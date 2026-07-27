@@ -1,0 +1,33 @@
+{
+  "name": "gostoned",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GoStoned — a modern online platform for Go, Baduk and Weiqi.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "tsx --test lib/game/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "tsx scripts/migrate.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "16.2.6",
+    "pg": "^8.13.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "16.2.6",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
