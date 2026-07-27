@@ -27,6 +27,7 @@ These rules apply whenever more than one developer or agent may work on the repo
 
 - Never develop directly on `main`.
 - Humans should use `feature/<developer>/<short-task-name>`, `fix/<developer>/<short-task-name>`, or `chore/<developer>/<short-task-name>` branches. Codex uses `codex/<short-task-name>`.
+- Before the first commit on a machine, configure `user.name` and a GitHub-verified or GitHub-provided noreply email. Never commit with an auto-generated `.local` address.
 - Start every branch from the latest `origin/main`.
 - Fetch `origin` before each work session and before opening or updating a pull request.
 - Before requesting final review, incorporate the latest `origin/main` into the feature branch and run all required checks again.
