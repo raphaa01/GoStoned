@@ -1,118 +1,58 @@
 "use client";
 
-import { Bot, ChevronRight, Clock3, Radio, UserRound } from "lucide-react";
+import { ArrowRight, Grid3X3, ShieldCheck, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
-import { GoBoard } from "@/components/game/GoBoard";
-import { createEmptyBoard } from "@/lib/game/goEngine";
-import type { Board } from "@/lib/game/types";
-
-function createPreviewBoard(): Board {
-  const board = createEmptyBoard(9);
-  const stones: Array<[number, number, "black" | "white"]> = [
-    [2, 2, "black"],
-    [6, 2, "white"],
-    [2, 6, "white"],
-    [6, 6, "black"],
-    [4, 2, "black"],
-    [5, 2, "white"],
-    [3, 3, "white"],
-    [4, 3, "black"],
-    [5, 3, "white"],
-    [3, 4, "black"],
-    [4, 4, "black"],
-    [5, 4, "white"],
-    [6, 4, "white"],
-    [2, 5, "black"],
-    [3, 5, "black"],
-    [5, 5, "white"],
-  ];
-
-  for (const [x, y, color] of stones) {
-    board[y][x] = color;
-  }
-  return board;
-}
-
-const previewBoard = createPreviewBoard();
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export function Hero() {
+  const { user } = useAuth();
+
   return (
-    <section className="home-dashboard">
-      <div className="home-board">
-        <div className="home-board-player">
-          <span className="player-avatar">MS</span>
-          <div>
-            <strong>MoriStone</strong>
-            <span>1,611</span>
-          </div>
-          <time>04:38</time>
+    <section className="home-hero">
+      <div className="home-hero-copy">
+        <span className="section-kicker">Go · Baduk · Weiqi</span>
+        <h1>Your next Go game starts here.</h1>
+        <p>
+          Find a real opponent, play on a focused board, and keep every result.
+          Guests start instantly; accounts save ratings across all board sizes.
+        </p>
+        <div className="hero-actions">
+          <Link className="button button--primary button--lg" href="/play">
+            Play online <ArrowRight size={19} />
+          </Link>
+          <Link className="button button--secondary button--lg" href={user ? "/profile" : "/register"}>
+            {user ? "View profile" : <><UserRoundPlus size={19} /> Create account</>}
+          </Link>
         </div>
-        <GoBoard
-          boardSize={9}
-          boardState={previewBoard}
-          onIntersectionClick={() => undefined}
-        />
-        <div className="home-board-player">
-          <span className="player-avatar player-avatar--you">G</span>
-          <div>
-            <strong>Guest</strong>
-            <span>Playing black</span>
-          </div>
-          <time>05:00</time>
+        <div className="hero-trust">
+          <span><ShieldCheck size={16} /> Server-checked moves</span>
+          <span><ShieldCheck size={16} /> Saved games and ratings</span>
         </div>
       </div>
 
-      <div className="home-start">
-        <div className="online-count">
-          <span className="live-dot" />
-          1,284 players online
+      <div className="hero-board-choice">
+        <header>
+          <span><Grid3X3 size={18} /></span>
+          <div><strong>Choose a board</strong><small>Matchmaking starts after your selection.</small></div>
+        </header>
+        <div className="hero-board-options">
+          {([
+            { size: 9, label: "Quick" },
+            { size: 13, label: "Balanced" },
+            { size: 19, label: "Classic" },
+          ] as const).map((option) => (
+            <Link href={`/play?size=${option.size}`} key={option.size}>
+              <strong>{option.size}×{option.size}</strong>
+              <span>{option.label}</span>
+              <ArrowRight size={18} />
+            </Link>
+          ))}
         </div>
-        <h1>Play Go online</h1>
-        <p>
-          Find a game in seconds. Play on 9×9, 13×13 or the classic 19×19 board.
-        </p>
-
-        <div className="home-actions">
-          <Link className="home-action home-action--primary" href="/play">
-            <span className="home-action-icon"><Radio size={28} /></span>
-            <span>
-              <strong>Play Online</strong>
-              <small>Find an opponent at your level</small>
-            </span>
-            <ChevronRight size={24} />
-          </Link>
-          <Link className="home-action" href="/play">
-            <span className="home-action-icon"><UserRound size={26} /></span>
-            <span>
-              <strong>Play a Friend</strong>
-              <small>Create a private game</small>
-            </span>
-            <ChevronRight size={22} />
-          </Link>
-          <Link className="home-action" href="/play">
-            <span className="home-action-icon"><Bot size={27} /></span>
-            <span>
-              <strong>Practice Game</strong>
-              <small>Play without a rating</small>
-            </span>
-            <ChevronRight size={22} />
-          </Link>
-        </div>
-
-        <div className="board-size-box">
-          <div>
-            <strong>Quick game</strong>
-            <span><Clock3 size={14} /> Choose a board</span>
-          </div>
-          <div className="board-size-links">
-            {([9, 13, 19] as const).map((size) => (
-              <Link href={`/play?size=${size}`} key={size}>
-                <strong>{size}×{size}</strong>
-                <small>{size === 9 ? "Quick" : size === 13 ? "Standard" : "Classic"}</small>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <ol className="hero-steps">
+          <li><span>1</span><div><strong>Choose</strong><small>Select your board size.</small></div></li>
+          <li><span>2</span><div><strong>Match</strong><small>We find another waiting player.</small></div></li>
+          <li><span>3</span><div><strong>Play</strong><small>Enter a focused game room with chat.</small></div></li>
+        </ol>
       </div>
     </section>
   );

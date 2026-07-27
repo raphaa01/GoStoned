@@ -8,6 +8,8 @@ type GameRow = {
   board_size: BoardSize;
   black_player_key: string;
   white_player_key: string;
+  black_player_name: string;
+  white_player_name: string;
   winner_key: string | null;
   status: "active" | "finished";
   result: string | null;
@@ -64,10 +66,24 @@ async function loadGame(
     values: readonly unknown[],
   ) => client ? client.query<T>(text, [...values]) : query<T>(text, values);
   const gameResult = await execute<GameRow>(
-    `SELECT id, board_size, black_player_key, white_player_key, winner_key,
-            status, result, komi, version, started_at, finished_at
-       FROM games
-      WHERE id = $1${lock ? " FOR UPDATE" : ""}`,
+    `SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
+            g.status, g.result, g.komi, g.version, g.started_at, g.finished_at,
+            COALESCE(
+              NULLIF(BTRIM(black_user.display_name), ''),
+              black_user.username,
+              'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
+            ) AS black_player_name,
+            COALESCE(
+              NULLIF(BTRIM(white_user.display_name), ''),
+              white_user.username,
+              'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
+            ) AS white_player_name
+       FROM games g
+       LEFT JOIN users black_user
+         ON g.black_player_key = 'user:' || black_user.id::text
+       LEFT JOIN users white_user
+         ON g.white_player_key = 'user:' || white_user.id::text
+      WHERE g.id = $1${lock ? " FOR UPDATE OF g" : ""}`,
     [gameId],
   );
   const game = gameResult.rows[0];
@@ -90,6 +106,8 @@ function serializeGame(game: GameRow, moveRows: MoveRow[]): GameState {
     boardSize: game.board_size,
     blackPlayerKey: game.black_player_key,
     whitePlayerKey: game.white_player_key,
+    blackPlayerName: game.black_player_name,
+    whitePlayerName: game.white_player_name,
     winnerKey: game.winner_key,
     status: game.status,
     result: game.result,
@@ -209,7 +227,14 @@ export async function submitMove(
         [game.id, score.result, winnerKey],
       );
       await recordFinishedStats(client, game, winnerKey);
-      return serializeGame(updated.rows[0], moveRows);
+      return serializeGame(
+        {
+          ...updated.rows[0],
+          black_player_name: game.black_player_name,
+          white_player_name: game.white_player_name,
+        },
+        moveRows,
+      );
     }
 
     const updated = await client.query<GameRow>(
@@ -220,7 +245,14 @@ export async function submitMove(
                   status, result, komi, version, started_at, finished_at`,
       [game.id],
     );
-    return serializeGame(updated.rows[0], moveRows);
+    return serializeGame(
+      {
+        ...updated.rows[0],
+        black_player_name: game.black_player_name,
+        white_player_name: game.white_player_name,
+      },
+      moveRows,
+    );
   });
 }
 
@@ -245,6 +277,13 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
       [game.id, `${winnerColor}+R`, winnerKey],
     );
     await recordFinishedStats(client, game, winnerKey);
-    return serializeGame(updated.rows[0], moveRows);
+    return serializeGame(
+      {
+        ...updated.rows[0],
+        black_player_name: game.black_player_name,
+        white_player_name: game.white_player_name,
+      },
+      moveRows,
+    );
   });
 }

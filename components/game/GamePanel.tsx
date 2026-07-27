@@ -1,5 +1,4 @@
-import { CircleDot, Clock3, Flag, SkipForward } from "lucide-react";
-import { shortPlayerName } from "@/lib/client/guestIdentity";
+import { CircleDot, Flag, SkipForward } from "lucide-react";
 import type { GameState, Stone } from "@/lib/game/types";
 
 type GamePanelProps = {
@@ -8,13 +7,19 @@ type GamePanelProps = {
   busy: boolean;
   onPass: () => void;
   onResign: () => void;
+  onLeave: () => void;
 };
 
-export function GamePanel({ game, playerKey, busy, onPass, onResign }: GamePanelProps) {
+export function GamePanel({
+  game,
+  playerKey,
+  busy,
+  onPass,
+  onResign,
+  onLeave,
+}: GamePanelProps) {
   const yourColor: Stone = game.blackPlayerKey === playerKey ? "black" : "white";
   const yourTurn = game.status === "active" && game.turn === yourColor;
-  const whiteName = shortPlayerName(game.whitePlayerKey);
-  const blackName = shortPlayerName(game.blackPlayerKey);
   const resultText =
     game.status === "finished"
       ? game.winnerKey === playerKey
@@ -24,22 +29,21 @@ export function GamePanel({ game, playerKey, busy, onPass, onResign }: GamePanel
           : `Draw · ${game.result}`
       : yourTurn
         ? "Your turn"
-        : `${game.turn === "black" ? "Black" : "White"} to move`;
+        : "Opponent's turn";
 
   return (
     <aside className="game-panel" aria-live="polite">
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div>
-          <strong>{whiteName}</strong>
+          <strong>{game.whitePlayerName}</strong>
           <span>{yourColor === "white" ? "You · White" : "Opponent · White"}</span>
         </div>
-        <strong className="game-time">Live</strong>
       </div>
 
       <div className="game-meta-strip">
         <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
-        <span><Clock3 size={15} /> No clock</span>
+        <span>Chinese rules</span>
         <span>Move {game.moveCount}</span>
       </div>
 
@@ -49,8 +53,8 @@ export function GamePanel({ game, playerKey, busy, onPass, onResign }: GamePanel
           <strong>{resultText}</strong>
           <span>
             {game.status === "finished"
-              ? "The result and ratings were saved."
-              : "Every move is validated and saved by the server."}
+              ? "Result and ratings saved."
+              : "Moves are checked and saved by the server."}
           </span>
         </div>
       </div>
@@ -58,10 +62,9 @@ export function GamePanel({ game, playerKey, busy, onPass, onResign }: GamePanel
       <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
         <div>
-          <strong>{blackName}</strong>
+          <strong>{game.blackPlayerName}</strong>
           <span>{yourColor === "black" ? "You · Black" : "Opponent · Black"}</span>
         </div>
-        <strong className="game-time">Live</strong>
       </div>
 
       {game.status === "active" ? (
@@ -73,7 +76,11 @@ export function GamePanel({ game, playerKey, busy, onPass, onResign }: GamePanel
             <Flag size={18} /> Resign
           </button>
         </div>
-      ) : null}
+      ) : (
+        <button className="button button--primary game-leave" onClick={onLeave} type="button">
+          Find another game
+        </button>
+      )}
     </aside>
   );
 }

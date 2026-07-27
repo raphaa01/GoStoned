@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
+  ON users(LOWER(username));
+
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
@@ -70,6 +73,33 @@ CREATE TABLE IF NOT EXISTS player_stats (
   PRIMARY KEY (player_key, board_size)
 );
 
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  key_hash TEXT PRIMARY KEY,
+  attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  blocked_until TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS game_messages (
+  id BIGSERIAL PRIMARY KEY,
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  player_key TEXT NOT NULL,
+  message TEXT NOT NULL CHECK (
+    CHAR_LENGTH(BTRIM(message)) BETWEEN 1 AND 500
+  ),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Keep the bootstrap idempotent when an early local prototype already created tables.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
@@ -95,6 +125,10 @@ CREATE INDEX IF NOT EXISTS idx_games_active_board
 CREATE INDEX IF NOT EXISTS idx_games_started_at ON games(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_player_stats_board_rating
   ON player_stats(board_size, rating DESC, games DESC);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at);
+CREATE INDEX IF NOT EXISTS idx_game_messages_game_id_id ON game_messages(game_id, id);
 
 DO $$
 BEGIN
@@ -138,14 +172,19 @@ ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_messages ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, matchmaking_queue FROM anon;
+    REVOKE ALL ON schema_migrations, users, games, moves, player_stats,
+      matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, matchmaking_queue FROM authenticated;
+    REVOKE ALL ON schema_migrations, users, games, moves, player_stats,
+      matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM authenticated;
   END IF;
 END
 $$;

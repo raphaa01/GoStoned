@@ -26,6 +26,8 @@ export function GoBoard({
   disabled = false,
 }: GoBoardProps) {
   const intersections = Array.from({ length: boardSize * boardSize });
+  const gridLines = Array.from({ length: boardSize });
+  const gridPosition = (value: number) => `${(value / (boardSize - 1)) * 100}%`;
   return (
     <div
       className="go-board"
@@ -33,11 +35,27 @@ export function GoBoard({
         {
           "--board-size": boardSize,
           "--grid-step": `${100 / (boardSize - 1)}%`,
+          "--intersection-size": `${86 / (boardSize - 1)}%`,
         } as React.CSSProperties
       }
       data-size={boardSize}
     >
-      <div className="go-board-grid" aria-hidden="true" />
+      <div className="go-board-grid" aria-hidden="true">
+        {gridLines.map((_, index) => (
+          <span
+            className="board-line board-line--vertical"
+            key={`vertical-${index}`}
+            style={{ left: gridPosition(index) }}
+          />
+        ))}
+        {gridLines.map((_, index) => (
+          <span
+            className="board-line board-line--horizontal"
+            key={`horizontal-${index}`}
+            style={{ top: gridPosition(index) }}
+          />
+        ))}
+      </div>
       <div className="go-board-points" role="grid" aria-label={`${boardSize} by ${boardSize} Go board`}>
         {intersections.map((_, index) => {
           const x = index % boardSize;

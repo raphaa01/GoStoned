@@ -10,6 +10,7 @@ type MatchmakingPanelProps = {
   status: "idle" | "waiting";
   busy: boolean;
   ready: boolean;
+  playerName: string | null;
   error: string | null;
   onFind: () => void;
   onCancel: () => void;
@@ -20,6 +21,7 @@ export function MatchmakingPanel({
   status,
   busy,
   ready,
+  playerName,
   error,
   onFind,
   onCancel,
@@ -33,7 +35,7 @@ export function MatchmakingPanel({
           <span className="panel-icon"><Radio size={18} /></span>
           <div>
             <h2>{waiting ? "Finding a player" : "Quick match"}</h2>
-            <p>{waiting ? "Keep this page open." : "Start instantly as a guest."}</p>
+            <p>{waiting ? "Keep this page open." : `Ready as ${playerName ?? "player"}.`}</p>
           </div>
         </div>
         <Badge tone="green">{waiting ? "Searching" : "Online"}</Badge>

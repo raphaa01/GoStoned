@@ -36,6 +36,8 @@ export type GameState = {
   boardSize: BoardSize;
   blackPlayerKey: string;
   whitePlayerKey: string;
+  blackPlayerName: string;
+  whitePlayerName: string;
   winnerKey: string | null;
   status: "active" | "finished";
   result: string | null;

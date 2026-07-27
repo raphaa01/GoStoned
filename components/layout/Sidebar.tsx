@@ -1,62 +1,43 @@
 "use client";
 
-import {
-  BarChart3,
-  BookOpen,
-  Crown,
-  Gamepad2,
-  LogIn,
-  MessageCircle,
-  Radio,
-  Settings,
-  Users,
-} from "lucide-react";
+import { Crown, Gamepad2, LogIn, LogOut, UserRound, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 
-const mainItems = [
+const items = [
   { href: "/play", label: "Play", icon: Gamepad2 },
-  { href: "/#learn", label: "Learn", icon: BookOpen },
   { href: "/leaderboard", label: "Leaderboard", icon: Crown },
-];
-
-const secondaryItems = [
-  { href: "/#watch", label: "Watch", icon: Radio },
-  { href: "/#community", label: "Community", icon: Users },
-  { href: "/#stats", label: "Statistics", icon: BarChart3 },
+  { href: "/profile", label: "Profile", icon: UserRound },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
+
+  async function signOut() {
+    await logout();
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <aside className="sidebar">
       <Link className="brand" href="/" aria-label="GoStoned home">
-        <span className="brand-mark">
-          <span />
-          <span />
-        </span>
+        <span className="brand-mark"><span /><span /></span>
         <span>GoStoned</span>
       </Link>
 
       <nav className="sidebar-nav" aria-label="Main navigation">
         <div className="nav-group">
-          {mainItems.map(({ href, label, icon: Icon }) => {
-            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-            return (
-              <Link className={`nav-link ${active ? "is-active" : ""}`} href={href} key={href}>
-                <Icon size={19} strokeWidth={1.8} />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-        </div>
-
-        <span className="nav-label">More</span>
-        <div className="nav-group">
-          {secondaryItems.map(({ href, label, icon: Icon }) => (
-            <Link className="nav-link" href={href} key={href}>
-              <Icon size={19} strokeWidth={1.8} />
+          {items.map(({ href, label, icon: Icon }) => (
+            <Link
+              className={`nav-link ${pathname.startsWith(href) ? "is-active" : ""}`}
+              href={href}
+              key={href}
+            >
+              <Icon size={19} strokeWidth={1.9} />
               <span>{label}</span>
             </Link>
           ))}
@@ -64,16 +45,24 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
-        <Link className="nav-link" href="/#support">
-          <MessageCircle size={19} strokeWidth={1.8} />
-          <span>Support</span>
-        </Link>
-        <Link className="nav-link" href="/#settings">
-          <Settings size={19} strokeWidth={1.8} />
-          <span>Settings</span>
-        </Link>
-        <Link className="sidebar-signup" href="/profile">Sign Up</Link>
-        <Link className="sidebar-login" href="/profile"><LogIn size={17} /> Log In</Link>
+        {loading ? <span className="sidebar-account-loading">Loading account…</span> : user ? (
+          <>
+            <Link className="sidebar-user" href="/profile">
+              <span>{user.displayName.slice(0, 2).toUpperCase()}</span>
+              <div><strong>{user.displayName}</strong><small>Account</small></div>
+            </Link>
+            <button className="sidebar-login" onClick={signOut} type="button">
+              <LogOut size={17} /> Log out
+            </button>
+          </>
+        ) : (
+          <>
+            <Link className="sidebar-signup" href="/register">
+              <UserRoundPlus size={17} /> Create account
+            </Link>
+            <Link className="sidebar-login" href="/login"><LogIn size={17} /> Log in</Link>
+          </>
+        )}
       </div>
     </aside>
   );

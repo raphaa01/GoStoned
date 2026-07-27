@@ -4,6 +4,10 @@ GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste
 
 ## Was bereits funktioniert
 
+- Registrierung und Login mit Benutzername und Passwort
+- sichere, serverseitige Sitzungen per HTTP-only Cookie
+- getrennte Ratings pro Brettgröße für registrierte Accounts
+- persistenter Gegner-Chat im fokussierten Spielraum
 - Gast-Identität pro Browser
 - Matchmaking für 9×9, 13×13 und 19×19
 - Live-Partien über eine deploybare Polling-API
@@ -60,8 +64,13 @@ npm run build
 Wenn `npm run dev` und Docker laufen, testet dieser Befehl automatisch einen vollständigen Zwei-Spieler-Ablauf:
 
 ```powershell
+npm run test:auth
 npm run test:live
 ```
+
+`test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
+Spieler, Matchmaking, Chat und Resign. `test:live` prüft zusätzlich eine
+vollständige Gastpartie mit serverseitiger Wertung.
 
 ## Datenbank und Migrationen
 

@@ -1,0 +1,55 @@
+import { NextRequest } from "next/server";
+import { noStoreJson } from "@/lib/api/responses";
+import {
+  AuthError,
+  authenticateAccount,
+  validateCredentials,
+} from "@/lib/auth/accountService";
+import { clearRateLimit, consumeRateLimit, RateLimitError } from "@/lib/auth/rateLimit";
+import {
+  createSession,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+} from "@/lib/auth/session";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as { username?: unknown; password?: unknown };
+    const credentials = validateCredentials(body.username, body.password);
+    const rateLimitKey = await consumeRateLimit(
+      request,
+      "login",
+      credentials.username,
+      8,
+      15,
+    );
+    const user = await authenticateAccount(credentials.username, credentials.password);
+    await clearRateLimit(rateLimitKey);
+    const token = await createSession(user.id);
+    const response = noStoreJson({ ok: true, user });
+    response.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      priority: "high",
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return noStoreJson(
+        { ok: false, error: error.message, code: error.code },
+        { status: error.status },
+      );
+    }
+    if (error instanceof RateLimitError) {
+      return noStoreJson({ ok: false, error: error.message }, { status: 429 });
+    }
+    console.error("Login failed:", error);
+    return noStoreJson({ ok: false, error: "Could not log in." }, { status: 500 });
+  }
+}
