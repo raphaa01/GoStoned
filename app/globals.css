@@ -1192,6 +1192,21 @@ a {
   top: 7%;
 }
 
+/*
+ * During local development an already open tab can briefly keep the previous
+ * GoBoard component while receiving the newest stylesheet. The previous
+ * component had no .board-line children, so keep a visual grid fallback until
+ * that tab has reloaded its JavaScript.
+ */
+.go-board-grid:empty {
+  background-image:
+    linear-gradient(rgba(52, 32, 16, 0.78) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 32, 16, 0.78) 1px, transparent 1px);
+  background-position: left top;
+  background-size: var(--grid-step) var(--grid-step);
+  box-shadow: inset 0 0 0 1px rgba(52, 32, 16, 0.78);
+}
+
 .board-line {
   background: rgba(52, 32, 16, 0.78);
   position: absolute;
@@ -1224,12 +1239,18 @@ a {
   border-radius: 50%;
   cursor: pointer;
   display: flex;
-  height: var(--intersection-size);
+  height: var(
+    --intersection-size,
+    clamp(22px, calc(75cqw / var(--board-size)), 54px)
+  );
   justify-content: center;
   padding: 0;
   position: absolute;
   transform: translate(-50%, -50%);
-  width: var(--intersection-size);
+  width: var(
+    --intersection-size,
+    clamp(22px, calc(75cqw / var(--board-size)), 54px)
+  );
 }
 
 .intersection::before {
