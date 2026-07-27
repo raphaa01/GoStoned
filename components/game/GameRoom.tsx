@@ -1,10 +1,11 @@
 "use client";
 
-import { ShieldCheck, Wifi } from "lucide-react";
+import { LogOut, ShieldCheck, Wifi } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { readApi } from "@/lib/client/api";
+import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import type { GameMessage } from "@/lib/game/chatService";
 import type { GameState, Stone } from "@/lib/game/types";
 import { ChatPanel } from "./ChatPanel";
@@ -129,6 +130,25 @@ export function GameRoom({ gameId }: { gameId: string }) {
     router.replace("/play");
   }
 
+  async function leaveGameRoom() {
+    if (!game || !playerKey || busy) return;
+    if (
+      game.status === "active" &&
+      !window.confirm("Leave this game? This counts as a resignation.")
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await leaveGameAndQueue(game.id, playerKey);
+      router.replace("/");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not leave the game.");
+      setBusy(false);
+    }
+  }
+
   if (loading || !playerKey || (!game && !error)) {
     return <main className="game-loading"><span className="spin-ring" /><p>Loading game…</p></main>;
   }
@@ -154,6 +174,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
         </span>
         <span className="game-security"><ShieldCheck size={15} /> Server verified</span>
         <span className="game-connection"><Wifi size={15} /> Live</span>
+        <button className="game-exit" disabled={busy} onClick={leaveGameRoom} type="button">
+          <LogOut size={15} />
+          Leave game
+        </button>
       </header>
 
       <main className="focused-game-layout">

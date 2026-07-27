@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { readApi } from "@/lib/client/api";
+import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import type { BoardSize } from "@/lib/game/types";
+import { ActiveGamePanel } from "./ActiveGamePanel";
 import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
 
@@ -20,32 +22,42 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const { playerKey, playerName, loading } = usePlayerIdentity();
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
   const [queueStatus, setQueueStatus] = useState<"idle" | "waiting">("idle");
+  const [activeGame, setActiveGame] = useState<{
+    gameId: string;
+    boardSize: BoardSize;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleQueueState = useCallback((queue: QueueState) => {
+  const handleQueueState = useCallback((queue: QueueState, enterMatchedGame: boolean) => {
     if (queue.boardSize) setBoardSize(queue.boardSize);
-    if (queue.status === "matched" && queue.gameId) {
-      router.replace(`/game/${queue.gameId}`);
+    if (queue.status === "matched" && queue.gameId && queue.boardSize) {
+      if (enterMatchedGame) {
+        router.replace(`/game/${queue.gameId}`);
+      } else {
+        setActiveGame({ gameId: queue.gameId, boardSize: queue.boardSize });
+        setQueueStatus("idle");
+      }
       return;
     }
+    setActiveGame(null);
     setQueueStatus(queue.status === "waiting" ? "waiting" : "idle");
   }, [router]);
 
-  const refreshQueue = useCallback(async () => {
+  const refreshQueue = useCallback(async (enterMatchedGame = false) => {
     if (!playerKey) return;
     const response = await fetch(
       `/api/matchmaking?playerKey=${encodeURIComponent(playerKey)}`,
       { cache: "no-store" },
     );
     const data = await readApi<{ matchmaking: QueueState }>(response);
-    handleQueueState(data.matchmaking);
+    handleQueueState(data.matchmaking, enterMatchedGame);
   }, [handleQueueState, playerKey]);
 
   useEffect(() => {
     if (!playerKey) return;
     const timeout = window.setTimeout(() => {
-      refreshQueue().catch(() => undefined);
+      refreshQueue(false).catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [playerKey, refreshQueue]);
@@ -53,7 +65,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   useEffect(() => {
     if (queueStatus !== "waiting") return;
     const interval = window.setInterval(() => {
-      refreshQueue().catch((requestError: unknown) => {
+      refreshQueue(true).catch((requestError: unknown) => {
         setError(requestError instanceof Error ? requestError.message : "Matchmaking failed.");
       });
     }, 1_000);
@@ -71,7 +83,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         body: JSON.stringify({ playerKey, boardSize }),
       });
       const data = await readApi<{ matchmaking: QueueState }>(response);
-      handleQueueState(data.matchmaking);
+      handleQueueState(data.matchmaking, true);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not join the queue.");
     } finally {
@@ -96,6 +108,22 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     }
   }
 
+  async function leaveActiveGame() {
+    if (!playerKey || !activeGame || busy) return;
+    if (!window.confirm("Leave this game? This counts as a resignation.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await leaveGameAndQueue(activeGame.gameId, playerKey);
+      setActiveGame(null);
+      setQueueStatus("idle");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not leave the game.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="match-lobby">
       <section className="match-lobby-copy">
@@ -112,24 +140,36 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       </section>
 
       <section className="match-lobby-card">
-        <div>
-          <span>Board size</span>
-          <BoardSizeSelector
-            disabled={queueStatus === "waiting"}
-            onChange={setBoardSize}
-            value={boardSize}
+        {activeGame ? (
+          <ActiveGamePanel
+            boardSize={activeGame.boardSize}
+            busy={busy}
+            error={error}
+            onLeave={leaveActiveGame}
+            onResume={() => router.push(`/game/${activeGame.gameId}`)}
           />
-        </div>
-        <MatchmakingPanel
-          boardSize={boardSize}
-          busy={busy}
-          error={error}
-          onCancel={cancelSearch}
-          onFind={findMatch}
-          playerName={playerName}
-          ready={Boolean(playerKey) && !loading}
-          status={queueStatus}
-        />
+        ) : (
+          <>
+            <div>
+              <span>Board size</span>
+              <BoardSizeSelector
+                disabled={queueStatus === "waiting"}
+                onChange={setBoardSize}
+                value={boardSize}
+              />
+            </div>
+            <MatchmakingPanel
+              boardSize={boardSize}
+              busy={busy}
+              error={error}
+              onCancel={cancelSearch}
+              onFind={findMatch}
+              playerName={playerName}
+              ready={Boolean(playerKey) && !loading}
+              status={queueStatus}
+            />
+          </>
+        )}
       </section>
     </div>
   );
