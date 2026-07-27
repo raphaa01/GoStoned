@@ -131,6 +131,16 @@ async function run() {
     json("POST", { playerKey: secondUser.playerKey, message: "Have fun!" }, registeredSecond.cookie!),
     201,
   );
+  const blockedChat = await request(
+    `/api/games/${gameId}/chat`,
+    json(
+      "POST",
+      { playerKey: firstUser.playerKey, message: "f.u.c.k" },
+      firstLogin.cookie!,
+    ),
+    400,
+  );
+  assert.equal(blockedChat.body.code, "message_blocked");
   const chat = await request(
     `/api/games/${gameId}/chat?playerKey=${encodeURIComponent(firstUser.playerKey)}`,
     { headers: { Cookie: firstLogin.cookie! } },

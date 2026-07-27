@@ -5,7 +5,7 @@ import { closePool, getPool } from "../lib/db";
 
 async function migrate() {
   const migrationsPath = path.join(process.cwd(), "db", "migrations");
-  console.log("GoStoned database migration");
+  console.log("GoStone database migration");
   console.log(`Reading migrations: ${migrationsPath}`);
 
   const pool = getPool();

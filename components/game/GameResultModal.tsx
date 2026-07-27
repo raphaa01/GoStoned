@@ -2,6 +2,7 @@
 
 import { Eye, Home, Minus, RotateCcw, Trophy, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { getTimeControl } from "@/lib/game/timeControls";
 import type { GameState } from "@/lib/game/types";
 
 type GameResultModalProps = {
@@ -64,11 +65,14 @@ export function GameResultModal({
         className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
         role="dialog"
       >
-        <div className="result-modal-hero">
-          <span className="result-modal-icon"><OutcomeIcon size={34} /></span>
-          <span className="result-modal-kicker">Game complete</span>
-          <h2 id="game-result-title">{outcome}</h2>
-          <p>{resultDescription(game.result)}</p>
+        <div className="result-modal-header">
+          <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
+          <div>
+            <span className="result-modal-kicker">Game complete</span>
+            <h2 id="game-result-title">{outcome}</h2>
+            <p>{resultDescription(game.result)}</p>
+          </div>
+          <strong className="result-code">{game.result ?? "Draw"}</strong>
         </div>
 
         <div className="result-player-list">
@@ -93,7 +97,7 @@ export function GameResultModal({
         <div className="result-facts">
           <span><small>Board</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
           <span><small>Moves</small><strong>{game.moveCount}</strong></span>
-          <span><small>Result</small><strong>{game.result ?? "Draw"}</strong></span>
+          <span><small>Clock</small><strong>{getTimeControl(game.timeControl).name}</strong></span>
         </div>
 
         <button

@@ -192,7 +192,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <header className="game-topbar">
         <span className="game-brand">
           <span className="brand-mark"><span /><span /></span>
-          GoStoned
+          GoStone
         </span>
         <span className="game-security"><ShieldCheck size={15} /> Server verified</span>
         <span className="game-connection"><Wifi size={15} /> Live</span>

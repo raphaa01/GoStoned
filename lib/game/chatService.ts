@@ -1,4 +1,5 @@
 import { query } from "@/lib/db";
+import { containsBannedChatContent } from "@/lib/moderation/chatModeration";
 import { GameServiceError } from "./gameService";
 
 export type GameMessage = {
@@ -80,6 +81,13 @@ export async function sendGameMessage(
       "Messages must contain between 1 and 500 characters.",
       400,
       "invalid_message",
+    );
+  }
+  if (containsBannedChatContent(message)) {
+    throw new GameServiceError(
+      "This message contains blocked language and was not sent.",
+      400,
+      "message_blocked",
     );
   }
   await assertGameParticipant(gameId, playerKey);

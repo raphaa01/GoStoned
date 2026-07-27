@@ -1,6 +1,6 @@
-# GoStoned
+# GoStone
 
-GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste können sich über die Matchmaking-Warteschlange finden und in getrennten Browsern gegeneinander spielen. Der Server prüft und speichert jeden Zug in PostgreSQL.
+GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste können sich über die Matchmaking-Warteschlange finden und in getrennten Browsern gegeneinander spielen. Der Server prüft und speichert jeden Zug in PostgreSQL.
 
 ## Was bereits funktioniert
 
@@ -8,6 +8,7 @@ GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste
 - sichere, serverseitige Sitzungen per HTTP-only Cookie
 - getrennte Ratings pro Brettgröße für registrierte Accounts
 - persistenter Gegner-Chat im fokussierten Spielraum
+- serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
 - Gast-Identität pro Browser
 - Matchmaking für 9×9, 13×13 und 19×19
 - Live-Partien über eine deploybare Polling-API
@@ -96,9 +97,9 @@ docker compose down
 2. Im SQL Editor die Dateien aus `db/migrations/` in nummerierter Reihenfolge ausführen. Alternativ lokal `DATABASE_URL` auf die direkte Supabase-Verbindung setzen und `npm run db:migrate` ausführen.
 3. Unter „Connect“ den Transaction-Pooler-Connection-String kopieren. Für Vercel ist normalerweise Port `6543` passend.
 4. Den Platzhalter für das Datenbankpasswort ersetzen und den vollständigen String als `DATABASE_URL` in Vercel speichern.
-5. `DATABASE_POOL_MAX=5` ebenfalls als Environment Variable setzen.
+5. `DATABASE_POOL_MAX=3` ebenfalls als Environment Variable setzen.
 
-Die öffentlichen Tabellen haben Row Level Security aktiviert und geben den Supabase-Rollen `anon` und `authenticated` keine direkten Tabellenrechte. GoStoned nutzt die Datenbank nur serverseitig über `pg`.
+Die öffentlichen Tabellen haben Row Level Security aktiviert und geben den Supabase-Rollen `anon` und `authenticated` keine direkten Tabellenrechte. GoStone nutzt die Datenbank nur serverseitig über `pg`.
 
 Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder einen Screenshot.
 
@@ -106,11 +107,29 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
 
 1. Das GitHub-Repository in Vercel importieren.
 2. Framework „Next.js“ verwenden; Build Command bleibt `npm run build`.
-3. In „Environment Variables“ `DATABASE_URL` und `DATABASE_POOL_MAX=5` hinterlegen.
+3. In „Environment Variables“ folgende Werte hinterlegen:
+   - `DATABASE_URL`: Supabase Transaction Pooler, normalerweise Port `6543`
+   - `DATABASE_POOL_MAX=3`
+   - `NEXT_PUBLIC_APP_URL`: die endgültige `https://`-Adresse der Website
+   - `LEGAL_NAME`: vollständiger Name des Betreibers
+   - `LEGAL_STREET`: Straße und Hausnummer
+   - `LEGAL_CITY`: Postleitzahl und Ort
+   - `LEGAL_EMAIL`: erreichbare Kontaktadresse
+   - optional: `LEGAL_ENTITY_DETAILS`, `LEGAL_PHONE`, `LEGAL_VAT_ID`
 4. Vor dem ersten Deployment die Migrationen gegen Supabase ausführen.
 5. Deploy starten und anschließend `/api/health`, `/api/db-health` und einen Test mit zwei Browsern prüfen.
 
 Der Build benötigt keine aktive Datenbankverbindung. API-Routen laufen mit der Node.js Runtime und verbinden sich erst bei einer Anfrage mit PostgreSQL.
+
+Vor dem Produktionsstart kann die vollständige Konfiguration einschließlich
+SSL-Verbindung, Migrationen und Impressumsangaben geprüft werden:
+
+```powershell
+vercel env run -e production -- npm run mvp:check
+```
+
+Der Check bricht bewusst ab, wenn noch eine lokale Datenbank, eine unverschlüsselte
+URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 
 ## Projektstruktur
 

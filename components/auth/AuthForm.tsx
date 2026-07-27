@@ -104,7 +104,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       </form>
 
       <p className="auth-switch">
-        {registering ? "Already have an account?" : "New to GoStoned?"}{" "}
+        {registering ? "Already have an account?" : "New to GoStone?"}{" "}
         <Link href={registering ? "/login" : "/register"}>
           {registering ? "Log in" : "Create account"}
         </Link>

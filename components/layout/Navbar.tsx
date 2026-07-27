@@ -26,9 +26,9 @@ export function Navbar() {
 
   return (
     <header className="mobile-nav">
-      <Link className="brand" href="/" aria-label="GoStoned home" onClick={() => setOpen(false)}>
+      <Link className="brand" href="/" aria-label="GoStone home" onClick={() => setOpen(false)}>
         <span className="brand-mark"><span /><span /></span>
-        <span>GoStoned</span>
+        <span>GoStone</span>
       </Link>
       <button
         aria-expanded={open}
@@ -52,6 +52,7 @@ export function Navbar() {
             </Link>
           ))}
           {!user ? <Link href="/register" onClick={() => setOpen(false)}>Create account</Link> : null}
+          <Link href="/impressum" onClick={() => setOpen(false)}>Impressum</Link>
           {user ? (
             <button onClick={signOut} type="button"><LogOut size={18} /> Log out</button>
           ) : null}

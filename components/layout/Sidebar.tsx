@@ -24,9 +24,9 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <Link className="brand" href="/" aria-label="GoStoned home">
+      <Link className="brand" href="/" aria-label="GoStone home">
         <span className="brand-mark"><span /><span /></span>
-        <span>GoStoned</span>
+        <span>GoStone</span>
       </Link>
 
       <nav className="sidebar-nav" aria-label="Main navigation">
@@ -45,6 +45,7 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
+        <Link className="sidebar-legal" href="/impressum">Impressum</Link>
         {loading ? <span className="sidebar-account-loading">Loading account…</span> : user ? (
           <>
             <Link className="sidebar-user" href="/profile">

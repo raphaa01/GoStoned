@@ -1,4 +1,4 @@
-# GoStoned team rules
+# GoStone team rules
 
 - Keep `main` stable and deployable.
 - Use one focused branch per feature or setup change.

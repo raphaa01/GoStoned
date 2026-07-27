@@ -14,6 +14,7 @@ type ChatPanelProps = {
 export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelProps) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,9 +26,12 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
     const message = text.trim();
     if (!message || busy || disabled) return;
     setBusy(true);
+    setError(null);
     try {
       await onSend(message);
       setText("");
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Message could not be sent.");
     } finally {
       setBusy(false);
     }
@@ -54,7 +58,10 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
           aria-label="Chat message"
           disabled={disabled || busy}
           maxLength={500}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            if (error) setError(null);
+          }}
           placeholder={disabled ? "Chat unavailable" : "Write a message…"}
           value={text}
         />
@@ -62,6 +69,7 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
           <Send size={17} />
         </button>
       </form>
+      {error ? <p className="chat-error" role="alert">{error}</p> : null}
     </section>
   );
 }
