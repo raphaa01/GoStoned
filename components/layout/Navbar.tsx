@@ -4,12 +4,12 @@ import Link from "next/link";
 export function Navbar() {
   return (
     <header className="mobile-nav">
-      <Link className="brand" href="/" aria-label="KAYA home">
+      <Link className="brand" href="/" aria-label="GoStoned home">
         <span className="brand-mark">
           <span />
           <span />
         </span>
-        <span>KAYA</span>
+        <span>GoStoned</span>
       </Link>
       <Link className="mobile-play-link" href="/play">
         Play

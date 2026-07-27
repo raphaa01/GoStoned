@@ -4,14 +4,14 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: {
-    default: "KAYA — Play Go Online",
-    template: "%s · KAYA",
+    default: "GoStoned — Play Go Online",
+    template: "%s · GoStoned",
   },
   description:
     "Play Go online on 9×9, 13×13 and 19×19 boards. Find your next match and grow your game.",
-  applicationName: "KAYA",
+  applicationName: "GoStoned",
   openGraph: {
-    title: "KAYA — The quiet game, played together.",
+    title: "GoStoned — Play Go Online",
     description: "A modern home for Go, Baduk and Weiqi.",
     type: "website",
     images: [
@@ -19,13 +19,13 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1734,
         height: 907,
-        alt: "KAYA — The quiet game, played together.",
+        alt: "GoStoned — Play Go Online",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "KAYA — Play Go Online",
+    title: "GoStoned — Play Go Online",
     description: "A modern home for Go, Baduk and Weiqi.",
     images: ["/og.png"],
   },

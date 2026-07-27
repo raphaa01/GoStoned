@@ -3,25 +3,26 @@
 import {
   BarChart3,
   BookOpen,
-  CircleUserRound,
   Crown,
   Gamepad2,
-  LayoutDashboard,
   LogIn,
+  MessageCircle,
+  Radio,
   Settings,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const mainItems = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/play", label: "Play", icon: Gamepad2 },
+  { href: "/#learn", label: "Learn", icon: BookOpen },
   { href: "/leaderboard", label: "Leaderboard", icon: Crown },
-  { href: "/profile", label: "My profile", icon: CircleUserRound },
 ];
 
 const secondaryItems = [
-  { href: "/#learn", label: "Learn Go", icon: BookOpen },
+  { href: "/#watch", label: "Watch", icon: Radio },
+  { href: "/#community", label: "Community", icon: Users },
   { href: "/#stats", label: "Statistics", icon: BarChart3 },
 ];
 
@@ -30,12 +31,12 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <Link className="brand" href="/" aria-label="KAYA home">
+      <Link className="brand" href="/" aria-label="GoStoned home">
         <span className="brand-mark">
           <span />
           <span />
         </span>
-        <span>KAYA</span>
+        <span>GoStoned</span>
       </Link>
 
       <nav className="sidebar-nav" aria-label="Main navigation">
@@ -51,7 +52,7 @@ export function Sidebar() {
           })}
         </div>
 
-        <span className="nav-label">Explore</span>
+        <span className="nav-label">More</span>
         <div className="nav-group">
           {secondaryItems.map(({ href, label, icon: Icon }) => (
             <Link className="nav-link" href={href} key={href}>
@@ -63,18 +64,16 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
+        <Link className="nav-link" href="/#support">
+          <MessageCircle size={19} strokeWidth={1.8} />
+          <span>Support</span>
+        </Link>
         <Link className="nav-link" href="/#settings">
           <Settings size={19} strokeWidth={1.8} />
           <span>Settings</span>
         </Link>
-        <div className="guest-card">
-          <div className="guest-avatar">G</div>
-          <div>
-            <strong>Playing as guest</strong>
-            <span>Create an account to save progress</span>
-          </div>
-          <LogIn size={18} />
-        </div>
+        <Link className="sidebar-signup" href="/profile">Sign Up</Link>
+        <Link className="sidebar-login" href="/profile"><LogIn size={17} /> Log In</Link>
       </div>
     </aside>
   );

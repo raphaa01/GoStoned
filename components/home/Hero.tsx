@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpen, Radio, Sparkles } from "lucide-react";
+import { Bot, ChevronRight, Clock3, Radio, UserRound } from "lucide-react";
 import Link from "next/link";
 import { GoBoard } from "@/components/game/GoBoard";
 import { createEmptyBoard } from "@/lib/game/goEngine";
@@ -13,13 +13,17 @@ function createPreviewBoard(): Board {
     [6, 2, "white"],
     [2, 6, "white"],
     [6, 6, "black"],
+    [4, 2, "black"],
+    [5, 2, "white"],
+    [3, 3, "white"],
     [4, 3, "black"],
     [5, 3, "white"],
-    [3, 4, "white"],
+    [3, 4, "black"],
     [4, 4, "black"],
     [5, 4, "white"],
+    [6, 4, "white"],
+    [2, 5, "black"],
     [3, 5, "black"],
-    [4, 5, "black"],
     [5, 5, "white"],
   ];
 
@@ -33,77 +37,81 @@ const previewBoard = createPreviewBoard();
 
 export function Hero() {
   return (
-    <section className="hero">
-      <div className="hero-copy">
-        <div className="eyebrow">
-          <span className="live-dot" />
-          1,284 players online
+    <section className="home-dashboard">
+      <div className="home-board">
+        <div className="home-board-player">
+          <span className="player-avatar">MS</span>
+          <div>
+            <strong>MoriStone</strong>
+            <span>1,611</span>
+          </div>
+          <time>04:38</time>
         </div>
-        <h1>
-          The quiet game,
-          <br />
-          <span>played together.</span>
-        </h1>
-        <p>
-          Find your next match, sharpen your reading, and discover a game that
-          has been unfolding for thousands of years.
-        </p>
-
-        <div className="hero-actions">
-          <Link className="button button--primary button--lg" href="/play">
-            <Radio size={20} />
-            Play online
-            <ArrowRight size={19} />
-          </Link>
-          <Link className="button button--secondary button--lg" href="/#learn">
-            <BookOpen size={19} />
-            Learn Go
-          </Link>
-        </div>
-
-        <div className="quick-sizes">
-          <span>Quick match</span>
-          {([9, 13, 19] as const).map((size) => (
-            <Link href={`/play?size=${size}`} key={size}>
-              <strong>{size}×{size}</strong>
-              <small>{size === 9 ? "~10 min" : size === 13 ? "~25 min" : "~45 min"}</small>
-            </Link>
-          ))}
+        <GoBoard
+          boardSize={9}
+          boardState={previewBoard}
+          onIntersectionClick={() => undefined}
+        />
+        <div className="home-board-player">
+          <span className="player-avatar player-avatar--you">G</span>
+          <div>
+            <strong>Guest</strong>
+            <span>Playing black</span>
+          </div>
+          <time>05:00</time>
         </div>
       </div>
 
-      <div className="hero-visual" aria-label="Example 9 by 9 Go position">
-        <div className="board-glow" />
-        <div className="match-card">
-          <div className="match-card-top">
-            <div>
-              <span className="player-stone player-stone--black" />
-              <div>
-                <strong>KuroSora</strong>
-                <small>1,642</small>
-              </div>
-            </div>
-            <span className="turn-pill">Your turn</span>
-            <div>
-              <div>
-                <strong>Mori_9</strong>
-                <small>1,611</small>
-              </div>
-              <span className="player-stone player-stone--white" />
-            </div>
-          </div>
-          <GoBoard boardSize={9} boardState={previewBoard} onIntersectionClick={() => undefined} />
-          <div className="match-card-footer">
-            <span>9×9 · Japanese rules</span>
-            <strong>04:38</strong>
-          </div>
+      <div className="home-start">
+        <div className="online-count">
+          <span className="live-dot" />
+          1,284 players online
         </div>
-        <div className="floating-note">
-          <Sparkles size={17} />
-          <span>
-            <strong>Beautiful shape</strong>
-            Your position is alive.
-          </span>
+        <h1>Play Go online</h1>
+        <p>
+          Find a game in seconds. Play on 9×9, 13×13 or the classic 19×19 board.
+        </p>
+
+        <div className="home-actions">
+          <Link className="home-action home-action--primary" href="/play">
+            <span className="home-action-icon"><Radio size={28} /></span>
+            <span>
+              <strong>Play Online</strong>
+              <small>Find an opponent at your level</small>
+            </span>
+            <ChevronRight size={24} />
+          </Link>
+          <Link className="home-action" href="/play">
+            <span className="home-action-icon"><UserRound size={26} /></span>
+            <span>
+              <strong>Play a Friend</strong>
+              <small>Create a private game</small>
+            </span>
+            <ChevronRight size={22} />
+          </Link>
+          <Link className="home-action" href="/play">
+            <span className="home-action-icon"><Bot size={27} /></span>
+            <span>
+              <strong>Practice Game</strong>
+              <small>Play without a rating</small>
+            </span>
+            <ChevronRight size={22} />
+          </Link>
+        </div>
+
+        <div className="board-size-box">
+          <div>
+            <strong>Quick game</strong>
+            <span><Clock3 size={14} /> Choose a board</span>
+          </div>
+          <div className="board-size-links">
+            {([9, 13, 19] as const).map((size) => (
+              <Link href={`/play?size=${size}`} key={size}>
+                <strong>{size}×{size}</strong>
+                <small>{size === 9 ? "Quick" : size === 13 ? "Standard" : "Classic"}</small>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </section>

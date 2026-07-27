@@ -1,8 +1,16 @@
 "use client";
 
-import { Activity, Database, ShieldCheck, Users } from "lucide-react";
+import {
+  Activity,
+  BookOpen,
+  ChevronRight,
+  Database,
+  Puzzle,
+  Swords,
+  Trophy,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/Card";
 
 type HealthState = "checking" | "online" | "offline";
 
@@ -12,7 +20,6 @@ export function StatusOverview() {
 
   useEffect(() => {
     let active = true;
-
     Promise.allSettled([
       fetch("/api/health").then((response) => {
         if (!response.ok) throw new Error("Backend unavailable");
@@ -27,53 +34,63 @@ export function StatusOverview() {
       setBackend(backendResult.status === "fulfilled" ? "online" : "offline");
       setDatabase(databaseResult.status === "fulfilled" ? "online" : "offline");
     });
-
     return () => {
       active = false;
     };
   }, []);
 
   return (
-    <section className="platform-overview" id="stats">
-      <div className="section-heading">
-        <div>
-          <span className="section-kicker">Platform pulse</span>
-          <h2>Everything you need to enter the flow.</h2>
+    <section className="home-sections" id="stats">
+      <div className="home-panel">
+        <div className="home-panel-title">
+          <div><Swords size={21} /><h2>Games happening now</h2></div>
+          <Link href="/play">Play <ChevronRight size={16} /></Link>
         </div>
-        <p>Play fast, learn deeply, and keep every game in one calm place.</p>
+        <div className="live-games-list">
+          <div><strong>9×9</strong><span>Fast games</span><b>184 playing</b></div>
+          <div><strong>13×13</strong><span>Standard games</span><b>96 playing</b></div>
+          <div><strong>19×19</strong><span>Classic games</span><b>412 playing</b></div>
+        </div>
       </div>
 
-      <div className="overview-grid">
-        <Card className="overview-card overview-card--accent">
-          <div className="overview-icon"><Users size={22} /></div>
-          <span className="overview-label">Players online</span>
-          <strong>1,284</strong>
-          <small><i /> 12% more this week</small>
-        </Card>
-        <Card className="overview-card">
-          <div className="overview-icon"><Activity size={22} /></div>
-          <span className="overview-label">Live games</span>
-          <strong>376</strong>
-          <small>Across all board sizes</small>
-        </Card>
-        <Card className="overview-card">
-          <div className="overview-icon"><ShieldCheck size={22} /></div>
-          <span className="overview-label">Game service</span>
-          <strong className="status-value">
-            <i className={`status-dot status-dot--${backend}`} />
-            {backend === "checking" ? "Checking" : backend === "online" ? "Online" : "Offline"}
-          </strong>
-          <small>Server-authoritative play</small>
-        </Card>
-        <Card className="overview-card">
-          <div className="overview-icon"><Database size={22} /></div>
-          <span className="overview-label">Game archive</span>
-          <strong className="status-value">
-            <i className={`status-dot status-dot--${database}`} />
-            {database === "checking" ? "Checking" : database === "online" ? "Connected" : "Setup needed"}
-          </strong>
-          <small>PostgreSQL persistence</small>
-        </Card>
+      <div className="home-panel">
+        <div className="home-panel-title">
+          <div><BookOpen size={21} /><h2>Learn Go</h2></div>
+          <Link href="/#learn">All lessons <ChevronRight size={16} /></Link>
+        </div>
+        <div className="lesson-card" id="learn">
+          <span className="lesson-number">01</span>
+          <div>
+            <strong>Your first game</strong>
+            <p>Learn liberties, captures and how a game ends.</p>
+            <span className="lesson-progress"><i /></span>
+          </div>
+          <button type="button">Start</button>
+        </div>
+        <div className="lesson-card">
+          <span className="lesson-number"><Puzzle size={19} /></span>
+          <div>
+            <strong>Daily problem</strong>
+            <p>Black to play. Find the best local move.</p>
+          </div>
+          <button type="button">Solve</button>
+        </div>
+      </div>
+
+      <div className="home-panel home-panel--compact">
+        <div className="home-panel-title">
+          <div><Trophy size={21} /><h2>Community</h2></div>
+          <Link href="/leaderboard">Leaderboard <ChevronRight size={16} /></Link>
+        </div>
+        <div className="community-stats">
+          <div><span>Players online</span><strong>1,284</strong></div>
+          <div><span>Live games</span><strong>376</strong></div>
+          <div><span>Games today</span><strong>8,451</strong></div>
+        </div>
+        <div className="service-status">
+          <span><Activity size={15} /> Game service <i className={`status-dot status-dot--${backend}`} /></span>
+          <span><Database size={15} /> Database <i className={`status-dot status-dot--${database}`} /></span>
+        </div>
       </div>
     </section>
   );

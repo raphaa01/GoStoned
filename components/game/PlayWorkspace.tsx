@@ -43,9 +43,9 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     <>
       <header className="play-header">
         <div>
-          <span className="section-kicker">Play online</span>
-          <h1>Enter the board.</h1>
-          <p>Choose your pace. We’ll find the right opponent.</p>
+          <span className="section-kicker">Online Go</span>
+          <h1>Play</h1>
+          <p>Choose a board size and find an opponent.</p>
         </div>
         <BoardSizeSelector onChange={changeSize} value={boardSize} />
       </header>
