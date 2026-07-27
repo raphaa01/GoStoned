@@ -7,25 +7,29 @@ import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
-import type { BoardSize } from "@/lib/game/types";
+import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { ActiveGamePanel } from "./ActiveGamePanel";
 import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
+import { TimeControlSelector } from "./TimeControlSelector";
 
 type QueueState = {
   status: "idle" | "waiting" | "matched";
   gameId: string | null;
   boardSize: BoardSize | null;
+  timeControl: TimeControlId | null;
 };
 
 export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) {
   const router = useRouter();
   const { playerKey, playerName, loading } = usePlayerIdentity();
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
+  const [timeControl, setTimeControl] = useState<TimeControlId>("rapid");
   const [queueStatus, setQueueStatus] = useState<"idle" | "waiting">("idle");
   const [activeGame, setActiveGame] = useState<{
     gameId: string;
     boardSize: BoardSize;
+    timeControl: TimeControlId;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +37,21 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
 
   const handleQueueState = useCallback((queue: QueueState, enterMatchedGame: boolean) => {
     if (queue.boardSize) setBoardSize(queue.boardSize);
-    if (queue.status === "matched" && queue.gameId && queue.boardSize) {
+    if (queue.timeControl) setTimeControl(queue.timeControl);
+    if (
+      queue.status === "matched" &&
+      queue.gameId &&
+      queue.boardSize &&
+      queue.timeControl
+    ) {
       if (enterMatchedGame) {
         router.replace(`/game/${queue.gameId}`);
       } else {
-        setActiveGame({ gameId: queue.gameId, boardSize: queue.boardSize });
+        setActiveGame({
+          gameId: queue.gameId,
+          boardSize: queue.boardSize,
+          timeControl: queue.timeControl,
+        });
         setQueueStatus("idle");
       }
       return;
@@ -82,7 +96,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       const response = await fetch("/api/matchmaking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerKey, boardSize }),
+        body: JSON.stringify({ playerKey, boardSize, timeControl }),
       });
       const data = await readApi<{ matchmaking: QueueState }>(response);
       handleQueueState(data.matchmaking, true);
@@ -145,6 +159,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         {activeGame ? (
           <ActiveGamePanel
             boardSize={activeGame.boardSize}
+            timeControl={activeGame.timeControl}
             busy={busy}
             error={error}
             onLeave={() => setConfirmLeave(true)}
@@ -152,13 +167,23 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
           />
         ) : (
           <>
-            <div>
-              <span>Board size</span>
-              <BoardSizeSelector
-                disabled={queueStatus === "waiting"}
-                onChange={setBoardSize}
-                value={boardSize}
-              />
+            <div className="lobby-options">
+              <div>
+                <span>Board size</span>
+                <BoardSizeSelector
+                  disabled={queueStatus === "waiting"}
+                  onChange={setBoardSize}
+                  value={boardSize}
+                />
+              </div>
+              <div>
+                <span>Time control</span>
+                <TimeControlSelector
+                  disabled={queueStatus === "waiting"}
+                  onChange={setTimeControl}
+                  value={timeControl}
+                />
+              </div>
             </div>
             <MatchmakingPanel
               boardSize={boardSize}
@@ -169,6 +194,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
               playerName={playerName}
               ready={Boolean(playerKey) && !loading}
               status={queueStatus}
+              timeControl={timeControl}
             />
           </>
         )}

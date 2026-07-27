@@ -1,7 +1,14 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { query, withTransaction } from "@/lib/db";
 import { applyMove, boardHash, createEmptyBoard, replayMoves, scoreChinese } from "./goEngine";
-import type { BoardSize, GameState, Stone, StoredMove } from "./types";
+import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
+import type {
+  BoardSize,
+  GameState,
+  Stone,
+  StoredMove,
+  TimeControlId,
+} from "./types";
 
 type GameRow = {
   id: string;
@@ -14,6 +21,15 @@ type GameRow = {
   status: "active" | "finished";
   result: string | null;
   komi: string | number;
+  time_control: TimeControlId;
+  main_time_seconds: number;
+  byo_yomi_periods: number;
+  byo_yomi_seconds: number;
+  black_time_remaining_ms: string | number;
+  white_time_remaining_ms: string | number;
+  black_periods_remaining: number;
+  white_periods_remaining: number;
+  turn_started_at: Date;
   version: number;
   started_at: Date;
   finished_at: Date | null;
@@ -67,7 +83,11 @@ async function loadGame(
   ) => client ? client.query<T>(text, [...values]) : query<T>(text, values);
   const gameResult = await execute<GameRow>(
     `SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
-            g.status, g.result, g.komi, g.version, g.started_at, g.finished_at,
+            g.status, g.result, g.komi, g.time_control, g.main_time_seconds,
+            g.byo_yomi_periods, g.byo_yomi_seconds,
+            g.black_time_remaining_ms, g.white_time_remaining_ms,
+            g.black_periods_remaining, g.white_periods_remaining,
+            g.turn_started_at, g.version, g.started_at, g.finished_at,
             COALESCE(
               NULLIF(BTRIM(black_user.display_name), ''),
               black_user.username,
@@ -99,8 +119,52 @@ async function loadGame(
   return { game, moveRows: movesResult.rows };
 }
 
-function serializeGame(game: GameRow, moveRows: MoveRow[]): GameState {
+function currentTurn(game: GameRow, moveRows: MoveRow[]): Stone | null {
+  if (game.status !== "active") return null;
+  return moveRows.length % 2 === 0 ? "black" : "white";
+}
+
+function calculateClocks(
+  game: GameRow,
+  turn: Stone | null,
+  now: Date,
+): { black: ClockAdvance; white: ClockAdvance } {
+  const periodTimeMs = game.byo_yomi_seconds * 1_000;
+  const elapsedMs = Math.max(0, now.getTime() - game.turn_started_at.getTime());
+  const blackInput = {
+    mainTimeMs: Number(game.black_time_remaining_ms),
+    periodsRemaining: game.black_periods_remaining,
+    periodTimeMs,
+  };
+  const whiteInput = {
+    mainTimeMs: Number(game.white_time_remaining_ms),
+    periodsRemaining: game.white_periods_remaining,
+    periodTimeMs,
+  };
+  return {
+    black:
+      turn === "black"
+        ? advanceClock({ ...blackInput, elapsedMs })
+        : restingClock(
+            blackInput.mainTimeMs,
+            blackInput.periodsRemaining,
+            blackInput.periodTimeMs,
+          ),
+    white:
+      turn === "white"
+        ? advanceClock({ ...whiteInput, elapsedMs })
+        : restingClock(
+            whiteInput.mainTimeMs,
+            whiteInput.periodsRemaining,
+            whiteInput.periodTimeMs,
+          ),
+  };
+}
+
+function serializeGame(game: GameRow, moveRows: MoveRow[], now = new Date()): GameState {
   const moves = mapMoves(moveRows);
+  const turn = currentTurn(game, moveRows);
+  const clocks = calculateClocks(game, turn, now);
   return {
     id: game.id,
     boardSize: game.board_size,
@@ -115,10 +179,37 @@ function serializeGame(game: GameRow, moveRows: MoveRow[]): GameState {
     version: game.version,
     startedAt: game.started_at.toISOString(),
     finishedAt: game.finished_at?.toISOString() ?? null,
-    turn: game.status === "active" ? (moves.length % 2 === 0 ? "black" : "white") : null,
+    timeControl: game.time_control,
+    clock: {
+      serverNow: now.toISOString(),
+      mainTimeSeconds: game.main_time_seconds,
+      byoYomiPeriods: game.byo_yomi_periods,
+      byoYomiSeconds: game.byo_yomi_seconds,
+      black: {
+        mainTimeMs: clocks.black.mainTimeMs,
+        periodsRemaining: clocks.black.periodsRemaining,
+        displayTimeMs: clocks.black.displayTimeMs,
+        phase: clocks.black.phase,
+      },
+      white: {
+        mainTimeMs: clocks.white.mainTimeMs,
+        periodsRemaining: clocks.white.periodsRemaining,
+        displayTimeMs: clocks.white.displayTimeMs,
+        phase: clocks.white.phase,
+      },
+    },
+    turn,
     moveCount: moves.length,
     board: replayMoves(game.board_size, moves),
     moves,
+  };
+}
+
+function withPlayerNames(row: GameRow, original: GameRow): GameRow {
+  return {
+    ...row,
+    black_player_name: original.black_player_name,
+    white_player_name: original.white_player_name,
   };
 }
 
@@ -151,10 +242,51 @@ async function recordFinishedStats(
   }
 }
 
+async function finishOnTime(
+  client: PoolClient,
+  game: GameRow,
+  moveRows: MoveRow[],
+  timedOutColor: Stone,
+  now: Date,
+): Promise<GameState> {
+  const winnerKey =
+    timedOutColor === "black" ? game.white_player_key : game.black_player_key;
+  const winnerColor = timedOutColor === "black" ? "W" : "B";
+  const updated = await client.query<GameRow>(
+    `UPDATE games
+        SET status = 'finished', result = $2, winner_key = $3,
+            black_time_remaining_ms = CASE WHEN $4 = 'black' THEN 0 ELSE black_time_remaining_ms END,
+            white_time_remaining_ms = CASE WHEN $4 = 'white' THEN 0 ELSE white_time_remaining_ms END,
+            black_periods_remaining = CASE WHEN $4 = 'black' THEN 0 ELSE black_periods_remaining END,
+            white_periods_remaining = CASE WHEN $4 = 'white' THEN 0 ELSE white_periods_remaining END,
+            finished_at = $5, updated_at = $5, version = version + 1
+      WHERE id = $1
+      RETURNING id, board_size, black_player_key, white_player_key, winner_key,
+                status, result, komi, time_control, main_time_seconds,
+                byo_yomi_periods, byo_yomi_seconds, black_time_remaining_ms,
+                white_time_remaining_ms, black_periods_remaining,
+                white_periods_remaining, turn_started_at, version,
+                started_at, finished_at`,
+    [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
+  );
+  await recordFinishedStats(client, game, winnerKey);
+  return serializeGame(withPlayerNames(updated.rows[0], game), moveRows, now);
+}
+
 export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
-  const { game, moveRows } = await loadGame(null, gameId);
-  assertParticipant(game, playerKey);
-  return serializeGame(game, moveRows);
+  return withTransaction(async (client) => {
+    const { game, moveRows } = await loadGame(client, gameId, true);
+    assertParticipant(game, playerKey);
+    const now = new Date();
+    const turn = currentTurn(game, moveRows);
+    if (turn) {
+      const clocks = calculateClocks(game, turn, now);
+      if (clocks[turn].timedOut) {
+        return finishOnTime(client, game, moveRows, turn, now);
+      }
+    }
+    return serializeGame(game, moveRows, now);
+  });
 }
 
 export async function submitMove(
@@ -173,6 +305,13 @@ export async function submitMove(
     const expectedPlayer = color === "black" ? game.black_player_key : game.white_player_key;
     if (playerKey !== expectedPlayer) {
       throw new GameServiceError("It is not your turn.", 409, "not_your_turn");
+    }
+
+    const now = new Date();
+    const clocks = calculateClocks(game, color, now);
+    const playerClock = clocks[color];
+    if (playerClock.timedOut) {
+      return finishOnTime(client, game, moveRows, color, now);
     }
 
     const currentBoard = replayMoves(game.board_size, mapMoves(moveRows));
@@ -220,39 +359,57 @@ export async function submitMove(
       const updated = await client.query<GameRow>(
         `UPDATE games
             SET status = 'finished', result = $2, winner_key = $3,
-                finished_at = NOW(), updated_at = NOW(), version = version + 1
+                black_time_remaining_ms = $4,
+                white_time_remaining_ms = $5,
+                black_periods_remaining = $6,
+                white_periods_remaining = $7,
+                finished_at = $8, updated_at = $8, version = version + 1
           WHERE id = $1
           RETURNING id, board_size, black_player_key, white_player_key, winner_key,
-                    status, result, komi, version, started_at, finished_at`,
-        [game.id, score.result, winnerKey],
+                    status, result, komi, time_control, main_time_seconds,
+                    byo_yomi_periods, byo_yomi_seconds, black_time_remaining_ms,
+                    white_time_remaining_ms, black_periods_remaining,
+                    white_periods_remaining, turn_started_at, version,
+                    started_at, finished_at`,
+        [
+          game.id,
+          score.result,
+          winnerKey,
+          color === "black" ? playerClock.mainTimeMs : Number(game.black_time_remaining_ms),
+          color === "white" ? playerClock.mainTimeMs : Number(game.white_time_remaining_ms),
+          color === "black" ? playerClock.periodsRemaining : game.black_periods_remaining,
+          color === "white" ? playerClock.periodsRemaining : game.white_periods_remaining,
+          now,
+        ],
       );
       await recordFinishedStats(client, game, winnerKey);
-      return serializeGame(
-        {
-          ...updated.rows[0],
-          black_player_name: game.black_player_name,
-          white_player_name: game.white_player_name,
-        },
-        moveRows,
-      );
+      return serializeGame(withPlayerNames(updated.rows[0], game), moveRows, now);
     }
 
     const updated = await client.query<GameRow>(
       `UPDATE games
-          SET updated_at = NOW(), version = version + 1
+          SET black_time_remaining_ms = $2,
+              white_time_remaining_ms = $3,
+              black_periods_remaining = $4,
+              white_periods_remaining = $5,
+              turn_started_at = $6, updated_at = NOW(), version = version + 1
         WHERE id = $1
         RETURNING id, board_size, black_player_key, white_player_key, winner_key,
-                  status, result, komi, version, started_at, finished_at`,
-      [game.id],
+                  status, result, komi, time_control, main_time_seconds,
+                  byo_yomi_periods, byo_yomi_seconds, black_time_remaining_ms,
+                  white_time_remaining_ms, black_periods_remaining,
+                  white_periods_remaining, turn_started_at, version,
+                  started_at, finished_at`,
+      [
+        game.id,
+        color === "black" ? playerClock.mainTimeMs : Number(game.black_time_remaining_ms),
+        color === "white" ? playerClock.mainTimeMs : Number(game.white_time_remaining_ms),
+        color === "black" ? playerClock.periodsRemaining : game.black_periods_remaining,
+        color === "white" ? playerClock.periodsRemaining : game.white_periods_remaining,
+        now,
+      ],
     );
-    return serializeGame(
-      {
-        ...updated.rows[0],
-        black_player_name: game.black_player_name,
-        white_player_name: game.white_player_name,
-      },
-      moveRows,
-    );
+    return serializeGame(withPlayerNames(updated.rows[0], game), moveRows, now);
   });
 }
 
@@ -273,17 +430,14 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
               finished_at = NOW(), updated_at = NOW(), version = version + 1
         WHERE id = $1
         RETURNING id, board_size, black_player_key, white_player_key, winner_key,
-                  status, result, komi, version, started_at, finished_at`,
+                  status, result, komi, time_control, main_time_seconds,
+                  byo_yomi_periods, byo_yomi_seconds, black_time_remaining_ms,
+                  white_time_remaining_ms, black_periods_remaining,
+                  white_periods_remaining, turn_started_at, version,
+                  started_at, finished_at`,
       [game.id, `${winnerColor}+R`, winnerKey],
     );
     await recordFinishedStats(client, game, winnerKey);
-    return serializeGame(
-      {
-        ...updated.rows[0],
-        black_player_name: game.black_player_name,
-        white_player_name: game.white_player_name,
-      },
-      moveRows,
-    );
+    return serializeGame(withPlayerNames(updated.rows[0], game), moveRows);
   });
 }

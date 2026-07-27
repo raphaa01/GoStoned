@@ -1,12 +1,14 @@
 "use client";
 
 import { Radio, Search, Users, X } from "lucide-react";
-import type { BoardSize } from "@/lib/game/types";
+import { getTimeControl } from "@/lib/game/timeControls";
+import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
 type MatchmakingPanelProps = {
   boardSize: BoardSize;
+  timeControl: TimeControlId;
   status: "idle" | "waiting";
   busy: boolean;
   ready: boolean;
@@ -18,6 +20,7 @@ type MatchmakingPanelProps = {
 
 export function MatchmakingPanel({
   boardSize,
+  timeControl,
   status,
   busy,
   ready,
@@ -27,6 +30,7 @@ export function MatchmakingPanel({
   onCancel,
 }: MatchmakingPanelProps) {
   const waiting = status === "waiting";
+  const selectedTime = getTimeControl(timeControl);
 
   return (
     <section className="matchmaking-panel" aria-live="polite">
@@ -47,8 +51,8 @@ export function MatchmakingPanel({
           <strong>{boardSize}×{boardSize}</strong>
         </div>
         <div>
-          <span>Mode</span>
-          <strong>Live</strong>
+          <span>Clock</span>
+          <strong>{selectedTime.name}</strong>
         </div>
         <div>
           <span>Rules</span>
@@ -60,7 +64,10 @@ export function MatchmakingPanel({
         <>
           <div className="queue-indicator">
             <Search className="spin" size={20} />
-            <span>Looking for another {boardSize}×{boardSize} player…</span>
+            <span>
+              Looking for another {boardSize}×{boardSize}{" "}
+              {selectedTime.name.toLowerCase()} player…
+            </span>
           </div>
           <Button className="match-button" disabled={busy} onClick={onCancel} size="lg" variant="secondary">
             <X size={20} />
@@ -75,7 +82,7 @@ export function MatchmakingPanel({
       )}
       {error ? <p className="match-error">{error}</p> : null}
       <p className="panel-note">
-        Open this page in a second browser or an incognito window and choose the same board size.
+        Both players must choose the same board size and time control.
       </p>
     </section>
   );

@@ -1,5 +1,7 @@
 import { CircleDot, Flag, SkipForward } from "lucide-react";
+import { getTimeControl } from "@/lib/game/timeControls";
 import type { GameState, Stone } from "@/lib/game/types";
+import { PlayerClock } from "./PlayerClock";
 
 type GamePanelProps = {
   game: GameState;
@@ -35,15 +37,20 @@ export function GamePanel({
     <aside className="game-panel" aria-live="polite">
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
-        <div>
+        <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
           <span>{yourColor === "white" ? "You · White" : "Opponent · White"}</span>
         </div>
+        <PlayerClock
+          clock={game.clock}
+          color="white"
+          running={game.status === "active" && game.turn === "white"}
+        />
       </div>
 
       <div className="game-meta-strip">
         <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
-        <span>Chinese rules</span>
+        <span>{getTimeControl(game.timeControl).name}</span>
         <span>Move {game.moveCount}</span>
       </div>
 
@@ -61,10 +68,15 @@ export function GamePanel({
 
       <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
-        <div>
+        <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
           <span>{yourColor === "black" ? "You · Black" : "Opponent · Black"}</span>
         </div>
+        <PlayerClock
+          clock={game.clock}
+          color="black"
+          running={game.status === "active" && game.turn === "black"}
+        />
       </div>
 
       {game.status === "active" ? (

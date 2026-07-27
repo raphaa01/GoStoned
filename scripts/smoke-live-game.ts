@@ -27,12 +27,13 @@ async function run() {
   const first = await post<{ matchmaking: { status: string } }>("/api/matchmaking", {
     playerKey: blackPlayer,
     boardSize: 9,
+    timeControl: "rapid",
   });
   assert.equal(first.matchmaking.status, "waiting");
 
   const second = await post<{ matchmaking: { status: string; gameId: string } }>(
     "/api/matchmaking",
-    { playerKey: whitePlayer, boardSize: 9 },
+    { playerKey: whitePlayer, boardSize: 9, timeControl: "rapid" },
   );
   assert.equal(second.matchmaking.status, "matched");
   assert.ok(second.matchmaking.gameId);

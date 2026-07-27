@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS games (
   result TEXT,
   komi NUMERIC(4,1) NOT NULL DEFAULT 6.5,
   rules TEXT NOT NULL DEFAULT 'chinese',
+  time_control TEXT NOT NULL DEFAULT 'rapid'
+    CHECK (time_control IN ('blitz', 'rapid', 'classic')),
+  main_time_seconds INT NOT NULL DEFAULT 600 CHECK (main_time_seconds > 0),
+  byo_yomi_periods INT NOT NULL DEFAULT 5 CHECK (byo_yomi_periods > 0),
+  byo_yomi_seconds INT NOT NULL DEFAULT 30 CHECK (byo_yomi_seconds > 0),
+  black_time_remaining_ms BIGINT NOT NULL DEFAULT 600000
+    CHECK (black_time_remaining_ms >= 0),
+  white_time_remaining_ms BIGINT NOT NULL DEFAULT 600000
+    CHECK (white_time_remaining_ms >= 0),
+  black_periods_remaining INT NOT NULL DEFAULT 5 CHECK (black_periods_remaining >= 0),
+  white_periods_remaining INT NOT NULL DEFAULT 5 CHECK (white_periods_remaining >= 0),
+  turn_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   version INT NOT NULL DEFAULT 0,
   started_at TIMESTAMP DEFAULT NOW(),
   finished_at TIMESTAMP,
@@ -54,6 +66,8 @@ CREATE TABLE IF NOT EXISTS moves (
 CREATE TABLE IF NOT EXISTS matchmaking_queue (
   player_key TEXT PRIMARY KEY,
   board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
+  time_control TEXT NOT NULL DEFAULT 'rapid'
+    CHECK (time_control IN ('blitz', 'rapid', 'classic')),
   status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'matched')),
   game_id UUID REFERENCES games(id) ON DELETE SET NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -106,17 +120,28 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 ALTER TABLE games ADD COLUMN IF NOT EXISTS result TEXT;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS komi NUMERIC(4,1) NOT NULL DEFAULT 6.5;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rules TEXT NOT NULL DEFAULT 'chinese';
+ALTER TABLE games ADD COLUMN IF NOT EXISTS time_control TEXT NOT NULL DEFAULT 'rapid';
+ALTER TABLE games ADD COLUMN IF NOT EXISTS main_time_seconds INT NOT NULL DEFAULT 600;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS byo_yomi_periods INT NOT NULL DEFAULT 5;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS byo_yomi_seconds INT NOT NULL DEFAULT 30;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS black_time_remaining_ms BIGINT NOT NULL DEFAULT 600000;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS white_time_remaining_ms BIGINT NOT NULL DEFAULT 600000;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS black_periods_remaining INT NOT NULL DEFAULT 5;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS white_periods_remaining INT NOT NULL DEFAULT 5;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE games ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 0;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 ALTER TABLE moves ADD COLUMN IF NOT EXISTS board_hash TEXT;
+ALTER TABLE matchmaking_queue ADD COLUMN IF NOT EXISTS time_control TEXT NOT NULL DEFAULT 'rapid';
 
 CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
 CREATE INDEX IF NOT EXISTS idx_games_board_size ON games(board_size);
 CREATE INDEX IF NOT EXISTS idx_moves_game_id ON moves(game_id);
 CREATE INDEX IF NOT EXISTS idx_player_stats_player_key ON player_stats(player_key);
 CREATE INDEX IF NOT EXISTS idx_player_stats_board_size ON player_stats(board_size);
+DROP INDEX IF EXISTS idx_matchmaking_waiting;
 CREATE INDEX IF NOT EXISTS idx_matchmaking_waiting
-  ON matchmaking_queue(board_size, created_at)
+  ON matchmaking_queue(board_size, time_control, created_at)
   WHERE status = 'waiting';
 CREATE INDEX IF NOT EXISTS idx_matchmaking_game_id ON matchmaking_queue(game_id);
 CREATE INDEX IF NOT EXISTS idx_games_active_board

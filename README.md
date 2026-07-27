@@ -11,6 +11,8 @@ GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste
 - Gast-Identität pro Browser
 - Matchmaking für 9×9, 13×13 und 19×19
 - Live-Partien über eine deploybare Polling-API
+- auswählbare Blitz-, Rapid- und Classic-Uhren mit japanischem Byo-yomi
+- serverseitige Zeitmessung und automatisch gespeicherter Sieg auf Zeit
 - serverseitige Zugreihenfolge, Captures, Suicide- und Superko-Prüfung
 - Pass, zwei aufeinanderfolgende Pässe, Chinese Area Scoring und Resign
 - dauerhaft gespeicherte Spiele, Züge, Ergebnisse und Statistiken
@@ -66,11 +68,14 @@ Wenn `npm run dev` und Docker laufen, testet dieser Befehl automatisch einen vol
 ```powershell
 npm run test:auth
 npm run test:live
+npm run test:clock
 ```
 
 `test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
 Spieler, Matchmaking, Chat und Resign. `test:live` prüft zusätzlich eine
 vollständige Gastpartie mit serverseitiger Wertung.
+`test:clock` erzwingt kontrolliert einen Zeitablauf und prüft das serverseitige
+Ergebnis.
 
 ## Datenbank und Migrationen
 

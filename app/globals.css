@@ -649,13 +649,18 @@ a {
   padding: 20px;
 }
 
-.match-lobby-card > div:first-child {
+.lobby-options {
   display: grid;
-  gap: 9px;
+  gap: 14px;
   margin-bottom: 14px;
 }
 
-.match-lobby-card > div:first-child > span {
+.lobby-options > div {
+  display: grid;
+  gap: 9px;
+}
+
+.lobby-options > div > span {
   color: var(--muted-2);
   font-size: 10px;
   font-weight: 800;
@@ -702,9 +707,63 @@ a {
 }
 
 .size-selector button.is-selected,
-.leaderboard-filter button.is-selected {
+.leaderboard-filter button.is-selected,
+.time-selector button.is-selected {
   background: var(--green);
   color: #fff;
+}
+
+.time-selector {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.time-selector button {
+  background: #292826;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 9px;
+  text-align: left;
+}
+
+.time-selector button:hover:not(:disabled):not(.is-selected) {
+  background: #343230;
+  border-color: var(--line);
+}
+
+.time-selector button:disabled {
+  cursor: not-allowed;
+}
+
+.time-selector-heading {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+
+.time-selector-heading svg {
+  flex: 0 0 auto;
+}
+
+.time-selector strong {
+  color: inherit;
+  font-size: 11px;
+}
+
+.time-selector button > span:not(.time-selector-heading) {
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.time-selector small {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-size: 7px;
 }
 
 .matchmaking-panel,
@@ -984,13 +1043,14 @@ a {
   align-items: center;
   display: grid;
   gap: 11px;
-  grid-template-columns: 34px 1fr;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   padding: 5px 2px;
 }
 
-.game-panel-player > div {
+.game-player-name {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .game-panel-player strong {
@@ -1005,6 +1065,49 @@ a {
 
 .game-panel-player.is-you strong {
   color: #b5d892;
+}
+
+.player-clock {
+  background: #272624;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  min-width: 96px;
+  padding: 7px 9px;
+  text-align: right;
+}
+
+.player-clock strong {
+  color: #dddcd7;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.025em;
+  line-height: 1;
+}
+
+.player-clock span {
+  font-size: 7px;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+.player-clock.is-running {
+  background: rgba(129, 182, 76, 0.17);
+  border-color: rgba(154, 207, 102, 0.45);
+  box-shadow: inset 3px 0 0 var(--green-hover);
+}
+
+.player-clock.is-running strong {
+  color: #d8f4bd;
+}
+
+.player-clock.is-byo-yomi {
+  background: rgba(210, 167, 93, 0.12);
+  border-color: rgba(210, 167, 93, 0.34);
+}
+
+.player-clock.is-byo-yomi strong {
+  color: #f0c982;
 }
 
 .player-stone {
@@ -2140,6 +2243,23 @@ a {
     padding: 13px;
   }
 
+  .time-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .time-selector button {
+    align-items: center;
+    grid-template-columns: minmax(80px, 0.8fr) minmax(105px, 1fr) 1fr;
+  }
+
+  .time-selector button > span:not(.time-selector-heading) {
+    text-align: center;
+  }
+
+  .time-selector small {
+    text-align: right;
+  }
+
   .size-selector button,
   .leaderboard-filter button {
     padding: 8px 7px;
@@ -2241,6 +2361,15 @@ a {
 
   .game-connection {
     display: none;
+  }
+
+  .game-panel-player {
+    gap: 8px;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+
+  .player-clock {
+    min-width: 90px;
   }
 
   .game-exit {

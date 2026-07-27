@@ -1,4 +1,5 @@
 export type BoardSize = 9 | 13 | 19;
+export type TimeControlId = "blitz" | "rapid" | "classic";
 export type Stone = "black" | "white";
 export type Intersection = Stone | null;
 export type Board = Intersection[][];
@@ -45,10 +46,29 @@ export type GameState = {
   version: number;
   startedAt: string;
   finishedAt: string | null;
+  timeControl: TimeControlId;
+  clock: GameClockState;
   turn: Stone | null;
   moveCount: number;
   board: Board;
   moves: StoredMove[];
+};
+
+export type PlayerClockState = {
+  mainTimeMs: number;
+  periodsRemaining: number;
+  displayTimeMs: number;
+  phase: "main" | "byo-yomi";
+};
+
+export type GameClockState = {
+  serverNow: string;
+  clientReceivedAt?: number;
+  mainTimeSeconds: number;
+  byoYomiPeriods: number;
+  byoYomiSeconds: number;
+  black: PlayerClockState;
+  white: PlayerClockState;
 };
 
 export type Score = {

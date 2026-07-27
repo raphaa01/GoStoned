@@ -19,6 +19,7 @@ function resultDescription(result: string | null) {
   if (winner !== "B" && winner !== "W") return result;
   const color = winner === "B" ? "Black" : "White";
   if (detail === "R") return `${color} wins by resignation`;
+  if (detail === "T") return `${color} wins on time`;
   return `${color} wins by ${detail} points`;
 }
 

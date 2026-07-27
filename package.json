@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
+    "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts"

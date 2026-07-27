@@ -29,7 +29,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const resultShownForGame = useRef<string | null>(null);
 
   const acceptGameState = useCallback((nextGame: GameState) => {
-    setGame(nextGame);
+    setGame({
+      ...nextGame,
+      clock: { ...nextGame.clock, clientReceivedAt: Date.now() },
+    });
     if (
       nextGame.status === "finished" &&
       resultShownForGame.current !== nextGame.id

@@ -1,12 +1,14 @@
 "use client";
 
 import { LogOut, Play, Swords } from "lucide-react";
-import type { BoardSize } from "@/lib/game/types";
+import { getTimeControl } from "@/lib/game/timeControls";
+import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
 type ActiveGamePanelProps = {
   boardSize: BoardSize;
+  timeControl: TimeControlId;
   busy: boolean;
   error: string | null;
   onLeave: () => void;
@@ -15,6 +17,7 @@ type ActiveGamePanelProps = {
 
 export function ActiveGamePanel({
   boardSize,
+  timeControl,
   busy,
   error,
   onLeave,
@@ -35,7 +38,7 @@ export function ActiveGamePanel({
 
       <div className="active-game-summary">
         <span>Board</span>
-        <strong>{boardSize}×{boardSize}</strong>
+        <strong>{boardSize}×{boardSize} · {getTimeControl(timeControl).name}</strong>
         <p>Leaving an active game counts as a resignation.</p>
       </div>
 

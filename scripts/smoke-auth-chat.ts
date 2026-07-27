@@ -96,13 +96,21 @@ async function run() {
 
   const waiting = await request(
     "/api/matchmaking",
-    json("POST", { playerKey: firstUser.playerKey, boardSize: 9 }, firstLogin.cookie!),
+    json(
+      "POST",
+      { playerKey: firstUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      firstLogin.cookie!,
+    ),
   );
   assert.equal((waiting.body.matchmaking as { status: string }).status, "waiting");
 
   const matched = await request(
     "/api/matchmaking",
-    json("POST", { playerKey: secondUser.playerKey, boardSize: 9 }, registeredSecond.cookie!),
+    json(
+      "POST",
+      { playerKey: secondUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      registeredSecond.cookie!,
+    ),
   );
   const gameId = (matched.body.matchmaking as { gameId: string }).gameId;
   assert.ok(gameId);
