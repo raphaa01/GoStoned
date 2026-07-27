@@ -11,6 +11,54 @@
 - Add no unnecessary libraries.
 - Do not perform large refactors without an explicit request.
 
+## Parallel collaboration
+
+These rules apply whenever more than one developer or agent may work on the repository.
+
+### Claim work before editing
+
+1. Create or claim a GitHub issue for every task before changing files.
+2. Record the task owner, branch name, intended outcome, and the main files or areas expected to change.
+3. One person owns a task and its branch at a time. Never have two people push to the same branch.
+4. Before starting, check active issues and open pull requests for overlapping work.
+5. If two tasks need the same file or interface, agree on ownership and merge order before editing. Split the work by a stable boundary when possible.
+
+### Branch and synchronization rules
+
+- Never develop directly on `main`.
+- Humans should use `feature/<developer>/<short-task-name>`, `fix/<developer>/<short-task-name>`, or `chore/<developer>/<short-task-name>` branches. Codex uses `codex/<short-task-name>`.
+- Start every branch from the latest `origin/main`.
+- Fetch `origin` before each work session and before opening or updating a pull request.
+- Before requesting final review, incorporate the latest `origin/main` into the feature branch and run all required checks again.
+- Rebase only a branch that nobody else uses. Never rewrite shared branch history.
+- Do not mix unrelated fixes, formatting, generated files, or cleanup into a feature branch.
+
+### High-conflict files and interfaces
+
+- Coordinate before changing shared configuration, `package.json`, `package-lock.json`, `.env.example`, `lib/db.ts`, `db/schema.sql`, authentication code, or public API and component interfaces.
+- Assign migration numbers before creating migration files so two branches never introduce the same number.
+- Never edit or renumber a migration that has already been merged. Add a new numbered migration instead.
+- When changing an interface used by another active task, agree on the interface first and merge that small contract change before dependent work when practical.
+- Avoid repository-wide formatting while another feature branch is active.
+
+### Pull requests and merge order
+
+1. Open a draft pull request early so the team can see the scope and affected files.
+2. Keep each pull request focused and small enough to review independently.
+3. Describe behavior changes, affected areas, migrations, configuration steps, and validation results in the pull request.
+4. Request review from the other developer and do not merge your own pull request without that review, except for an explicitly agreed emergency.
+5. Merge overlapping pull requests one at a time. After the first merge, update and revalidate the remaining branch before merging it.
+6. Do not merge with unresolved review comments, failing checks, uncertain conflicts, or undocumented manual steps.
+7. Delete a feature branch only after its pull request is merged and no follow-up work depends on it.
+
+### Conflict and handoff rules
+
+- Stop and coordinate when a merge conflict affects behavior you do not own or understand. Do not guess which version is correct.
+- Never discard another contributor's changes to make a conflict disappear.
+- When handing work to another person, leave the branch pushed and document the current state, remaining work, validation status, and known risks in the issue or pull request.
+- If work must pause, make a small checkpoint commit only when it is coherent and safe; otherwise document the uncommitted state without sharing secrets.
+- Inform the other developer immediately about breaking changes, reverted work, migration changes, or required environment updates.
+
 ## Automatic Git workflow
 
 These rules apply to every task that changes repository files.
