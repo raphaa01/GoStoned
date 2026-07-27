@@ -223,21 +223,55 @@ async function recordFinishedStats(
     const draw = winnerKey === null;
     const ratingDelta = draw ? 0 : won ? 16 : -16;
     await client.query(
-      `INSERT INTO player_stats
-         (player_key, board_size, games, wins, losses, draws, rating, highest_rating)
-       VALUES ($1, $2, 1, $3, $4, $5, 1200 + $6, GREATEST(1200, 1200 + $6))
-       ON CONFLICT (player_key, board_size) DO UPDATE
-       SET games = player_stats.games + 1,
-           wins = player_stats.wins + $3,
-           losses = player_stats.losses + $4,
-           draws = player_stats.draws + $5,
-           rating = GREATEST(100, player_stats.rating + $6),
-           highest_rating = GREATEST(
-             player_stats.highest_rating,
-             GREATEST(100, player_stats.rating + $6)
-           ),
-           updated_at = NOW()`,
-      [playerKey, game.board_size, won ? 1 : 0, !won && !draw ? 1 : 0, draw ? 1 : 0, ratingDelta],
+      `INSERT INTO player_stats (player_key, board_size)
+       VALUES ($1, $2)
+       ON CONFLICT (player_key, board_size) DO NOTHING`,
+      [playerKey, game.board_size],
+    );
+    const current = await client.query<{ rating: number }>(
+      `SELECT rating
+         FROM player_stats
+        WHERE player_key = $1 AND board_size = $2
+        FOR UPDATE`,
+      [playerKey, game.board_size],
+    );
+    const ratingBefore = current.rows[0].rating;
+    const ratingAfter = Math.max(100, ratingBefore + ratingDelta);
+    await client.query(
+      `UPDATE player_stats
+          SET games = games + 1,
+              wins = wins + $3,
+              losses = losses + $4,
+              draws = draws + $5,
+              rating = $6,
+              highest_rating = GREATEST(highest_rating, $6),
+              updated_at = NOW()
+        WHERE player_key = $1 AND board_size = $2`,
+      [
+        playerKey,
+        game.board_size,
+        won ? 1 : 0,
+        !won && !draw ? 1 : 0,
+        draw ? 1 : 0,
+        ratingAfter,
+      ],
+    );
+    await client.query(
+      `INSERT INTO player_rating_history
+         (player_key, game_id, board_size, rating_before, rating_after,
+          rating_change, result, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()))
+       ON CONFLICT (player_key, game_id) DO NOTHING`,
+      [
+        playerKey,
+        game.id,
+        game.board_size,
+        ratingBefore,
+        ratingAfter,
+        ratingAfter - ratingBefore,
+        draw ? "draw" : won ? "win" : "loss",
+        game.finished_at,
+      ],
     );
   }
 }
@@ -269,7 +303,7 @@ async function finishOnTime(
                 started_at, finished_at`,
     [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
   );
-  await recordFinishedStats(client, game, winnerKey);
+  await recordFinishedStats(client, updated.rows[0], winnerKey);
   return serializeGame(withPlayerNames(updated.rows[0], game), moveRows, now);
 }
 
@@ -382,7 +416,7 @@ export async function submitMove(
           now,
         ],
       );
-      await recordFinishedStats(client, game, winnerKey);
+      await recordFinishedStats(client, updated.rows[0], winnerKey);
       return serializeGame(withPlayerNames(updated.rows[0], game), moveRows, now);
     }
 
@@ -437,7 +471,7 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
                   started_at, finished_at`,
       [game.id, `${winnerColor}+R`, winnerKey],
     );
-    await recordFinishedStats(client, game, winnerKey);
+    await recordFinishedStats(client, updated.rows[0], winnerKey);
     return serializeGame(withPlayerNames(updated.rows[0], game), moveRows);
   });
 }

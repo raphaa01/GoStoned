@@ -19,6 +19,7 @@ const requiredTables = [
   "matchmaking_queue",
   "game_messages",
   "player_stats",
+  "player_rating_history",
 ] as const;
 
 async function checkMvp() {

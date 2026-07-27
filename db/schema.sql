@@ -87,6 +87,20 @@ CREATE TABLE IF NOT EXISTS player_stats (
   PRIMARY KEY (player_key, board_size)
 );
 
+CREATE TABLE IF NOT EXISTS player_rating_history (
+  id BIGSERIAL PRIMARY KEY,
+  player_key TEXT NOT NULL,
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
+  rating_before INT NOT NULL CHECK (rating_before >= 100),
+  rating_after INT NOT NULL CHECK (rating_after >= 100),
+  rating_change INT NOT NULL,
+  result TEXT NOT NULL CHECK (result IN ('win', 'loss', 'draw')),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (player_key, game_id),
+  CHECK (rating_change = rating_after - rating_before)
+);
+
 CREATE TABLE IF NOT EXISTS user_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -150,6 +164,16 @@ CREATE INDEX IF NOT EXISTS idx_games_active_board
 CREATE INDEX IF NOT EXISTS idx_games_started_at ON games(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_player_stats_board_rating
   ON player_stats(board_size, rating DESC, games DESC);
+CREATE INDEX IF NOT EXISTS idx_player_rating_history_player_board_time
+  ON player_rating_history(player_key, board_size, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_rating_history_game_id
+  ON player_rating_history(game_id);
+CREATE INDEX IF NOT EXISTS idx_games_black_player_finished
+  ON games(black_player_key, finished_at DESC)
+  WHERE status = 'finished';
+CREATE INDEX IF NOT EXISTS idx_games_white_player_finished
+  ON games(white_player_key, finished_at DESC)
+  WHERE status = 'finished';
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at);
@@ -196,6 +220,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_rating_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
@@ -204,11 +229,11 @@ ALTER TABLE game_messages ENABLE ROW LEVEL SECURITY;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats,
+    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats,
+    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM authenticated;
   END IF;
 END

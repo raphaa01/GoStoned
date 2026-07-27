@@ -155,7 +155,61 @@ async function run() {
     json("POST", { playerKey: firstUser.playerKey }, firstLogin.cookie!),
   );
 
-  console.log(`Accounts, sessions, matchmaking, chat, and game ${gameId} passed.`);
+  const firstProfile = await request("/api/profile", {
+    headers: { Cookie: firstLogin.cookie! },
+  });
+  const firstStats = firstProfile.body.stats as Array<{
+    boardSize: number;
+    games: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    rating: number;
+    highestRating: number;
+    ratingChange30Days: number;
+  }>;
+  const firstHistory = firstProfile.body.history as Array<{
+    gameId: string;
+    result: string;
+    ratingBefore: number;
+    ratingAfter: number;
+    ratingChange: number;
+  }>;
+  const firstRecentGames = firstProfile.body.recentGames as Array<{
+    gameId: string;
+    result: string;
+    ratingChange: number;
+  }>;
+  const firstGameHistory = firstHistory.find((entry) => entry.gameId === gameId);
+  const firstBoardStat = firstStats.find((stat) => stat.boardSize === 9);
+  assert.equal(firstBoardStat?.games, 1);
+  assert.equal(firstBoardStat?.wins, 0);
+  assert.equal(firstBoardStat?.losses, 1);
+  assert.equal(firstBoardStat?.draws, 0);
+  assert.equal(firstBoardStat?.rating, 1184);
+  assert.equal(firstBoardStat?.highestRating, 1200);
+  assert.equal(firstBoardStat?.ratingChange30Days, -16);
+  assert.equal(firstGameHistory?.result, "loss");
+  assert.equal(firstGameHistory?.ratingBefore, 1200);
+  assert.equal(firstGameHistory?.ratingAfter, 1184);
+  assert.equal(firstGameHistory?.ratingChange, -16);
+  assert.equal(firstRecentGames[0].gameId, gameId);
+  assert.equal(firstRecentGames[0].result, "loss");
+  assert.equal(firstRecentGames[0].ratingChange, -16);
+
+  const secondProfile = await request("/api/profile", {
+    headers: { Cookie: registeredSecond.cookie! },
+  });
+  const secondHistory = secondProfile.body.history as Array<{
+    gameId: string;
+    result: string;
+    ratingChange: number;
+  }>;
+  const secondGameHistory = secondHistory.find((entry) => entry.gameId === gameId);
+  assert.equal(secondGameHistory?.result, "win");
+  assert.equal(secondGameHistory?.ratingChange, 16);
+
+  console.log(`Accounts, sessions, matchmaking, chat, rating history, and game ${gameId} passed.`);
 }
 
 run().catch((error) => {
