@@ -1,36 +1,52 @@
-import { NextResponse } from "next/server";
+import { apiError, noStoreJson } from "@/lib/api/responses";
 import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type GameRow = {
-  id: string;
-  board_size: number;
-  black_player_key: string;
-  white_player_key: string;
-  winner_key: string | null;
-  status: string;
-  result: string | null;
-  started_at: Date;
-  finished_at: Date | null;
+type GameSummaryRow = {
+  active_9: string;
+  active_13: string;
+  active_19: string;
+  active_games: string;
+  games_today: string;
+  waiting_players: string;
 };
 
 export async function GET() {
   try {
-    const result = await query<GameRow>(
-      `SELECT id, board_size, black_player_key, white_player_key, winner_key,
-              status, result, started_at, finished_at
-         FROM games
-        ORDER BY started_at DESC
-        LIMIT 20`,
+    const result = await query<GameSummaryRow>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'active' AND board_size = 9)::text AS active_9,
+         COUNT(*) FILTER (WHERE status = 'active' AND board_size = 13)::text AS active_13,
+         COUNT(*) FILTER (WHERE status = 'active' AND board_size = 19)::text AS active_19,
+         COUNT(*) FILTER (WHERE status = 'active')::text AS active_games,
+         COUNT(*) FILTER (WHERE started_at >= CURRENT_DATE)::text AS games_today,
+         (
+           SELECT COUNT(*)::text
+             FROM matchmaking_queue
+            WHERE status = 'waiting'
+              AND updated_at >= NOW() - INTERVAL '5 minutes'
+         ) AS waiting_players
+       FROM games`,
     );
-    return NextResponse.json({ ok: true, games: result.rows });
+    const row = result.rows[0];
+    const activeGames = Number(row.active_games);
+    const waitingPlayers = Number(row.waiting_players);
+    return noStoreJson({
+      ok: true,
+      summary: {
+        activeByBoard: {
+          9: Number(row.active_9),
+          13: Number(row.active_13),
+          19: Number(row.active_19),
+        },
+        activeGames,
+        gamesToday: Number(row.games_today),
+        playersOnline: activeGames * 2 + waitingPlayers,
+      },
+    });
   } catch (error) {
-    console.error("Games query failed:", error);
-    return NextResponse.json(
-      { ok: false, games: [], error: "Games are temporarily unavailable." },
-      { status: 503 },
-    );
+    return apiError(error);
   }
 }

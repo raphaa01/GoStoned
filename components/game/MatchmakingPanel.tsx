@@ -1,35 +1,42 @@
 "use client";
 
-import { Radio, Search, Users } from "lucide-react";
-import { useState } from "react";
+import { Radio, Search, Users, X } from "lucide-react";
 import type { BoardSize } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
-export function MatchmakingPanel({ boardSize }: { boardSize: BoardSize }) {
-  const [state, setState] = useState<"idle" | "searching" | "ready">("idle");
+type MatchmakingPanelProps = {
+  boardSize: BoardSize;
+  status: "idle" | "waiting";
+  busy: boolean;
+  ready: boolean;
+  error: string | null;
+  onFind: () => void;
+  onCancel: () => void;
+};
 
-  async function findMatch() {
-    setState("searching");
-    try {
-      await fetch(`/api/matchmaking?boardSize=${boardSize}`);
-      setState("ready");
-    } catch {
-      setState("idle");
-    }
-  }
+export function MatchmakingPanel({
+  boardSize,
+  status,
+  busy,
+  ready,
+  error,
+  onFind,
+  onCancel,
+}: MatchmakingPanelProps) {
+  const waiting = status === "waiting";
 
   return (
-    <section className="matchmaking-panel">
+    <section className="matchmaking-panel" aria-live="polite">
       <div className="panel-heading">
         <div>
           <span className="panel-icon"><Radio size={18} /></span>
           <div>
-            <h2>Quick match</h2>
-            <p>Find a player near your level.</p>
+            <h2>{waiting ? "Finding a player" : "Quick match"}</h2>
+            <p>{waiting ? "Keep this page open." : "Start instantly as a guest."}</p>
           </div>
         </div>
-        <Badge tone="green">Live soon</Badge>
+        <Badge tone="green">{waiting ? "Searching" : "Online"}</Badge>
       </div>
 
       <div className="match-settings">
@@ -38,32 +45,35 @@ export function MatchmakingPanel({ boardSize }: { boardSize: BoardSize }) {
           <strong>{boardSize}×{boardSize}</strong>
         </div>
         <div>
-          <span>Time</span>
-          <strong>{boardSize === 9 ? "5 + 3×20s" : "10 + 5×30s"}</strong>
+          <span>Mode</span>
+          <strong>Live</strong>
         </div>
         <div>
           <span>Rules</span>
-          <strong>Japanese</strong>
+          <strong>Chinese</strong>
         </div>
       </div>
 
-      <Button
-        className="match-button"
-        disabled={state === "searching"}
-        onClick={findMatch}
-        size="lg"
-      >
-        {state === "searching" ? <Search className="spin" size={20} /> : <Users size={20} />}
-        {state === "idle"
-          ? "Find an opponent"
-          : state === "searching"
-            ? "Joining queue…"
-            : "Matchmaking is ready"}
-      </Button>
+      {waiting ? (
+        <>
+          <div className="queue-indicator">
+            <Search className="spin" size={20} />
+            <span>Looking for another {boardSize}×{boardSize} player…</span>
+          </div>
+          <Button className="match-button" disabled={busy} onClick={onCancel} size="lg" variant="secondary">
+            <X size={20} />
+            Cancel search
+          </Button>
+        </>
+      ) : (
+        <Button className="match-button" disabled={busy || !ready} onClick={onFind} size="lg">
+          {busy ? <Search className="spin" size={20} /> : <Users size={20} />}
+          {!ready ? "Preparing guest…" : busy ? "Joining queue…" : "Find an opponent"}
+        </Button>
+      )}
+      {error ? <p className="match-error">{error}</p> : null}
       <p className="panel-note">
-        {state === "ready"
-          ? "The API boundary is connected. Live queue persistence comes next."
-          : "Guests can play instantly. Sign in later to keep your rating."}
+        Open this page in a second browser or an incognito window and choose the same board size.
       </p>
     </section>
   );

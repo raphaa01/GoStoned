@@ -21,3 +21,38 @@ export type MoveResult =
       board: Board;
       error: MoveError;
     };
+
+export type StoredMove = {
+  moveNumber: number;
+  color: Stone;
+  x: number | null;
+  y: number | null;
+  isPass: boolean;
+  createdAt: string;
+};
+
+export type GameState = {
+  id: string;
+  boardSize: BoardSize;
+  blackPlayerKey: string;
+  whitePlayerKey: string;
+  winnerKey: string | null;
+  status: "active" | "finished";
+  result: string | null;
+  komi: number;
+  version: number;
+  startedAt: string;
+  finishedAt: string | null;
+  turn: Stone | null;
+  moveCount: number;
+  board: Board;
+  moves: StoredMove[];
+};
+
+export type Score = {
+  black: number;
+  white: number;
+  winner: Stone | null;
+  margin: number;
+  result: string;
+};

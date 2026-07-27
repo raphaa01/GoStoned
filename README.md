@@ -1,31 +1,25 @@
 # GoStoned
 
-GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Frontend und serverseitige API-Routen liegen gemeinsam in einer Next.js-App; dauerhafte Spiel-, Zug- und Statistikdaten werden in PostgreSQL gespeichert.
+GoStoned ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste können sich über die Matchmaking-Warteschlange finden und in getrennten Browsern gegeneinander spielen. Der Server prüft und speichert jeden Zug in PostgreSQL.
 
-## Tech Stack
+## Was bereits funktioniert
 
-- Next.js 16 mit App Router, React und TypeScript
-- PostgreSQL 16
-- `pg` als zentraler PostgreSQL-Client — kein Prisma
-- Docker Compose für die lokale Datenbank
-- SQL-Schema und versionierte Migrationen
-- später Vercel mit Neon oder Supabase
+- Gast-Identität pro Browser
+- Matchmaking für 9×9, 13×13 und 19×19
+- Live-Partien über eine deploybare Polling-API
+- serverseitige Zugreihenfolge, Captures, Suicide- und Superko-Prüfung
+- Pass, zwei aufeinanderfolgende Pässe, Chinese Area Scoring und Resign
+- dauerhaft gespeicherte Spiele, Züge, Ergebnisse und Statistiken
+- responsive Desktop- und Mobile-Oberfläche
+- lokale PostgreSQL-Datenbank mit Docker
+- Vercel-kompatible Next.js Route Handlers
+- Supabase-kompatible SQL-Migrationen und Row Level Security
 
-## Architektur
-
-- `app/` enthält Seiten und serverseitige Route Handlers.
-- `components/` enthält wiederverwendbare UI-Komponenten.
-- `lib/db.ts` ist die einzige zentrale PostgreSQL-Verbindung.
-- `lib/game/` enthält React-unabhängige Spiellogik.
-- `db/schema.sql` ist das idempotente Basisschema.
-- `db/migrations/` enthält versionierte SQL-Änderungen.
-- `scripts/migrate.ts` lädt `.env` und wendet `db/schema.sql` an.
-
-Das Frontend greift niemals direkt auf PostgreSQL zu. Alle Verbindungen verwenden ausschließlich `DATABASE_URL`.
+Das Frontend spricht ausschließlich mit `app/api/**`. Nur `lib/db.ts` darf PostgreSQL über `pg` öffnen. Der Browser erhält niemals Datenbank-Zugangsdaten.
 
 ## Lokaler Start unter Windows
 
-Voraussetzungen: Node.js und Docker Desktop.
+Voraussetzungen: [Node.js LTS](https://nodejs.org/) und [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```powershell
 docker compose up -d
@@ -35,63 +29,89 @@ npm run db:migrate
 npm run dev
 ```
 
-Anschließend testen:
+Unter macOS/Linux:
+
+```bash
+docker compose up -d
+cp .env.example .env
+npm install
+npm run db:migrate
+npm run dev
+```
+
+Danach öffnen:
 
 - [http://localhost:3000](http://localhost:3000/)
+- [http://localhost:3000/play](http://localhost:3000/play)
 - [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - [http://localhost:3000/api/db-health](http://localhost:3000/api/db-health)
 
-Unter macOS/Linux wird statt `copy` dieser Befehl verwendet:
+Für einen echten lokalen Test `/play` in zwei verschiedenen Browsern öffnen, zum Beispiel Chrome und Edge. In beiden dieselbe Brettgröße wählen und auf „Find an opponent“ klicken. Zwei normale Tabs desselben Browsers teilen absichtlich dieselbe Gast-ID; dafür stattdessen ein Inkognito-Fenster verwenden.
 
-```bash
-cp .env.example .env
-```
-
-## Docker verwalten
-
-Laufende Container prüfen:
+## Tests
 
 ```powershell
-docker ps
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-Lokale Datenbank stoppen:
+Wenn `npm run dev` und Docker laufen, testet dieser Befehl automatisch einen vollständigen Zwei-Spieler-Ablauf:
 
 ```powershell
+npm run test:live
+```
+
+## Datenbank und Migrationen
+
+`npm run db:migrate` führt alle noch nicht angewendeten Dateien aus `db/migrations/` in Reihenfolge und jeweils in einer Transaktion aus. Die Tabelle `schema_migrations` merkt sich den Stand. `db/schema.sql` bleibt die lesbare, idempotente Darstellung des aktuellen Gesamtschemas.
+
+Docker prüfen oder stoppen:
+
+```powershell
+docker compose ps
 docker compose down
 ```
 
-Lokale Datenbank einschließlich aller Daten vollständig löschen:
+`docker compose down -v` löscht zusätzlich alle lokalen Datenbankdaten und sollte nur bewusst verwendet werden.
 
-```powershell
-docker compose down -v
-```
+## Supabase einrichten
 
-`docker compose up -d` startet ausschließlich die lokale PostgreSQL-Datenbank. GitHub speichert den Quellcode, aber keine Datenbankdaten oder Docker-Volumes.
+1. In Supabase ein neues Projekt erstellen.
+2. Im SQL Editor die Dateien aus `db/migrations/` in nummerierter Reihenfolge ausführen. Alternativ lokal `DATABASE_URL` auf die direkte Supabase-Verbindung setzen und `npm run db:migrate` ausführen.
+3. Unter „Connect“ den Transaction-Pooler-Connection-String kopieren. Für Vercel ist normalerweise Port `6543` passend.
+4. Den Platzhalter für das Datenbankpasswort ersetzen und den vollständigen String als `DATABASE_URL` in Vercel speichern.
+5. `DATABASE_POOL_MAX=5` ebenfalls als Environment Variable setzen.
 
-## Scripts
+Die öffentlichen Tabellen haben Row Level Security aktiviert und geben den Supabase-Rollen `anon` und `authenticated` keine direkten Tabellenrechte. GoStoned nutzt die Datenbank nur serverseitig über `pg`.
 
-| Script | Aufgabe |
-| --- | --- |
-| `npm run dev` | Entwicklungsserver starten |
-| `npm run build` | Production-Build erstellen |
-| `npm start` | Production-Server starten |
-| `npm run typecheck` | TypeScript prüfen |
-| `npm run lint` | ESLint ausführen |
-| `npm test` | Go-Engine testen |
-| `npm run db:migrate` | `db/schema.sql` auf `DATABASE_URL` anwenden |
+Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder einen Screenshot.
 
-## API-Status
+## Vercel deployen
 
-- `GET /api/health` liefert den Status der GoStoned-Anwendung.
-- `GET /api/db-health` führt über `lib/db.ts` eine echte `SELECT NOW()`-Abfrage aus.
+1. Das GitHub-Repository in Vercel importieren.
+2. Framework „Next.js“ verwenden; Build Command bleibt `npm run build`.
+3. In „Environment Variables“ `DATABASE_URL` und `DATABASE_POOL_MAX=5` hinterlegen.
+4. Vor dem ersten Deployment die Migrationen gegen Supabase ausführen.
+5. Deploy starten und anschließend `/api/health`, `/api/db-health` und einen Test mit zwei Browsern prüfen.
 
-## Environment und Secrets
+Der Build benötigt keine aktive Datenbankverbindung. API-Routen laufen mit der Node.js Runtime und verbinden sich erst bei einer Anfrage mit PostgreSQL.
 
-Für die lokale Entwicklung wird `.env.example` nach `.env` kopiert. `.env` ist absichtlich von Git ausgeschlossen und darf niemals committed werden. Zugangsdaten, Tokens und produktive Connection Strings gehören nicht ins Repository.
+## Projektstruktur
 
-Beim späteren Deployment wird `DATABASE_URL` von Neon oder Supabase als Environment-Variable in Vercel hinterlegt. Im Anwendungscode werden weder lokale noch produktive Datenbank-URLs hardcodiert.
+- `app/` – Seiten und serverseitige APIs
+- `components/` – UI, Brett und Spielansicht
+- `lib/db.ts` – einzige PostgreSQL-Verbindung
+- `lib/game/` – React-unabhängige Regeln und serverseitiger Game Service
+- `lib/matchmaking/` – transaktionales PostgreSQL-Matchmaking
+- `db/migrations/` – versionierte Datenbankänderungen
+- `scripts/` – Migration und Live-Smoke-Test
 
-## Zusammenarbeit
+## Zusammenarbeit über GitHub
 
-`main` bleibt stabil. Änderungen erfolgen auf kleinen Feature-Branches und werden vor einem Pull Request mindestens mit `npm run typecheck` und `npm run build` geprüft. Weitere verbindliche Regeln stehen in `AGENTS.md`.
+`main` bleibt stabil. Jede Aufgabe bekommt einen eigenen Branch, zum Beispiel `codex/chat`. Vor Änderungen zuerst den aktuellen Stand von `main` holen. Danach nur den eigenen Branch pushen und einen Pull Request öffnen. Die verbindlichen automatischen Regeln stehen in `AGENTS.md`.
+
+## Mobile Strategie
+
+Die Website ist bereits responsive und API-basiert. Eine spätere PWA, Capacitor-App oder React-Native/Expo-App kann dieselben APIs verwenden. Persistente Spiellogik bleibt dabei weiterhin auf dem Server.

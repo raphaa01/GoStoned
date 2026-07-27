@@ -1,4 +1,10 @@
-import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from "pg";
+import {
+  Pool,
+  type PoolClient,
+  type PoolConfig,
+  type QueryResult,
+  type QueryResultRow,
+} from "pg";
 import { getDatabaseUrl, isLocalDatabase } from "./env";
 
 declare global {
@@ -8,11 +14,13 @@ declare global {
 
 function createPool(): Pool {
   const connectionString = getDatabaseUrl();
+  const configuredMax = Number(process.env.DATABASE_POOL_MAX);
   const config: PoolConfig = {
     connectionString,
-    max: 10,
+    max: Number.isInteger(configuredMax) && configuredMax > 0 ? configuredMax : 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 8_000,
+    allowExitOnIdle: process.env.NODE_ENV !== "production",
   };
 
   if (!isLocalDatabase(connectionString)) {
@@ -34,6 +42,25 @@ export function query<T extends QueryResultRow = QueryResultRow>(
   values: readonly unknown[] = [],
 ): Promise<QueryResult<T>> {
   return getPool().query<T>(text, [...values]);
+}
+
+export async function withTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL statement_timeout = '8s'");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function closePool(): Promise<void> {

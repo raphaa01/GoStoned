@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyMove, countLiberties, createEmptyBoard, getGroup } from "./goEngine";
+import {
+  applyMove,
+  boardHash,
+  countLiberties,
+  createEmptyBoard,
+  getGroup,
+  replayMoves,
+  scoreChinese,
+} from "./goEngine";
 
 test("creates empty boards at every supported size", () => {
   for (const size of [9, 13, 19] as const) {
@@ -45,4 +53,31 @@ test("rejects suicide moves", () => {
 
   const result = applyMove(board, "black", 1, 1);
   assert.deepEqual(result, { ok: false, board, error: "suicide" });
+});
+
+test("replays stored moves and creates a stable board hash", () => {
+  const board = replayMoves(9, [
+    { moveNumber: 1, color: "black", x: 2, y: 2, isPass: false, createdAt: "" },
+    { moveNumber: 2, color: "white", x: null, y: null, isPass: true, createdAt: "" },
+    { moveNumber: 3, color: "black", x: 3, y: 2, isPass: false, createdAt: "" },
+  ]);
+
+  assert.equal(board[2][2], "black");
+  assert.equal(board[2][3], "black");
+  assert.equal(boardHash(board), boardHash(board.map((row) => [...row])));
+});
+
+test("scores stones, surrounded territory, and komi with Chinese area scoring", () => {
+  const board = createEmptyBoard(9);
+  board[3][4] = "black";
+  board[4][3] = "black";
+  board[4][5] = "black";
+  board[5][4] = "black";
+  board[8][8] = "white";
+
+  const score = scoreChinese(board, 0.5);
+  assert.equal(score.black, 5);
+  assert.equal(score.white, 1.5);
+  assert.equal(score.winner, "black");
+  assert.equal(score.result, "B+3.5");
 });
