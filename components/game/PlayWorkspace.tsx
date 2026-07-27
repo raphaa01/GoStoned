@@ -4,6 +4,7 @@ import { ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import type { BoardSize } from "@/lib/game/types";
@@ -28,6 +29,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const handleQueueState = useCallback((queue: QueueState, enterMatchedGame: boolean) => {
     if (queue.boardSize) setBoardSize(queue.boardSize);
@@ -110,13 +112,13 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
 
   async function leaveActiveGame() {
     if (!playerKey || !activeGame || busy) return;
-    if (!window.confirm("Leave this game? This counts as a resignation.")) return;
     setBusy(true);
     setError(null);
     try {
       await leaveGameAndQueue(activeGame.gameId, playerKey);
       setActiveGame(null);
       setQueueStatus("idle");
+      setConfirmLeave(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not leave the game.");
     } finally {
@@ -145,7 +147,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             boardSize={activeGame.boardSize}
             busy={busy}
             error={error}
-            onLeave={leaveActiveGame}
+            onLeave={() => setConfirmLeave(true)}
             onResume={() => router.push(`/game/${activeGame.gameId}`)}
           />
         ) : (
@@ -171,6 +173,15 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
           </>
         )}
       </section>
+      <ConfirmModal
+        busy={busy}
+        confirmLabel="Leave game"
+        description="Your opponent will win and the result will be saved as a resignation."
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={leaveActiveGame}
+        open={confirmLeave}
+        title="Leave this game?"
+      />
     </div>
   );
 }
