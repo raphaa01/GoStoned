@@ -1,4 +1,12 @@
-import type { Board, BoardSize, MoveResult, Position, Stone } from "./types";
+import type {
+  Board,
+  BoardSize,
+  MoveResult,
+  Position,
+  Score,
+  Stone,
+  StoredMove,
+} from "./types";
 
 export function createEmptyBoard(size: BoardSize): Board {
   return Array.from({ length: size }, () => Array<null>(size).fill(null));
@@ -93,4 +101,78 @@ export function applyMove(
   }
 
   return { ok: true, board, captured };
+}
+
+export function boardHash(board: Board): string {
+  return board
+    .map((row) =>
+      row.map((intersection) => (intersection === "black" ? "B" : intersection === "white" ? "W" : ".")).join(""),
+    )
+    .join("/");
+}
+
+export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
+  let board = createEmptyBoard(size);
+
+  for (const move of moves) {
+    if (move.isPass || move.x === null || move.y === null) continue;
+    const result = applyMove(board, move.color, move.x, move.y);
+    if (!result.ok) {
+      throw new Error(`Stored move ${move.moveNumber} is invalid (${result.error}).`);
+    }
+    board = result.board;
+  }
+
+  return board;
+}
+
+export function scoreChinese(board: Board, komi = 6.5): Score {
+  let black = 0;
+  let white = komi;
+  const visited = new Set<string>();
+
+  for (let y = 0; y < board.length; y += 1) {
+    for (let x = 0; x < board[y].length; x += 1) {
+      const stone = board[y][x];
+      if (stone === "black") {
+        black += 1;
+        continue;
+      }
+      if (stone === "white") {
+        white += 1;
+        continue;
+      }
+
+      const startKey = `${x}:${y}`;
+      if (visited.has(startKey)) continue;
+
+      const region: Position[] = [];
+      const borders = new Set<Stone>();
+      const stack: Position[] = [{ x, y }];
+
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        const key = `${current.x}:${current.y}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        region.push(current);
+
+        for (const neighbor of getNeighbors(board, current)) {
+          const neighborStone = board[neighbor.y][neighbor.x];
+          if (neighborStone) borders.add(neighborStone);
+          else if (!visited.has(`${neighbor.x}:${neighbor.y}`)) stack.push(neighbor);
+        }
+      }
+
+      if (borders.size === 1) {
+        if (borders.has("black")) black += region.length;
+        else white += region.length;
+      }
+    }
+  }
+
+  const margin = Math.abs(black - white);
+  const winner: Stone | null = black === white ? null : black > white ? "black" : "white";
+  const result = winner ? `${winner === "black" ? "B" : "W"}+${margin}` : "Draw";
+  return { black, white, winner, margin, result };
 }

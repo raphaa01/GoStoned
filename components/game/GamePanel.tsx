@@ -1,54 +1,98 @@
-import { CircleDot, Clock3, Flag, MessageSquare, MoreHorizontal } from "lucide-react";
-import type { BoardSize, Stone } from "@/lib/game/types";
+import { CircleDot, Flag, SkipForward } from "lucide-react";
+import { getTimeControl } from "@/lib/game/timeControls";
+import type { GameState, Stone } from "@/lib/game/types";
+import { PlayerClock } from "./PlayerClock";
+
+type GamePanelProps = {
+  game: GameState;
+  playerKey: string;
+  busy: boolean;
+  onPass: () => void;
+  onResign: () => void;
+  onLeave: () => void;
+};
 
 export function GamePanel({
-  boardSize,
-  turn,
-  moveCount,
-}: {
-  boardSize: BoardSize;
-  turn: Stone;
-  moveCount: number;
-}) {
+  game,
+  playerKey,
+  busy,
+  onPass,
+  onResign,
+  onLeave,
+}: GamePanelProps) {
+  const yourColor: Stone = game.blackPlayerKey === playerKey ? "black" : "white";
+  const yourTurn = game.status === "active" && game.turn === yourColor;
+  const resultText =
+    game.status === "finished"
+      ? game.winnerKey === playerKey
+        ? `You won · ${game.result}`
+        : game.winnerKey
+          ? `You lost · ${game.result}`
+          : `Draw · ${game.result}`
+      : yourTurn
+        ? "Your turn"
+        : "Opponent's turn";
+
   return (
-    <aside className="game-panel">
-      <div className="game-panel-player">
+    <aside className="game-panel" aria-live="polite">
+      <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
-        <div>
-          <strong>Waiting for opponent</strong>
-          <span>Guest · unrated</span>
+        <div className="game-player-name">
+          <strong>{game.whitePlayerName}</strong>
+          <span>{yourColor === "white" ? "You · White" : "Opponent · White"}</span>
         </div>
-        <strong className="game-time">--:--</strong>
+        <PlayerClock
+          clock={game.clock}
+          color="white"
+          running={game.status === "active" && game.turn === "white"}
+        />
       </div>
 
       <div className="game-meta-strip">
-        <span><CircleDot size={15} /> {boardSize}×{boardSize}</span>
-        <span><Clock3 size={15} /> Live</span>
-        <span>Move {moveCount}</span>
+        <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
+        <span>{getTimeControl(game.timeControl).name}</span>
+        <span>Move {game.moveCount}</span>
       </div>
 
-      <div className="game-state">
-        <span className={`player-stone player-stone--${turn}`} />
+      <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
+        <span className={`player-stone player-stone--${game.turn ?? yourColor}`} />
         <div>
-          <strong>{moveCount === 0 ? "Board preview" : `${turn === "black" ? "Black" : "White"} to move`}</strong>
-          <span>Moves will be validated by the server.</span>
+          <strong>{resultText}</strong>
+          <span>
+            {game.status === "finished"
+              ? "Result and ratings saved."
+              : "Moves are checked and saved by the server."}
+          </span>
         </div>
       </div>
 
-      <div className="game-panel-player">
+      <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
-        <div>
-          <strong>You</strong>
-          <span>Guest player</span>
+        <div className="game-player-name">
+          <strong>{game.blackPlayerName}</strong>
+          <span>{yourColor === "black" ? "You · Black" : "Opponent · Black"}</span>
         </div>
-        <strong className="game-time">--:--</strong>
+        <PlayerClock
+          clock={game.clock}
+          color="black"
+          running={game.status === "active" && game.turn === "black"}
+        />
       </div>
 
-      <div className="game-actions">
-        <button type="button"><MessageSquare size={18} /> Chat</button>
-        <button type="button"><Flag size={18} /> Resign</button>
-        <button aria-label="More game actions" type="button"><MoreHorizontal size={19} /></button>
-      </div>
+      {game.status === "active" ? (
+        <div className="game-actions">
+          <button disabled={!yourTurn || busy} onClick={onPass} type="button">
+            <SkipForward size={18} /> Pass
+          </button>
+          <button disabled={busy} onClick={onResign} type="button">
+            <Flag size={18} /> Resign
+          </button>
+        </div>
+      ) : (
+        <button className="button button--primary game-leave" onClick={onLeave} type="button">
+          Find another game
+        </button>
+      )}
     </aside>
   );
 }
