@@ -6,10 +6,11 @@ import {
   GameServiceError,
   getGameState,
   resignGame,
+  resumePlay,
   submitMove,
 } from "./gameService";
-import { boardHash, createEmptyBoard } from "./goEngine";
-import type { GameState } from "./types";
+import { applyMove, boardHash, createEmptyBoard } from "./goEngine";
+import type { GameState, Stone, StoredMove } from "./types";
 
 const gameId = "11111111-1111-4111-8111-111111111111";
 const blackKey = "guest:black";
@@ -37,6 +38,39 @@ function emptyBoardPassRows() {
       created_at: new Date("2099-01-01T00:02:00.000Z"),
     },
   ];
+}
+
+function persistedMoveRows(
+  moves: readonly StoredMove[],
+  hashMode: "computed" | "missing" = "computed",
+) {
+  let board = createEmptyBoard(9);
+  return moves.map((move) => {
+    if (!move.isPass) {
+      const result = applyMove(board, move.color, move.x!, move.y!);
+      if (!result.ok) throw new Error(`Invalid test move (${result.error}).`);
+      board = result.board;
+    }
+    return {
+      move_number: move.moveNumber,
+      color: move.color,
+      x: move.x,
+      y: move.y,
+      is_pass: move.isPass,
+      board_hash: hashMode === "computed" ? boardHash(board) : null,
+      created_at: new Date(`2099-01-01T00:${String(move.moveNumber).padStart(2, "0")}:00.000Z`),
+    };
+  });
+}
+
+function storedMove(
+  moveNumber: number,
+  color: Stone,
+  x: number | null,
+  y: number | null,
+  isPass = false,
+): StoredMove {
+  return { moveNumber, color, x, y, isPass, createdAt: "" };
 }
 
 function gameRow(overrides: Record<string, unknown> = {}) {
@@ -161,12 +195,13 @@ async function withFakeDatabase(
     scoring: Record<string, unknown> | null;
     deadRows?: Record<string, unknown>[];
     moveRows?: Record<string, unknown>[];
+    allowMoveWrite?: boolean;
   },
   action: () => Promise<unknown>,
 ): Promise<string[]> {
   const statements: string[] = [];
   const client = {
-    async query(sql: string) {
+    async query(sql: string, values: unknown[] = []) {
       statements.push(sql);
       if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
         return { rows: [], rowCount: 0 };
@@ -182,6 +217,38 @@ async function withFakeDatabase(
       if (sql.includes("FROM game_dead_stones")) {
         const deadRows = rows.deadRows ?? [];
         return { rows: deadRows, rowCount: deadRows.length };
+      }
+      if (rows.allowMoveWrite && sql.includes("INSERT INTO moves")) {
+        const inserted = {
+          move_number: values[1],
+          color: values[2],
+          x: values[3],
+          y: values[4],
+          is_pass: values[5],
+          board_hash: values[6],
+          created_at: new Date("2099-01-01T00:02:00.000Z"),
+        };
+        return { rows: [inserted], rowCount: 1 };
+      }
+      if (
+        rows.allowMoveWrite
+        && sql.includes("UPDATE games")
+        && sql.includes("SET to_move = $2")
+      ) {
+        return {
+          rows: [{
+            ...rows.game,
+            to_move: values[1],
+            consecutive_passes: values[2],
+            black_time_remaining_ms: values[3],
+            white_time_remaining_ms: values[4],
+            black_periods_remaining: values[5],
+            white_periods_remaining: values[6],
+            turn_started_at: values[7],
+            version: Number(rows.game.version) + 1,
+          }],
+          rowCount: 1,
+        };
       }
       throw new Error(`Unexpected database statement in fail-closed test: ${sql}`);
     },
@@ -206,6 +273,7 @@ async function assertRejectedWithoutWrites(
     scoring: Record<string, unknown> | null;
     deadRows?: Record<string, unknown>[];
     moveRows?: Record<string, unknown>[];
+    allowMoveWrite?: boolean;
   },
   expectedCode: string,
   action: () => Promise<unknown>,
@@ -232,9 +300,10 @@ async function assertRejectedWithoutWrites(
 async function loadState(
   game: Record<string, unknown>,
   scoring: Record<string, unknown> | null,
+  moveRows?: Record<string, unknown>[],
 ): Promise<GameState> {
   let state: GameState | undefined;
-  const statements = await withFakeDatabase({ game, scoring }, async () => {
+  const statements = await withFakeDatabase({ game, scoring, moveRows }, async () => {
     state = await getGameState(gameId, blackKey);
   });
   assert.ok(state);
@@ -242,6 +311,348 @@ async function loadState(
   assert.equal(statements.includes("ROLLBACK"), false);
   return state;
 }
+
+test("move history trust boundary derives positions and rejects contradictory evidence", async (t) => {
+  await t.test("a non-participant is rejected before the move history is queried", async () => {
+    let rejection: unknown;
+    const statements = await withFakeDatabase(
+      {
+        game: gameRow({ to_move: "white" }),
+        scoring: null,
+        moveRows: [{ ...emptyBoardPassRows()[0], board_hash: "tampered" }],
+      },
+      async () => {
+        try {
+          await getGameState(gameId, "guest:attacker");
+        } catch (error) {
+          rejection = error;
+        }
+      },
+    );
+    assert.ok(rejection instanceof GameServiceError);
+    assert.equal(rejection.status, 403);
+    assert.equal(rejection.code, "not_participant");
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(statements.at(-1), "ROLLBACK");
+  });
+
+  await t.test("a non-null placement hash must match authoritative replay", async () => {
+    const moves = persistedMoveRows([storedMove(1, "black", 0, 0)]);
+    moves[0].board_hash = "tampered";
+    await assertRejectedWithoutWrites(
+      { game: gameRow({ to_move: "white" }), scoring: null, moveRows: moves },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+
+  await t.test("a pass hash must equal its unchanged replayed position", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ to_move: "white", consecutive_passes: 1 }),
+        scoring: null,
+        moveRows: [{ ...emptyBoardPassRows()[0], board_hash: "tampered" }],
+      },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+
+  await t.test("a correctly hashed pass may repeat the unchanged position", async () => {
+    const state = await loadState(
+      gameRow({ to_move: "white", consecutive_passes: 1 }),
+      null,
+      [emptyBoardPassRows()[0]],
+    );
+    assert.equal(state.moveCount, 1);
+    assert.equal(state.consecutivePasses, 1);
+    assert.equal(state.turn, "white");
+  });
+
+  await t.test("an invalid move log fails closed before any write", async () => {
+    const first = persistedMoveRows([storedMove(1, "black", 0, 0)])[0];
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ to_move: "black" }),
+        scoring: null,
+        moveRows: [
+          first,
+          { ...first, move_number: 2, color: "white", created_at: new Date("2099-01-01T00:02:00Z") },
+        ],
+      },
+      "move_history_mismatch",
+      () => submitMove(gameId, blackKey, { x: 1, y: 0 }),
+    );
+  });
+
+  await t.test("a non-contiguous move log fails closed before any write", async () => {
+    const moves = persistedMoveRows([
+      storedMove(1, "black", 0, 0),
+      storedMove(2, "white", 1, 0),
+    ]);
+    moves[1].move_number = 3;
+    await assertRejectedWithoutWrites(
+      { game: gameRow({ to_move: "black" }), scoring: null, moveRows: moves },
+      "move_history_mismatch",
+      () => submitMove(gameId, blackKey, { x: 2, y: 0 }),
+    );
+  });
+
+  await t.test("current-profile history requires a stored hash", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ to_move: "white" }),
+        scoring: null,
+        moveRows: persistedMoveRows([storedMove(1, "black", 0, 0)], "missing"),
+      },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+
+  await t.test("nullable legacy hashes remain readable from computed history", async () => {
+    const state = await loadState(
+      gameRow({ rules_profile: "legacy-immediate-area", to_move: null }),
+      null,
+      persistedMoveRows([storedMove(1, "black", 0, 0)], "missing"),
+    );
+    assert.equal(state.board[0][0], "black");
+    assert.equal(state.turn, "white");
+  });
+
+  await t.test("a legal move after nullable history persists and returns the derived board", async () => {
+    const moveRows = persistedMoveRows([storedMove(1, "black", 0, 0)], "missing");
+    let state: GameState | undefined;
+    const statements = await withFakeDatabase(
+      {
+        game: gameRow({ rules_profile: "legacy-immediate-area", to_move: null }),
+        scoring: null,
+        moveRows,
+        allowMoveWrite: true,
+      },
+      async () => {
+        state = await submitMove(gameId, whiteKey, { x: 1, y: 0 });
+      },
+    );
+    assert.ok(state);
+    assert.equal(state.board[0][0], "black");
+    assert.equal(state.board[0][1], "white");
+    assert.equal(state.moveCount, 2);
+    assert.equal(state.turn, "black");
+    assert.equal(moveRows[1].board_hash, boardHash(state.board));
+    assert.equal(statements.at(-1), "COMMIT");
+  });
+
+  await t.test("a pass remains exempt from superko and stores the unchanged derived hash", async () => {
+    const moveRows = persistedMoveRows([storedMove(1, "black", 0, 0)], "missing");
+    let state: GameState | undefined;
+    await withFakeDatabase(
+      {
+        game: gameRow({ rules_profile: "legacy-immediate-area", to_move: null }),
+        scoring: null,
+        moveRows,
+        allowMoveWrite: true,
+      },
+      async () => {
+        state = await submitMove(gameId, whiteKey, { isPass: true });
+      },
+    );
+    assert.ok(state);
+    assert.equal(state.moveCount, 2);
+    assert.equal(state.consecutivePasses, 1);
+    assert.equal(state.turn, "black");
+    assert.equal(moveRows[1].is_pass, true);
+    assert.equal(moveRows[1].board_hash, boardHash(state.board));
+  });
+
+  await t.test("nullable hashes cannot bypass Chinese positional superko", async () => {
+    const moves = [
+      storedMove(1, "black", 0, 1),
+      storedMove(2, "white", 1, 1),
+      storedMove(3, "black", 2, 1),
+      storedMove(4, "white", 0, 2),
+      storedMove(5, "black", 1, 0),
+      storedMove(6, "white", 2, 2),
+      storedMove(7, "black", 8, 8),
+      storedMove(8, "white", 1, 3),
+      storedMove(9, "black", 1, 2),
+    ];
+    let rejection: unknown;
+    const statements = await withFakeDatabase(
+      {
+        game: gameRow({ rules_profile: "legacy-immediate-area", to_move: null }),
+        scoring: null,
+        moveRows: persistedMoveRows(moves, "missing"),
+      },
+      async () => {
+        try {
+          await submitMove(gameId, whiteKey, { x: 1, y: 1 });
+        } catch (error) {
+          rejection = error;
+        }
+      },
+    );
+    assert.ok(rejection instanceof GameServiceError);
+    assert.equal(rejection.status, 409);
+    assert.equal(rejection.code, "ko");
+    assert.deepEqual(
+      statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
+      [],
+    );
+    assert.equal(statements.includes("ROLLBACK"), true);
+  });
+
+  await t.test("correct hashes cannot launder an illegal historical superko recapture", async () => {
+    const moves = [
+      storedMove(1, "black", 0, 1),
+      storedMove(2, "white", 1, 1),
+      storedMove(3, "black", 2, 1),
+      storedMove(4, "white", 0, 2),
+      storedMove(5, "black", 1, 0),
+      storedMove(6, "white", 2, 2),
+      storedMove(7, "black", 8, 8),
+      storedMove(8, "white", 1, 3),
+      storedMove(9, "black", 1, 2),
+      storedMove(10, "white", 1, 1),
+    ];
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ rules_profile: "legacy-immediate-area", to_move: null }),
+        scoring: null,
+        moveRows: persistedMoveRows(moves),
+      },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+
+  await t.test("scoring and a claim-dependent resume preserve the complete position history", async () => {
+    const moves = [
+      storedMove(1, "black", 0, 1),
+      storedMove(2, "white", 1, 1),
+      storedMove(3, "black", 2, 1),
+      storedMove(4, "white", 0, 2),
+      storedMove(5, "black", 1, 0),
+      storedMove(6, "white", 2, 2),
+      storedMove(7, "black", 8, 8),
+      storedMove(8, "white", 1, 3),
+      storedMove(9, "black", 1, 2),
+      storedMove(10, "white", null, null, true),
+      storedMove(11, "black", null, null, true),
+    ];
+    const moveRows = persistedMoveRows(moves);
+    let currentGame: Record<string, unknown> = gameRow({
+      phase: "scoring",
+      to_move: null,
+      consecutive_passes: 2,
+      scoring_revision: 1,
+    });
+    let currentScoring: Record<string, unknown> | null = scoringRow({
+      board_hash: moveRows.at(-1)!.board_hash,
+      stopped_move_number: moveRows.length,
+      fallback_to_move: "white",
+    });
+    let currentDeadRows: Record<string, unknown>[] = [{ x: 8, y: 8, color: "black" }];
+    const statements: string[] = [];
+    const client = {
+      async query(sql: string, values: unknown[] = []) {
+        statements.push(sql);
+        if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("FROM games g")) return { rows: [currentGame], rowCount: 1 };
+        if (sql.includes("FROM moves")) return { rows: moveRows, rowCount: moveRows.length };
+        if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_scoring_state")) {
+          return { rows: currentScoring ? [currentScoring] : [], rowCount: currentScoring ? 1 : 0 };
+        }
+        if (sql.includes("FROM game_dead_stones")) {
+          return { rows: currentDeadRows, rowCount: currentDeadRows.length };
+        }
+        if (sql.startsWith("DELETE FROM game_scoring_state")) {
+          currentScoring = null;
+          currentDeadRows = [];
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SET phase = 'play', to_move = $2")) {
+          currentGame = {
+            ...currentGame,
+            phase: "play",
+            to_move: values[1],
+            consecutive_passes: 0,
+            scoring_revision: Number(currentGame.scoring_revision) + 1,
+            last_resume_claim: values[2],
+            last_resume_by: values[3],
+            last_resume_x: values[4],
+            last_resume_y: values[5],
+            turn_started_at: values[6],
+            version: Number(currentGame.version) + 1,
+          };
+          return { rows: [currentGame], rowCount: 1 };
+        }
+        if (sql.includes("INSERT INTO moves")) {
+          return {
+            rows: [{
+              move_number: values[1],
+              color: values[2],
+              x: values[3],
+              y: values[4],
+              is_pass: values[5],
+              board_hash: values[6],
+              created_at: new Date("2099-01-01T00:12:00.000Z"),
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("UPDATE games") && sql.includes("SET to_move = $2")) {
+          currentGame = {
+            ...currentGame,
+            to_move: values[1],
+            consecutive_passes: values[2],
+            black_time_remaining_ms: values[3],
+            white_time_remaining_ms: values[4],
+            black_periods_remaining: values[5],
+            white_periods_remaining: values[6],
+            turn_started_at: values[7],
+            version: Number(currentGame.version) + 1,
+          };
+          return { rows: [currentGame], rowCount: 1 };
+        }
+        throw new Error(`Unexpected database statement in resume-history test: ${sql}`);
+      },
+      release() {},
+    };
+    const previousPool = globalThis.goStonedDbPool;
+    globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+
+    try {
+      const resumed = await resumePlay(gameId, blackKey, 1, "dead", { x: 8, y: 8 });
+      assert.equal(resumed.phase, "play");
+      assert.equal(resumed.turn, "black");
+      assert.equal(resumed.moveCount, 11);
+
+      const passed = await submitMove(gameId, blackKey, { isPass: true });
+      assert.equal(passed.turn, "white");
+      assert.equal(passed.moveCount, 12);
+      assert.equal(passed.consecutivePasses, 1);
+
+      const writeCount = statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)).length;
+      await assert.rejects(
+        () => submitMove(gameId, whiteKey, { x: 1, y: 1 }),
+        (error: unknown) => error instanceof GameServiceError
+          && error.status === 409
+          && error.code === "ko",
+      );
+      assert.equal(moveRows.length, 12);
+      assert.equal(
+        statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)).length,
+        writeCount,
+      );
+      assert.equal(statements.at(-1), "ROLLBACK");
+    } finally {
+      globalThis.goStonedDbPool = previousPool;
+    }
+  });
+});
 
 test("database rules boundary rejects malformed state before any gameplay or rating write", async (t) => {
   await t.test("unknown game profile blocks a move", async () => {
@@ -533,21 +944,13 @@ test("finalized Chinese score snapshots fail closed before any write", async (t)
   });
 
   await t.test("persisted dead stones contain only part of a connected group", async () => {
-    const moveRows = [
-      [1, "black", 0, 0, false],
-      [2, "white", 8, 8, false],
-      [3, "black", 1, 0, false],
-      [4, "white", null, null, true],
-      [5, "black", null, null, true],
-    ].map(([move_number, color, x, y, is_pass]) => ({
-      move_number,
-      color,
-      x,
-      y,
-      is_pass,
-      board_hash: null,
-      created_at: new Date(`2099-01-01T00:0${move_number}:00.000Z`),
-    }));
+    const moveRows = persistedMoveRows([
+      storedMove(1, "black", 0, 0),
+      storedMove(2, "white", 8, 8),
+      storedMove(3, "black", 1, 0),
+      storedMove(4, "white", null, null, true),
+      storedMove(5, "black", null, null, true),
+    ]);
     const board = createEmptyBoard(9);
     board[0][0] = "black";
     board[0][1] = "black";
@@ -724,21 +1127,13 @@ test("second score confirmation preserves the exact Chinese database and API con
   stoppedBoard[8][8] = "white";
   const scoredBoard = stoppedBoard.map((row) => [...row]);
   scoredBoard[8][8] = null;
-  const moveRows = [
-    [1, "black", 1, 0, false],
-    [2, "white", 8, 8, false],
-    [3, "black", 0, 1, false],
-    [4, "white", null, null, true],
-    [5, "black", null, null, true],
-  ].map(([move_number, color, x, y, is_pass]) => ({
-    move_number,
-    color,
-    x,
-    y,
-    is_pass,
-    board_hash: null,
-    created_at: new Date(`2099-01-01T00:0${move_number}:00.000Z`),
-  }));
+  const moveRows = persistedMoveRows([
+    storedMove(1, "black", 1, 0),
+    storedMove(2, "white", 8, 8),
+    storedMove(3, "black", 0, 1),
+    storedMove(4, "white", null, null, true),
+    storedMove(5, "black", null, null, true),
+  ]);
   const deadRows = [{ x: 8, y: 8, color: "white" }];
   const initialScoring = scoringRow({
     board_hash: boardHash(stoppedBoard),
