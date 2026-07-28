@@ -78,6 +78,7 @@ npm run test:matchmaking-races
 npm run test:player-report-races
 npm run test:move-hash-db
 npm run test:scoring-races
+npm run test:statement-timeout
 ```
 
 Diese mutierenden Smokes verlangen zusätzlich die expliziten Werte
@@ -101,6 +102,10 @@ Ergebnis.
 Sperre sowie deren Ablauf. Der Test verändert Limit-Zeilen und verweigert deshalb
 jede nicht-lokale `DATABASE_URL`; er darf niemals gegen Supabase oder Produktion
 ausgeführt werden.
+`test:statement-timeout` prüft an derselben ausdrücklich lokalen Datenbank, dass
+neue Anwendungssitzungen das Acht-Sekunden-Limit übernehmen, PostgreSQL eine
+langsame Anweisung mit SQLSTATE `57014` abbricht und dieselbe Backend-Verbindung
+danach ohne zusätzliche Polling-Transaktion weiterverwendet werden kann.
 `test:scoring-races` prüft lokal konkurrierende Bestätigung/Wiederaufnahme- und
 Bestätigung/Resign-Übergänge, exakt einen Rating-Ledger-Eintrag pro Spieler,
 die automatische Wiederaufnahme nach Ablauf des Entscheidungsfensters sowie
@@ -117,6 +122,27 @@ ihren `ready`- und `valid`-Status sowie einen unveränderten zweiten
 Migrationsdurchlauf. Die Tabelle `schema_migrations` merkt sich den Stand.
 `db/schema.sql` bleibt die lesbare, idempotente Darstellung des aktuellen
 Gesamtschemas.
+
+Migration `016_database_statement_timeout.sql` setzt für genau die durch
+`DATABASE_URL` authentifizierte Rolle in genau ihrer aktuellen Datenbank ein
+`statement_timeout` von acht Sekunden. Damit sind auch direkte, transaktionslose
+Polling-Abfragen begrenzt; mutierende Transaktionen behalten ihr zusätzliches
+`SET LOCAL` in `lib/db.ts`. Das Limit gilt pro PostgreSQL-Anweisung, nicht für
+eine komplette HTTP-Anfrage, und wird erst von neu aufgebauten
+Datenbanksitzungen übernommen. Der eigenständige Migrations-Runner deaktiviert
+dieses Anwendungslimit in seiner ausschließlich für Migrationen verwendeten
+Sitzung und prüft das Ergebnis, bevor er den Migrations-Lock erwirbt. Dadurch
+bleiben absichtlich längere DDL- und Concurrent-Index-Läufe möglich, während
+deren vorhandene engere Lock- und Migrationslimits unverändert gelten.
+
+Ein Rollback der Anwendung erfordert keine Rücknahme dieses Limits. Soll die
+Datenbankrichtlinie selbst zurückgenommen werden, muss eine geprüfte neue
+Migration für dieselbe dynamisch ermittelte Rolle/Datenbank-Kombination
+`ALTER ROLE ... IN DATABASE ... RESET statement_timeout` ausführen. Das Limit
+darf nicht ersatzweise rollenweit oder für die gesamte Datenbank geändert werden.
+Auch nach einem solchen Reset müssen die unten beschriebenen älteren
+Pooler-Backends kontrolliert beendet werden, damit sie nicht weiter den zuvor
+geladenen Wert verwenden.
 
 Migration `007_guest_sessions.sql` führt sichere, serverseitige Gast-Sitzungen
 ein. Frühere, ausschließlich im Browser erzeugte Gast-IDs werden bewusst nicht
@@ -198,6 +224,27 @@ docker compose down
 3. Unter „Connect“ den Transaction-Pooler-Connection-String kopieren. Für Vercel ist normalerweise Port `6543` passend.
 4. Den Platzhalter für das Datenbankpasswort ersetzen und den vollständigen String als `DATABASE_URL` in Vercel speichern.
 5. `DATABASE_POOL_MAX=3` ebenfalls als Environment Variable setzen.
+
+Migration 016 allein genügt noch nicht für einen sicheren Produktiv-Rollout:
+Supavisor lädt Rollenstandards nur beim Aufbau eines PostgreSQL-Backends und
+kann im Transaction-Modus alte Backends weiterverwenden. Nach dem vollständig
+committeten Migrationslauf deshalb über den direkten oder den Session-Endpunkt
+mit derselben Anwendungsrolle `current_database()`, `current_user` und einen
+`clock_timestamp()` als Cutover-Zeitpunkt erfassen. In einem angekündigten
+Wartungsfenster anschließend über eine administrative direkte Sitzung alle
+`pg_stat_activity`-Einträge exakt dieser Rolle und Datenbank auflisten, deren
+`backend_start` vor diesem Cutover liegt. Diese konkreten alten PIDs müssen mit
+expliziter Betreiberfreigabe über `pg_terminate_backend` beendet werden; weder
+Migration noch Anwendung tun das automatisch.
+
+Der Rollout bleibt blockiert, bis eine erneute direkte Abfrage keine solche alte
+Backend-PID mehr findet und Abfragen über denselben Transaction Pooler wie die
+Vercel-Anwendung für jede beobachtete Backend-PID `current_user`,
+`current_database()` und `current_setting('statement_timeout') = '8s'` liefern.
+Ein einzelner erfolgreicher Pooler-Aufruf ist kein ausreichender Nachweis. Wenn
+eine alte PID bestehen bleibt, wieder erscheint oder ein beobachtetes Backend
+einen anderen Wert liefert, darf nicht deployt werden. Ein PostgREST-Reload ist
+nicht nötig, weil GoStone serverseitig direkt über `pg` verbindet.
 
 Die öffentlichen Tabellen haben Row Level Security aktiviert und geben den Supabase-Rollen `anon` und `authenticated` keine direkten Tabellenrechte. GoStone nutzt die Datenbank nur serverseitig über `pg`.
 

@@ -21,6 +21,7 @@
     "test:move-hash-db": "tsx scripts/smoke-move-hash-guard.ts",
     "test:rate-limit": "tsx scripts/smoke-rate-limit.ts",
     "test:scoring-races": "tsx scripts/smoke-scoring-races.ts",
+    "test:statement-timeout": "tsx scripts/smoke-statement-timeout.ts",
     "test:browser": "playwright test",
     "typecheck": "tsc --noEmit",
     "db:prepare-ci-smoke": "tsx scripts/prepare-ci-postgres.ts",

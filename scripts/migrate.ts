@@ -29,6 +29,19 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function disableMigrationStatementTimeout(client: PoolClient): Promise<void> {
+  // The request-serving role has an 8-second database default. This dedicated
+  // CLI session must still permit intentional long-running migrations such as
+  // concurrent index builds; narrower migration lock/time limits remain active.
+  await client.query("SET statement_timeout = '0'");
+  const result = await client.query<{ statementTimeout: string }>(
+    "SELECT pg_catalog.current_setting('statement_timeout') AS \"statementTimeout\"",
+  );
+  if (result.rows.length !== 1 || result.rows[0].statementTimeout !== "0") {
+    throw new Error("Migration statement timeout could not be disabled.");
+  }
+}
+
 async function setTrustedSearchPath(client: PoolClient): Promise<void> {
   await client.query("SET search_path TO public");
   const result = await client.query<{ schemas: string }>(
@@ -191,6 +204,7 @@ async function migrate() {
   const client = await pool.connect();
   let lockAcquired = false;
   try {
+    await disableMigrationStatementTimeout(client);
     await setTrustedSearchPath(client);
     await acquireMigrationLock(client);
     lockAcquired = true;

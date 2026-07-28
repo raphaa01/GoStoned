@@ -120,6 +120,9 @@ jobs:
       - name: Verify fresh and idempotent migration chain
         run: npm run test:migrations-db
 
+      - name: Verify database statement timeout and backend recovery
+        run: npm run test:statement-timeout
+
       - name: Verify migration serialization and recovery
         run: npm run test:migration-recovery
 

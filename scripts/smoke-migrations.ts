@@ -18,6 +18,8 @@ import {
 type MigrationSnapshot = Readonly<{
   databaseName: string;
   roleName: string;
+  activeStatementTimeout: string;
+  databaseRoleSettings: readonly string[];
   migrations: ReadonlyArray<Readonly<{ filename: string; appliedAt: string }>>;
   indexes: ReadonlyArray<Readonly<{
     relationOid: number;
@@ -96,7 +98,9 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   const identity = await query<{
     database_name: string;
     role_name: string;
+    session_role: string;
     owner_name: string;
+    active_statement_timeout: string;
     rolcanlogin: boolean;
     rolsuper: boolean;
     rolcreatedb: boolean;
@@ -106,7 +110,9 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   }>(
     `SELECT current_database() AS database_name,
             current_user AS role_name,
+            session_user AS session_role,
             pg_get_userbyid(database.datdba) AS owner_name,
+            pg_catalog.current_setting('statement_timeout') AS active_statement_timeout,
             role.rolcanlogin,
             role.rolsuper,
             role.rolcreatedb,
@@ -121,7 +127,9 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   const connected = identity.rows[0];
   assert.equal(connected.database_name, expected.databaseName, "Migration smoke identity check failed.");
   assert.equal(connected.role_name, expected.roleName, "Migration smoke identity check failed.");
+  assert.equal(connected.session_role, expected.roleName, "Migration smoke identity check failed.");
   assert.equal(connected.owner_name, expected.roleName, "Migration smoke owner check failed.");
+  assert.equal(connected.active_statement_timeout, "8s", "Database statement timeout is not active.");
   assert.equal(connected.rolcanlogin, true, "Migration smoke role check failed.");
   assert.equal(connected.rolsuper, false, "Migration smoke role check failed.");
   assert.equal(connected.rolcreatedb, false, "Migration smoke role check failed.");
@@ -143,6 +151,22 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
     { role_name: "anon", rolcanlogin: false, rolsuper: false },
     { role_name: "authenticated", rolcanlogin: false, rolsuper: false },
   ]);
+
+  const databaseRoleConfig = await query<{ settings: string[] }>(
+    `SELECT setting.setconfig AS settings
+       FROM pg_catalog.pg_db_role_setting AS setting
+       JOIN pg_catalog.pg_database AS database ON database.oid = setting.setdatabase
+       JOIN pg_catalog.pg_roles AS role ON role.oid = setting.setrole
+      WHERE database.datname = current_database()
+        AND role.rolname = current_user`,
+  );
+  assert.equal(databaseRoleConfig.rows.length, 1, "Database-role defaults are not canonical.");
+  const databaseRoleSettings = [...databaseRoleConfig.rows[0].settings].sort();
+  assert.deepEqual(
+    databaseRoleSettings.filter((setting) => setting.startsWith("statement_timeout=")),
+    ["statement_timeout=8s"],
+    "Database statement timeout is not scoped to the migration role and database.",
+  );
 
   const ledger = await query<{ filename: string; applied_at: Date }>(
     "SELECT filename, applied_at FROM public.schema_migrations ORDER BY filename",
@@ -182,6 +206,8 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   return {
     databaseName: connected.database_name,
     roleName: connected.role_name,
+    activeStatementTimeout: connected.active_statement_timeout,
+    databaseRoleSettings,
     migrations: ledger.rows.map(({ filename, applied_at }) => ({
       filename,
       appliedAt: applied_at.toISOString(),
