@@ -17,6 +17,8 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
+  DEFAULT_RULES_PROFILE,
+  LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
   type ResolvedRulesConfiguration,
@@ -246,7 +248,8 @@ function normalizeHistoricalRulesLifecycle(
   // clearing its snapshot or returning the terminal game to the play phase.
   // Preserve those exact terminal rows as a canonical, read-only resignation.
   if (
-    policy.scoringLifecycle === "agreement"
+    policy.profile === DEFAULT_RULES_PROFILE
+    && policy.scoringLifecycle === "agreement"
     && game.status === "finished"
     && game.phase === "scoring"
     && game.finish_reason === "resignation"
@@ -270,7 +273,8 @@ function normalizeHistoricalRulesLifecycle(
   // instances drained. A game they finished after the one-time backfill has
   // no finish_reason, so derive the same value the migration would have used.
   if (
-    policy.scoringLifecycle === "immediate"
+    policy.profile === LEGACY_IMMEDIATE_AREA_PROFILE
+    && policy.scoringLifecycle === "immediate"
     && game.status === "finished"
     && game.phase === "play"
     && game.finish_reason === null

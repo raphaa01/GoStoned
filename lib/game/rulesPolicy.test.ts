@@ -52,7 +52,12 @@ test("registers exactly the two persisted Chinese profiles without a fallback", 
   assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).resumeTurnRule, "claim-dependent");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).resumeTurnRule, "none");
   assert.equal(Object.isFrozen(RULES_POLICIES), true);
-  assert.equal(Object.isFrozen(resolveRulesPolicy(DEFAULT_RULES_PROFILE)), true);
+  for (const [profile, policy] of Object.entries(RULES_POLICIES)) {
+    assert.equal(policy.profile, profile);
+    assert.equal(Object.isFrozen(policy), true);
+    assert.equal(Object.isFrozen(policy.supportedKomi), true);
+    assert.equal(Object.isFrozen(policy.supportedHandicaps), true);
+  }
 });
 
 test("keeps new matches on the explicit current Chinese policy", () => {

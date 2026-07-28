@@ -175,6 +175,55 @@ test("database rules boundary rejects malformed state before any gameplay or rat
     );
   });
 
+  await t.test("an unknown agreement profile cannot inherit the Chinese resignation repair", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({
+          status: "finished",
+          phase: "scoring",
+          to_move: null,
+          scoring_revision: 1,
+          winner_key: blackKey,
+          result: "B+R",
+          finish_reason: "resignation",
+          finished_at: new Date("2099-01-01T00:05:00.000Z"),
+          rules: "japanese",
+          rules_profile: "japanese-1989-gostone-v1",
+          scoring_method: "territory",
+          komi: "6.5",
+        }),
+        scoring: scoringRow({
+          rules: "japanese",
+          rules_profile: "japanese-1989-gostone-v1",
+          scoring_method: "territory",
+          komi: "6.5",
+        }),
+      },
+      "rules_configuration_unsupported",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("an unknown immediate profile cannot inherit migration-008 normalization", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({
+          status: "finished",
+          phase: "play",
+          to_move: null,
+          winner_key: blackKey,
+          result: "B+2.5",
+          finish_reason: null,
+          finished_at: new Date("2099-01-01T00:05:00.000Z"),
+          rules_profile: "chinese-2002-gostone-v2",
+        }),
+        scoring: null,
+      },
+      "rules_configuration_unsupported",
+      () => submitMove(gameId, blackKey, { x: 0, y: 0 }),
+    );
+  });
+
   await t.test("unsupported current-profile komi blocks a move", async () => {
     await assertRejectedWithoutWrites(
       { game: gameRow({ komi: "0.5" }), scoring: null },
