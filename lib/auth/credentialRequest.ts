@@ -1,6 +1,44 @@
 import type { NextRequest } from "next/server";
 import { AuthError, validateCredentials } from "./accountService";
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost"
+    || hostname === "[::1]"
+    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function exactRequestOrigin(requestOrigin: string): string | null {
+  const parsed = new URL(requestOrigin);
+  return parsed.username === ""
+    && parsed.password === ""
+    && parsed.pathname === "/"
+    && parsed.search === ""
+    && parsed.hash === ""
+      ? parsed.origin
+      : null;
+}
+
+function expectedMutationOrigin(request: NextRequest): string | null {
+  const normalized = new URL(request.nextUrl.origin);
+  const addressedHost = request.headers.get("host");
+  if (normalized.hostname !== "localhost" || !addressedHost) {
+    return normalized.origin;
+  }
+
+  // Next.js canonicalizes every loopback spelling to localhost in NextURL.
+  // The HTTP Host header retains the exact browser authority, so recover only
+  // that loopback origin rather than equating distinct local browser origins.
+  const addressed = new URL(`${normalized.protocol}//${addressedHost}`);
+  return addressed.username === ""
+    && addressed.password === ""
+    && addressed.pathname === "/"
+    && addressed.search === ""
+    && addressed.hash === ""
+    && isLoopbackHostname(addressed.hostname)
+      ? addressed.origin
+      : null;
+}
+
 export function assertAuthMutationRequest(
   request: NextRequest,
   { requireJson = false }: { requireJson?: boolean } = {},
@@ -14,7 +52,11 @@ export function assertAuthMutationRequest(
   let originMatches = true;
   if (requestOrigin) {
     try {
-      originMatches = new URL(requestOrigin).origin === request.nextUrl.origin;
+      const actualOrigin = exactRequestOrigin(requestOrigin);
+      const expectedOrigin = expectedMutationOrigin(request);
+      originMatches = actualOrigin !== null
+        && expectedOrigin !== null
+        && actualOrigin === expectedOrigin;
     } catch {
       originMatches = false;
     }
