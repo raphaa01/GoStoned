@@ -48,14 +48,24 @@ test("migration runner keeps concurrent index builds outside its transaction", (
     new URL("../../scripts/migrate.ts", import.meta.url),
     "utf8",
   );
-  assert.match(migrationRunner, /gostone:migration-mode=nontransactional/);
-  assert.match(migrationRunner, /if \(nonTransactional\)/);
+  const migrationContracts = readFileSync(
+    new URL("../../scripts/migrationIndexes.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(migrationContracts, /gostone:migration-mode=nontransactional/);
+  assert.match(migrationRunner, /pg_try_advisory_lock/);
+  assert.match(migrationRunner, /public\.schema_migrations/);
+  assert.match(migrationRunner, /current_schemas\(FALSE\)::text/);
   assert.match(
     migrationRunner,
-    /if \(nonTransactional\) \{\s+await client\.query\(sql\);\s+await client\.query\("INSERT INTO schema_migrations/,
+    /if \(migration\.nonTransactional\) \{\s+await reconcileConcurrentIndex/,
   );
   assert.match(
     migrationRunner,
-    /continue;\s+\}\s+await client\.query\("BEGIN"\)/,
+    /continue;\s+\}\s+\n\s+if \(alreadyApplied\.rowCount\)/,
+  );
+  assert.match(
+    migrationRunner,
+    /classification\.state === "exact-invalid"[\s\S]+BEGIN[\s\S]+recoveryLockSql[\s\S]+recoveryRenameSql[\s\S]+relationOid !== confirmed\.relationOid[\s\S]+recoveryDropSql[\s\S]+COMMIT/,
   );
 });

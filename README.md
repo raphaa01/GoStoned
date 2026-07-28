@@ -194,7 +194,7 @@ docker compose down
 ## Supabase einrichten
 
 1. In Supabase ein neues Projekt erstellen.
-2. Im SQL Editor die Dateien aus `db/migrations/` in nummerierter Reihenfolge ausführen. Alternativ lokal `DATABASE_URL` auf die direkte Supabase-Verbindung setzen und `npm run db:migrate` ausführen.
+2. Im SQL Editor die Dateien aus `db/migrations/` in nummerierter Reihenfolge ausführen. Alternativ lokal `DATABASE_URL` vorübergehend auf die direkte Supabase-Verbindung oder den Session-Pooler (normalerweise Port `5432`) setzen und `npm run db:migrate` ausführen. Der Migrations-Runner lehnt Transaction-Pooler-Verbindungen wie Port `6543` ab, weil sein sitzungsgebundener Lock dort nicht sicher wäre.
 3. Unter „Connect“ den Transaction-Pooler-Connection-String kopieren. Für Vercel ist normalerweise Port `6543` passend.
 4. Den Platzhalter für das Datenbankpasswort ersetzen und den vollständigen String als `DATABASE_URL` in Vercel speichern.
 5. `DATABASE_POOL_MAX=3` ebenfalls als Environment Variable setzen.

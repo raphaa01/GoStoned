@@ -15,6 +15,7 @@
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
     "test:matchmaking-races": "tsx scripts/smoke-matchmaking-races.ts",
+    "test:migration-recovery": "tsx scripts/smoke-migration-recovery.ts",
     "test:migrations-db": "tsx scripts/smoke-migrations.ts",
     "test:player-report-races": "tsx scripts/smoke-player-report-races.ts",
     "test:move-hash-db": "tsx scripts/smoke-move-hash-guard.ts",
