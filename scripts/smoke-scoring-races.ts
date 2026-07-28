@@ -3,6 +3,7 @@ import "dotenv/config";
 import { closePool, query } from "../lib/db";
 import { isLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
+import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -27,10 +28,17 @@ async function api(
   path: string,
   init: RequestInit,
   cookie: string,
+  expectedPlayerKey?: string,
 ): Promise<{ response: Response; body: Record<string, unknown> }> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
-    headers: { ...init.headers, Cookie: cookie },
+    headers: {
+      ...init.headers,
+      Cookie: cookie,
+      ...(expectedPlayerKey
+        ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }
+        : {}),
+    },
   });
   const body = await response.json() as Record<string, unknown>;
   return { response, body };
@@ -53,12 +61,13 @@ async function postGame(
   suffix: string,
   body: Record<string, unknown>,
   cookie: string,
+  expectedPlayerKey?: string,
 ) {
   return api(`/api/games/${gameId}${suffix}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }, cookie);
+  }, cookie, expectedPlayerKey);
 }
 
 async function setupScoringFixture(): Promise<ScoringFixture> {
@@ -68,14 +77,16 @@ async function setupScoringFixture(): Promise<ScoringFixture> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   assert.equal(first.response.status, 200);
+  assert.equal(first.body.actor, black.playerKey);
   const second = await api("/api/matchmaking", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, white.cookie);
+  }, white.cookie, white.playerKey);
   assert.equal(second.response.status, 200);
+  assert.equal(second.body.actor, white.playerKey);
   const gameId = ((second.body.matchmaking as { gameId: string }).gameId);
 
   for (const [guest, move] of [
@@ -212,7 +223,13 @@ async function run() {
     postGame(confirmResign.gameId, "/scoring/confirm", {
       expectedRevision: confirmResign.revision,
     }, confirmResign.white.cookie),
-    postGame(confirmResign.gameId, "/resign", {}, confirmResign.white.cookie),
+    postGame(
+      confirmResign.gameId,
+      "/resign",
+      {},
+      confirmResign.white.cookie,
+      confirmResign.white.playerKey,
+    ),
   ]);
   assert.deepEqual(
     confirmResignResults.map(({ response }) => response.status).sort(),

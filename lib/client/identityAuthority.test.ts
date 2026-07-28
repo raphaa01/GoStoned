@@ -27,3 +27,18 @@ test("terminal invalidation rejects every request already in flight", () => {
   assert.equal(authority.isCurrent(authority.capture()), true);
   assert.equal(authority.updateIdentity("guest:A"), false);
 });
+
+test("a matchmaking mutation invalidates older reads for the same identity", () => {
+  const authority = createIdentityRequestAuthority("account:A");
+  const initialRead = authority.capture();
+  authority.invalidate();
+  const join = authority.capture();
+
+  assert.equal(authority.isCurrent(initialRead), false);
+  assert.equal(authority.isCurrent(join), true);
+
+  authority.invalidate();
+  const cancel = authority.capture();
+  assert.equal(authority.isCurrent(join), false);
+  assert.equal(authority.isCurrent(cancel), true);
+});

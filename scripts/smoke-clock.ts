@@ -2,6 +2,7 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { closePool, query } from "../lib/db";
 import { isLocalDatabase } from "../lib/env";
+import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -24,11 +25,18 @@ async function post<T>(
   path: string,
   body: Record<string, unknown>,
   cookie: string,
+  expectedPlayerKey?: string,
 ): Promise<T> {
   return readJson<T>(
     await fetch(`${baseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookie,
+        ...(expectedPlayerKey
+          ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }
+          : {}),
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -52,13 +60,15 @@ async function run() {
   await post("/api/matchmaking", {
     boardSize: 9,
     timeControl: "blitz",
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   const matched = await post<{
+    actor: string;
     matchmaking: { gameId: string; timeControl: string };
   }>("/api/matchmaking", {
     boardSize: 9,
     timeControl: "blitz",
-  }, white.cookie);
+  }, white.cookie, white.playerKey);
+  assert.equal(matched.actor, white.playerKey);
   const gameId = matched.matchmaking.gameId;
   assert.equal(matched.matchmaking.timeControl, "blitz");
 

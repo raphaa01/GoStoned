@@ -34,15 +34,14 @@ export function applyMatchmakingQueueState(
     && queue.boardSize
     && queue.timeControl
   ) {
+    handlers.setActiveGame({
+      gameId: queue.gameId,
+      boardSize: queue.boardSize,
+      timeControl: queue.timeControl,
+    });
+    handlers.setQueueStatus("idle");
     if (enterMatchedGame) {
       handlers.enterGame(queue.gameId);
-    } else {
-      handlers.setActiveGame({
-        gameId: queue.gameId,
-        boardSize: queue.boardSize,
-        timeControl: queue.timeControl,
-      });
-      handlers.setQueueStatus("idle");
     }
     return;
   }

@@ -64,3 +64,21 @@ test("game reconnect status remains perceivable and locks stale controls", () =>
   assert.doesNotMatch(clock, /!running \|\| observedAt !== null/);
   assert.doesNotMatch(styles, /\.game-connection\s*\{\s*display:\s*none/);
 });
+
+test("matchmaking reconciliation is announced without making the whole panel live", () => {
+  const workspace = source("components/game/PlayWorkspace.tsx");
+  const panel = source("components/game/MatchmakingPanel.tsx");
+  assert.match(workspace, /useLayoutEffect\(\(\) => \{/);
+  assert.match(workspace, /matchmakingConnectionAllowsActions/);
+  assert.match(workspace, /\|\| activeGame\s+\|\| !matchmakingConnectionAllowsSync/);
+  assert.doesNotMatch(workspace, /enterMatchedOnSync\.current \|\| queueKnown\.current/);
+  assert.match(panel, /aria-atomic="true"/);
+  assert.match(panel, /aria-live="polite"/);
+  assert.match(panel, /role="status"/);
+  assert.doesNotMatch(panel, /<section[^>]+aria-live=/);
+  assert.doesNotMatch(panel, /<section[^>]+aria-busy=/);
+  assert.match(panel, /className="match-error" role="alert"/);
+  assert.match(panel, /ref=\{primaryActionRef\}/);
+  assert.match(panel, /identityUnavailable\s*\? copy\.secureSessionUnavailable/);
+  assert.match(panel, /presentedConnectionDescription/);
+});

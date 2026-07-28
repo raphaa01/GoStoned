@@ -27,6 +27,7 @@ import {
 } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
+import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import {
   createPollingRequestGuard,
   nextChatPollDelay,
@@ -53,6 +54,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     identityKind,
     loading,
     error: identityError,
+    refreshIdentity,
     retry: retryIdentity,
   } = usePlayerIdentity();
   const [game, setGame] = useState<GameState | null>(null);
@@ -465,6 +467,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
   ) && gameInteractionAllowed && !busy;
 
   function reconcileAfterOperation(requestError: unknown) {
+    if (
+      requestError instanceof ApiRequestError
+      && requestError.code === "identity_changed"
+    ) {
+      recoverChangedIdentity();
+      return;
+    }
     const affectsConnection = operationAffectsConnection(requestError);
     if (affectsConnection) {
       applyConnectionFailure(
@@ -473,6 +482,23 @@ export function GameRoom({ gameId }: { gameId: string }) {
       );
     }
     immediateGameSync.current?.(affectsConnection);
+  }
+
+  function recoverChangedIdentity() {
+    identityAuthority.current.invalidate();
+    clearGameBoundState();
+    transitionConnection({ kind: "unavailable" });
+    setError(localizedApiError(
+      dictionary,
+      new ApiRequestError("The player session changed.", {
+        status: 409,
+        code: "identity_changed",
+      }),
+      copy.unavailable,
+    ));
+    void refreshIdentity()
+      .catch(() => undefined)
+      .finally(() => router.replace(href("/play")));
   }
 
   async function makeMove(move: { x?: number; y?: number; isPass?: boolean }) {
@@ -511,6 +537,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       const response = await fetch(`/api/games/${game.id}/resign`, {
         method: "POST",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
       });
       const data = await readApi<{ game: GameState }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
@@ -624,10 +651,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
       try {
         await readApi<Record<string, unknown>>(await fetch("/api/matchmaking", {
           method: "DELETE",
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
           signal: AbortSignal.timeout(5_000),
         }));
       } catch (requestError) {
         if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+        if (
+          requestError instanceof ApiRequestError
+          && requestError.code === "identity_changed"
+        ) {
+          recoverChangedIdentity();
+          return;
+        }
         if (requestError instanceof ApiRequestError && requestError.status === 401) {
           applyConnectionFailure(requestError, 0);
           recoverExpiredSession();
@@ -659,9 +694,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await leaveGameAndQueue(game.id);
+      const result = await leaveGameAndQueue(game.id, playerKey);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
       setConfirmation(null);
+      if (result.kind === "active") {
+        setError(copy.leaveFailed);
+        if (result.gameId !== game.id) {
+          router.replace(href(`/game/${result.gameId}`));
+        }
+        return;
+      }
       router.replace(href("/"));
     } catch (requestError) {
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;

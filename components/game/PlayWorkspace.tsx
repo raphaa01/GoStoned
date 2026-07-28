@@ -2,16 +2,28 @@
 
 import { ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { readApi } from "@/lib/client/api";
+import { ApiRequestError, readApi } from "@/lib/client/api";
+import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
+import { createIdentityRequestAuthority, type IdentityRequestToken } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import {
   applyMatchmakingQueueState,
   type MatchmakingQueueState,
 } from "@/lib/client/matchmaking";
+import {
+  INITIAL_MATCHMAKING_CONNECTION,
+  isTerminalMatchmakingConnection,
+  matchmakingConnectionAfterFailure,
+  matchmakingConnectionAfterSuccess,
+  matchmakingConnectionAllowsActions,
+  matchmakingConnectionAllowsSync,
+  matchmakingOperationNeedsReconciliation,
+  type MatchmakingConnectionState,
+} from "@/lib/client/matchmakingConnection";
 import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -20,15 +32,23 @@ import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
 import { TimeControlSelector } from "./TimeControlSelector";
 
+type MatchmakingApiResponse = {
+  actor: string;
+  matchmaking: MatchmakingQueueState;
+};
+
 export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) {
   const router = useRouter();
-  const { dictionary, href } = useI18n();
+  const { dictionary, href, locale } = useI18n();
   const copy = dictionary.play;
   const {
     playerKey,
     playerName,
+    identityKind,
     loading,
     error: identityError,
+    refreshIdentity,
+    restartGuest,
     retry: retryIdentity,
   } = usePlayerIdentity();
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
@@ -42,7 +62,83 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [connectionState, setConnectionState] = useState<MatchmakingConnectionState>(
+    INITIAL_MATCHMAKING_CONNECTION,
+  );
+  const [syncAttempt, setSyncAttempt] = useState(0);
   const matchmakingAction = useRef<HTMLButtonElement>(null);
+  const queueKnown = useRef(false);
+  const enterMatchedOnSync = useRef(false);
+  const connectionStateRef = useRef<MatchmakingConnectionState>(
+    INITIAL_MATCHMAKING_CONNECTION,
+  );
+  const identityKey = `${identityKind ?? "none"}:${playerKey ?? "none"}:${locale}`;
+  const requestAuthority = useRef(createIdentityRequestAuthority(identityKey));
+  const cancelQueueReads = useRef<() => void>(() => undefined);
+  const activeOperationController = useRef<AbortController | null>(null);
+
+  const transitionConnection = useCallback((next: MatchmakingConnectionState) => {
+    connectionStateRef.current = next;
+    setConnectionState(next);
+    if (isTerminalMatchmakingConnection(next)) {
+      setBusy(false);
+      setConfirmLeave(false);
+    }
+  }, []);
+
+  const clearQueueBoundState = useCallback(() => {
+    queueKnown.current = false;
+    enterMatchedOnSync.current = false;
+    setQueueStatus("idle");
+    setActiveGame(null);
+    setConfirmLeave(false);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!requestAuthority.current.updateIdentity(identityKey)) return;
+    cancelQueueReads.current();
+    activeOperationController.current?.abort();
+    activeOperationController.current = null;
+    clearQueueBoundState();
+    connectionStateRef.current = INITIAL_MATCHMAKING_CONNECTION;
+    setConnectionState(INITIAL_MATCHMAKING_CONNECTION);
+    setBusy(false);
+    setError(null);
+  }, [clearQueueBoundState, identityKey]);
+
+  useLayoutEffect(() => () => {
+    cancelQueueReads.current();
+    activeOperationController.current?.abort();
+    activeOperationController.current = null;
+    requestAuthority.current.invalidate();
+  }, []);
+
+  const applyConnectionFailure = useCallback((
+    requestError: unknown,
+    retryDelayMs: number,
+  ) => {
+    const previous = connectionStateRef.current;
+    const next = matchmakingConnectionAfterFailure(
+      previous,
+      requestError,
+      Date.now(),
+      retryDelayMs,
+    );
+    if (
+      previous.kind !== next.kind
+      && isTerminalMatchmakingConnection(next)
+    ) {
+      const actionHadFocus = document.activeElement === matchmakingAction.current;
+      activeOperationController.current?.abort();
+      requestAuthority.current.invalidate();
+      clearQueueBoundState();
+      if (actionHadFocus) {
+        window.requestAnimationFrame(() => matchmakingAction.current?.focus());
+      }
+    }
+    transitionConnection(next);
+    return next;
+  }, [clearQueueBoundState, transitionConnection]);
 
   const handleQueueState = useCallback((
     queue: MatchmakingQueueState,
@@ -53,52 +149,100 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       selectBoardSize: setBoardSize,
       selectTimeControl: setTimeControl,
       setActiveGame,
-      setQueueStatus,
+      setQueueStatus: (status) => {
+        setQueueStatus(status);
+      },
     });
   }, [href, router]);
 
-  const refreshQueue = useCallback(async (
-    enterMatchedGame = false,
-    signal?: AbortSignal,
+  const acceptQueueResponse = useCallback((
+    data: MatchmakingApiResponse,
+    requestIdentity: IdentityRequestToken,
+    enterMatchedGame: boolean,
   ) => {
-    if (!playerKey) return;
-    const response = await fetch("/api/matchmaking", { cache: "no-store", signal });
-    const data = await readApi<{ matchmaking: MatchmakingQueueState }>(response);
-    if (signal?.aborted) return;
+    if (
+      !playerKey
+      || !requestAuthority.current.isCurrent(requestIdentity)
+      || isTerminalMatchmakingConnection(connectionStateRef.current)
+    ) {
+      return false;
+    }
+    if (data.actor !== playerKey) {
+      throw new ApiRequestError("The player session changed.", {
+        status: 409,
+        code: "identity_changed",
+      });
+    }
     handleQueueState(data.matchmaking, enterMatchedGame);
-  }, [handleQueueState, playerKey]);
+    queueKnown.current = true;
+    enterMatchedOnSync.current = data.matchmaking.status === "waiting";
+    transitionConnection(matchmakingConnectionAfterSuccess(Date.now()));
+    setError(null);
+    return true;
+  }, [handleQueueState, playerKey, transitionConnection]);
 
   useEffect(() => {
-    if (!playerKey) return;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      refreshQueue(false, controller.signal).catch(() => undefined);
-    }, 0);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [playerKey, refreshQueue]);
-
-  useEffect(() => {
-    if (queueStatus !== "waiting") return;
+    if (
+      !playerKey
+      || busy
+      || activeGame
+      || !matchmakingConnectionAllowsSync(connectionStateRef.current)
+    ) {
+      return;
+    }
+    const requestIdentity = requestAuthority.current.capture();
     let cancelled = false;
-    let timer: number;
+    let timer: number | undefined;
     const guard = createPollingRequestGuard();
 
     const poll = async () => {
+      if (
+        !requestAuthority.current.isCurrent(requestIdentity)
+        || !matchmakingConnectionAllowsSync(connectionStateRef.current)
+      ) {
+        return;
+      }
       let requestError: unknown = null;
-      const signal = guard.start();
+      let shouldContinue = false;
+      const guardSignal = guard.start();
+      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
       try {
-        await refreshQueue(true, signal);
-        if (guard.isCurrent(signal)) setError(null);
-      } catch (error) {
-        requestError = error;
-        if (guard.isCurrent(signal)) {
-          setError(localizedApiError(dictionary, error, copy.matchmakingFailed));
+        const response = await fetch("/api/matchmaking", {
+          cache: "no-store",
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+          signal,
+        });
+        const data = await readApi<MatchmakingApiResponse>(response);
+        if (
+          !guard.isCurrent(guardSignal)
+          || !requestAuthority.current.isCurrent(requestIdentity)
+        ) {
+          return;
+        }
+        const accepted = acceptQueueResponse(
+          data,
+          requestIdentity,
+          enterMatchedOnSync.current,
+        );
+        shouldContinue = accepted && data.matchmaking.status === "waiting";
+      } catch (caughtError) {
+        requestError = caughtError;
+        if (
+          guard.isCurrent(guardSignal)
+          && requestAuthority.current.isCurrent(requestIdentity)
+        ) {
+          const delay = nextPollDelay(1_000, requestError, document.hidden);
+          const next = applyConnectionFailure(requestError, delay);
+          setError(localizedApiError(dictionary, requestError, copy.matchmakingFailed));
+          shouldContinue = matchmakingConnectionAllowsSync(next);
         }
       } finally {
-        if (!cancelled && guard.isCurrent(signal)) {
+        if (
+          !cancelled
+          && guard.isCurrent(guardSignal)
+          && requestAuthority.current.isCurrent(requestIdentity)
+          && shouldContinue
+        ) {
           timer = window.setTimeout(
             poll,
             nextPollDelay(1_000, requestError, document.hidden),
@@ -107,65 +251,264 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       }
     };
 
-    timer = window.setTimeout(poll, 1_000);
-    return () => {
+    const cancel = () => {
       cancelled = true;
       guard.cancel();
-      window.clearTimeout(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [copy.matchmakingFailed, dictionary, queueStatus, refreshQueue]);
+    cancelQueueReads.current = cancel;
+    const currentConnection = connectionStateRef.current;
+    const initialDelay = currentConnection.kind === "reconnecting"
+      ? Math.max(0, currentConnection.retryAt - Date.now())
+      : queueKnown.current ? 1_000 : 0;
+    timer = window.setTimeout(poll, initialDelay);
+    return () => {
+      cancel();
+      if (cancelQueueReads.current === cancel) {
+        cancelQueueReads.current = () => undefined;
+      }
+    };
+  }, [
+    acceptQueueResponse,
+    activeGame,
+    applyConnectionFailure,
+    busy,
+    copy.matchmakingFailed,
+    dictionary,
+    identityKey,
+    playerKey,
+    syncAttempt,
+  ]);
 
-  async function findMatch() {
-    if (!playerKey) return;
+  function beginQueueOperation() {
+    cancelQueueReads.current();
+    activeOperationController.current?.abort();
+    const controller = new AbortController();
+    activeOperationController.current = controller;
+    requestAuthority.current.invalidate();
+    const requestIdentity = requestAuthority.current.capture();
     setBusy(true);
     setError(null);
+    return {
+      controller,
+      requestIdentity,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+    };
+  }
+
+  function reconcileOperationFailure(
+    requestError: unknown,
+    requestIdentity: IdentityRequestToken,
+    fallback: string,
+  ) {
+    if (!requestAuthority.current.isCurrent(requestIdentity)) return;
+    setError(localizedApiError(dictionary, requestError, fallback));
+    if (!matchmakingOperationNeedsReconciliation(requestError)) return;
+    const delay = nextPollDelay(1_000, requestError, document.hidden);
+    const next = applyConnectionFailure(requestError, delay);
+    if (matchmakingConnectionAllowsSync(next)) {
+      enterMatchedOnSync.current = true;
+      setSyncAttempt((current) => current + 1);
+    }
+  }
+
+  function restoreQueueActionFocus() {
+    window.requestAnimationFrame(() => matchmakingAction.current?.focus());
+  }
+
+  async function findMatch() {
+    if (
+      !playerKey
+      || busy
+      || !matchmakingConnectionAllowsActions(connectionStateRef.current)
+    ) {
+      return;
+    }
+    const { controller, requestIdentity, signal } = beginQueueOperation();
+    enterMatchedOnSync.current = true;
     try {
       const response = await fetch("/api/matchmaking", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
         body: JSON.stringify({ boardSize, timeControl }),
+        signal,
       });
-      const data = await readApi<{ matchmaking: MatchmakingQueueState }>(response);
-      handleQueueState(data.matchmaking, true);
+      const data = await readApi<MatchmakingApiResponse>(response);
+      if (!acceptQueueResponse(data, requestIdentity, true)) return;
+      if (data.matchmaking.status !== "matched") restoreQueueActionFocus();
     } catch (requestError) {
-      setError(localizedApiError(dictionary, requestError, copy.joinFailed));
+      reconcileOperationFailure(requestError, requestIdentity, copy.joinFailed);
     } finally {
-      setBusy(false);
+      if (activeOperationController.current === controller) {
+        activeOperationController.current = null;
+      }
+      if (requestAuthority.current.isCurrent(requestIdentity)) {
+        setBusy(false);
+      }
     }
   }
 
   async function cancelSearch() {
-    if (!playerKey) return;
-    setBusy(true);
+    if (
+      !playerKey
+      || busy
+      || !matchmakingConnectionAllowsActions(connectionStateRef.current)
+    ) {
+      return;
+    }
+    const { controller, requestIdentity, signal } = beginQueueOperation();
+    enterMatchedOnSync.current = true;
     try {
-      const data = await readApi<{ matchmaking: MatchmakingQueueState }>(
+      const data = await readApi<MatchmakingApiResponse>(
         await fetch("/api/matchmaking", {
           method: "DELETE",
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+          signal,
         }),
       );
-      handleQueueState(data.matchmaking, true);
+      if (!acceptQueueResponse(data, requestIdentity, true)) return;
+      if (data.matchmaking.status !== "matched") restoreQueueActionFocus();
     } catch (requestError) {
-      setError(localizedApiError(dictionary, requestError, copy.cancelFailed));
+      reconcileOperationFailure(requestError, requestIdentity, copy.cancelFailed);
     } finally {
-      setBusy(false);
+      if (activeOperationController.current === controller) {
+        activeOperationController.current = null;
+      }
+      if (requestAuthority.current.isCurrent(requestIdentity)) {
+        setBusy(false);
+      }
     }
   }
 
   async function leaveActiveGame() {
-    if (!playerKey || !activeGame || busy) return;
-    setBusy(true);
-    setError(null);
+    if (
+      !playerKey
+      || !activeGame
+      || busy
+      || !matchmakingConnectionAllowsActions(connectionStateRef.current)
+    ) {
+      return;
+    }
+    const { controller, requestIdentity, signal } = beginQueueOperation();
+    enterMatchedOnSync.current = true;
     try {
-      await leaveGameAndQueue(activeGame.gameId);
+      const result = await leaveGameAndQueue(activeGame.gameId, playerKey, signal);
+      if (!requestAuthority.current.isCurrent(requestIdentity)) return;
+      queueKnown.current = true;
+      enterMatchedOnSync.current = false;
+      if (result.kind === "active") {
+        setBoardSize(result.boardSize);
+        setTimeControl(result.timeControl);
+        setActiveGame(result);
+        setQueueStatus("idle");
+        transitionConnection(matchmakingConnectionAfterSuccess(Date.now()));
+        setError(copy.leaveFailed);
+        return;
+      }
       setActiveGame(null);
       setQueueStatus("idle");
       setConfirmLeave(false);
+      transitionConnection(matchmakingConnectionAfterSuccess(Date.now()));
+      setError(null);
+      restoreQueueActionFocus();
     } catch (requestError) {
-      setError(localizedApiError(dictionary, requestError, copy.leaveFailed));
+      reconcileOperationFailure(requestError, requestIdentity, copy.leaveFailed);
     } finally {
-      setBusy(false);
+      if (activeOperationController.current === controller) {
+        activeOperationController.current = null;
+      }
+      if (requestAuthority.current.isCurrent(requestIdentity)) {
+        setBusy(false);
+      }
     }
   }
+
+  function retryQueueSync() {
+    cancelQueueReads.current();
+    activeOperationController.current?.abort();
+    activeOperationController.current = null;
+    requestAuthority.current.invalidate();
+    clearQueueBoundState();
+    transitionConnection(INITIAL_MATCHMAKING_CONNECTION);
+    setError(null);
+    setSyncAttempt((current) => current + 1);
+  }
+
+  function recoverExpiredSession() {
+    if (identityKind === "account") {
+      router.push(
+        `${href("/login")}?reauthenticate=1&returnTo=${encodeURIComponent("/play")}`,
+      );
+      return;
+    }
+    if (identityKind === "guest") {
+      restartGuest();
+      return;
+    }
+    retryIdentity();
+  }
+
+  function recoverChangedIdentity() {
+    refreshIdentity().catch(() => undefined);
+  }
+
+  useEffect(() => {
+    if (!playerKey) return;
+    const markOffline = () => {
+      if (isTerminalMatchmakingConnection(connectionStateRef.current)) return;
+      applyConnectionFailure(new Error("offline"), 0);
+      setError(null);
+    };
+    const reconcileOnline = () => {
+      const current = connectionStateRef.current;
+      if (current.kind !== "reconnecting" || current.reason !== "offline") return;
+      setSyncAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener("offline", markOffline);
+    window.addEventListener("online", reconcileOnline);
+    return () => {
+      window.removeEventListener("offline", markOffline);
+      window.removeEventListener("online", reconcileOnline);
+    };
+  }, [applyConnectionFailure, playerKey]);
+
+  const actionReady = Boolean(playerKey)
+    && !loading
+    && matchmakingConnectionAllowsActions(connectionState);
+  const connectionLabel = connectionState.kind === "live"
+    ? queueStatus === "waiting" ? copy.searching : copy.ready
+    : connectionState.kind === "checking"
+      ? copy.checkingQueue
+      : connectionState.kind === "reconnecting"
+        ? connectionState.reason === "rate_limited"
+          ? copy.syncDelayed
+          : connectionState.reason === "offline" ? copy.offline : copy.reconnecting
+        : connectionState.kind === "session_expired"
+          ? copy.sessionExpired
+          : connectionState.kind === "identity_changed"
+            ? copy.identityChanged
+          : copy.unavailable;
+  const connectionDescription = connectionState.kind === "checking"
+    ? copy.checkingQueueDescription
+    : connectionState.kind === "reconnecting"
+      ? connectionState.reason === "rate_limited"
+        ? copy.syncDelayedDescription
+        : connectionState.reason === "offline"
+          ? copy.offlineDescription
+          : copy.reconnectingDescription
+      : connectionState.kind === "session_expired"
+        ? identityKind === "account"
+          ? copy.sessionExpiredAccountDescription
+          : copy.sessionExpiredGuestDescription
+        : connectionState.kind === "identity_changed"
+          ? copy.identityChangedDescription
+        : connectionState.kind === "unavailable"
+          ? copy.queueUnavailableDescription
+          : null;
+  const panelError = error ?? identityError;
 
   return (
     <div className="match-lobby">
@@ -190,7 +533,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
           <ActiveGamePanel
             boardSize={activeGame.boardSize}
             timeControl={activeGame.timeControl}
-            busy={busy}
+            busy={busy || !actionReady}
             error={error}
             onLeave={() => {
               setError(null);
@@ -204,7 +547,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
               <div>
                 <span>{copy.boardSize}</span>
                 <BoardSizeSelector
-                  disabled={queueStatus === "waiting"}
+                  disabled={busy || queueStatus === "waiting" || !actionReady}
                   onChange={setBoardSize}
                   value={boardSize}
                 />
@@ -212,7 +555,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
               <div>
                 <span>{copy.timeControl}</span>
                 <TimeControlSelector
-                  disabled={queueStatus === "waiting"}
+                  disabled={busy || queueStatus === "waiting" || !actionReady}
                   onChange={setTimeControl}
                   value={timeControl}
                 />
@@ -221,13 +564,26 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             <MatchmakingPanel
               boardSize={boardSize}
               busy={busy}
-              error={error ?? identityError}
+              connectionDescription={connectionDescription}
+              connectionKind={connectionState.kind}
+              connectionLabel={connectionLabel}
+              error={panelError}
               onCancel={cancelSearch}
               onFind={findMatch}
+              onRecover={connectionState.kind === "session_expired"
+                ? recoverExpiredSession
+                : connectionState.kind === "identity_changed"
+                  ? recoverChangedIdentity
+                  : retryQueueSync}
               onRetry={retryIdentity}
               primaryActionRef={matchmakingAction}
               playerName={playerName}
-              ready={Boolean(playerKey) && !loading}
+              ready={actionReady}
+              recoveryLabel={connectionState.kind === "session_expired"
+                ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
+                : connectionState.kind === "identity_changed"
+                  ? copy.refreshSession
+                  : copy.retryQueue}
               status={queueStatus}
               timeControl={timeControl}
             />
@@ -235,7 +591,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         )}
       </section>
       <ConfirmModal
-        busy={busy}
+        busy={busy || !actionReady}
         confirmLabel={copy.leaveGame}
         description={copy.leaveDescription}
         error={error}

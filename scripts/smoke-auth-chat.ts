@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { isLocalDatabase } from "../lib/env";
+import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -34,12 +35,20 @@ async function request(
   };
 }
 
-function json(method: string, body: object, cookie?: string): RequestInit {
+function json(
+  method: string,
+  body: object,
+  cookie?: string,
+  expectedPlayerKey?: string,
+): RequestInit {
   return {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(expectedPlayerKey
+        ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }
+        : {}),
     },
     body: JSON.stringify(body),
   };
@@ -103,6 +112,7 @@ async function run() {
     201,
   );
   assert.ok(registeredSecond.cookie);
+  const secondUser = registeredSecond.body.user as { playerKey: string };
 
   const waiting = await request(
     "/api/matchmaking",
@@ -110,6 +120,7 @@ async function run() {
       "POST",
       { boardSize: 9, timeControl: "rapid" },
       firstLogin.cookie!,
+      firstUser.playerKey,
     ),
   );
   assert.equal((waiting.body.matchmaking as { status: string }).status, "waiting");
@@ -120,8 +131,11 @@ async function run() {
       "POST",
       { boardSize: 9, timeControl: "rapid" },
       registeredSecond.cookie!,
+      secondUser.playerKey,
     ),
   );
+  assert.equal(waiting.body.actor, firstUser.playerKey);
+  assert.equal(matched.body.actor, secondUser.playerKey);
   const gameId = (matched.body.matchmaking as { gameId: string }).gameId;
   assert.ok(gameId);
 
@@ -162,7 +176,7 @@ async function run() {
 
   const resigned = await request(
     `/api/games/${gameId}/resign`,
-    json("POST", {}, firstLogin.cookie!),
+    json("POST", {}, firstLogin.cookie!, firstUser.playerKey),
   );
   assert.equal((resigned.body.game as { rated: boolean }).rated, true);
 
