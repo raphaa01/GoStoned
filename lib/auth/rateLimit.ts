@@ -153,6 +153,7 @@ export const RATE_LIMIT_POLICIES = {
     windowMinutes: 1 / 6,
   },
   resign: { scope: "game-resign", limit: 6, ipLimit: 60, windowMinutes: 1 },
+  localePreference: { scope: "locale-preference", limit: 30, windowMinutes: 1 },
   publicGameSummary: { scope: "public-game-summary", limit: 20, windowMinutes: 1 },
   publicStats: { scope: "public-stats", limit: 60, windowMinutes: 1 },
   publicDatabaseHealth: { scope: "public-database-health", limit: 120, windowMinutes: 1 },

@@ -292,6 +292,18 @@ async function installApiHarness(
         return;
       }
     }
+    if (method === "GET" && url.pathname === "/api/games" && exactQuery(url, {})) {
+      await fulfillJson(route, {
+        ok: true,
+        summary: {
+          gamesStartedLast24Hours: 0,
+          observedAt: "2026-01-01T00:00:00.000Z",
+          recentlyWaitingPlayers: 0,
+          unfinishedGames: 0,
+        },
+      });
+      return;
+    }
     if (method === "GET" && url.pathname === `/api/games/${GAME_ID}`) {
       const knownVersion = url.searchParams.get("knownVersion");
       const validQuery = exactQuery(url, {})
@@ -717,6 +729,74 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   await expect(page).toHaveURL(`${ORIGIN}/de/play?size=19&source=browser#queue`);
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.getByRole("button", { name: /19×19/ })).toHaveAttribute("aria-pressed", "true");
+  await expectNoDocumentOverflow(page);
+  await expectCleanHarness(harness);
+});
+
+test("locale preference survives a rejected oversized mutation", async ({ page }, testInfo) => {
+  test.skip(
+    !["chromium-320-touch", "chromium-1024"].includes(testInfo.project.name),
+    "One touch and one desktop project cover the real locale boundary.",
+  );
+  const address = testInfo.project.name === "chromium-320-touch"
+    ? "203.0.113.230"
+    : "203.0.113.231";
+  const requestHeaders = {
+    "Content-Type": "application/json",
+    "x-real-ip": address,
+  };
+  const saved = await page.request.post(`${ORIGIN}/api/locale`, {
+    data: { locale: "de" },
+    headers: requestHeaders,
+  });
+  expect(saved.status()).toBe(200);
+  expect(await saved.json()).toEqual({ ok: true, locale: "de" });
+  const setCookie = saved.headers()["set-cookie"] ?? "";
+  expect(setCookie).toMatch(/^gostone_locale=de;/);
+  expect(setCookie).toMatch(/Path=\//);
+  expect(setCookie).toMatch(/Max-Age=31536000/);
+  expect(setCookie).toMatch(/Secure/i);
+  expect(setCookie).toMatch(/HttpOnly/i);
+  expect(setCookie).toMatch(/SameSite=lax/i);
+
+  // The production cookie is Secure, while this isolated browser server is
+  // intentionally HTTP. Mirror the validated preference in its local jar so
+  // the remaining journey can prove rejection and remembered routing.
+  await page.context().addCookies([{
+    domain: "127.0.0.1",
+    httpOnly: true,
+    name: "gostone_locale",
+    path: "/",
+    sameSite: "Lax",
+    secure: false,
+    value: "de",
+  }]);
+  const browserCookie = (await page.context().cookies(ORIGIN))
+    .find(({ name }) => name === "gostone_locale");
+  expect(browserCookie).toMatchObject({
+    httpOnly: true,
+    name: "gostone_locale",
+    path: "/",
+    sameSite: "Lax",
+    secure: false,
+    value: "de",
+  });
+
+  const rejected = await page.request.post(`${ORIGIN}/api/locale`, {
+    data: { locale: "en", padding: "x".repeat(1_024) },
+    headers: requestHeaders,
+  });
+  expect(rejected.status()).toBe(400);
+  expect(rejected.headers()["set-cookie"]).toBeUndefined();
+  expect(await rejected.json()).toMatchObject({ ok: false, code: "invalid_locale" });
+  expect((await page.context().cookies(ORIGIN)).find(
+    ({ name }) => name === "gostone_locale",
+  )?.value).toBe("de");
+
+  const harness = await installApiHarness(page);
+  await page.goto("/?source=remembered&tag=a&tag=b#landing");
+  await expect(page).toHaveURL(`${ORIGIN}/de?source=remembered&tag=a&tag=b#landing`);
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expectNoDocumentOverflow(page);
   await expectCleanHarness(harness);
 });

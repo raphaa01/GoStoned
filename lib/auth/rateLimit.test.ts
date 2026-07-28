@@ -289,6 +289,14 @@ test("player reporting has separate actor and address burst and hourly policies"
   });
 });
 
+test("locale preference has a dedicated database-free address budget", () => {
+  assert.deepEqual(RATE_LIMIT_POLICIES.localePreference, {
+    scope: "locale-preference",
+    limit: 30,
+    windowMinutes: 1,
+  });
+});
+
 test("ephemeral guards keep their process-local store bounded", () => {
   globalThis.goStoneEphemeralRateLimits = new Map();
   for (let index = 0; index < 10_001; index += 1) {
