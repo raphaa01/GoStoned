@@ -31,10 +31,10 @@ function wait(milliseconds: number): Promise<void> {
 
 async function setTrustedSearchPath(client: PoolClient): Promise<void> {
   await client.query("SET search_path TO public");
-  const result = await client.query<{ schemas: string[] }>(
-    "SELECT pg_catalog.current_schemas(FALSE) AS schemas",
+  const result = await client.query<{ schemas: string }>(
+    "SELECT pg_catalog.current_schemas(FALSE)::text AS schemas",
   );
-  if (result.rows.length !== 1 || JSON.stringify(result.rows[0].schemas) !== '["public"]') {
+  if (result.rows.length !== 1 || result.rows[0].schemas !== "{public}") {
     throw new Error("Migration search path could not be secured.");
   }
 }

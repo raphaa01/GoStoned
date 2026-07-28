@@ -55,6 +55,7 @@ test("migration runner keeps concurrent index builds outside its transaction", (
   assert.match(migrationContracts, /gostone:migration-mode=nontransactional/);
   assert.match(migrationRunner, /pg_try_advisory_lock/);
   assert.match(migrationRunner, /public\.schema_migrations/);
+  assert.match(migrationRunner, /current_schemas\(FALSE\)::text/);
   assert.match(
     migrationRunner,
     /if \(migration\.nonTransactional\) \{\s+await reconcileConcurrentIndex/,
