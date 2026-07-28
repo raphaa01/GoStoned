@@ -193,7 +193,13 @@ async function run() {
 
   const resigned = await request(
     `/api/games/${gameId}/resign`,
-    json("POST", {}, firstLogin.cookie!, firstUser.playerKey),
+    {
+      method: "POST",
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
   assert.equal((resigned.body.game as { rated: boolean }).rated, true);
 
