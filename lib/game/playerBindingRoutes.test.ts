@@ -58,12 +58,14 @@ test("every game mutation rejects a changed actor before rate or game writes", a
           new NextRequest(`https://gostone.test/api/games/${gameId}/${mutation.path}`, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              ...(mutation.name === "resignation" ? {} : {
+                "Content-Type": "application/json",
+              }),
               Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}`,
               [EXPECTED_PLAYER_HEADER]: displayedPlayer,
               "x-real-ip": "203.0.113.141",
             },
-            body: "{}",
+            ...(mutation.name === "resignation" ? {} : { body: "{}" }),
           }),
           { params: Promise.resolve({ gameId }) },
         );

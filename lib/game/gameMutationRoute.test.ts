@@ -1,0 +1,443 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { NextRequest } from "next/server";
+import type { Pool } from "pg";
+import { POST as submitMove } from "@/app/api/games/[gameId]/moves/route";
+import { POST as resignGame } from "@/app/api/games/[gameId]/resign/route";
+import { POST as confirmScore } from "@/app/api/games/[gameId]/scoring/confirm/route";
+import { POST as setDeadGroup } from "@/app/api/games/[gameId]/scoring/dead-stones/route";
+import { POST as resumePlay } from "@/app/api/games/[gameId]/scoring/resume/route";
+import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
+import { SESSION_COOKIE } from "@/lib/auth/session";
+import {
+  assertGameMutationMetadata,
+  MAX_GAME_MUTATION_BODY_BYTES,
+  readGameMutationJson,
+} from "./gameMutationRequest";
+import { GameServiceError } from "./gameService";
+
+const gameId = "33333333-3333-4333-8333-333333333333";
+const playerKey = "user:11111111-1111-4111-8111-111111111111";
+const SERVICE_BOUNDARY_SENTINEL = "expected game service boundary";
+
+type MutationHandler = (
+  request: NextRequest,
+  context: { params: Promise<{ gameId: string }> },
+) => Promise<Response>;
+
+const mutations: Array<{
+  name: string;
+  path: string;
+  handler: MutationHandler;
+  body: string | null;
+}> = [
+  { name: "move", path: "moves", handler: submitMove, body: JSON.stringify({ x: 2, y: 3 }) },
+  { name: "resign", path: "resign", handler: resignGame, body: null },
+  {
+    name: "score confirmation",
+    path: "scoring/confirm",
+    handler: confirmScore,
+    body: JSON.stringify({ expectedRevision: 2 }),
+  },
+  {
+    name: "dead-stone edit",
+    path: "scoring/dead-stones",
+    handler: setDeadGroup,
+    body: JSON.stringify({ x: 2, y: 3, dead: true, expectedRevision: 2 }),
+  },
+  {
+    name: "resume",
+    path: "scoring/resume",
+    handler: resumePlay,
+    body: JSON.stringify({ expectedRevision: 2, claim: "dead", x: 2, y: 3 }),
+  },
+];
+
+class RequestBoundaryPool {
+  readonly statements: string[] = [];
+  rateReservations = 0;
+  serviceBoundaryAttempts = 0;
+
+  async connect() {
+    this.serviceBoundaryAttempts += 1;
+    throw new Error(SERVICE_BOUNDARY_SENTINEL);
+  }
+
+  async query(sql: string) {
+    const normalized = sql.replace(/\s+/g, " ").trim();
+    this.statements.push(normalized);
+    if (normalized.includes("FROM user_sessions s")) {
+      return {
+        rows: [{
+          id: playerKey.slice("user:".length),
+          username: "player",
+          display_name: "Player",
+          expires_at: new Date(Date.now() + 60_000),
+        }],
+        rowCount: 1,
+      };
+    }
+    if (normalized.includes("INSERT INTO auth_rate_limits")) {
+      this.rateReservations += 1;
+      return {
+        rows: [{
+          attempts: 1,
+          window_started_at: new Date(),
+          blocked_until: null,
+          retry_after_seconds: 60,
+        }],
+        rowCount: 1,
+      };
+    }
+    throw new Error(`Game service must not be reached: ${normalized}`);
+  }
+}
+
+async function withExpectedServiceBoundary(action: () => Promise<Response>): Promise<Response> {
+  const previousConsoleError = console.error;
+  const logged: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    logged.push(args);
+  };
+  try {
+    const response = await action();
+    assert.equal(logged.length, 1);
+    assert.equal(logged[0][0], "API request failed:");
+    assert.ok(logged[0][1] instanceof Error);
+    assert.equal((logged[0][1] as Error).message, SERVICE_BOUNDARY_SENTINEL);
+    return response;
+  } finally {
+    console.error = previousConsoleError;
+  }
+}
+
+async function withPool<T>(pool: RequestBoundaryPool, action: () => Promise<T>): Promise<T> {
+  const previousPool = globalThis.goStonedDbPool;
+  globalThis.goStonedDbPool = pool as unknown as Pool;
+  globalThis.goStoneEphemeralRateLimits = new Map();
+  try {
+    return await action();
+  } finally {
+    globalThis.goStonedDbPool = previousPool;
+  }
+}
+
+function mutationRequest(
+  mutation: (typeof mutations)[number],
+  options: {
+    body?: BodyInit | null;
+    contentType?: string;
+    origin?: string;
+    secFetchSite?: string;
+    url?: string;
+  } = {},
+): NextRequest {
+  const body = options.body === undefined ? mutation.body : options.body;
+  return new NextRequest(
+    options.url ?? `https://gostone.test/api/games/${gameId}/${mutation.path}`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}`,
+        [EXPECTED_PLAYER_HEADER]: playerKey,
+        "x-real-ip": "203.0.113.190",
+        "sec-fetch-site": options.secFetchSite ?? "same-origin",
+        ...(body === null ? {} : {
+          "Content-Type": options.contentType ?? "application/json",
+        }),
+        ...(options.origin ? { Origin: options.origin } : {}),
+      },
+      ...(body === null ? {} : { body }),
+    },
+  );
+}
+
+const context = { params: Promise.resolve({ gameId }) };
+
+test("game mutation metadata is rejected before identity or persistent rate-limit access", async (t) => {
+  for (const mutation of mutations) {
+    await t.test(mutation.name, async () => {
+      const cases: Array<{
+        request: NextRequest;
+        context?: { params: Promise<{ gameId: string }> };
+        status: number;
+        code: string;
+      }> = [
+        {
+          request: mutationRequest(mutation, { origin: "https://attacker.test" }),
+          status: 403,
+          code: "request_rejected",
+        },
+        {
+          request: mutationRequest(mutation, { origin: "not a valid origin" }),
+          status: 403,
+          code: "request_rejected",
+        },
+        {
+          request: mutationRequest(mutation, { secFetchSite: "cross-site" }),
+          status: 403,
+          code: "request_rejected",
+        },
+        {
+          request: mutationRequest(mutation, {
+            url: `https://gostone.test/api/games/${gameId}/${mutation.path}?unsupported=1`,
+          }),
+          status: 400,
+          code: "invalid_game_mutation_request",
+        },
+        {
+          request: mutationRequest(mutation),
+          context: { params: Promise.resolve({ gameId: "NOT-A-UUID" }) },
+          status: 404,
+          code: "game_not_found",
+        },
+      ];
+      if (mutation.body !== null) {
+        cases.push({
+          request: mutationRequest(mutation, { contentType: "text/plain" }),
+          status: 403,
+          code: "request_rejected",
+        });
+      } else {
+        cases.push({
+          request: mutationRequest(mutation, { body: "{}" }),
+          status: 400,
+          code: "invalid_game_mutation_request",
+        });
+      }
+
+      for (const invalid of cases) {
+        const pool = new RequestBoundaryPool();
+        const response = await withPool(pool, () => mutation.handler(
+          invalid.request,
+          invalid.context ?? context,
+        ));
+        assert.equal(response.status, invalid.status);
+        assert.equal((await response.json()).code, invalid.code);
+        assert.equal(pool.statements.length, 0);
+      }
+    });
+  }
+});
+
+test("invalid JSON mutations consume actor-bound budgets but never reach game services", async (t) => {
+  for (const mutation of mutations.filter(({ body }) => body !== null)) {
+    await t.test(mutation.name, async () => {
+      const validObject = JSON.parse(mutation.body!) as Record<string, unknown>;
+      const invalidBodies: BodyInit[] = [
+        "",
+        "not-json",
+        "null",
+        "[]",
+        "1",
+        JSON.stringify({ ...validObject, extra: true }),
+        JSON.stringify({ ...validObject, extra: "x".repeat(MAX_GAME_MUTATION_BODY_BYTES) }),
+        new Uint8Array([0xc3, 0x28]),
+      ];
+      for (const body of invalidBodies) {
+        const pool = new RequestBoundaryPool();
+        const response = await withPool(pool, () => mutation.handler(
+          mutationRequest(mutation, { body }),
+          context,
+        ));
+        assert.equal(response.status, 400);
+        assert.equal((await response.json()).code, "invalid_game_mutation_request");
+        assert.equal(pool.rateReservations, 4);
+        assert.equal(pool.statements.some((sql) => /\bFROM games\b/.test(sql)), false);
+        assert.equal(
+          pool.statements.some((sql) => /\b(?:moves|game_scoring_state)\b/.test(sql)),
+          false,
+        );
+      }
+    });
+  }
+});
+
+test("valid game mutation payloads pass route semantics and reach the service boundary", async () => {
+  const move = mutations[0];
+  const validCases: Array<{
+    name: string;
+    mutation: (typeof mutations)[number];
+    body: BodyInit | null;
+  }> = [
+    { name: "move", mutation: move, body: JSON.stringify({ x: 2, y: 3 }) },
+    { name: "pass", mutation: move, body: JSON.stringify({ isPass: true }) },
+    {
+      name: "explicit non-pass",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3, isPass: false }),
+    },
+    {
+      name: "score confirmation",
+      mutation: mutations[2],
+      body: mutations[2].body,
+    },
+    { name: "dead-stone edit", mutation: mutations[3], body: mutations[3].body },
+    { name: "scoring resume", mutation: mutations[4], body: mutations[4].body },
+    { name: "bodyless resignation", mutation: mutations[1], body: null },
+  ];
+
+  for (const valid of validCases) {
+    const pool = new RequestBoundaryPool();
+    const response = await withPool(pool, () => withExpectedServiceBoundary(
+      () => valid.mutation.handler(
+        mutationRequest(valid.mutation, { body: valid.body }),
+        context,
+      ),
+    ));
+    assert.equal(response.status, 500, valid.name);
+    assert.equal((await response.json()).code, "internal_error", valid.name);
+    assert.equal(pool.rateReservations, 4, valid.name);
+    assert.equal(pool.serviceBoundaryAttempts, 1, valid.name);
+  }
+});
+
+test("invalid semantic payloads are metered and stop before the service boundary", async () => {
+  const move = mutations[0];
+  const invalidCases: Array<{
+    name: string;
+    mutation: (typeof mutations)[number];
+    body: string;
+  }> = [
+    {
+      name: "pass with coordinates",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3, isPass: true }),
+    },
+    {
+      name: "explicit non-pass without coordinates",
+      mutation: move,
+      body: JSON.stringify({ isPass: false }),
+    },
+    { name: "fractional move", mutation: move, body: JSON.stringify({ x: 2.5, y: 3 }) },
+    {
+      name: "unsafe move integer",
+      mutation: move,
+      body: JSON.stringify({ x: Number.MAX_SAFE_INTEGER + 1, y: 3 }),
+    },
+    {
+      name: "zero confirmation revision",
+      mutation: mutations[2],
+      body: JSON.stringify({ expectedRevision: 0 }),
+    },
+    {
+      name: "fractional confirmation revision",
+      mutation: mutations[2],
+      body: JSON.stringify({ expectedRevision: 1.5 }),
+    },
+    {
+      name: "wrong dead state",
+      mutation: mutations[3],
+      body: JSON.stringify({ x: 2, y: 3, dead: "true", expectedRevision: 2 }),
+    },
+    {
+      name: "zero dead-stone revision",
+      mutation: mutations[3],
+      body: JSON.stringify({ x: 2, y: 3, dead: true, expectedRevision: 0 }),
+    },
+    {
+      name: "unsafe dead-stone coordinate",
+      mutation: mutations[3],
+      body: JSON.stringify({
+        x: Number.MAX_SAFE_INTEGER + 1,
+        y: 3,
+        dead: true,
+        expectedRevision: 2,
+      }),
+    },
+    {
+      name: "unsupported resume claim",
+      mutation: mutations[4],
+      body: JSON.stringify({ expectedRevision: 2, claim: "seki", x: 2, y: 3 }),
+    },
+    {
+      name: "zero resume revision",
+      mutation: mutations[4],
+      body: JSON.stringify({ expectedRevision: 0, claim: "dead", x: 2, y: 3 }),
+    },
+    {
+      name: "fractional resume coordinate",
+      mutation: mutations[4],
+      body: JSON.stringify({ expectedRevision: 2, claim: "alive", x: 2, y: 3.5 }),
+    },
+  ];
+
+  for (const invalid of invalidCases) {
+    const pool = new RequestBoundaryPool();
+    const response = await withPool(pool, () => invalid.mutation.handler(
+      mutationRequest(invalid.mutation, { body: invalid.body }),
+      context,
+    ));
+    assert.equal(response.status, 400, invalid.name);
+    assert.equal((await response.json()).code, "invalid_game_mutation_request", invalid.name);
+    assert.equal(pool.rateReservations, 4, invalid.name);
+    assert.equal(pool.serviceBoundaryAttempts, 0, invalid.name);
+    assert.equal(pool.statements.some((sql) => /\bFROM games\b/.test(sql)), false, invalid.name);
+  }
+});
+
+test("bounded parser accepts every current client payload shape", async () => {
+  const validCases: Array<{
+    body: Record<string, unknown>;
+    fields: readonly (readonly string[])[];
+  }> = [
+    { body: { x: 2, y: 3 }, fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]] },
+    { body: { isPass: true }, fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]] },
+    {
+      body: { x: 2, y: 3, isPass: false },
+      fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]],
+    },
+    { body: { expectedRevision: 2 }, fields: [["expectedRevision"]] },
+    {
+      body: { x: 2, y: 3, dead: true, expectedRevision: 2 },
+      fields: [["x", "y", "dead", "expectedRevision"]],
+    },
+    {
+      body: { expectedRevision: 2, claim: "dead", x: 2, y: 3 },
+      fields: [["expectedRevision", "claim", "x", "y"]],
+    },
+  ];
+
+  for (const entry of validCases) {
+    const request = new NextRequest(`https://gostone.test/api/games/${gameId}/moves`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(entry.body),
+    });
+    assert.doesNotThrow(() => assertGameMutationMetadata(request, gameId, "json"));
+    assert.deepEqual(await readGameMutationJson(request, entry.fields), entry.body);
+  }
+
+  const resign = new NextRequest(`https://gostone.test/api/games/${gameId}/resign`, {
+    method: "POST",
+  });
+  assert.doesNotThrow(() => assertGameMutationMetadata(resign, gameId, "none"));
+});
+
+test("bounded parser rejects malformed, non-object, oversized, non-UTF-8, and excess input", async () => {
+  const invalidBodies: Array<BodyInit | null> = [
+    null,
+    "",
+    "not-json",
+    "null",
+    "[]",
+    JSON.stringify({ expectedRevision: 2, extra: true }),
+    JSON.stringify({ expectedRevision: "x".repeat(MAX_GAME_MUTATION_BODY_BYTES) }),
+    new Uint8Array([0xc3, 0x28]),
+  ];
+
+  for (const body of invalidBodies) {
+    const request = new NextRequest(`https://gostone.test/api/games/${gameId}/scoring/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      ...(body === null ? {} : { body }),
+    });
+    await assert.rejects(
+      () => readGameMutationJson(request, [["expectedRevision"]]),
+      (error: unknown) =>
+        error instanceof GameServiceError
+        && error.status === 400
+        && error.code === "invalid_game_mutation_request",
+    );
+  }
+});
