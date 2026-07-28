@@ -55,4 +55,7 @@ test("keeps every terminal rating write behind one eligibility boundary", () => 
     service,
     /history\.player_key IN \(g\.black_player_key, g\.white_player_key\)/,
   );
+  assert.match(service, /FROM player_rating_history\s+WHERE game_id = \$1\s+FOR UPDATE/);
+  assert.match(service, /if \(existingHistory\.rowCount !== 0\)/);
+  assert.match(service, /if \(ledger\.rowCount !== 1\)/);
 });

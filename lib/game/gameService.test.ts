@@ -356,7 +356,7 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     }
   });
 
-  await t.test("matching finished state needs no history query", async () => {
+  await t.test("matching finished state still receives the fully verified outcome", async () => {
     let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
     const statements = await withFakeDatabase(
       { game: finishedScoredGame({ version: 9 }), scoring: finalizedScoringRow() },
@@ -364,9 +364,44 @@ test("version-aware polling skips replay only when wall-time transitions are saf
         result = await pollGameState(gameId, blackKey, 9);
       },
     );
-    assert.ok(result?.unchanged);
-    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
-    assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), false);
+    assert.ok(result && !result.unchanged);
+    assert.equal(result.game.status, "finished");
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), true);
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), true);
+  });
+
+  await t.test("matching malformed active and finished headers cannot return heartbeats", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({
+          version: 7,
+          result: "B+R",
+          winner_key: blackKey,
+          finished_at: finalizedAt,
+        }),
+        scoring: null,
+      },
+      "game_outcome_mismatch",
+      () => pollGameState(gameId, blackKey, 7),
+    );
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({
+          version: 9,
+          status: "finished",
+          phase: "play",
+          to_move: null,
+          result: "W+T",
+          winner_key: blackKey,
+          finish_reason: "resignation",
+          finished_at: finalizedAt,
+        }),
+        scoring: null,
+      },
+      "game_outcome_mismatch",
+      () => pollGameState(gameId, blackKey, 9),
+    );
   });
 
   await t.test("matching unexpired scoring reads only its deadline header", async () => {
@@ -880,6 +915,132 @@ test("database rules boundary rejects malformed state before any gameplay or rat
   });
 });
 
+test("game outcome boundary rejects contradictory active and terminal tuples", async (t) => {
+  for (const [name, override] of [
+    ["result", { result: "B+R" }],
+    ["winner", { winner_key: blackKey }],
+    ["finish timestamp", { finished_at: finalizedAt }],
+    ["missing persisted turn", { to_move: null }],
+  ] as const) {
+    await t.test(`active play with ${name}`, async () => {
+      await assertRejectedWithoutWrites(
+        { game: gameRow(override), scoring: null },
+        "game_outcome_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    });
+  }
+
+  for (const finishReason of ["resignation", "timeout"] as const) {
+    const suffix = finishReason === "resignation" ? "R" : "T";
+    const otherSuffix = finishReason === "resignation" ? "T" : "R";
+    const canonical = gameRow({
+      status: "finished",
+      phase: "play",
+      to_move: null,
+      result: `B+${suffix}`,
+      winner_key: blackKey,
+      finish_reason: finishReason,
+      finished_at: finalizedAt,
+      ...(finishReason === "timeout"
+        ? { white_time_remaining_ms: 0, white_periods_remaining: 0 }
+        : {}),
+    });
+    for (const [name, override] of [
+      ["missing result", { result: null }],
+      ["missing winner", { winner_key: null }],
+      ["missing finish timestamp", { finished_at: null }],
+      ["persisted turn", { to_move: "black" }],
+      ["wrong result suffix", { result: `B+${otherSuffix}` }],
+      ["winner-color mismatch", { winner_key: whiteKey }],
+      ...(finishReason === "timeout"
+        ? [
+            ["loser with remaining time", { white_time_remaining_ms: 1 }],
+            ["loser with remaining periods", { white_periods_remaining: 1 }],
+          ] as const
+        : []),
+    ] as const) {
+      await t.test(`${finishReason} with ${name}`, async () => {
+        await assertRejectedWithoutWrites(
+          { game: { ...canonical, ...override }, scoring: null },
+          "game_outcome_mismatch",
+          () => getGameState(gameId, blackKey),
+        );
+      });
+    }
+  }
+
+  const whiteTimeout = gameRow({
+    status: "finished",
+    phase: "play",
+    to_move: null,
+    result: "W+T",
+    winner_key: whiteKey,
+    finish_reason: "timeout",
+    finished_at: finalizedAt,
+    black_time_remaining_ms: 0,
+    black_periods_remaining: 0,
+  });
+  for (const [name, override] of [
+    ["Black has remaining time", { black_time_remaining_ms: 1 }],
+    ["Black has remaining periods", { black_periods_remaining: 1 }],
+  ] as const) {
+    await t.test(`White timeout win while ${name}`, async () => {
+      await assertRejectedWithoutWrites(
+        { game: { ...whiteTimeout, ...override }, scoring: null },
+        "game_outcome_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    });
+  }
+
+  const legacy = gameRow({
+    status: "finished",
+    phase: "play",
+    to_move: null,
+    rules_profile: "legacy-immediate-area",
+    komi: "7.5",
+    result: "W+7.5",
+    winner_key: whiteKey,
+    finish_reason: "legacy_score",
+    finished_at: finalizedAt,
+  });
+  for (const [name, override, moveRows] of [
+    ["missing result", { result: null }, emptyBoardPassRows()],
+    ["missing winner", { winner_key: null }, emptyBoardPassRows()],
+    ["missing finish timestamp", { finished_at: null }, emptyBoardPassRows()],
+    ["persisted turn", { to_move: "white" }, emptyBoardPassRows()],
+    ["resignation suffix", { result: "W+R" }, emptyBoardPassRows()],
+    ["incorrect score", { result: "W+1.5" }, emptyBoardPassRows()],
+    ["winner-color mismatch", { winner_key: blackKey }, emptyBoardPassRows()],
+    ["fewer than two final passes", {}, [emptyBoardPassRows()[0]]],
+  ] as const) {
+    await t.test(`legacy score with ${name}`, async () => {
+      await assertRejectedWithoutWrites(
+        { game: { ...legacy, ...override }, scoring: null, moveRows: [...moveRows] },
+        "game_outcome_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    });
+  }
+
+  for (const [name, moveRows] of [
+    ["two black passes", emptyBoardPassRows().map((row) => ({ ...row, color: "black" }))],
+    ["white moving first", emptyBoardPassRows().map((row, index) => ({
+      ...row,
+      color: index === 0 ? "white" : "black",
+    }))],
+  ] as const) {
+    await t.test(`legacy score with ${name}`, async () => {
+      await assertRejectedWithoutWrites(
+        { game: legacy, scoring: null, moveRows: [...moveRows] },
+        "move_history_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    });
+  }
+});
+
 test("database rules boundary preserves every supported canonical and rollout lifecycle", async (t) => {
   await t.test("active current play", async () => {
     const state = await loadState(gameRow(), null);
@@ -919,14 +1080,34 @@ test("database rules boundary preserves every supported canonical and rollout li
         status: "finished",
         phase: "play",
         to_move: null,
+        winner_key: blackKey,
         result: `B+${suffix}`,
         finish_reason: finishReason,
         finished_at: new Date("2099-01-01T00:05:00.000Z"),
+        ...(finishReason === "timeout"
+          ? { white_time_remaining_ms: 0, white_periods_remaining: 0 }
+          : {}),
       }), null);
       assert.equal(state.finishReason, finishReason);
       assert.equal(state.scoring, null);
     });
   }
+
+  await t.test("finished current timeout won by White", async () => {
+    const state = await loadState(gameRow({
+      status: "finished",
+      phase: "play",
+      to_move: null,
+      winner_key: whiteKey,
+      result: "W+T",
+      finish_reason: "timeout",
+      finished_at: new Date("2099-01-01T00:05:00.000Z"),
+      black_time_remaining_ms: 0,
+      black_periods_remaining: 0,
+    }), null);
+    assert.equal(state.finishReason, "timeout");
+    assert.equal(state.result, "W+T");
+  });
 
   for (const komi of [6.5, 7.5]) {
     await t.test(`finished legacy ${komi} komi score`, async () => {
@@ -936,10 +1117,11 @@ test("database rules boundary preserves every supported canonical and rollout li
         to_move: null,
         rules_profile: "legacy-immediate-area",
         komi: String(komi),
+        winner_key: whiteKey,
         result: `W+${komi}`,
         finish_reason: "legacy_score",
         finished_at: new Date("2099-01-01T00:05:00.000Z"),
-      }), null);
+      }), null, emptyBoardPassRows());
       assert.equal(state.rulesProfile, "legacy-immediate-area");
       assert.equal(state.komi, komi);
       assert.equal(state.finishReason, "legacy_score");
@@ -990,11 +1172,11 @@ test("database rules boundary preserves every supported canonical and rollout li
       to_move: "white",
       rules_profile: "legacy-immediate-area",
       komi: "6.5",
-      winner_key: blackKey,
-      result: "B+2.5",
+      winner_key: whiteKey,
+      result: "W+6.5",
       finish_reason: null,
       finished_at: new Date("2099-01-01T00:05:00.000Z"),
-    }), null);
+    }), null, emptyBoardPassRows());
     assert.equal(state.status, "finished");
     assert.equal(state.turn, null);
     assert.equal(state.finishReason, "legacy_score");
@@ -1375,6 +1557,10 @@ test("second score confirmation rates two database-verified registered players",
           rowCount: 2,
         };
       }
+      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
+        assert.deepEqual(values, [gameId]);
+        return { rows: [], rowCount: 0 };
+      }
       if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
         return { rows: [{ rating: 1_200 }], rowCount: 1 };
       }
@@ -1435,6 +1621,85 @@ test("second score confirmation rates two database-verified registered players",
   );
 });
 
+test("rating finalization rolls back pre-existing and racing ledger conflicts", async (t) => {
+  for (const mode of ["pre-existing", "insert-race"] as const) {
+    await t.test(mode, async () => {
+      const statements: string[] = [];
+      const activeGame = gameRow({
+        black_player_key: blackUserKey,
+        white_player_key: whiteUserKey,
+        rated: true,
+      });
+      const finishedGame = gameRow({
+        ...activeGame,
+        status: "finished",
+        phase: "play",
+        to_move: null,
+        result: "W+R",
+        winner_key: whiteUserKey,
+        finish_reason: "resignation",
+        finished_at: finalizedAt,
+        version: 1,
+      });
+      const client = {
+        async query(sql: string) {
+          statements.push(sql);
+          if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql.includes("FROM games g")) return { rows: [activeGame], rowCount: 1 };
+          if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
+          if (sql.includes("FROM game_scoring_state")) return { rows: [], rowCount: 0 };
+          if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
+            return { rows: [finishedGame], rowCount: 1 };
+          }
+          if (sql.includes("AS player_key") && sql.includes("FROM users")) {
+            return {
+              rows: [{ player_key: blackUserKey }, { player_key: whiteUserKey }],
+              rowCount: 2,
+            };
+          }
+          if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
+            return mode === "pre-existing"
+              ? { rows: [{ player_key: blackUserKey }], rowCount: 1 }
+              : { rows: [], rowCount: 0 };
+          }
+          if (sql.includes("INSERT INTO player_stats")) return { rows: [], rowCount: 1 };
+          if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
+            return { rows: [{ rating: 1_200 }], rowCount: 1 };
+          }
+          if (sql.includes("INSERT INTO player_rating_history")) {
+            return { rows: [], rowCount: 0 };
+          }
+          throw new Error(`Unexpected database statement in rating-conflict test: ${sql}`);
+        },
+        release() {},
+      };
+      const previousPool = globalThis.goStonedDbPool;
+      globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+
+      let rejection: unknown;
+      try {
+        await resignGame(gameId, blackUserKey);
+      } catch (error) {
+        rejection = error;
+      } finally {
+        globalThis.goStonedDbPool = previousPool;
+      }
+
+      assert.ok(rejection instanceof GameServiceError);
+      assert.equal(rejection.code, "rating_history_conflict");
+      assert.equal(statements.includes("ROLLBACK"), true);
+      assert.equal(statements.includes("COMMIT"), false);
+      assert.equal(statements.some((sql) => sql.includes("UPDATE player_stats")), false);
+      assert.equal(
+        statements.filter((sql) => sql.includes("INSERT INTO player_rating_history")).length,
+        mode === "insert-race" ? 1 : 0,
+      );
+    });
+  }
+});
+
 test("a controlled guest can resign to an account without creating rating writes", async () => {
   const statements: string[] = [];
   const eligibilityChecks: unknown[][] = [];
@@ -1471,6 +1736,9 @@ test("a controlled guest can resign to an account without creating rating writes
       if (sql.startsWith("DELETE FROM game_scoring_state")) return { rows: [], rowCount: 1 };
       if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
         return { rows: [finishedGame], rowCount: 1 };
+      }
+      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
+        return { rows: [], rowCount: 0 };
       }
       if (sql.includes("AS player_key") && sql.includes("FROM users")) {
         eligibilityChecks.push(values);
