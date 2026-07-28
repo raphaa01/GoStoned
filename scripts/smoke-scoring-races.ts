@@ -341,6 +341,7 @@ async function run() {
     confirmResume.black.cookie,
     confirmResume.black.playerKey,
   );
+  assert.equal(confirmResumeState.response.status, 200);
   const firstGame = confirmResumeState.body.game as {
     status: string;
     phase: string;
@@ -501,6 +502,7 @@ async function run() {
     confirmResign.black.cookie,
     confirmResign.black.playerKey,
   );
+  assert.equal(confirmResignState.response.status, 200);
   const resignedGame = confirmResignState.body.game as { status: string; rated: boolean };
   assert.equal(resignedGame.status, "finished");
   assert.equal(resignedGame.rated, false);
@@ -524,12 +526,16 @@ async function run() {
         WHERE game_id = $1`,
     [deadline.gameId],
   );
+  // Production scoring deadlines originate as JS Dates. Match that millisecond
+  // precision so the evidence snapshot survives a node-postgres round trip.
+  const deadlineStartedAt = new Date(Date.now() - 2_000);
+  const deadlineExpiresAt = new Date(Date.now() - 1_000);
   await query(
     `UPDATE game_scoring_state
-        SET started_at = NOW() - INTERVAL '2 seconds',
-            expires_at = NOW() - INTERVAL '1 second'
+        SET started_at = $2,
+            expires_at = $3
       WHERE game_id = $1`,
-    [deadline.gameId],
+    [deadline.gameId, deadlineStartedAt, deadlineExpiresAt],
   );
   const expiredState = await api(
     `/api/games/${deadline.gameId}`,
@@ -537,6 +543,7 @@ async function run() {
     deadline.black.cookie,
     deadline.black.playerKey,
   );
+  assert.equal(expiredState.response.status, 200);
   const resumed = expiredState.body.game as {
     status: string;
     phase: string;
@@ -561,6 +568,7 @@ async function run() {
     deadline.white.cookie,
     deadline.white.playerKey,
   );
+  assert.equal(deadlineRetry.response.status, 200);
   assert.equal((deadlineRetry.body.game as { phase: string }).phase, "play");
   assert.equal((await resumeEvents(deadline.gameId)).length, 1);
 
