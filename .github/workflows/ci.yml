@@ -81,18 +81,18 @@ jobs:
       GOSTONE_CI_DATABASE_BOOTSTRAP: gostone-ci-v1
       GOSTONE_SMOKE_DATABASE_NAME: gostone_ci
       GOSTONE_SMOKE_DATABASE_ROLE: gostone_ci_runner
-      DATABASE_URL: postgresql://gostone_ci_runner:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}@127.0.0.1:5432/gostone_ci
+      DATABASE_URL: postgresql://gostone_ci_admin:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}@127.0.0.1:5432/gostone_ci
     services:
       postgres:
         image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
         env:
-          POSTGRES_USER: gostone_ci_runner
+          POSTGRES_USER: gostone_ci_admin
           POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           POSTGRES_DB: gostone_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U gostone_ci_runner -d gostone_ci"
+          --health-cmd "pg_isready -U gostone_ci_admin -d gostone_ci"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
