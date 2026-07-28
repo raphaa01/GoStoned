@@ -100,9 +100,14 @@ test("policy dispatch preserves immediate and agreement scoring boundaries", () 
   board[8][8] = "white";
   const legacy = resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE);
   const current = resolveRulesPolicy(DEFAULT_RULES_PROFILE);
-  assert.deepEqual(scoreImmediatePosition(legacy, board, 6.5), scoreChinese(board, 6.5));
+  const immediate = scoreImmediatePosition(legacy, board, 6.5);
+  assert.equal(immediate.scoringRule, "chinese-area");
+  assert.deepEqual(immediate.breakdown, scoreChinese(board, 6.5));
+  assert.deepEqual(immediate.outcome, { kind: "points", winner: "white", margin: 6.5 });
+  const agreement = scoreAgreementPosition(current, board, [{ x: 8, y: 8 }], 7.5);
+  assert.equal(agreement.scoringRule, "chinese-area");
   assert.deepEqual(
-    scoreAgreementPosition(current, board, [{ x: 8, y: 8 }], 7.5),
+    agreement.breakdown,
     scoreChineseAgreement(board, [{ x: 8, y: 8 }], 7.5),
   );
   assert.throws(

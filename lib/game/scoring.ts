@@ -3,7 +3,8 @@ import {
   type RulesPolicy,
   UnsupportedRulesPolicyError,
 } from "./rulesPolicy";
-import type { Board, Position, Score, Stone } from "./types";
+import { tagChineseAreaScore, type ChineseAreaComputation } from "./scoreContract";
+import type { Board, ChineseAreaScore, Position, Stone } from "./types";
 
 export type MarkedDeadGroup = {
   key: string;
@@ -94,7 +95,7 @@ export function scoreChineseAgreement(
   board: Board,
   deadStones: Position[],
   komi: number,
-): Score {
+): ChineseAreaScore {
   return scoreChinese(removeDeadStones(board, deadStones), komi);
 }
 
@@ -102,14 +103,16 @@ export function scoreImmediatePosition(
   policy: RulesPolicy,
   board: Board,
   komi: number,
-): Score {
+): ChineseAreaComputation {
   if (policy.scoringLifecycle !== "immediate") {
     throw new UnsupportedRulesPolicyError(
       "rules_policy_mismatch",
       "This rules profile does not permit immediate scoring.",
     );
   }
-  if (policy.scoringRule === "chinese-area") return scoreChinese(board, komi);
+  if (policy.scoringRule === "chinese-area") {
+    return tagChineseAreaScore(scoreChinese(board, komi), komi);
+  }
   throw new UnsupportedRulesPolicyError(
     "rules_policy_mismatch",
     "This scoring rule is not supported by the engine.",
@@ -121,7 +124,7 @@ export function scoreAgreementPosition(
   board: Board,
   deadStones: Position[],
   komi: number,
-): Score {
+): ChineseAreaComputation {
   if (policy.scoringLifecycle !== "agreement") {
     throw new UnsupportedRulesPolicyError(
       "rules_policy_mismatch",
@@ -129,7 +132,7 @@ export function scoreAgreementPosition(
     );
   }
   if (policy.scoringRule === "chinese-area") {
-    return scoreChineseAgreement(board, deadStones, komi);
+    return tagChineseAreaScore(scoreChineseAgreement(board, deadStones, komi), komi);
   }
   throw new UnsupportedRulesPolicyError(
     "rules_policy_mismatch",

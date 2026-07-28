@@ -223,6 +223,13 @@ test("scores stones, surrounded territory, and komi with Chinese area scoring", 
   assert.equal(score.result, "B+3.5");
 });
 
+test("keeps the Chinese score JSON contract byte-for-byte stable", () => {
+  assert.equal(
+    JSON.stringify(scoreChinese(createEmptyBoard(9), 7.5)),
+    "{\"black\":40.5,\"white\":48,\"blackStones\":0,\"whiteStones\":0,\"blackTerritory\":0,\"whiteTerritory\":0,\"neutralPoints\":81,\"winner\":\"white\",\"margin\":7.5,\"result\":\"W+7.5\"}",
+  );
+});
+
 test("splits an odd number of neutral dame points equally", () => {
   const board = [
     ["black", null, "white"],

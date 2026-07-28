@@ -1,4 +1,5 @@
 import { getGroup, getNeighbors, type PrisonerLedger } from "./goEngine";
+import type { ScoredOutcome } from "./scoreContract";
 import type { Board, Position, Stone } from "./types";
 
 export type JapaneseScoringErrorCode =
@@ -20,9 +21,7 @@ export class JapaneseScoringError extends Error {
   }
 }
 
-export type JapanesePointOutcome =
-  | Readonly<{ kind: "points"; winner: Stone; margin: number }>
-  | Readonly<{ kind: "jigo" }>;
+export type JapanesePointOutcome = ScoredOutcome;
 
 export type JapaneseTerritoryScore = Readonly<{
   method: "territory";

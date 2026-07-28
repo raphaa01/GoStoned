@@ -1,11 +1,11 @@
+import type { ScoredOutcome } from "./scoreContract";
 import type { Stone } from "./types";
 
 export const JAPANESE_1989_CONTRACT_ID =
   "japanese-1989-gostone-inactive-v1" as const;
 
 export type Japanese1989ContractOutcome =
-  | Readonly<{ kind: "points"; winner: Stone; margin: number }>
-  | Readonly<{ kind: "jigo" }>
+  | ScoredOutcome
   | Readonly<{ kind: "resignation"; winner: Stone }>
   | Readonly<{ kind: "no-result"; reason: "cyclic-repetition" }>
   | Readonly<{

@@ -8,10 +8,36 @@ import {
   resignGame,
   submitMove,
 } from "./gameService";
+import { boardHash, createEmptyBoard } from "./goEngine";
 import type { GameState } from "./types";
 
 const gameId = "11111111-1111-4111-8111-111111111111";
 const blackKey = "guest:black";
+const whiteKey = "guest:white";
+const emptyBoardHash = boardHash(createEmptyBoard(9));
+
+function emptyBoardPassRows() {
+  return [
+    {
+      move_number: 1,
+      color: "black",
+      x: null,
+      y: null,
+      is_pass: true,
+      board_hash: emptyBoardHash,
+      created_at: new Date("2099-01-01T00:01:00.000Z"),
+    },
+    {
+      move_number: 2,
+      color: "white",
+      x: null,
+      y: null,
+      is_pass: true,
+      board_hash: emptyBoardHash,
+      created_at: new Date("2099-01-01T00:02:00.000Z"),
+    },
+  ];
+}
 
 function gameRow(overrides: Record<string, unknown> = {}) {
   const now = new Date("2099-01-01T00:00:00.000Z");
@@ -59,7 +85,7 @@ function scoringRow(overrides: Record<string, unknown> = {}) {
   const now = new Date("2099-01-01T00:00:00.000Z");
   return {
     game_id: gameId,
-    board_hash: "snapshot",
+    board_hash: emptyBoardHash,
     stopped_move_number: 2,
     revision: 1,
     rules: "chinese",
@@ -91,8 +117,51 @@ function scoringRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const finalizedAt = new Date("2099-01-01T00:05:00.000Z");
+
+function finishedScoredGame(overrides: Record<string, unknown> = {}) {
+  return gameRow({
+    status: "finished",
+    phase: "scoring",
+    to_move: null,
+    scoring_revision: 1,
+    winner_key: "guest:white",
+    result: "W+7.5",
+    finish_reason: "score",
+    finished_at: finalizedAt,
+    ...overrides,
+  });
+}
+
+function finalizedScoringRow(overrides: Record<string, unknown> = {}) {
+  return scoringRow({
+    black_confirmed_revision: 1,
+    white_confirmed_revision: 1,
+    black_confirmed_at: finalizedAt,
+    white_confirmed_at: finalizedAt,
+    scored_board_hash: emptyBoardHash,
+    black_stones: 0,
+    white_stones: 0,
+    black_territory: 0,
+    white_territory: 0,
+    neutral_points: 81,
+    black_dead_stones: 0,
+    white_dead_stones: 0,
+    black_total: "40.5",
+    white_total: "48.0",
+    result: "W+7.5",
+    finalized_at: finalizedAt,
+    ...overrides,
+  });
+}
+
 async function withFakeDatabase(
-  rows: { game: Record<string, unknown>; scoring: Record<string, unknown> | null },
+  rows: {
+    game: Record<string, unknown>;
+    scoring: Record<string, unknown> | null;
+    deadRows?: Record<string, unknown>[];
+    moveRows?: Record<string, unknown>[];
+  },
   action: () => Promise<unknown>,
 ): Promise<string[]> {
   const statements: string[] = [];
@@ -103,11 +172,17 @@ async function withFakeDatabase(
         return { rows: [], rowCount: 0 };
       }
       if (sql.includes("FROM games g")) return { rows: [rows.game], rowCount: 1 };
-      if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
+      if (sql.includes("FROM moves")) {
+        const moveRows = rows.moveRows ?? (rows.scoring ? emptyBoardPassRows() : []);
+        return { rows: moveRows, rowCount: moveRows.length };
+      }
       if (sql.includes("FROM game_scoring_state")) {
         return { rows: rows.scoring ? [rows.scoring] : [], rowCount: rows.scoring ? 1 : 0 };
       }
-      if (sql.includes("FROM game_dead_stones")) return { rows: [], rowCount: 0 };
+      if (sql.includes("FROM game_dead_stones")) {
+        const deadRows = rows.deadRows ?? [];
+        return { rows: deadRows, rowCount: deadRows.length };
+      }
       throw new Error(`Unexpected database statement in fail-closed test: ${sql}`);
     },
     release() {},
@@ -126,7 +201,12 @@ async function withFakeDatabase(
 }
 
 async function assertRejectedWithoutWrites(
-  rows: { game: Record<string, unknown>; scoring: Record<string, unknown> | null },
+  rows: {
+    game: Record<string, unknown>;
+    scoring: Record<string, unknown> | null;
+    deadRows?: Record<string, unknown>[];
+    moveRows?: Record<string, unknown>[];
+  },
   expectedCode: string,
   action: () => Promise<unknown>,
 ) {
@@ -256,38 +336,16 @@ test("database rules boundary preserves every supported canonical and rollout li
   });
 
   await t.test("finished agreement score", async () => {
-    const finalizedAt = new Date("2099-01-01T00:05:00.000Z");
     const state = await loadState(
-      gameRow({
-        status: "finished",
-        phase: "scoring",
-        to_move: null,
-        scoring_revision: 1,
-        result: "W+7.5",
-        finish_reason: "score",
-        finished_at: finalizedAt,
-      }),
-      scoringRow({
-        black_confirmed_revision: 1,
-        white_confirmed_revision: 1,
-        black_confirmed_at: finalizedAt,
-        white_confirmed_at: finalizedAt,
-        scored_board_hash: "final",
-        black_stones: 0,
-        white_stones: 0,
-        black_territory: 0,
-        white_territory: 0,
-        neutral_points: 81,
-        black_dead_stones: 0,
-        white_dead_stones: 0,
-        black_total: "40.5",
-        white_total: "48.0",
-        result: "W+7.5",
-        finalized_at: finalizedAt,
-      }),
+      finishedScoredGame(),
+      finalizedScoringRow(),
     );
     assert.equal(state.finishReason, "score");
     assert.equal(state.scoring?.preview.result, "W+7.5");
+    assert.equal(
+      JSON.stringify(state.scoring?.preview),
+      "{\"black\":40.5,\"white\":48,\"blackStones\":0,\"whiteStones\":0,\"blackTerritory\":0,\"whiteTerritory\":0,\"neutralPoints\":81,\"winner\":\"white\",\"margin\":7.5,\"result\":\"W+7.5\"}",
+    );
   });
 
   for (const finishReason of ["resignation", "timeout"] as const) {
@@ -379,6 +437,219 @@ test("database rules boundary preserves every supported canonical and rollout li
   });
 });
 
+test("finalized Chinese score snapshots fail closed before any write", async (t) => {
+  const cases = [
+    ["black total", finishedScoredGame(), finalizedScoringRow({ black_total: "41.5" })],
+    ["breakdown", finishedScoredGame(), finalizedScoringRow({ black_stones: 1 })],
+    ["score result", finishedScoredGame(), finalizedScoringRow({ result: "B+7.5" })],
+    ["non-finite total", finishedScoredGame(), finalizedScoringRow({ white_total: "NaN" })],
+    ["partial final fields", finishedScoredGame(), finalizedScoringRow({ black_stones: null })],
+    ["game result", finishedScoredGame({ result: "W+6.5" }), finalizedScoringRow()],
+    ["winner key", finishedScoredGame({ winner_key: blackKey }), finalizedScoringRow()],
+    ["dead-stone count", finishedScoredGame(), finalizedScoringRow({ black_dead_stones: 1 })],
+    ["stopped board hash", finishedScoredGame(), finalizedScoringRow({ board_hash: "corrupt" })],
+    ["scored board hash", finishedScoredGame(), finalizedScoringRow({ scored_board_hash: "corrupt" })],
+    [
+      "self-consistent score unrelated to the board",
+      finishedScoredGame({ result: "B+73.5", winner_key: blackKey }),
+      finalizedScoringRow({
+        black_stones: 0,
+        white_stones: 0,
+        black_territory: 81,
+        white_territory: 0,
+        neutral_points: 0,
+        black_total: "81.0",
+        white_total: "7.5",
+        result: "B+73.5",
+      }),
+    ],
+  ] as const;
+  for (const [name, game, scoring] of cases) {
+    await t.test(name, async () => {
+      await assertRejectedWithoutWrites(
+        { game, scoring },
+        "scoring_snapshot_mismatch",
+        () => confirmScore(gameId, blackKey, 1),
+      );
+    });
+  }
+
+  await t.test("dead-stone color does not match the stopped board", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: finishedScoredGame(),
+        scoring: finalizedScoringRow({ black_dead_stones: 1 }),
+        deadRows: [{ x: 0, y: 0, color: "black" }],
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("finished score has no finalized snapshot", async () => {
+    await assertRejectedWithoutWrites(
+      { game: finishedScoredGame(), scoring: scoringRow() },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("active scoring has terminal snapshot fields", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 }),
+        scoring: finalizedScoringRow(),
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("active scoring cannot persist both confirmations without finalizing", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 }),
+        scoring: scoringRow({
+          black_confirmed_revision: 1,
+          white_confirmed_revision: 1,
+          black_confirmed_at: finalizedAt,
+          white_confirmed_at: finalizedAt,
+        }),
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("game and snapshot revisions differ", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 2 }),
+        scoring: scoringRow(),
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("persisted dead stones contain only part of a connected group", async () => {
+    const moveRows = [
+      [1, "black", 0, 0, false],
+      [2, "white", 8, 8, false],
+      [3, "black", 1, 0, false],
+      [4, "white", null, null, true],
+      [5, "black", null, null, true],
+    ].map(([move_number, color, x, y, is_pass]) => ({
+      move_number,
+      color,
+      x,
+      y,
+      is_pass,
+      board_hash: null,
+      created_at: new Date(`2099-01-01T00:0${move_number}:00.000Z`),
+    }));
+    const board = createEmptyBoard(9);
+    board[0][0] = "black";
+    board[0][1] = "black";
+    board[8][8] = "white";
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 }),
+        scoring: scoringRow({
+          board_hash: boardHash(board),
+          stopped_move_number: moveRows.length,
+        }),
+        deadRows: [{ x: 0, y: 0, color: "black" }],
+        moveRows,
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("expired corrupt state cannot be deleted before validation", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 }),
+        scoring: scoringRow({ board_hash: "corrupt", expires_at: new Date(0) }),
+      },
+      "scoring_snapshot_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+
+  await t.test("resignation cannot launder corrupt scoring state", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 }),
+        scoring: scoringRow({ board_hash: "corrupt" }),
+      },
+      "scoring_snapshot_mismatch",
+      () => resignGame(gameId, blackKey),
+    );
+  });
+
+  const historicalResignation = gameRow({
+    status: "finished",
+    phase: "scoring",
+    to_move: null,
+    scoring_revision: 1,
+    winner_key: blackKey,
+    result: "B+R",
+    finish_reason: "resignation",
+    finished_at: finalizedAt,
+  });
+  await t.test("historical resignation cannot discard a corrupt stopped board", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: historicalResignation,
+        scoring: scoringRow({ board_hash: "corrupt" }),
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("historical resignation cannot discard invalid dead-stone rows", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: historicalResignation,
+        scoring: scoringRow(),
+        deadRows: [{ x: 0, y: 0, color: "black" }],
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("historical resignation cannot discard mismatched confirmation metadata", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: historicalResignation,
+        scoring: scoringRow({ black_confirmed_revision: 1, black_confirmed_at: null }),
+      },
+      "scoring_snapshot_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+
+  await t.test("historical resignation cannot discard two unfinalized confirmations", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: historicalResignation,
+        scoring: scoringRow({
+          black_confirmed_revision: 1,
+          white_confirmed_revision: 1,
+          black_confirmed_at: finalizedAt,
+          white_confirmed_at: finalizedAt,
+        }),
+      },
+      "rules_configuration_mismatch",
+      () => confirmScore(gameId, blackKey, 1),
+    );
+  });
+});
+
 test("historical lifecycle compatibility rejects every unreachable near miss", async (t) => {
   const historicalResignation = gameRow({
     status: "finished",
@@ -444,6 +715,160 @@ test("historical lifecycle compatibility rejects every unreachable near miss", a
   }
 });
 
+test("second score confirmation preserves the exact Chinese database and API contract", async () => {
+  const initialGame = gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 });
+  const blackConfirmedAt = new Date("2099-01-01T00:03:00.000Z");
+  const stoppedBoard = createEmptyBoard(9);
+  stoppedBoard[0][1] = "black";
+  stoppedBoard[1][0] = "black";
+  stoppedBoard[8][8] = "white";
+  const scoredBoard = stoppedBoard.map((row) => [...row]);
+  scoredBoard[8][8] = null;
+  const moveRows = [
+    [1, "black", 1, 0, false],
+    [2, "white", 8, 8, false],
+    [3, "black", 0, 1, false],
+    [4, "white", null, null, true],
+    [5, "black", null, null, true],
+  ].map(([move_number, color, x, y, is_pass]) => ({
+    move_number,
+    color,
+    x,
+    y,
+    is_pass,
+    board_hash: null,
+    created_at: new Date(`2099-01-01T00:0${move_number}:00.000Z`),
+  }));
+  const deadRows = [{ x: 8, y: 8, color: "white" }];
+  const initialScoring = scoringRow({
+    board_hash: boardHash(stoppedBoard),
+    stopped_move_number: moveRows.length,
+    black_confirmed_revision: 1,
+    black_confirmed_at: blackConfirmedAt,
+  });
+  let scoringWrite: unknown[] | undefined;
+  let gameFinishWrite: unknown[] | undefined;
+  const ratingLedgerWrites: unknown[][] = [];
+  const client = {
+    async query(sql: string, values: unknown[] = []) {
+      if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
+      if (sql.includes("FROM moves")) return { rows: moveRows, rowCount: moveRows.length };
+      if (sql.includes("FROM game_scoring_state")) return { rows: [initialScoring], rowCount: 1 };
+      if (sql.includes("FROM game_dead_stones")) return { rows: deadRows, rowCount: deadRows.length };
+      if (sql.includes("UPDATE game_scoring_state") && sql.includes("white_confirmed_revision")) {
+        return {
+          rows: [{
+            ...initialScoring,
+            white_confirmed_revision: 1,
+            white_confirmed_at: values[2],
+            updated_at: values[2],
+          }],
+          rowCount: 1,
+        };
+      }
+      if (sql.startsWith("UPDATE games SET updated_at")) {
+        return { rows: [{ ...initialGame, version: 1 }], rowCount: 1 };
+      }
+      if (sql.includes("UPDATE game_scoring_state") && sql.includes("scored_board_hash")) {
+        scoringWrite = values;
+        return {
+          rows: [finalizedScoringRow({
+            board_hash: boardHash(stoppedBoard),
+            stopped_move_number: moveRows.length,
+            black_confirmed_revision: 1,
+            white_confirmed_revision: 1,
+            black_confirmed_at: blackConfirmedAt,
+            white_confirmed_at: values[12],
+            scored_board_hash: values[1],
+            black_stones: values[2],
+            white_stones: values[3],
+            black_territory: values[4],
+            white_territory: values[5],
+            neutral_points: values[6],
+            black_dead_stones: values[7],
+            white_dead_stones: values[8],
+            black_total: values[9],
+            white_total: values[10],
+            result: values[11],
+            finalized_at: values[12],
+          })],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'score'")) {
+        gameFinishWrite = values;
+        return {
+          rows: [finishedScoredGame({
+            result: values[1],
+            winner_key: values[2],
+            finished_at: values[3],
+            version: 2,
+          })],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
+        return { rows: [{ rating: 1_200 }], rowCount: 1 };
+      }
+      if (sql.includes("INSERT INTO player_rating_history")) {
+        ratingLedgerWrites.push(values);
+        return { rows: [{ id: `history-${ratingLedgerWrites.length}` }], rowCount: 1 };
+      }
+      if (sql.includes("INSERT INTO player_stats") || sql.includes("UPDATE player_stats")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected database statement in score finalization test: ${sql}`);
+    },
+    release() {},
+  };
+  const previousPool = globalThis.goStonedDbPool;
+  globalThis.goStonedDbPool = {
+    connect: async () => client,
+  } as unknown as Pool;
+
+  let state: GameState;
+  try {
+    state = await confirmScore(gameId, whiteKey, 1);
+  } finally {
+    globalThis.goStonedDbPool = previousPool;
+  }
+
+  assert.ok(scoringWrite);
+  const finalizedAt = scoringWrite[12];
+  assert.ok(finalizedAt instanceof Date);
+  assert.deepEqual(scoringWrite, [
+    gameId,
+    boardHash(scoredBoard),
+    2,
+    0,
+    79,
+    0,
+    0,
+    0,
+    1,
+    81,
+    7.5,
+    "B+73.5",
+    finalizedAt,
+  ]);
+  assert.deepEqual(gameFinishWrite, [gameId, "B+73.5", blackKey, finalizedAt]);
+  assert.deepEqual(
+    ratingLedgerWrites.map((values) => [values[0], values[5], values[6]]),
+    [
+      [blackKey, 16, "win"],
+      [whiteKey, -16, "loss"],
+    ],
+  );
+  assert.equal(state.winnerKey, blackKey);
+  assert.equal(
+    JSON.stringify(state.scoring?.preview),
+    "{\"black\":81,\"white\":7.5,\"blackStones\":2,\"whiteStones\":0,\"blackTerritory\":79,\"whiteTerritory\":0,\"neutralPoints\":0,\"winner\":\"black\",\"margin\":73.5,\"result\":\"B+73.5\"}",
+  );
+});
+
 test("resigning during scoring persists the canonical terminal lifecycle before ratings", async () => {
   const statements: string[] = [];
   const initialGame = gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 });
@@ -465,7 +890,9 @@ test("resigning during scoring persists the canonical terminal lifecycle before 
         return { rows: [], rowCount: 0 };
       }
       if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
-      if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
+      if (sql.includes("FROM moves")) {
+        return { rows: emptyBoardPassRows(), rowCount: 2 };
+      }
       if (sql.includes("FROM game_scoring_state")) return { rows: [scoringRow()], rowCount: 1 };
       if (sql.includes("FROM game_dead_stones")) return { rows: [], rowCount: 0 };
       if (sql.startsWith("DELETE FROM game_scoring_state")) return { rows: [], rowCount: 1 };
