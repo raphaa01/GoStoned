@@ -14,6 +14,7 @@
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
+    "test:move-hash-db": "tsx scripts/smoke-move-hash-guard.ts",
     "test:rate-limit": "tsx scripts/smoke-rate-limit.ts",
     "test:scoring-races": "tsx scripts/smoke-scoring-races.ts",
     "typecheck": "tsc --noEmit",
