@@ -132,6 +132,7 @@ export const de = {
     not_scoring: "Diese Partie befindet sich nicht in der Wertungsphase.",
     scoring_revision_conflict: "Der Wertungsvorschlag hat sich geändert. Prüfe die aktuelle Position.",
     scoring_snapshot_mismatch: "Die gespeicherte Wertungsposition konnte nicht geprüft werden.",
+    move_history_mismatch: "Der gespeicherte Spielverlauf konnte nicht geprüft werden.",
     rules_configuration_unsupported: "Die gespeicherten Regeln dieser Partie werden von dieser Serverversion nicht unterstützt.",
     rules_configuration_mismatch: "Der Wertungseintrag dieser Partie passt nicht zu ihren gespeicherten Regeln.",
     game_finished: "Diese Partie ist bereits beendet.",

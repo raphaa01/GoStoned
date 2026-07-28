@@ -3,9 +3,8 @@ import { query, withTransaction } from "@/lib/db";
 import {
   applyMove,
   boardHash,
-  createEmptyBoard,
   getGroup,
-  replayMoves,
+  replayMovesWithPrisoners,
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import {
@@ -18,6 +17,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
+  LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
   type ResolvedRulesConfiguration,
@@ -129,6 +129,8 @@ type LoadedGame = {
   game: GameRow;
   rules: ResolvedRulesConfiguration;
   moveRows: MoveRow[];
+  board: Board;
+  positionHistory: readonly string[];
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
 };
@@ -326,9 +328,60 @@ function mapMoves(rows: MoveRow[]): StoredMove[] {
   }));
 }
 
+function moveHistoryMismatch(): never {
+  throw new GameServiceError(
+    "The stored move history could not be verified.",
+    500,
+    "move_history_mismatch",
+  );
+}
+
+function replayStoredMoveRows(
+  boardSize: BoardSize,
+  rows: MoveRow[],
+  policy: RulesPolicy,
+): Readonly<{ board: Board; positionHistory: readonly string[] }> {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (
+      row.move_number !== index + 1
+      || (row.is_pass && (row.x !== null || row.y !== null))
+      || (!row.is_pass && (row.x === null || row.y === null))
+    ) {
+      return moveHistoryMismatch();
+    }
+  }
+  let replay: ReturnType<typeof replayMovesWithPrisoners>;
+  try {
+    replay = replayMovesWithPrisoners(boardSize, mapMoves(rows));
+  } catch {
+    return moveHistoryMismatch();
+  }
+
+  const priorHashes = new Set<string>([replay.positionHistory[0]]);
+  for (let index = 0; index < rows.length; index += 1) {
+    const storedHash = rows[index].board_hash;
+    const replayedHash = replay.positionHistory[index + 1];
+    // Migration 002 added nullable hashes after live games already existed.
+    // Migration 008 assigned those games the legacy profile. Reconstruct only
+    // that known history; current-profile games must carry matching evidence.
+    if (
+      (storedHash === null && policy.profile !== LEGACY_IMMEDIATE_AREA_PROFILE)
+      || (storedHash !== null && storedHash !== replayedHash)
+      || (!rows[index].is_pass
+        && isRepeatedPositionForbidden(policy, replayedHash, priorHashes))
+    ) {
+      return moveHistoryMismatch();
+    }
+    priorHashes.add(replayedHash);
+  }
+  return { board: replay.board, positionHistory: replay.positionHistory };
+}
+
 async function loadGame(
   client: PoolClient | null,
   gameId: string,
+  playerKey: string,
   lock = false,
 ): Promise<LoadedGame> {
   const execute = <T extends QueryResultRow>(text: string, values: readonly unknown[]) =>
@@ -363,6 +416,7 @@ async function loadGame(
   );
   let game = gameResult.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
+  assertParticipant(game, playerKey);
   const rules = storedRulesConfiguration(game);
 
   const movesResult = await execute<MoveRow>(
@@ -372,6 +426,7 @@ async function loadGame(
       ORDER BY move_number`,
     [gameId],
   );
+  const replay = replayStoredMoveRows(game.board_size, movesResult.rows, rules.policy);
 
   const scoringResult = await execute<ScoringRow>(
     `SELECT * FROM game_scoring_state WHERE game_id = $1${lock ? " FOR UPDATE" : ""}`,
@@ -379,7 +434,6 @@ async function loadGame(
   );
   let scoring: ScoringRow | null = scoringResult.rows[0] ?? null;
   let deadRows: DeadStoneRow[] = [];
-  let scoringBoard: Board | null = null;
   if (scoring) {
     storedScoringConfiguration(rules, scoring);
     const deadResult = await execute<DeadStoneRow>(
@@ -390,10 +444,17 @@ async function loadGame(
       [gameId],
     );
     deadRows = deadResult.rows;
-    scoringBoard = replayMoves(game.board_size, mapMoves(movesResult.rows));
     validateScoringPosition(
-      { game, rules, moveRows: movesResult.rows, scoring, deadRows },
-      scoringBoard,
+      {
+        game,
+        rules,
+        moveRows: movesResult.rows,
+        board: replay.board,
+        positionHistory: replay.positionHistory,
+        scoring,
+        deadRows,
+      },
+      replay.board,
     );
   }
   const normalized = normalizeHistoricalRulesLifecycle(game, rules.policy, scoring);
@@ -402,9 +463,17 @@ async function loadGame(
   if (!scoring) deadRows = [];
   assertRulesLifecycle(game, rules.policy, scoring);
 
-  const loaded = { game, rules, moveRows: movesResult.rows, scoring, deadRows };
+  const loaded = {
+    game,
+    rules,
+    moveRows: movesResult.rows,
+    board: replay.board,
+    positionHistory: replay.positionHistory,
+    scoring,
+    deadRows,
+  };
   if (scoring) {
-    validateScoringSnapshot(loaded, scoringBoard!);
+    validateScoringSnapshot(loaded, replay.board);
   }
   return loaded;
 }
@@ -655,11 +724,10 @@ function validateScoringSnapshot(
 }
 
 function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
-  const { game, rules, moveRows, scoring } = loaded;
+  const { game, rules, moveRows, board, scoring } = loaded;
   const moves = mapMoves(moveRows);
   const turn = currentTurn(game, moveRows, rules.policy);
   const clocks = calculateClocks(game, turn, now);
-  const board = replayMoves(game.board_size, moves);
   const validatedScoring = scoring ? validateScoringSnapshot(loaded, board) : null;
   const deadStones = validatedScoring?.deadStones ?? [];
   const preview = scoring
@@ -888,16 +956,13 @@ async function resumeExpiredScoring(
 }
 
 function stoppedBoard(loaded: LoadedGame, scoring: ScoringRow): Board {
-  const moves = mapMoves(loaded.moveRows).slice(0, scoring.stopped_move_number);
-  const board = replayMoves(loaded.game.board_size, moves);
-  assertScoringBoardMatches(loaded, scoring, board);
-  return board;
+  assertScoringBoardMatches(loaded, scoring, loaded.board);
+  return loaded.board;
 }
 
 export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    const loaded = await loadGame(client, gameId, playerKey, true);
     const now = new Date();
     const resumed = await resumeExpiredScoring(client, loaded, now);
     if (resumed) return serializeGame(resumed, now);
@@ -916,11 +981,10 @@ export async function submitMove(
   move: { x?: number; y?: number; isPass?: boolean },
 ): Promise<GameState> {
   return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    const loaded = await loadGame(client, gameId, playerKey, true);
     const resumed = await resumeExpiredScoring(client, loaded, new Date());
     if (resumed) return serializeGame(resumed);
-    const { game, moveRows, rules } = loaded;
+    const { game, moveRows, rules, positionHistory } = loaded;
     if (game.status !== "active") {
       throw new GameServiceError("This game is already finished.", 409, "game_finished");
     }
@@ -938,8 +1002,9 @@ export async function submitMove(
     const playerClock = clocks[color];
     if (playerClock.timedOut) return finishOnTime(client, loaded, color, now);
 
-    const currentBoard = replayMoves(game.board_size, mapMoves(moveRows));
+    const currentBoard = loaded.board;
     const isPass = move.isPass === true;
+    let nextBoard = currentBoard;
     let nextHash = boardHash(currentBoard);
     if (!isPass) {
       if (!Number.isInteger(move.x) || !Number.isInteger(move.y)) {
@@ -949,11 +1014,9 @@ export async function submitMove(
       if (!result.ok) {
         throw new GameServiceError(`Illegal move: ${result.error}.`, 409, result.error);
       }
+      nextBoard = result.board;
       nextHash = boardHash(result.board);
-      const previousHashes = new Set([
-        boardHash(createEmptyBoard(game.board_size)),
-        ...moveRows.filter((row) => !row.is_pass && row.board_hash).map((row) => row.board_hash!),
-      ]);
+      const previousHashes = new Set(positionHistory);
       if (isRepeatedPositionForbidden(rules.policy, nextHash, previousHashes)) {
         throw new GameServiceError(
           "Illegal move: this position repeats an earlier board.",
@@ -971,6 +1034,8 @@ export async function submitMove(
       [game.id, nextMoveNumber, color, isPass ? null : move.x, isPass ? null : move.y, isPass, nextHash],
     );
     moveRows.push(inserted.rows[0]);
+    loaded.board = nextBoard;
+    loaded.positionHistory = Object.freeze([...positionHistory, nextHash]);
     const previousPasses = effectiveConsecutivePasses(
       game,
       moveRows.slice(0, -1),
@@ -1119,8 +1184,7 @@ export async function setDeadGroup(
   proposal: { x: number; y: number; dead: boolean; expectedRevision: number },
 ): Promise<GameState> {
   return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    const loaded = await loadGame(client, gameId, playerKey, true);
     const resumed = await resumeExpiredScoring(client, loaded, new Date());
     if (resumed) return serializeGame(resumed);
     const scoring = assertScoringPhase(loaded, proposal.expectedRevision);
@@ -1196,8 +1260,7 @@ export async function confirmScore(
   expectedRevision: number,
 ): Promise<GameState> {
   return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    const loaded = await loadGame(client, gameId, playerKey, true);
     const resumed = await resumeExpiredScoring(client, loaded, new Date());
     if (resumed) return serializeGame(resumed);
     const color = playerColor(loaded.game, playerKey);
@@ -1306,8 +1369,7 @@ export async function resumePlay(
   disputedStone: Position,
 ): Promise<GameState> {
   return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    const loaded = await loadGame(client, gameId, playerKey, true);
     const expired = await resumeExpiredScoring(client, loaded, new Date());
     if (expired) return serializeGame(expired);
     const scoring = assertScoringPhase(loaded, expectedRevision);
@@ -1365,8 +1427,7 @@ export async function resumePlay(
 
 export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction(async (client) => {
-    let loaded = await loadGame(client, gameId, true);
-    assertParticipant(loaded.game, playerKey);
+    let loaded = await loadGame(client, gameId, playerKey, true);
     loaded = await resumeExpiredScoring(client, loaded, new Date()) ?? loaded;
     const { game } = loaded;
     if (game.status !== "active") {
