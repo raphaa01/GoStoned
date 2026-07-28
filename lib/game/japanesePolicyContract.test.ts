@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   JAPANESE_1989_CONTRACT_ID,
   JAPANESE_1989_POLICY_CONTRACT,
+  JAPANESE_1989_RULES_PROFILE,
+  JAPANESE_SETTLEMENT_PROPOSAL_DIGEST_VERSION,
   type Japanese1989ContractOutcome,
 } from "./japanesePolicyContract";
 import {
@@ -16,12 +18,27 @@ import {
 test("documents authentic Japanese semantics without activating a rules profile", () => {
   assert.deepEqual(JAPANESE_1989_POLICY_CONTRACT, {
     contractId: "japanese-1989-gostone-inactive-v1",
+    futureRulesProfile: "japanese-1989-gostone-v1",
     activation: "inactive",
     ruleset: "japanese",
     scoringMethod: "territory",
     scoringRule: "japanese-territory-with-prisoners",
     twoPassEffect: "stop",
     settlementRule: "mutual-life-death-and-territory-agreement",
+    proposalDigest: {
+      algorithm: "sha256",
+      serializationVersion: "japanese-settlement-proposal-v1",
+      includes: [
+        "game-id",
+        "stopped-board-hash",
+        "stopped-move-number",
+        "revision",
+        "rules-identity",
+        "prisoner-ledger",
+        "sorted-dead-stones",
+        "sorted-neutral-region-seeds",
+      ],
+    },
     automatedLifeDeathAdjudication: false,
     normalPlayKoRule: "simple-ko",
     koBanClearedBy: "prohibited-player-plays-elsewhere",
@@ -41,6 +58,13 @@ test("documents authentic Japanese semantics without activating a rules profile"
     },
   });
   assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT), true);
+  assert.notEqual(JAPANESE_1989_CONTRACT_ID, JAPANESE_1989_RULES_PROFILE);
+  assert.equal(
+    JAPANESE_1989_POLICY_CONTRACT.proposalDigest.serializationVersion,
+    JAPANESE_SETTLEMENT_PROPOSAL_DIGEST_VERSION,
+  );
+  assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT.proposalDigest), true);
+  assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT.proposalDigest.includes), true);
   assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT.postStopLifeDeathKo), true);
   assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT.matchConditions), true);
   assert.equal(Object.isFrozen(JAPANESE_1989_POLICY_CONTRACT.matchConditions.supportedKomi), true);
@@ -56,8 +80,14 @@ test("the inactive contract cannot resolve through the production registry", () 
     LEGACY_IMMEDIATE_AREA_PROFILE,
   ].sort());
   assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_CONTRACT_ID), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
   assert.throws(
     () => resolveRulesPolicy(JAPANESE_1989_CONTRACT_ID),
+    (error: unknown) => error instanceof UnsupportedRulesPolicyError
+      && error.code === "unsupported_rules_profile",
+  );
+  assert.throws(
+    () => resolveRulesPolicy(JAPANESE_1989_RULES_PROFILE),
     (error: unknown) => error instanceof UnsupportedRulesPolicyError
       && error.code === "unsupported_rules_profile",
   );

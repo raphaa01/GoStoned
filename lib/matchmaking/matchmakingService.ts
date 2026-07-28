@@ -12,6 +12,7 @@ type QueueRow = {
   player_key: string;
   board_size: BoardSize;
   time_control: TimeControlId;
+  rules_profile: string;
   status: "waiting" | "matched";
   game_id: string | null;
   created_at: Date;
@@ -43,7 +44,8 @@ function mapQueue(row?: QueueRow): MatchmakingStatus {
 
 export async function getMatchmakingStatus(playerKey: string): Promise<MatchmakingStatus> {
   const result = await query<QueueRow>(
-    `SELECT q.player_key, q.board_size, q.time_control, q.status, q.game_id, q.created_at,
+    `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
+            q.status, q.game_id, q.created_at,
             g.status AS game_status,
             q.updated_at < NOW() - INTERVAL '5 minutes' AS is_stale
        FROM matchmaking_queue q
@@ -83,7 +85,8 @@ export async function joinMatchmaking(
     );
 
     const existing = await client.query<QueueRow>(
-      `SELECT q.player_key, q.board_size, q.time_control, q.status, q.game_id, q.created_at,
+      `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
+              q.status, q.game_id, q.created_at,
               g.status AS game_status
          FROM matchmaking_queue q
          LEFT JOIN games g ON g.id = q.game_id
@@ -100,24 +103,27 @@ export async function joinMatchmaking(
     }
 
     await client.query(
-      `INSERT INTO matchmaking_queue (player_key, board_size, time_control, status, game_id)
-       VALUES ($1, $2, $3, 'waiting', NULL)
+      `INSERT INTO matchmaking_queue (
+         player_key, board_size, time_control, rules_profile, status, game_id
+       )
+       VALUES ($1, $2, $3, $4, 'waiting', NULL)
        ON CONFLICT (player_key) DO UPDATE
        SET board_size = EXCLUDED.board_size, time_control = EXCLUDED.time_control,
-           status = 'waiting', game_id = NULL,
+           rules_profile = EXCLUDED.rules_profile, status = 'waiting', game_id = NULL,
            created_at = NOW(), updated_at = NOW()`,
-      [playerKey, boardSize, timeControlId],
+      [playerKey, boardSize, timeControlId, rules.rulesProfile],
     );
 
     const opponentResult = await client.query<QueueRow>(
-      `SELECT player_key, board_size, time_control, status, game_id, created_at
+      `SELECT player_key, board_size, time_control, rules_profile, status, game_id, created_at
          FROM matchmaking_queue
         WHERE board_size = $1 AND time_control = $2
-          AND status = 'waiting' AND player_key <> $3
+          AND rules_profile = $3
+          AND status = 'waiting' AND player_key <> $4
         ORDER BY created_at
         LIMIT 1
         FOR UPDATE SKIP LOCKED`,
-      [boardSize, timeControlId, playerKey],
+      [boardSize, timeControlId, rules.rulesProfile, playerKey],
     );
     const opponent = opponentResult.rows[0];
     if (!opponent) {
@@ -164,9 +170,10 @@ export async function joinMatchmaking(
 
     await client.query(
       `UPDATE matchmaking_queue
-          SET status = 'matched', game_id = $1, updated_at = NOW()
-        WHERE player_key = ANY($2::text[])`,
-      [gameId, [opponent.player_key, playerKey]],
+          SET status = 'matched', game_id = $1, rules_profile = $2,
+              updated_at = NOW()
+        WHERE player_key = ANY($3::text[])`,
+      [gameId, rules.rulesProfile, [opponent.player_key, playerKey]],
     );
     return {
       status: "matched",

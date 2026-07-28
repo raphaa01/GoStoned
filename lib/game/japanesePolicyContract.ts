@@ -3,6 +3,9 @@ import type { Stone } from "./types";
 
 export const JAPANESE_1989_CONTRACT_ID =
   "japanese-1989-gostone-inactive-v1" as const;
+export const JAPANESE_1989_RULES_PROFILE = "japanese-1989-gostone-v1" as const;
+export const JAPANESE_SETTLEMENT_PROPOSAL_DIGEST_VERSION =
+  "japanese-settlement-proposal-v1" as const;
 
 export type Japanese1989ContractOutcome =
   | ScoredOutcome
@@ -33,12 +36,27 @@ export type Japanese1989ContractOutcome =
  */
 export const JAPANESE_1989_POLICY_CONTRACT = Object.freeze({
   contractId: JAPANESE_1989_CONTRACT_ID,
+  futureRulesProfile: JAPANESE_1989_RULES_PROFILE,
   activation: "inactive",
   ruleset: "japanese",
   scoringMethod: "territory",
   scoringRule: "japanese-territory-with-prisoners",
   twoPassEffect: "stop",
   settlementRule: "mutual-life-death-and-territory-agreement",
+  proposalDigest: Object.freeze({
+    algorithm: "sha256",
+    serializationVersion: JAPANESE_SETTLEMENT_PROPOSAL_DIGEST_VERSION,
+    includes: Object.freeze([
+      "game-id",
+      "stopped-board-hash",
+      "stopped-move-number",
+      "revision",
+      "rules-identity",
+      "prisoner-ledger",
+      "sorted-dead-stones",
+      "sorted-neutral-region-seeds",
+    ]),
+  }),
   automatedLifeDeathAdjudication: false,
   normalPlayKoRule: "simple-ko",
   koBanClearedBy: "prohibited-player-plays-elsewhere",
