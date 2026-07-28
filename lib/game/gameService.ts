@@ -147,10 +147,12 @@ type PollGameRow = Pick<
   | "id"
   | "black_player_key"
   | "white_player_key"
+  | "winner_key"
   | "status"
   | "phase"
   | "to_move"
   | "scoring_revision"
+  | "result"
   | "finish_reason"
   | "rules"
   | "rules_profile"
@@ -166,6 +168,7 @@ type PollGameRow = Pick<
   | "white_periods_remaining"
   | "turn_started_at"
   | "version"
+  | "finished_at"
 >;
 
 type PollScoringRow = {
@@ -333,12 +336,84 @@ function normalizeHistoricalRulesLifecycle(
         ? "timeout"
         : "legacy_score";
     return {
-      game: { ...game, finish_reason: finishReason },
+      game: { ...game, finish_reason: finishReason, to_move: null },
       scoring,
     };
   }
 
   return { game, scoring };
+}
+
+function gameOutcomeMismatch(): never {
+  throw new GameServiceError(
+    "The stored game outcome is internally inconsistent.",
+    500,
+    "game_outcome_mismatch",
+  );
+}
+
+function resultWinnerKey(game: GameRow, result: string): string | null | undefined {
+  if (result === "Draw") return null;
+  if (result.startsWith("B+")) return game.black_player_key;
+  if (result.startsWith("W+")) return game.white_player_key;
+  return undefined;
+}
+
+function assertGameOutcome(loaded: LoadedGame): void {
+  const { game, rules, moveRows, board } = loaded;
+  if (game.status === "active") {
+    if (
+      game.result !== null
+      || game.winner_key !== null
+      || game.finished_at !== null
+      || (game.phase === "play"
+        && rules.policy.turnSource === "persisted"
+        && game.to_move === null)
+    ) {
+      return gameOutcomeMismatch();
+    }
+    return;
+  }
+
+  if (game.result === null || game.finished_at === null || game.to_move !== null) {
+    return gameOutcomeMismatch();
+  }
+
+  if (game.finish_reason === "resignation" || game.finish_reason === "timeout") {
+    const suffix = game.finish_reason === "resignation" ? "R" : "T";
+    if (
+      !new RegExp(`^[BW]\\+${suffix}$`).test(game.result)
+      || resultWinnerKey(game, game.result) !== game.winner_key
+    ) {
+      return gameOutcomeMismatch();
+    }
+    if (game.finish_reason === "timeout") {
+      const timedOutColor = game.result.startsWith("B+") ? "white" : "black";
+      const remainingTime = Number(game[`${timedOutColor}_time_remaining_ms`]);
+      const remainingPeriods = game[`${timedOutColor}_periods_remaining`];
+      if (remainingTime !== 0 || remainingPeriods !== 0) {
+        return gameOutcomeMismatch();
+      }
+    }
+    return;
+  }
+
+  if (game.finish_reason === "legacy_score") {
+    if (
+      moveRows.length < 2
+      || !moveRows.at(-1)?.is_pass
+      || !moveRows.at(-2)?.is_pass
+    ) {
+      return gameOutcomeMismatch();
+    }
+    const computation = scoreImmediatePosition(rules.policy, board, rules.komi);
+    if (
+      requireChineseAreaBreakdown(computation).result !== game.result
+      || winnerKeyForScoredOutcome(game, computation.outcome) !== game.winner_key
+    ) {
+      return gameOutcomeMismatch();
+    }
+  }
 }
 
 function assertParticipant(
@@ -388,6 +463,8 @@ function replayStoredMoveRows(
       row.move_number !== index + 1
       || (row.is_pass && (row.x !== null || row.y !== null))
       || (!row.is_pass && (row.x === null || row.y === null))
+      || (policy.turnSource === "move-log"
+        && row.color !== (index % 2 === 0 ? "black" : "white"))
     ) {
       return moveHistoryMismatch();
     }
@@ -526,6 +603,7 @@ async function loadGame(
   if (scoring) {
     validateScoringSnapshot(loaded, replay.board);
   }
+  assertGameOutcome(loaded);
   return loaded;
 }
 
@@ -889,6 +967,21 @@ async function recordFinishedStats(
   game: GameRow,
   winnerKey: string | null,
 ) {
+  const existingHistory = await client.query<{ player_key: string }>(
+    `SELECT player_key
+       FROM player_rating_history
+      WHERE game_id = $1
+      FOR UPDATE`,
+    [game.id],
+  );
+  if (existingHistory.rowCount !== 0) {
+    throw new GameServiceError(
+      "The rating history already contains evidence before this game finalization.",
+      500,
+      "rating_history_conflict",
+    );
+  }
+
   const registered = await client.query<RegisteredPlayerRow>(
     `SELECT 'user:' || id::text AS player_key
        FROM users
@@ -937,7 +1030,13 @@ async function recordFinishedStats(
         game.finished_at,
       ],
     );
-    if (ledger.rowCount === 0) continue;
+    if (ledger.rowCount !== 1) {
+      throw new GameServiceError(
+        "The rating history could not be recorded exactly once.",
+        500,
+        "rating_history_conflict",
+      );
+    }
     await client.query(
       `UPDATE player_stats
           SET games = games + 1,
@@ -1067,13 +1166,14 @@ async function resolveGameState(
 
 async function pollHeader(gameId: string): Promise<PollGameRow> {
   const result = await query<PollGameRow>(
-    `SELECT g.id, g.black_player_key, g.white_player_key, g.status, g.phase,
-            g.to_move, g.scoring_revision, g.finish_reason, g.rules,
+    `SELECT g.id, g.black_player_key, g.white_player_key, g.winner_key,
+            g.status, g.phase, g.to_move, g.scoring_revision, g.result,
+            g.finish_reason, g.rules,
             g.rules_profile, g.scoring_method, g.komi, g.handicap,
             g.main_time_seconds, g.byo_yomi_periods, g.byo_yomi_seconds,
             g.black_time_remaining_ms, g.white_time_remaining_ms,
             g.black_periods_remaining, g.white_periods_remaining,
-            g.turn_started_at, g.version
+            g.turn_started_at, g.version, g.finished_at
        FROM games g
       WHERE g.id = $1`,
     [gameId],
@@ -1109,12 +1209,14 @@ export async function pollGameState(
 
   const rules = storedRulesConfiguration(game);
   const now = new Date();
-  if (game.status === "finished") return heartbeat(game, null, now);
 
   if (
     game.status === "active"
     && game.phase === "play"
     && game.finish_reason === null
+    && game.result === null
+    && game.winner_key === null
+    && game.finished_at === null
     && rules.policy.turnSource !== "move-log"
     && game.to_move !== null
   ) {
@@ -1126,6 +1228,10 @@ export async function pollGameState(
     game.status === "active"
     && game.phase === "scoring"
     && game.finish_reason === null
+    && game.result === null
+    && game.winner_key === null
+    && game.finished_at === null
+    && game.to_move === null
     && rules.policy.scoringLifecycle === "agreement"
   ) {
     const scoring = await query<PollScoringRow>(
