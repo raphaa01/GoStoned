@@ -250,20 +250,42 @@ class MatchmakingClient {
       };
     }
     if (
-      normalized.startsWith("DELETE FROM matchmaking_queue")
+      normalized.startsWith("WITH stale_waiting AS MATERIALIZED")
       && normalized.includes("updated_at < NOW()")
     ) {
+      assert.match(normalized, /ORDER BY queued\.updated_at, queued\.player_key/);
+      assert.match(normalized, /LIMIT 200 FOR UPDATE OF queued SKIP LOCKED/);
+      assert.match(
+        normalized,
+        /DELETE FROM matchmaking_queue AS queued USING stale_waiting AS stale WHERE queued\.player_key = stale\.player_key AND queued\.board_size = \$1 AND queued\.time_control = \$2 AND queued\.rules_profile = \$3 AND queued\.status = 'waiting' AND queued\.updated_at < NOW\(\) - INTERVAL '5 minutes'$/,
+      );
       const [boardSize, timeControl, rulesProfile] = values;
-      let rowCount = 0;
-      for (const [playerKey, row] of this.pool.queue) {
-        if (
+      const staleBefore = Date.now() - 5 * 60_000;
+      const candidates = [...this.pool.queue.values()]
+        .filter((row) =>
           row.board_size === boardSize
           && row.time_control === timeControl
           && row.rules_profile === rulesProfile
           && row.status === "waiting"
-          && row.updated_at.getTime() < Date.now() - 5 * 60_000
+          && row.updated_at.getTime() < staleBefore
+          && !this.pool.locks.isHeld(`row:${row.player_key}`))
+        .sort((left, right) =>
+          left.updated_at.getTime() - right.updated_at.getTime()
+          || (left.player_key < right.player_key ? -1 : left.player_key > right.player_key ? 1 : 0))
+        .slice(0, 200);
+      let rowCount = 0;
+      for (const candidate of candidates) {
+        await this.lockRow(candidate.player_key);
+        const row = this.viewQueue(candidate.player_key);
+        if (
+          row
+          && row.board_size === boardSize
+          && row.time_control === timeControl
+          && row.rules_profile === rulesProfile
+          && row.status === "waiting"
+          && row.updated_at.getTime() < staleBefore
         ) {
-          this.localQueue.set(playerKey, null);
+          this.localQueue.set(row.player_key, null);
           rowCount += 1;
         }
       }
@@ -377,6 +399,10 @@ class MatchmakingClient {
       return { rows: [], rowCount: 1 };
     }
     if (normalized.includes("FROM matchmaking_queue") && normalized.includes("FOR UPDATE SKIP LOCKED")) {
+      assert.match(
+        normalized,
+        /q\.updated_at >= NOW\(\) - INTERVAL '5 minutes'/,
+      );
       const boardSize = values[0];
       const timeControl = values[1];
       const profile = values[2];
@@ -393,6 +419,7 @@ class MatchmakingClient {
           && row.time_control === timeControl
           && row.rules_profile === profile
           && row.status === "waiting"
+          && row.updated_at.getTime() >= Date.now() - 5 * 60_000
           && !this.pool.isPairBlocked(playerKey, row.player_key)
           && !this.pool.locks.isHeld(`row:${row.player_key}`)
           && ![...this.pool.games.values()].some((game) =>
@@ -500,6 +527,21 @@ async function withPool<T>(pool: MatchmakingPool, action: () => Promise<T>) {
   } finally {
     globalThis.goStonedDbPool = previous;
   }
+}
+
+function seedStaleWaiting(pool: MatchmakingPool, prefix: string, count: number) {
+  const staleTime = new Date(Date.now() - 6 * 60_000);
+  const keys: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const playerKey = `${prefix}${String(index).padStart(3, "0")}`;
+    pool.seedWaiting(playerKey);
+    Object.assign(pool.queue.get(playerKey)!, {
+      created_at: staleTime,
+      updated_at: staleTime,
+    });
+    keys.push(playerKey);
+  }
+  return keys;
 }
 
 test("simultaneous compatible first joins converge on one game", async () => {
@@ -657,6 +699,108 @@ test("join cleanup removes only stale waiting rows from the requested pool", asy
   assert.equal(pool.queue.get("guest:fresh-active")?.status, "waiting");
   assert.equal(pool.queue.get("guest:matched")?.game_id, matchedGameId);
   assert.equal(pool.queue.has("guest:stale-classic"), true);
+});
+
+test("bounded cleanup leaves its deterministic 201st stale row ineligible for matching", async () => {
+  const pool = new MatchmakingPool();
+  const staleKeys = seedStaleWaiting(pool, "guest:stale-cap-", 201);
+
+  const joined = await withPool(pool, () => joinMatchmaking(
+    "guest:joining",
+    9,
+    "rapid",
+  ));
+
+  assert.equal(joined.status, "waiting");
+  assert.equal(pool.games.size, 0);
+  assert.deepEqual(
+    staleKeys.filter((playerKey) => pool.queue.has(playerKey)),
+    ["guest:stale-cap-200"],
+  );
+  assert.equal(pool.queue.get("guest:stale-cap-200")?.status, "waiting");
+});
+
+test("locked stale cleanup residue stays ineligible after unlock until a later cleanup", async () => {
+  const pool = new MatchmakingPool();
+  const lockedStaleKey = "guest:locked-stale";
+  pool.seedWaiting(lockedStaleKey);
+  Object.assign(pool.queue.get(lockedStaleKey)!, {
+    created_at: new Date(Date.now() - 6 * 60_000),
+    updated_at: new Date(Date.now() - 6 * 60_000),
+  });
+  const locker = await pool.connect();
+  await locker.query("BEGIN");
+  await locker.query(
+    `SELECT q.player_key
+       FROM matchmaking_queue q
+      WHERE q.player_key = $1
+      FOR UPDATE OF q`,
+    [lockedStaleKey],
+  );
+
+  try {
+    const firstJoin = await withPool(pool, () => joinMatchmaking(
+      "guest:first-fresh",
+      9,
+      "rapid",
+    ));
+    assert.equal(firstJoin.status, "waiting");
+    assert.equal(pool.games.size, 0);
+    assert.equal(pool.queue.has(lockedStaleKey), true);
+  } finally {
+    await locker.query("ROLLBACK");
+    locker.release();
+  }
+
+  assert.equal(pool.queue.get(lockedStaleKey)?.status, "waiting");
+  const olderBacklog = seedStaleWaiting(pool, "guest:older-stale-", 200);
+  for (const playerKey of olderBacklog) {
+    Object.assign(pool.queue.get(playerKey)!, {
+      created_at: new Date(Date.now() - 7 * 60_000),
+      updated_at: new Date(Date.now() - 7 * 60_000),
+    });
+  }
+
+  const secondJoin = await withPool(pool, () => joinMatchmaking(
+    "guest:second-fresh",
+    9,
+    "rapid",
+  ));
+  assert.equal(secondJoin.status, "matched");
+  assert.equal(pool.games.get(secondJoin.gameId!)?.black_player_key, "guest:first-fresh");
+  assert.equal(pool.queue.get(lockedStaleKey)?.status, "waiting");
+  assert.equal(olderBacklog.some((playerKey) => pool.queue.has(playerKey)), false);
+
+  const thirdJoin = await withPool(pool, () => joinMatchmaking(
+    "guest:third-fresh",
+    9,
+    "rapid",
+  ));
+  assert.equal(thirdJoin.status, "waiting");
+  assert.equal(pool.queue.has(lockedStaleKey), false);
+});
+
+test("fresh FIFO opponent matches while capped stale residue remains excluded", async () => {
+  const pool = new MatchmakingPool();
+  const staleKeys = seedStaleWaiting(pool, "guest:stale-with-fresh-", 205);
+  pool.seedWaiting("guest:fresh-opponent");
+
+  const joined = await withPool(pool, () => joinMatchmaking(
+    "guest:joining",
+    9,
+    "rapid",
+  ));
+
+  assert.equal(joined.status, "matched");
+  assert.equal(pool.games.get(joined.gameId!)?.black_player_key, "guest:fresh-opponent");
+  assert.deepEqual(
+    staleKeys.filter((playerKey) => pool.queue.has(playerKey)),
+    staleKeys.slice(200),
+  );
+  assert.equal(
+    staleKeys.some((playerKey) => pool.queue.get(playerKey)?.status === "matched"),
+    false,
+  );
 });
 
 test("guarded publication rolls back an orphan game and preserves the opponent", async () => {

@@ -92,6 +92,10 @@ const requiredIndexDefinitions = {
   idx_user_sessions_expires_at: [
     "ON public.user_sessions USING btree (expires_at)",
   ],
+  idx_matchmaking_waiting_pool_updated_at: [
+    "ON public.matchmaking_queue USING btree (board_size, time_control, rules_profile, updated_at, player_key)",
+    "WHERE (status = 'waiting'::text)",
+  ],
   idx_player_rating_history_board_player_time: [
     "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
     "INCLUDE (game_id, rating_before, rating_after, result)",
