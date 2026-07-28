@@ -92,13 +92,12 @@ async function run() {
     201,
   );
   assert.ok(registeredSecond.cookie);
-  const secondUser = registeredSecond.body.user as { playerKey: string };
 
   const waiting = await request(
     "/api/matchmaking",
     json(
       "POST",
-      { playerKey: firstUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      { boardSize: 9, timeControl: "rapid" },
       firstLogin.cookie!,
     ),
   );
@@ -108,7 +107,7 @@ async function run() {
     "/api/matchmaking",
     json(
       "POST",
-      { playerKey: secondUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      { boardSize: 9, timeControl: "rapid" },
       registeredSecond.cookie!,
     ),
   );
@@ -116,33 +115,33 @@ async function run() {
   assert.ok(gameId);
 
   const game = await request(
-    `/api/games/${gameId}?playerKey=${encodeURIComponent(firstUser.playerKey)}`,
+    `/api/games/${gameId}`,
     { headers: { Cookie: firstLogin.cookie! } },
   );
   assert.equal((game.body.game as { blackPlayerName: string }).blackPlayerName, firstUsername);
 
   await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { playerKey: firstUser.playerKey, message: "Good luck!" }, firstLogin.cookie!),
+    json("POST", { message: "Good luck!" }, firstLogin.cookie!),
     201,
   );
   await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { playerKey: secondUser.playerKey, message: "Have fun!" }, registeredSecond.cookie!),
+    json("POST", { message: "Have fun!" }, registeredSecond.cookie!),
     201,
   );
   const blockedChat = await request(
     `/api/games/${gameId}/chat`,
     json(
       "POST",
-      { playerKey: firstUser.playerKey, message: "f.u.c.k" },
+      { message: "f.u.c.k" },
       firstLogin.cookie!,
     ),
     400,
   );
   assert.equal(blockedChat.body.code, "message_blocked");
   const chat = await request(
-    `/api/games/${gameId}/chat?playerKey=${encodeURIComponent(firstUser.playerKey)}`,
+    `/api/games/${gameId}/chat`,
     { headers: { Cookie: firstLogin.cookie! } },
   );
   assert.deepEqual(
@@ -152,7 +151,7 @@ async function run() {
 
   await request(
     `/api/games/${gameId}/resign`,
-    json("POST", { playerKey: firstUser.playerKey }, firstLogin.cookie!),
+    json("POST", {}, firstLogin.cookie!),
   );
 
   const firstProfile = await request("/api/profile", {

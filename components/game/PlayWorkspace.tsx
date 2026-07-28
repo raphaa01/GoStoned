@@ -22,7 +22,13 @@ type QueueState = {
 
 export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) {
   const router = useRouter();
-  const { playerKey, playerName, loading } = usePlayerIdentity();
+  const {
+    playerKey,
+    playerName,
+    loading,
+    error: identityError,
+    retry: retryIdentity,
+  } = usePlayerIdentity();
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
   const [timeControl, setTimeControl] = useState<TimeControlId>("rapid");
   const [queueStatus, setQueueStatus] = useState<"idle" | "waiting">("idle");
@@ -62,10 +68,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
 
   const refreshQueue = useCallback(async (enterMatchedGame = false) => {
     if (!playerKey) return;
-    const response = await fetch(
-      `/api/matchmaking?playerKey=${encodeURIComponent(playerKey)}`,
-      { cache: "no-store" },
-    );
+    const response = await fetch("/api/matchmaking", { cache: "no-store" });
     const data = await readApi<{ matchmaking: QueueState }>(response);
     handleQueueState(data.matchmaking, enterMatchedGame);
   }, [handleQueueState, playerKey]);
@@ -96,7 +99,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       const response = await fetch("/api/matchmaking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerKey, boardSize, timeControl }),
+        body: JSON.stringify({ boardSize, timeControl }),
       });
       const data = await readApi<{ matchmaking: QueueState }>(response);
       handleQueueState(data.matchmaking, true);
@@ -112,7 +115,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     setBusy(true);
     try {
       await readApi(
-        await fetch(`/api/matchmaking?playerKey=${encodeURIComponent(playerKey)}`, {
+        await fetch("/api/matchmaking", {
           method: "DELETE",
         }),
       );
@@ -129,7 +132,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     setBusy(true);
     setError(null);
     try {
-      await leaveGameAndQueue(activeGame.gameId, playerKey);
+      await leaveGameAndQueue(activeGame.gameId);
       setActiveGame(null);
       setQueueStatus("idle");
       setConfirmLeave(false);
@@ -151,7 +154,13 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         </p>
         <div className="lobby-trust">
           <span><ShieldCheck size={17} /> Server-validated rules</span>
-          <span>{loading ? "Preparing your player…" : `Playing as ${playerName}`}</span>
+          <span>
+            {loading
+              ? "Preparing your player…"
+              : identityError
+                ? "Player session unavailable"
+                : `Playing as ${playerName}`}
+          </span>
         </div>
       </section>
 
@@ -188,9 +197,10 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             <MatchmakingPanel
               boardSize={boardSize}
               busy={busy}
-              error={error}
+              error={error ?? identityError}
               onCancel={cancelSearch}
               onFind={findMatch}
+              onRetry={retryIdentity}
               playerName={playerName}
               ready={Boolean(playerKey) && !loading}
               status={queueStatus}

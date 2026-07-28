@@ -11,10 +11,7 @@ export async function GET(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
+    const playerKey = await resolvePlayerKey(request);
     const { gameId } = await context.params;
     const game = await getGameState(gameId, playerKey);
     return noStoreJson({ ok: true, game });

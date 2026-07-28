@@ -1,11 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { closePool, query } from "../lib/db";
 
 const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
-const blackPlayer = `guest:${randomUUID()}`;
-const whitePlayer = `guest:${randomUUID()}`;
 
 async function readJson<T>(response: Response): Promise<T> {
   const data = (await response.json()) as T & { error?: string };
@@ -13,30 +10,45 @@ async function readJson<T>(response: Response): Promise<T> {
   return data;
 }
 
-async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+async function post<T>(
+  path: string,
+  body: Record<string, unknown>,
+  cookie: string,
+): Promise<T> {
   return readJson<T>(
     await fetch(`${baseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: cookie },
       body: JSON.stringify(body),
     }),
   );
 }
 
+async function createGuest() {
+  const response = await fetch(`${baseUrl}/api/auth/guest`, { method: "POST" });
+  const body = await readJson<{
+    identity: { playerKey: string };
+  }>(response);
+  assert.equal(response.status, 201);
+  const cookie = response.headers.get("set-cookie")?.split(";")[0];
+  assert.ok(cookie);
+  return { cookie, playerKey: body.identity.playerKey };
+}
+
 async function run() {
   console.log(`Testing server-authoritative clock at ${baseUrl}`);
+  const black = await createGuest();
+  const white = await createGuest();
   await post("/api/matchmaking", {
-    playerKey: blackPlayer,
     boardSize: 9,
     timeControl: "blitz",
-  });
+  }, black.cookie);
   const matched = await post<{
     matchmaking: { gameId: string; timeControl: string };
   }>("/api/matchmaking", {
-    playerKey: whitePlayer,
     boardSize: 9,
     timeControl: "blitz",
-  });
+  }, white.cookie);
   const gameId = matched.matchmaking.gameId;
   assert.equal(matched.matchmaking.timeControl, "blitz");
 
@@ -59,14 +71,14 @@ async function run() {
     };
   }>(
     await fetch(
-      `${baseUrl}/api/games/${gameId}?playerKey=${encodeURIComponent(blackPlayer)}`,
-      { cache: "no-store" },
+      `${baseUrl}/api/games/${gameId}`,
+      { cache: "no-store", headers: { Cookie: black.cookie } },
     ),
   );
 
   assert.equal(finished.game.status, "finished");
   assert.equal(finished.game.result, "W+T");
-  assert.equal(finished.game.winnerKey, whitePlayer);
+  assert.equal(finished.game.winnerKey, white.playerKey);
   assert.equal(finished.game.clock.black.periodsRemaining, 0);
   console.log(`Clock flow passed for game ${gameId}.`);
 }

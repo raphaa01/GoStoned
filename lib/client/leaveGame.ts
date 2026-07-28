@@ -1,10 +1,8 @@
 import { readApi } from "./api";
 
-export async function leaveGameAndQueue(gameId: string, playerKey: string): Promise<void> {
+export async function leaveGameAndQueue(gameId: string): Promise<void> {
   const resignResponse = await fetch(`/api/games/${gameId}/resign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ playerKey }),
   });
 
   // A finished game no longer needs a resignation, but its matchmaking entry
@@ -14,7 +12,7 @@ export async function leaveGameAndQueue(gameId: string, playerKey: string): Prom
   }
 
   await readApi(
-    await fetch(`/api/matchmaking?playerKey=${encodeURIComponent(playerKey)}`, {
+    await fetch("/api/matchmaking", {
       method: "DELETE",
     }),
   );

@@ -18,7 +18,12 @@ type Confirmation = "resign" | "leave" | null;
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const router = useRouter();
-  const { playerKey, loading } = usePlayerIdentity();
+  const {
+    playerKey,
+    loading,
+    error: identityError,
+    retry: retryIdentity,
+  } = usePlayerIdentity();
   const [game, setGame] = useState<GameState | null>(null);
   const [messages, setMessages] = useState<GameMessage[]>([]);
   const [busy, setBusy] = useState(false);
@@ -45,10 +50,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const refreshGame = useCallback(async () => {
     if (!playerKey) return;
-    const response = await fetch(
-      `/api/games/${gameId}?playerKey=${encodeURIComponent(playerKey)}`,
-      { cache: "no-store" },
-    );
+    const response = await fetch(`/api/games/${gameId}`, { cache: "no-store" });
     const data = await readApi<{ game: GameState }>(response);
     acceptGameState(data.game);
   }, [acceptGameState, gameId, playerKey]);
@@ -56,7 +58,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const refreshChat = useCallback(async () => {
     if (!playerKey) return;
     const response = await fetch(
-      `/api/games/${gameId}/chat?playerKey=${encodeURIComponent(playerKey)}&after=${lastMessageId.current}`,
+      `/api/games/${gameId}/chat?after=${lastMessageId.current}`,
       { cache: "no-store" },
     );
     const data = await readApi<{ messages: GameMessage[] }>(response);
@@ -100,7 +102,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       const response = await fetch(`/api/games/${game.id}/moves`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerKey, ...move }),
+        body: JSON.stringify(move),
       });
       const data = await readApi<{ game: GameState }>(response);
       acceptGameState(data.game);
@@ -119,8 +121,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       const response = await fetch(`/api/games/${game.id}/resign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerKey }),
       });
       const data = await readApi<{ game: GameState }>(response);
       setConfirmation(null);
@@ -137,7 +137,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const response = await fetch(`/api/games/${gameId}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerKey, message }),
+      body: JSON.stringify({ message }),
     });
     const data = await readApi<{ message: GameMessage }>(response);
     lastMessageId.current = Math.max(lastMessageId.current, Number(data.message.id));
@@ -146,7 +146,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   async function clearFinishedGame(destination: "/" | "/play") {
     if (playerKey) {
-      await fetch(`/api/matchmaking?playerKey=${encodeURIComponent(playerKey)}`, {
+      await fetch("/api/matchmaking", {
         method: "DELETE",
       }).catch(() => undefined);
     }
@@ -162,7 +162,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await leaveGameAndQueue(game.id, playerKey);
+      await leaveGameAndQueue(game.id);
       setConfirmation(null);
       router.replace("/");
     } catch (requestError) {
@@ -171,17 +171,21 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }
 
-  if (loading || !playerKey || (!game && !error)) {
+  if (loading || (!playerKey && !identityError) || (!game && !error && !identityError)) {
     return <main className="game-loading"><span className="spin-ring" /><p>Loading game…</p></main>;
   }
 
-  if (!game) {
+  if (!playerKey || !game) {
     return (
       <main className="game-loading">
         <h1>Game unavailable</h1>
-        <p>{error ?? "This game could not be loaded."}</p>
-        <button className="button button--primary" onClick={() => router.replace("/play")} type="button">
-          Return to play
+        <p>{identityError ?? error ?? "This game could not be loaded."}</p>
+        <button
+          className="button button--primary"
+          onClick={identityError ? retryIdentity : () => router.replace("/play")}
+          type="button"
+        >
+          {identityError ? "Retry player session" : "Return to play"}
         </button>
       </main>
     );

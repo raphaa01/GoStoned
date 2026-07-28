@@ -18,10 +18,14 @@ export function Navbar() {
   ];
 
   async function signOut() {
-    await logout();
-    setOpen(false);
-    router.push("/");
-    router.refresh();
+    try {
+      await logout();
+      setOpen(false);
+      router.push("/");
+      router.refresh();
+    } catch {
+      // AuthProvider keeps the current account identity when logout fails.
+    }
   }
 
   return (

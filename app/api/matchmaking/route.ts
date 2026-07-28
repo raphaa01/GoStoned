@@ -14,10 +14,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
+    const playerKey = await resolvePlayerKey(request);
     const matchmaking = await getMatchmakingStatus(playerKey);
     return noStoreJson({ ok: true, matchmaking });
   } catch (error) {
@@ -28,7 +25,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
-      playerKey?: unknown;
       boardSize?: unknown;
       timeControl?: unknown;
     };
@@ -38,7 +34,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
+    const playerKey = await resolvePlayerKey(request);
     const matchmaking = await joinMatchmaking(playerKey, body.boardSize, body.timeControl);
     return noStoreJson({ ok: true, matchmaking });
   } catch (error) {
@@ -48,10 +44,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
+    const playerKey = await resolvePlayerKey(request);
     await cancelMatchmaking(playerKey);
     return noStoreJson({ ok: true });
   } catch (error) {

@@ -18,15 +18,6 @@ type QueueRow = {
   is_stale?: boolean;
 };
 
-export function isValidPlayerKey(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    /^(guest|user):[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  );
-}
-
 export function isBoardSize(value: unknown): value is BoardSize {
   return value === 9 || value === 13 || value === 19;
 }

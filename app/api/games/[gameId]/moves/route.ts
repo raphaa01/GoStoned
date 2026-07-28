@@ -12,12 +12,11 @@ export async function POST(
 ) {
   try {
     const body = (await request.json()) as {
-      playerKey?: unknown;
       x?: unknown;
       y?: unknown;
       isPass?: unknown;
     };
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
+    const playerKey = await resolvePlayerKey(request);
     if (body.isPass !== true && (!Number.isInteger(body.x) || !Number.isInteger(body.y))) {
       return noStoreJson({ ok: false, error: "Integer x and y are required." }, { status: 400 });
     }

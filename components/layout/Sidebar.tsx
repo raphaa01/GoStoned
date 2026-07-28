@@ -17,9 +17,13 @@ export function Sidebar() {
   const { user, loading, logout } = useAuth();
 
   async function signOut() {
-    await logout();
-    router.push("/");
-    router.refresh();
+    try {
+      await logout();
+      router.push("/");
+      router.refresh();
+    } catch {
+      // AuthProvider keeps the current account identity when logout fails.
+    }
   }
 
   return (

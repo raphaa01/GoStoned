@@ -11,10 +11,7 @@ export async function GET(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
+    const playerKey = await resolvePlayerKey(request);
     const afterId = Number(request.nextUrl.searchParams.get("after") ?? 0);
     const { gameId } = await context.params;
     const messages = await getGameMessages(
@@ -33,8 +30,8 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const body = (await request.json()) as { playerKey?: unknown; message?: unknown };
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
+    const body = (await request.json()) as { message?: unknown };
+    const playerKey = await resolvePlayerKey(request);
     const { gameId } = await context.params;
     const message = await sendGameMessage(gameId, playerKey, body.message);
     return noStoreJson({ ok: true, message }, { status: 201 });

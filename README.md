@@ -9,7 +9,7 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - getrennte Ratings pro Brettgröße für registrierte Accounts
 - persistenter Gegner-Chat im fokussierten Spielraum
 - serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
-- Gast-Identität pro Browser
+- serverseitig ausgestellte Gast-Sitzungen per HTTP-only Cookie
 - Matchmaking für 9×9, 13×13 und 19×19
 - Live-Partien über eine deploybare Polling-API
 - auswählbare Blitz-, Rapid- und Classic-Uhren mit japanischem Byo-yomi
@@ -74,13 +74,25 @@ npm run test:clock
 
 `test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
 Spieler, Matchmaking, Chat und Resign. `test:live` prüft zusätzlich eine
-vollständige Gastpartie mit serverseitiger Wertung.
+vollständige Gastpartie mit serverseitiger Wertung und weist nach, dass eine
+Gast-Sitzung nicht als der andere Spieler handeln kann.
 `test:clock` erzwingt kontrolliert einen Zeitablauf und prüft das serverseitige
 Ergebnis.
 
 ## Datenbank und Migrationen
 
 `npm run db:migrate` führt alle noch nicht angewendeten Dateien aus `db/migrations/` in Reihenfolge und jeweils in einer Transaktion aus. Die Tabelle `schema_migrations` merkt sich den Stand. `db/schema.sql` bleibt die lesbare, idempotente Darstellung des aktuellen Gesamtschemas.
+
+Migration `007_guest_sessions.sql` führt sichere, serverseitige Gast-Sitzungen
+ein. Frühere, ausschließlich im Browser erzeugte Gast-IDs werden bewusst nicht
+als Berechtigungsnachweis übernommen. Nach dem Rollout erhält ein abgemeldeter
+Browser deshalb eine neue Gast-Identität und kann eine alte Gastpartie nicht
+fortsetzen; ein unsicherer Kompatibilitäts-Fallback darf nicht ergänzt werden.
+Beim Rollback darf deshalb nur auf eine Version zurückgegangen werden, die die
+Cookie-basierte Autorisierung weiterhin erzwingt. Ein vollständiges Zurückrollen
+auf die frühere Client-ID-Autorisierung würde die neuen Partien wieder für
+Gast-Impersonation öffnen; falls keine sichere Zwischenversion verfügbar ist,
+muss Gast-Spielbetrieb bis zur Korrektur pausiert werden.
 
 Docker prüfen oder stoppen:
 

@@ -110,6 +110,13 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS guest_sessions (
+  guest_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS auth_rate_limits (
   key_hash TEXT PRIMARY KEY,
   attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
@@ -176,6 +183,7 @@ CREATE INDEX IF NOT EXISTS idx_games_white_player_finished
   WHERE status = 'finished';
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_guest_sessions_expires_at ON guest_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at);
 CREATE INDEX IF NOT EXISTS idx_game_messages_game_id_id ON game_messages(game_id, id);
 
@@ -223,6 +231,7 @@ ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_rating_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guest_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_messages ENABLE ROW LEVEL SECURITY;
 
@@ -230,11 +239,11 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
-      matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM anon;
+      matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
-      matchmaking_queue, user_sessions, auth_rate_limits, game_messages FROM authenticated;
+      matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages FROM authenticated;
   END IF;
 END
 $$;

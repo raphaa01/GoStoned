@@ -1,6 +1,6 @@
 "use client";
 
-import { Radio, Search, Users, X } from "lucide-react";
+import { Radio, RefreshCw, Search, Users, X } from "lucide-react";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
@@ -16,6 +16,7 @@ type MatchmakingPanelProps = {
   error: string | null;
   onFind: () => void;
   onCancel: () => void;
+  onRetry: () => void;
 };
 
 export function MatchmakingPanel({
@@ -28,6 +29,7 @@ export function MatchmakingPanel({
   error,
   onFind,
   onCancel,
+  onRetry,
 }: MatchmakingPanelProps) {
   const waiting = status === "waiting";
   const selectedTime = getTimeControl(timeControl);
@@ -39,10 +41,18 @@ export function MatchmakingPanel({
           <span className="panel-icon"><Radio size={18} /></span>
           <div>
             <h2>{waiting ? "Finding a player" : "Quick match"}</h2>
-            <p>{waiting ? "Keep this page open." : `Ready as ${playerName ?? "player"}.`}</p>
+            <p>
+              {waiting
+                ? "Keep this page open."
+                : !ready && error
+                  ? "Your secure player session is unavailable."
+                  : `Ready as ${playerName ?? "player"}.`}
+            </p>
           </div>
         </div>
-        <Badge tone="green">{waiting ? "Searching" : "Online"}</Badge>
+        <Badge tone={ready ? "green" : "neutral"}>
+          {waiting ? "Searching" : ready ? "Online" : error ? "Unavailable" : "Preparing"}
+        </Badge>
       </div>
 
       <div className="match-settings">
@@ -75,9 +85,22 @@ export function MatchmakingPanel({
           </Button>
         </>
       ) : (
-        <Button className="match-button" disabled={busy || !ready} onClick={onFind} size="lg">
-          {busy ? <Search className="spin" size={20} /> : <Users size={20} />}
-          {!ready ? "Preparing guest…" : busy ? "Joining queue…" : "Find an opponent"}
+        <Button
+          className="match-button"
+          disabled={busy || (!ready && !error)}
+          onClick={ready ? onFind : onRetry}
+          size="lg"
+        >
+          {busy ? (
+            <Search className="spin" size={20} />
+          ) : !ready && error ? (
+            <RefreshCw size={20} />
+          ) : (
+            <Users size={20} />
+          )}
+          {!ready
+            ? error ? "Retry player session" : "Preparing guest…"
+            : busy ? "Joining queue…" : "Find an opponent"}
         </Button>
       )}
       {error ? <p className="match-error">{error}</p> : null}

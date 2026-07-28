@@ -11,8 +11,7 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const body = (await request.json()) as { playerKey?: unknown };
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
+    const playerKey = await resolvePlayerKey(request);
     const { gameId } = await context.params;
     const game = await resignGame(gameId, playerKey);
     return noStoreJson({ ok: true, game });

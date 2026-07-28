@@ -14,6 +14,8 @@ const requiredVariables = [
 const requiredTables = [
   "users",
   "user_sessions",
+  "guest_sessions",
+  "auth_rate_limits",
   "games",
   "moves",
   "matchmaking_queue",
