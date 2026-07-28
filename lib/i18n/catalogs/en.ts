@@ -98,6 +98,8 @@ export const en = {
     haveAccount: "Already have an account?",
     newToGoStone: "New to GoStone?",
     errors: {
+      invalid_request: "The request could not be read. Please try again.",
+      request_rejected: "This authentication request was blocked. Please try again.",
       invalid_username: "Username must contain 3–20 letters, numbers, or underscores.",
       password_required: "Password is required.",
       password_too_short: "Password must contain at least 8 characters.",
