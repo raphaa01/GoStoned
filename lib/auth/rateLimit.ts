@@ -123,7 +123,7 @@ export const RATE_LIMIT_POLICIES = {
     windowMinutes: 1 / 6,
   },
   resign: { scope: "game-resign", limit: 6, ipLimit: 60, windowMinutes: 1 },
-  publicGameSummary: { scope: "public-game-summary", limit: 60, windowMinutes: 1 },
+  publicGameSummary: { scope: "public-game-summary", limit: 20, windowMinutes: 1 },
   publicStats: { scope: "public-stats", limit: 60, windowMinutes: 1 },
   publicDatabaseHealth: { scope: "public-database-health", limit: 120, windowMinutes: 1 },
   profileRead: { scope: "profile-read", limit: 30, ipLimit: 300, windowMinutes: 1 },
