@@ -17,7 +17,8 @@ import {
 } from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
-import type { GameState, Stone } from "@/lib/game/types";
+import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
+import type { GamePollResponse, GameState, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { GamePanel } from "./GamePanel";
@@ -47,6 +48,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const resultShownForGame = useRef<string | null>(null);
   const latestGameVersion = useRef(-1);
   const latestGameId = useRef<string | null>(null);
+  const lastFullGameResponseAt = useRef(0);
   const gameStatus = useRef<GameState["status"] | null>(null);
   const acceptedGame = useRef<GameState | null>(null);
   const boardStatus = useRef<HTMLDivElement>(null);
@@ -56,6 +58,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (latestGameId.current !== gameId) {
       latestGameId.current = gameId;
       latestGameVersion.current = -1;
+      lastFullGameResponseAt.current = 0;
     }
     if (nextGame.version < latestGameVersion.current) return;
     latestGameVersion.current = nextGame.version;
@@ -79,10 +82,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const refreshGame = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey) return;
-    const response = await fetch(`/api/games/${gameId}`, { cache: "no-store", signal });
-    const data = await readApi<{ game: GameState }>(response);
+    const requestStartedAt = Date.now();
+    const hasCurrentGameCache = latestGameId.current === gameId;
+    const response = await fetch(
+      gamePollUrl(
+        gameId,
+        hasCurrentGameCache ? latestGameVersion.current : -1,
+        hasCurrentGameCache ? lastFullGameResponseAt.current : 0,
+        requestStartedAt,
+      ),
+      { cache: "no-store", signal },
+    );
+    const data = await readApi<GamePollResponse>(response);
     if (signal?.aborted) return;
-    acceptGameState(data.game);
+    const nextGame = gameStateFromPoll(acceptedGame.current, data);
+    if (nextGame) acceptGameState(nextGame);
+    if (
+      "game" in data
+      && data.game.id === gameId
+      && data.game.version >= latestGameVersion.current
+    ) {
+      lastFullGameResponseAt.current = Date.now();
+    }
   }, [acceptGameState, gameId, playerKey]);
 
   const refreshChat = useCallback(async (signal?: AbortSignal) => {

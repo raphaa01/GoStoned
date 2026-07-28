@@ -5,6 +5,7 @@ import {
   confirmScore,
   GameServiceError,
   getGameState,
+  pollGameState,
   resignGame,
   resumePlay,
   submitMove,
@@ -256,6 +257,7 @@ async function withFakeDatabase(
   };
   const previousPool = globalThis.goStonedDbPool;
   globalThis.goStonedDbPool = {
+    query: client.query,
     connect: async () => client,
   } as unknown as Pool;
 
@@ -311,6 +313,154 @@ async function loadState(
   assert.equal(statements.includes("ROLLBACK"), false);
   return state;
 }
+
+test("version-aware polling skips replay only when wall-time transitions are safe", async (t) => {
+  await t.test("matching current-profile play returns a fresh clock without locks or moves", async () => {
+    let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
+    const statements = await withFakeDatabase(
+      { game: gameRow({ version: 7 }), scoring: null },
+      async () => {
+        result = await pollGameState(gameId, blackKey, 7);
+      },
+    );
+    assert.ok(result?.unchanged);
+    assert.equal(result.gameId, gameId);
+    assert.equal(result.version, 7);
+    assert.equal(result.clock.black.phase, "main");
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE")), false);
+    assert.equal(statements.includes("BEGIN"), false);
+    assert.equal(statements.includes("COMMIT"), false);
+    assert.equal(
+      statements.some((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
+      false,
+    );
+  });
+
+  await t.test("a stale or future version receives the fully verified state", async () => {
+    for (const knownVersion of [6, 8]) {
+      let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
+      const statements = await withFakeDatabase(
+        { game: gameRow({ version: 7 }), scoring: null },
+        async () => {
+          result = await pollGameState(gameId, blackKey, knownVersion);
+        },
+      );
+      assert.ok(result && !result.unchanged);
+      assert.equal(result.game.version, 7);
+      assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+      assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), true);
+    }
+  });
+
+  await t.test("matching finished state needs no history query", async () => {
+    let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
+    const statements = await withFakeDatabase(
+      { game: finishedScoredGame({ version: 9 }), scoring: finalizedScoringRow() },
+      async () => {
+        result = await pollGameState(gameId, blackKey, 9);
+      },
+    );
+    assert.ok(result?.unchanged);
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), false);
+  });
+
+  await t.test("matching unexpired scoring reads only its deadline header", async () => {
+    let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
+    const statements = await withFakeDatabase(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1, version: 4 }),
+        scoring: scoringRow(),
+      },
+      async () => {
+        result = await pollGameState(gameId, blackKey, 4);
+      },
+    );
+    assert.ok(result?.unchanged);
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(
+      statements.some((sql) => sql.includes("FROM game_scoring_state scoring")),
+      true,
+    );
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE")), false);
+  });
+
+  await t.test("legacy play falls through because its turn is move-log authoritative", async () => {
+    let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
+    const statements = await withFakeDatabase(
+      {
+        game: gameRow({ rules_profile: "legacy-immediate-area", to_move: null, version: 3 }),
+        scoring: null,
+      },
+      async () => {
+        result = await pollGameState(gameId, blackKey, 3);
+      },
+    );
+    assert.ok(result && !result.unchanged);
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+  });
+
+  await t.test("an outsider is rejected before version or dependent state is exposed", async () => {
+    let rejection: unknown;
+    const statements = await withFakeDatabase(
+      { game: gameRow({ version: 7 }), scoring: null },
+      async () => {
+        try {
+          await pollGameState(gameId, "guest:attacker", 7);
+        } catch (error) {
+          rejection = error;
+        }
+      },
+    );
+    assert.ok(rejection instanceof GameServiceError);
+    assert.equal(rejection.status, 403);
+    assert.equal(rejection.code, "not_participant");
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), false);
+    assert.equal(statements.includes("BEGIN"), false);
+    assert.equal(statements.includes("ROLLBACK"), false);
+  });
+
+  await t.test("timeout boundary falls through and validates history before writing", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({
+          version: 2,
+          main_time_seconds: 0,
+          black_time_remaining_ms: 0,
+          black_periods_remaining: 1,
+          byo_yomi_seconds: 1,
+          turn_started_at: new Date("2000-01-01T00:00:00.000Z"),
+        }),
+        scoring: null,
+        moveRows: [{ ...emptyBoardPassRows()[0], board_hash: "tampered" }],
+      },
+      "move_history_mismatch",
+      () => pollGameState(gameId, blackKey, 2),
+    );
+  });
+
+  await t.test("expired or missing scoring falls through and fails closed", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1, version: 5 }),
+        scoring: scoringRow({ expires_at: new Date("2000-01-01T00:00:00.000Z") }),
+        moveRows: [{ ...emptyBoardPassRows()[0], board_hash: "tampered" }],
+      },
+      "move_history_mismatch",
+      () => pollGameState(gameId, blackKey, 5),
+    );
+    await assertRejectedWithoutWrites(
+      {
+        game: gameRow({ phase: "scoring", to_move: null, scoring_revision: 1, version: 5 }),
+        scoring: null,
+      },
+      "rules_configuration_mismatch",
+      () => pollGameState(gameId, blackKey, 5),
+    );
+  });
+});
 
 test("move history trust boundary derives positions and rejects contradictory evidence", async (t) => {
   await t.test("a non-participant is rejected before the move history is queried", async () => {

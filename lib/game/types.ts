@@ -99,6 +99,20 @@ export type GameClockState = {
   white: PlayerClockState;
 };
 
+export type GamePollHeartbeat = {
+  unchanged: true;
+  gameId: string;
+  version: number;
+  clock: GameClockState;
+};
+
+export type GamePollResponse =
+  | GamePollHeartbeat
+  | {
+      unchanged?: false;
+      game: GameState;
+    };
+
 export type ChineseAreaScore = {
   black: number;
   white: number;
