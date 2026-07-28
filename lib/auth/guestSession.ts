@@ -49,6 +49,19 @@ export async function createGuestSession(): Promise<{
 
   const guestId = await withTransaction(async (client) => {
     await client.query("DELETE FROM guest_sessions WHERE expires_at <= NOW()");
+    await client.query(
+      `WITH stale AS (
+         SELECT key_hash
+           FROM auth_rate_limits
+          WHERE updated_at < NOW() - INTERVAL '48 hours'
+          ORDER BY updated_at
+          LIMIT 200
+          FOR UPDATE SKIP LOCKED
+       )
+       DELETE FROM auth_rate_limits AS rate_limit
+       USING stale
+       WHERE rate_limit.key_hash = stale.key_hash`,
+    );
     const result = await client.query<GuestSessionRow>(
       `INSERT INTO guest_sessions (token_hash, expires_at)
        VALUES ($1, NOW() + INTERVAL '30 days')

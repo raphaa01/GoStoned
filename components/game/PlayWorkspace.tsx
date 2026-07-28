@@ -7,6 +7,7 @@ import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
+import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { ActiveGamePanel } from "./ActiveGamePanel";
 import { BoardSizeSelector } from "./BoardSizeSelector";
@@ -66,29 +67,62 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     setQueueStatus(queue.status === "waiting" ? "waiting" : "idle");
   }, [router]);
 
-  const refreshQueue = useCallback(async (enterMatchedGame = false) => {
+  const refreshQueue = useCallback(async (
+    enterMatchedGame = false,
+    signal?: AbortSignal,
+  ) => {
     if (!playerKey) return;
-    const response = await fetch("/api/matchmaking", { cache: "no-store" });
+    const response = await fetch("/api/matchmaking", { cache: "no-store", signal });
     const data = await readApi<{ matchmaking: QueueState }>(response);
+    if (signal?.aborted) return;
     handleQueueState(data.matchmaking, enterMatchedGame);
   }, [handleQueueState, playerKey]);
 
   useEffect(() => {
     if (!playerKey) return;
+    const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      refreshQueue(false).catch(() => undefined);
+      refreshQueue(false, controller.signal).catch(() => undefined);
     }, 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
   }, [playerKey, refreshQueue]);
 
   useEffect(() => {
     if (queueStatus !== "waiting") return;
-    const interval = window.setInterval(() => {
-      refreshQueue(true).catch((requestError: unknown) => {
-        setError(requestError instanceof Error ? requestError.message : "Matchmaking failed.");
-      });
-    }, 1_000);
-    return () => window.clearInterval(interval);
+    let cancelled = false;
+    let timer: number;
+    const guard = createPollingRequestGuard();
+
+    const poll = async () => {
+      let requestError: unknown = null;
+      const signal = guard.start();
+      try {
+        await refreshQueue(true, signal);
+        if (guard.isCurrent(signal)) setError(null);
+      } catch (error) {
+        requestError = error;
+        if (guard.isCurrent(signal)) {
+          setError(error instanceof Error ? error.message : "Matchmaking failed.");
+        }
+      } finally {
+        if (!cancelled && guard.isCurrent(signal)) {
+          timer = window.setTimeout(
+            poll,
+            nextPollDelay(1_000, requestError, document.hidden),
+          );
+        }
+      }
+    };
+
+    timer = window.setTimeout(poll, 1_000);
+    return () => {
+      cancelled = true;
+      guard.cancel();
+      window.clearTimeout(timer);
+    };
   }, [queueStatus, refreshQueue]);
 
   async function findMatch() {

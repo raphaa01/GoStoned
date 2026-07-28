@@ -10,6 +10,8 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - persistenter Gegner-Chat im fokussierten Spielraum
 - serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
 - serverseitig ausgestellte Gast-Sitzungen per HTTP-only Cookie
+- atomare, aktionsbezogene Missbrauchslimits für Authentifizierung, Matchmaking,
+  Spielzüge, Chat und teure Datenbankabfragen
 - Matchmaking für 9×9, 13×13 und 19×19
 - Live-Partien über eine deploybare Polling-API
 - auswählbare Blitz-, Rapid- und Classic-Uhren mit japanischem Byo-yomi
@@ -70,6 +72,7 @@ Wenn `npm run dev` und Docker laufen, testet dieser Befehl automatisch einen vol
 npm run test:auth
 npm run test:live
 npm run test:clock
+npm run test:rate-limit
 ```
 
 `test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
@@ -78,6 +81,10 @@ vollständige Gastpartie mit serverseitiger Wertung und weist nach, dass eine
 Gast-Sitzung nicht als der andere Spieler handeln kann.
 `test:clock` erzwingt kontrolliert einen Zeitablauf und prüft das serverseitige
 Ergebnis.
+`test:rate-limit` startet 100 gleichzeitige Limit-Anfragen und prüft die atomare
+Sperre sowie deren Ablauf. Der Test verändert Limit-Zeilen und verweigert deshalb
+jede nicht-lokale `DATABASE_URL`; er darf niemals gegen Supabase oder Produktion
+ausgeführt werden.
 
 ## Datenbank und Migrationen
 
@@ -93,6 +100,18 @@ Cookie-basierte Autorisierung weiterhin erzwingt. Ein vollständiges Zurückroll
 auf die frühere Client-ID-Autorisierung würde die neuen Partien wieder für
 Gast-Impersonation öffnen; falls keine sichere Zwischenversion verfügbar ist,
 muss Gast-Spielbetrieb bis zur Korrektur pausiert werden.
+
+Mutierende Aktionslimits werden dauerhaft und getrennt nach der serverseitig
+verifizierten Spieler-ID und der von Vercel gesetzten Client-Adresse geführt.
+Hochfrequente Lesezugriffe verwenden bewusst pro Serverinstanz begrenzte
+Actor-/IP-Zähler, damit normales Polling keine zusätzlichen PostgreSQL-Schreiblasten
+erzeugt. Diese zweite Ebene ist ein Anwendungs-Guard und kein Ersatz für
+plattformseitigen DDoS-Schutz. Gespeichert werden nur versionierte SHA-256-Schlüssel,
+keine IP-Adressen, Cookies oder Spieler-IDs im Klartext. Polling-Anfragen laufen
+einzeln, respektieren `Retry-After`, brechen veraltete Anfragen beim Verlassen ab
+und werden in ausgeblendeten Tabs verlangsamt. Veraltete persistente Limit-Zeilen
+werden bei der Erstellung neuer Gast-Sitzungen in kleinen, sperrarmen Batches
+entfernt.
 
 Docker prüfen oder stoppen:
 
