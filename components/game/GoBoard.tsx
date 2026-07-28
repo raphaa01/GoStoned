@@ -61,6 +61,7 @@ export function GoBoard({
   const instructionsId = useId();
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const boardRef = useRef<HTMLDivElement>(null);
+  const precisionToolbarRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointerTypeRef = useRef<PrecisionPlacementActivation["pointerType"]>("keyboard");
   const touchPointersRef = useRef(new Set<number>());
@@ -127,6 +128,13 @@ export function GoBoard({
       left: board.clientWidth * ratio(precisionPosition.x) - viewport.clientWidth / 2,
       top: board.clientHeight * ratio(precisionPosition.y) - viewport.clientHeight / 2,
     });
+    if (pointerTypeRef.current !== "touch") return;
+    const previewIndex = precisionPosition.y * boardSize + precisionPosition.x;
+    const focusPreview = window.requestAnimationFrame(() => {
+      precisionToolbarRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+      buttonRefs.current[previewIndex]?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusPreview);
   }, [boardSize, precisionPosition]);
 
   const cancelPrecision = useCallback(() => {
@@ -295,7 +303,7 @@ export function GoBoard({
       }}
     >
       {precisionPosition ? (
-        <div className="precision-placement-toolbar">
+        <div className="precision-placement-toolbar" ref={precisionToolbarRef}>
           <p aria-atomic="true" aria-live="polite" role="status">
             {formatBoardLabel(copy.precisionPlacementStatus, {
               coordinate: goCoordinate(boardSize, precisionPosition.x, precisionPosition.y),
