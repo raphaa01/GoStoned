@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { closePool, getPool, query } from "../lib/db";
-import { getDatabaseUrl, isLocalDatabase } from "../lib/env";
+import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -14,7 +14,7 @@ type GameCountRow = {
 };
 
 const databaseUrl = getDatabaseUrl();
-if (!isLocalDatabase(databaseUrl)) {
+if (!isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("Matchmaking race smoke tests may only mutate a local PostgreSQL database.");
 }
 

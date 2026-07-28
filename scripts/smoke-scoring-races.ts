@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
-import { isLocalDatabase } from "../lib/env";
+import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
@@ -12,7 +12,7 @@ const smokeHost = new URL(baseUrl).hostname;
 if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
   throw new Error("The scoring race smoke only runs against an isolated local server.");
 }
-if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("The scoring race smoke requires an isolated local DATABASE_URL.");
 }
 

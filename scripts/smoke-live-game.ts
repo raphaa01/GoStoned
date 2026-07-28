@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
-import { isLocalDatabase } from "../lib/env";
+import { isUnambiguousLocalDatabase } from "../lib/env";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
@@ -11,7 +11,7 @@ const smokeHost = new URL(baseUrl).hostname;
 if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
   throw new Error("The live-game smoke test only runs against an isolated local server.");
 }
-if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("The live-game smoke test requires an isolated local DATABASE_URL.");
 }
 
