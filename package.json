@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "mvp:check": "tsx scripts/check-mvp.ts",
-    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts",
+    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",

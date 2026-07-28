@@ -35,7 +35,11 @@ export async function POST(request: NextRequest) {
     }
     console.error("Guest session creation failed:", error);
     return noStoreJson(
-      { ok: false, error: "Could not prepare a secure guest session." },
+      {
+        ok: false,
+        error: "Could not prepare a secure guest session.",
+        code: "guest_session_failed",
+      },
       { status: 500 },
     );
   }

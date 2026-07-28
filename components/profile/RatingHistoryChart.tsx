@@ -1,3 +1,6 @@
+"use client";
+
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { RatingHistoryEntry } from "@/lib/stats/statsService";
 
 type ChartPoint = {
@@ -6,8 +9,8 @@ type ChartPoint = {
   label: string;
 };
 
-function formatShortDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
+function formatShortDate(value: string, locale: "en" | "de") {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
   }).format(new Date(value));
@@ -20,12 +23,14 @@ export function RatingHistoryChart({
   history: RatingHistoryEntry[];
   currentRating: number;
 }) {
+  const { dictionary, locale } = useI18n();
+  const copy = dictionary.profile;
   if (history.length === 0) {
     return (
       <div className="rating-chart-empty">
         <span>1200</span>
-        <strong>Your timeline starts after your next completed game.</strong>
-        <p>Every result will add one verified rating point here.</p>
+        <strong>{copy.chartEmptyTitle}</strong>
+        <p>{copy.chartEmptyDescription}</p>
       </div>
     );
   }
@@ -35,12 +40,12 @@ export function RatingHistoryChart({
     {
       rating: first.ratingBefore,
       recordedAt: first.recordedAt,
-      label: "Starting rating",
+      label: copy.startingRating,
     },
     ...history.map((entry) => ({
       rating: entry.ratingAfter,
       recordedAt: entry.recordedAt,
-      label: entry.result === "win" ? "Win" : entry.result === "loss" ? "Loss" : "Draw",
+      label: entry.result === "win" ? copy.win : entry.result === "loss" ? copy.loss : copy.draw,
     })),
   ];
   const ratings = points.map((point) => point.rating);
@@ -72,7 +77,7 @@ export function RatingHistoryChart({
   return (
     <div className="rating-chart">
       <svg
-        aria-label={`Rating development from ${first.ratingBefore} to ${currentRating}`}
+        aria-label={`${copy.ratingDevelopment} ${first.ratingBefore} ${copy.to} ${currentRating}`}
         role="img"
         viewBox="0 0 800 250"
       >
@@ -97,7 +102,7 @@ export function RatingHistoryChart({
                 key={`${point.recordedAt}-${index}`}
                 r={index === coordinates.length - 1 ? 5 : 3}
               >
-                <title>{`${point.label}: ${point.rating} · ${formatShortDate(point.recordedAt)}`}</title>
+                <title>{`${point.label}: ${point.rating} · ${formatShortDate(point.recordedAt, locale)}`}</title>
               </circle>
             ))
           : null}
@@ -105,10 +110,10 @@ export function RatingHistoryChart({
           <circle className="rating-chart__point rating-chart__point--last" cx={lastPoint.x} cy={lastPoint.y} r="5" />
         ) : null}
         <text className="rating-chart__date" x={chartLeft} y="239">
-          {formatShortDate(points[0].recordedAt)}
+          {formatShortDate(points[0].recordedAt, locale)}
         </text>
         <text className="rating-chart__date" textAnchor="end" x={chartRight} y="239">
-          {formatShortDate(points.at(-1)!.recordedAt)}
+          {formatShortDate(points.at(-1)!.recordedAt, locale)}
         </text>
       </svg>
     </div>

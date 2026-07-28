@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     if (error instanceof RateLimitError) return apiError(error);
     console.error("Session lookup failed:", error);
-    return noStoreJson({ ok: false, error: "Could not read the session." }, { status: 500 });
+    return noStoreJson(
+      { ok: false, error: "Could not read the session.", code: "session_failed" },
+      { status: 500 },
+    );
   }
 }

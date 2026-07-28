@@ -23,6 +23,9 @@ export async function POST(request: NextRequest) {
     return clearedSessionResponse();
   } catch (error) {
     console.error("Logout failed:", error);
-    return noStoreJson({ ok: false, error: "Could not log out." }, { status: 500 });
+    return noStoreJson(
+      { ok: false, error: "Could not log out.", code: "logout_failed" },
+      { status: 500 },
+    );
   }
 }

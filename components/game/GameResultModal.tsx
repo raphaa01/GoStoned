@@ -2,8 +2,10 @@
 
 import { Eye, Home, Minus, RotateCcw, Trophy, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { getTimeControl } from "@/lib/game/timeControls";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import type { Dictionary } from "@/lib/i18n/dictionary";
 import type { GameState } from "@/lib/game/types";
+import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 
 type GameResultModalProps = {
   game: GameState;
@@ -14,14 +16,14 @@ type GameResultModalProps = {
   onViewBoard: () => void;
 };
 
-function resultDescription(result: string | null) {
-  if (!result) return "The game has ended.";
+function resultDescription(result: string | null, copy: Dictionary["game"]) {
+  if (!result) return copy.ended;
   const [winner, detail] = result.split("+");
   if (winner !== "B" && winner !== "W") return result;
-  const color = winner === "B" ? "Black" : "White";
-  if (detail === "R") return `${color} wins by resignation`;
-  if (detail === "T") return `${color} wins on time`;
-  return `${color} wins by ${detail} points`;
+  const color = winner === "B" ? copy.black : copy.white;
+  if (detail === "R") return `${color} ${copy.winsResignation}`;
+  if (detail === "T") return `${color} ${copy.winsTime}`;
+  return `${color} ${copy.winsPoints} ${detail} ${copy.points}`;
 }
 
 export function GameResultModal({
@@ -32,6 +34,9 @@ export function GameResultModal({
   onPlayAgain,
   onViewBoard,
 }: GameResultModalProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
+  const rulesSummary = localizedRulesSummary(game, dictionary);
   const dialog = useRef<HTMLElement>(null);
   const playAgainButton = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -109,7 +114,7 @@ export function GameResultModal({
 
   const draw = !game.winnerKey;
   const won = game.winnerKey === playerKey;
-  const outcome = draw ? "Draw" : won ? "Victory" : "Defeat";
+  const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
   const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
   const deadCounts = (game.scoring?.deadStones ?? []).reduce(
     (counts, { x, y }) => {
@@ -133,11 +138,11 @@ export function GameResultModal({
         <div className="result-modal-header">
           <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
           <div>
-            <span className="result-modal-kicker">Game complete</span>
+            <span className="result-modal-kicker">{copy.complete}</span>
             <h2 id="game-result-title">{outcome}</h2>
-            <p>{resultDescription(game.result)}</p>
+            <p>{resultDescription(game.result, copy)}</p>
           </div>
-          <strong className="result-code">{game.result ?? "Draw"}</strong>
+          <strong className="result-code">{game.result ?? copy.draw}</strong>
         </div>
 
         <div className="result-player-list">
@@ -145,45 +150,45 @@ export function GameResultModal({
             <span className="player-stone player-stone--black" />
             <span>
               <strong>{game.blackPlayerName}</strong>
-              <small>{game.blackPlayerKey === playerKey ? "You · Black" : "Black"}</small>
+              <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
             </span>
-            {game.winnerKey === game.blackPlayerKey ? <b>Winner</b> : null}
+            {game.winnerKey === game.blackPlayerKey ? <b>{copy.winner}</b> : null}
           </div>
           <div className={game.winnerKey === game.whitePlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--white" />
             <span>
               <strong>{game.whitePlayerName}</strong>
-              <small>{game.whitePlayerKey === playerKey ? "You · White" : "White"}</small>
+              <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
             </span>
-            {game.winnerKey === game.whitePlayerKey ? <b>Winner</b> : null}
+            {game.winnerKey === game.whitePlayerKey ? <b>{copy.winner}</b> : null}
           </div>
         </div>
 
         <div className="result-facts">
-          <span><small>Board</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
-          <span><small>Moves</small><strong>{game.moveCount}</strong></span>
-          <span><small>Clock</small><strong>{getTimeControl(game.timeControl).name}</strong></span>
+          <span><small>{copy.board}</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
+          <span><small>{copy.moves}</small><strong>{game.moveCount}</strong></span>
+          <span><small>{copy.clock}</small><strong>{dictionary.timeControls[game.timeControl].name}</strong></span>
         </div>
 
         {game.finishReason === "score" && game.scoring ? (
-          <section className="result-score-details" aria-label="Agreed scoring details">
+          <section className="result-score-details" aria-label={copy.agreedDetails}>
             <div>
-              <span><small>Black total</small><strong>{game.scoring.preview.black}</strong></span>
-              <span><small>White total</small><strong>{game.scoring.preview.white}</strong></span>
+              <span><small>{copy.blackTotal}</small><strong>{game.scoring.preview.black}</strong></span>
+              <span><small>{copy.whiteTotal}</small><strong>{game.scoring.preview.white}</strong></span>
             </div>
             <div>
               <span>
-                <small>Black stones · territory</small>
+                <small>{copy.blackStonesTerritory}</small>
                 <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
               </span>
               <span>
-                <small>White stones · territory</small>
+                <small>{copy.whiteStonesTerritory}</small>
                 <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
               </span>
             </div>
             <p>
-              Chinese 2002 · GoStone v1 · area · {game.komi} komi · neutral {game.scoring.preview.neutralPoints}, shared equally
-              {" · "}dead: {deadCounts.black} black, {deadCounts.white} white
+              {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
+              {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
             </p>
           </section>
         ) : null}
@@ -195,11 +200,11 @@ export function GameResultModal({
           type="button"
         >
           <RotateCcw size={18} />
-          Find another game
+          {copy.findAnother}
         </button>
         <div className="result-secondary-actions">
-          <button onClick={onViewBoard} type="button"><Eye size={16} /> View board</button>
-          <button onClick={onHome} type="button"><Home size={16} /> Home</button>
+          <button onClick={onViewBoard} type="button"><Eye size={16} /> {copy.viewBoard}</button>
+          <button onClick={onHome} type="button"><Home size={16} /> {copy.home}</button>
         </div>
       </section>
     </div>

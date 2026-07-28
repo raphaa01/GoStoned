@@ -1,3 +1,6 @@
+"use client";
+
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize } from "@/lib/game/types";
 
 type BoardSizeSelectorProps = {
@@ -6,15 +9,15 @@ type BoardSizeSelectorProps = {
   disabled?: boolean;
 };
 
-const sizes: Array<{ value: BoardSize; label: string; pace: string }> = [
-  { value: 9, label: "9×9", pace: "Quick" },
-  { value: 13, label: "13×13", pace: "Balanced" },
-  { value: 19, label: "19×19", pace: "Classic" },
-];
-
 export function BoardSizeSelector({ value, onChange, disabled = false }: BoardSizeSelectorProps) {
+  const { dictionary } = useI18n();
+  const sizes: Array<{ value: BoardSize; label: string; pace: string }> = [
+    { value: 9, label: "9×9", pace: dictionary.play.boardQuick },
+    { value: 13, label: "13×13", pace: dictionary.play.boardBalanced },
+    { value: 19, label: "19×19", pace: dictionary.play.boardClassic },
+  ];
   return (
-    <div className="size-selector" aria-label="Choose board size">
+    <div className="size-selector" aria-label={dictionary.play.boardSelectorLabel}>
       {sizes.map((size) => (
         <button
           className={value === size.value ? "is-selected" : ""}

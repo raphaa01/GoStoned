@@ -1,7 +1,7 @@
 "use client";
 
 import { Radio, RefreshCw, Search, Users, X } from "lucide-react";
-import { getTimeControl } from "@/lib/game/timeControls";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -31,8 +31,10 @@ export function MatchmakingPanel({
   onCancel,
   onRetry,
 }: MatchmakingPanelProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.play;
   const waiting = status === "waiting";
-  const selectedTime = getTimeControl(timeControl);
+  const selectedTime = dictionary.timeControls[timeControl];
 
   return (
     <section className="matchmaking-panel" aria-live="polite">
@@ -40,33 +42,33 @@ export function MatchmakingPanel({
         <div>
           <span className="panel-icon"><Radio size={18} /></span>
           <div>
-            <h2>{waiting ? "Finding a player" : "Quick match"}</h2>
+            <h2>{waiting ? copy.findingPlayer : copy.quickMatch}</h2>
             <p>
               {waiting
-                ? "Keep this page open."
+                ? copy.keepOpen
                 : !ready && error
-                  ? "Your secure player session is unavailable."
-                  : `Ready as ${playerName ?? "player"}.`}
+                  ? copy.secureSessionUnavailable
+                  : `${copy.readyAs} ${playerName ?? copy.player}.`}
             </p>
           </div>
         </div>
         <Badge tone={ready ? "green" : "neutral"}>
-          {waiting ? "Searching" : ready ? "Online" : error ? "Unavailable" : "Preparing"}
+          {waiting ? copy.searching : ready ? copy.online : error ? copy.unavailable : copy.preparing}
         </Badge>
       </div>
 
       <div className="match-settings">
         <div>
-          <span>Board</span>
+          <span>{copy.board}</span>
           <strong>{boardSize}×{boardSize}</strong>
         </div>
         <div>
-          <span>Clock</span>
+          <span>{copy.clock}</span>
           <strong>{selectedTime.name}</strong>
         </div>
         <div>
-          <span>Rules</span>
-          <strong>Chinese</strong>
+          <span>{copy.rules}</span>
+          <strong>{copy.chinese}</strong>
         </div>
       </div>
 
@@ -75,13 +77,13 @@ export function MatchmakingPanel({
           <div className="queue-indicator">
             <Search className="spin" size={20} />
             <span>
-              Looking for another {boardSize}×{boardSize}{" "}
-              {selectedTime.name.toLowerCase()} player…
+              {copy.lookingFor} {boardSize}×{boardSize}{" "}
+              {selectedTime.name.toLocaleLowerCase()} {copy.playerSuffix}
             </span>
           </div>
           <Button className="match-button" disabled={busy} onClick={onCancel} size="lg" variant="secondary">
             <X size={20} />
-            Cancel search
+            {copy.cancelSearch}
           </Button>
         </>
       ) : (
@@ -99,13 +101,13 @@ export function MatchmakingPanel({
             <Users size={20} />
           )}
           {!ready
-            ? error ? "Retry player session" : "Preparing guest…"
-            : busy ? "Joining queue…" : "Find an opponent"}
+            ? error ? copy.retrySession : copy.preparingGuest
+            : busy ? copy.joiningQueue : copy.findOpponent}
         </Button>
       )}
       {error ? <p className="match-error">{error}</p> : null}
       <p className="panel-note">
-        Both players must choose the same board size and time control.
+        {copy.matchingNote}
       </p>
     </section>
   );

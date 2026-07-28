@@ -1,7 +1,7 @@
 "use client";
 
 import { LogOut, Play, Swords } from "lucide-react";
-import { getTimeControl } from "@/lib/game/timeControls";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -23,33 +23,35 @@ export function ActiveGamePanel({
   onLeave,
   onResume,
 }: ActiveGamePanelProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.play;
   return (
     <section className="active-game-panel" aria-live="polite">
       <div className="panel-heading">
         <div>
           <span className="panel-icon"><Swords size={18} /></span>
           <div>
-            <h2>Game in progress</h2>
-            <p>Choose whether you want to continue or leave it.</p>
+            <h2>{copy.activeTitle}</h2>
+            <p>{copy.activeDescription}</p>
           </div>
         </div>
-        <Badge tone="green">Active</Badge>
+        <Badge tone="green">{copy.active}</Badge>
       </div>
 
       <div className="active-game-summary">
-        <span>Board</span>
-        <strong>{boardSize}×{boardSize} · {getTimeControl(timeControl).name}</strong>
-        <p>Leaving an active game counts as a resignation.</p>
+        <span>{copy.board}</span>
+        <strong>{boardSize}×{boardSize} · {dictionary.timeControls[timeControl].name}</strong>
+        <p>{copy.leavingResigns}</p>
       </div>
 
       <div className="active-game-actions">
         <Button disabled={busy} onClick={onResume} size="lg">
           <Play size={19} />
-          Continue game
+          {copy.continueGame}
         </Button>
         <Button disabled={busy} onClick={onLeave} size="lg" variant="secondary">
           <LogOut size={19} />
-          Leave game
+          {copy.leaveGame}
         </Button>
       </div>
       {error ? <p className="match-error">{error}</p> : null}

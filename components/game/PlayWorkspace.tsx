@@ -4,11 +4,13 @@ import { ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ActiveGamePanel } from "./ActiveGamePanel";
 import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
@@ -23,6 +25,8 @@ type QueueState = {
 
 export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) {
   const router = useRouter();
+  const { dictionary, href } = useI18n();
+  const copy = dictionary.play;
   const {
     playerKey,
     playerName,
@@ -52,7 +56,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       queue.timeControl
     ) {
       if (enterMatchedGame) {
-        router.replace(`/game/${queue.gameId}`);
+        router.replace(href(`/game/${queue.gameId}`));
       } else {
         setActiveGame({
           gameId: queue.gameId,
@@ -65,7 +69,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     }
     setActiveGame(null);
     setQueueStatus(queue.status === "waiting" ? "waiting" : "idle");
-  }, [router]);
+  }, [href, router]);
 
   const refreshQueue = useCallback(async (
     enterMatchedGame = false,
@@ -105,7 +109,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       } catch (error) {
         requestError = error;
         if (guard.isCurrent(signal)) {
-          setError(error instanceof Error ? error.message : "Matchmaking failed.");
+          setError(localizedApiError(dictionary, error, copy.matchmakingFailed));
         }
       } finally {
         if (!cancelled && guard.isCurrent(signal)) {
@@ -123,7 +127,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       guard.cancel();
       window.clearTimeout(timer);
     };
-  }, [queueStatus, refreshQueue]);
+  }, [copy.matchmakingFailed, dictionary, queueStatus, refreshQueue]);
 
   async function findMatch() {
     if (!playerKey) return;
@@ -138,7 +142,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       const data = await readApi<{ matchmaking: QueueState }>(response);
       handleQueueState(data.matchmaking, true);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not join the queue.");
+      setError(localizedApiError(dictionary, requestError, copy.joinFailed));
     } finally {
       setBusy(false);
     }
@@ -155,7 +159,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       );
       setQueueStatus("idle");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not cancel.");
+      setError(localizedApiError(dictionary, requestError, copy.cancelFailed));
     } finally {
       setBusy(false);
     }
@@ -171,7 +175,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       setQueueStatus("idle");
       setConfirmLeave(false);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not leave the game.");
+      setError(localizedApiError(dictionary, requestError, copy.leaveFailed));
     } finally {
       setBusy(false);
     }
@@ -180,20 +184,17 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   return (
     <div className="match-lobby">
       <section className="match-lobby-copy">
-        <span className="section-kicker"><Sparkles size={14} /> Live matchmaking</span>
-        <h1>Choose your board.</h1>
-        <p>
-          You enter a distraction-free game room as soon as another player joins.
-          Every move and message is saved on the server.
-        </p>
+        <span className="section-kicker"><Sparkles size={14} /> {copy.kicker}</span>
+        <h1>{copy.title}</h1>
+        <p>{copy.description}</p>
         <div className="lobby-trust">
-          <span><ShieldCheck size={17} /> Server-validated rules</span>
+          <span><ShieldCheck size={17} /> {copy.serverValidated}</span>
           <span>
             {loading
-              ? "Preparing your player…"
+              ? copy.preparingPlayer
               : identityError
-                ? "Player session unavailable"
-                : `Playing as ${playerName}`}
+                ? copy.sessionUnavailable
+                : `${copy.playingAs} ${playerName}`}
           </span>
         </div>
       </section>
@@ -206,13 +207,13 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             busy={busy}
             error={error}
             onLeave={() => setConfirmLeave(true)}
-            onResume={() => router.push(`/game/${activeGame.gameId}`)}
+            onResume={() => router.push(href(`/game/${activeGame.gameId}`))}
           />
         ) : (
           <>
             <div className="lobby-options">
               <div>
-                <span>Board size</span>
+                <span>{copy.boardSize}</span>
                 <BoardSizeSelector
                   disabled={queueStatus === "waiting"}
                   onChange={setBoardSize}
@@ -220,7 +221,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
                 />
               </div>
               <div>
-                <span>Time control</span>
+                <span>{copy.timeControl}</span>
                 <TimeControlSelector
                   disabled={queueStatus === "waiting"}
                   onChange={setTimeControl}
@@ -245,12 +246,12 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       </section>
       <ConfirmModal
         busy={busy}
-        confirmLabel="Leave game"
-        description="Your opponent will win and the result will be saved as a resignation."
+        confirmLabel={copy.leaveGame}
+        description={copy.leaveDescription}
         onCancel={() => setConfirmLeave(false)}
         onConfirm={leaveActiveGame}
         open={confirmLeave}
-        title="Leave this game?"
+        title={copy.leaveTitle}
       />
     </div>
   );

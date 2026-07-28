@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { GameClockState, PlayerClockState, Stone } from "@/lib/game/types";
 
 type PlayerClockProps = {
@@ -49,6 +50,8 @@ function tickClock(
 }
 
 export function PlayerClock({ clock, color, running }: PlayerClockProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
   const [localNow, setLocalNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -65,7 +68,7 @@ export function PlayerClock({ clock, color, running }: PlayerClockProps) {
 
   return (
     <div
-      aria-label={`${color} clock ${formatTime(visible.displayTimeMs)}`}
+      aria-label={`${color === "black" ? copy.black : copy.white} ${copy.clockLabel} ${formatTime(visible.displayTimeMs)}`}
       className={`player-clock ${running ? "is-running" : ""} ${
         visible.phase === "byo-yomi" ? "is-byo-yomi" : ""
       }`}
@@ -73,9 +76,9 @@ export function PlayerClock({ clock, color, running }: PlayerClockProps) {
       <strong>{formatTime(visible.displayTimeMs)}</strong>
       <span>
         {visible.phase === "main"
-          ? "Main time"
+          ? copy.mainTime
           : `Byo-yomi · ${visible.periodsRemaining} ${
-              visible.periodsRemaining === 1 ? "period" : "periods"
+              visible.periodsRemaining === 1 ? copy.period : copy.periods
             }`}
       </span>
     </div>

@@ -2,9 +2,10 @@
 
 import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
 import { useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
-import { getTimeControl } from "@/lib/game/timeControls";
 import type { GameState, Position, Stone } from "@/lib/game/types";
+import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { PlayerClock } from "./PlayerClock";
 
 function deadStoneCounts(game: GameState) {
@@ -39,6 +40,9 @@ export function GamePanel({
   onResumePlay,
   onLeave,
 }: GamePanelProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
+  const rulesSummary = localizedRulesSummary(game, dictionary);
   const [selectedGroupKey, setSelectedGroupKey] = useState("");
   const yourColor: Stone = game.blackPlayerKey === playerKey ? "black" : "white";
   const yourTurn = game.status === "active" && game.turn === yourColor;
@@ -55,15 +59,15 @@ export function GamePanel({
   const resultText =
     game.status === "finished"
       ? game.winnerKey === playerKey
-        ? `You won · ${game.result}`
+        ? `${copy.youWon} · ${game.result}`
         : game.winnerKey
-          ? `You lost · ${game.result}`
-          : `Draw · ${game.result}`
+          ? `${copy.youLost} · ${game.result}`
+          : `${copy.draw} · ${game.result}`
         : activeScoring
-        ? "Agree on the final position"
+        ? copy.agreeFinalPosition
         : yourTurn
-        ? "Your turn"
-        : "Opponent's turn";
+        ? copy.yourTurn
+        : copy.opponentTurn;
 
   return (
     <aside className="game-panel" aria-live="polite">
@@ -71,7 +75,7 @@ export function GamePanel({
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
-          <span>{yourColor === "white" ? "You · White" : "Opponent · White"}</span>
+          <span>{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
         </div>
         <PlayerClock
           clock={game.clock}
@@ -82,8 +86,8 @@ export function GamePanel({
 
       <div className="game-meta-strip">
         <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
-        <span>{getTimeControl(game.timeControl).name}</span>
-        <span>{game.phase === "scoring" ? "Scoring" : `Move ${game.moveCount}`}</span>
+        <span>{dictionary.timeControls[game.timeControl].name}</span>
+        <span>{game.phase === "scoring" ? copy.scoring : `${copy.move} ${game.moveCount}`}</span>
       </div>
 
       <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
@@ -92,14 +96,14 @@ export function GamePanel({
           <strong>{resultText}</strong>
           <span>
             {game.status === "finished"
-              ? "Result and ratings saved."
+              ? copy.resultSaved
               : activeScoring
-                ? "Mark dead groups, then both players confirm the same position."
+                ? copy.scoringInstructions
               : game.lastResume?.claim === "deadline"
-                ? "The scoring window expired, so play resumed without a result."
+                ? copy.scoringExpired
               : game.lastResume
-                ? "Play resumed to resolve a marked-group dispute on the board."
-              : "Moves are checked and saved by the server."}
+                ? copy.disputeResumed
+              : copy.movesVerified}
           </span>
         </div>
       </div>
@@ -108,7 +112,7 @@ export function GamePanel({
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
-          <span>{yourColor === "black" ? "You · Black" : "Opponent · Black"}</span>
+          <span>{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
         </div>
         <PlayerClock
           clock={game.clock}
@@ -119,104 +123,104 @@ export function GamePanel({
 
       {activeScoring ? (
         <div className="scoring-controls">
-          <div className="scoring-preview" aria-label="Provisional Chinese area score">
-            <span><small>Black</small><strong>{activeScoring.preview.black}</strong></span>
-            <span><small>White</small><strong>{activeScoring.preview.white}</strong></span>
+          <div className="scoring-preview" aria-label={copy.provisionalScore}>
+            <span><small>{copy.black}</small><strong>{activeScoring.preview.black}</strong></span>
+            <span><small>{copy.white}</small><strong>{activeScoring.preview.white}</strong></span>
           </div>
           <span className="scoring-note">
-            Chinese 2002 · GoStone v1 · area · {game.komi} komi · neutral points shared
+            {rulesSummary} · {copy.neutralShared}
             <br />
-            Respond by{" "}
+            {copy.respondBy}{" "}
             <time dateTime={activeScoring.expiresAt}>
               {new Date(activeScoring.expiresAt).toISOString().slice(11, 16)} UTC
             </time>
-            ; otherwise play resumes automatically.
+            ; {copy.autoResume}
           </span>
           <p>
-            Your confirmation: <strong>{youConfirmed ? "confirmed" : "waiting"}</strong>
+            {copy.yourConfirmation}: <strong>{youConfirmed ? copy.confirmed : copy.waiting}</strong>
             <br />
-            Opponent: <strong>{(yourColor === "black" ? activeScoring.whiteConfirmed : activeScoring.blackConfirmed) ? "confirmed" : "waiting"}</strong>
+            {copy.opponent}: <strong>{(yourColor === "black" ? activeScoring.whiteConfirmed : activeScoring.blackConfirmed) ? copy.confirmed : copy.waiting}</strong>
           </p>
           <details className="scoring-breakdown">
-            <summary>Score breakdown</summary>
+            <summary>{copy.scoreBreakdown}</summary>
             <span>
-              Black: {activeScoring.preview.blackStones} stones + {activeScoring.preview.blackTerritory} territory
+              {copy.black}: {activeScoring.preview.blackStones} {copy.stones} + {activeScoring.preview.blackTerritory} {copy.territory}
             </span>
             <span>
-              White: {activeScoring.preview.whiteStones} stones + {activeScoring.preview.whiteTerritory} territory + {game.komi} komi
+              {copy.white}: {activeScoring.preview.whiteStones} {copy.stones} + {activeScoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
             </span>
             <span>
-              Neutral: {activeScoring.preview.neutralPoints}, shared equally · Dead: {deadCounts.black} black, {deadCounts.white} white
+              {copy.neutral}: {activeScoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
             </span>
           </details>
           <label className="scoring-dispute-picker">
-            <span>Marked group to dispute</span>
+            <span>{copy.markedGroup}</span>
             <select
               disabled={busy || disputeGroups.length === 0}
               onChange={(event) => setSelectedGroupKey(event.target.value)}
               value={selectedGroup?.key ?? ""}
             >
-              {disputeGroups.length === 0 ? <option value="">Mark a group first</option> : null}
+              {disputeGroups.length === 0 ? <option value="">{copy.markGroupFirst}</option> : null}
               {disputeGroups.map((group) => (
                 <option key={group.key} value={group.key}>
-                  {group.color === "black" ? "Black" : "White"} group at column {group.representative.x + 1}, row {group.representative.y + 1} · {group.stones.length} {group.stones.length === 1 ? "stone" : "stones"}
+                  {group.color === "black" ? copy.black : copy.white} {copy.groupAt} {group.representative.x + 1}, {copy.row} {group.representative.y + 1} · {group.stones.length} {group.stones.length === 1 ? copy.stone : copy.stones}
                 </option>
               ))}
             </select>
           </label>
           <div className="game-actions scoring-actions">
             <button disabled={busy || Boolean(youConfirmed)} onClick={onConfirmScore} type="button">
-              <Check size={18} /> {youConfirmed ? "Confirmed" : "Confirm score"}
+              <Check size={18} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
             </button>
             <button
               disabled={busy || !selectedGroup}
               onClick={() => selectedGroup && onResumePlay("dead", selectedGroup.representative)}
               type="button"
             >
-              <Play size={18} /> Prove marked group dead
+              <Play size={18} /> {copy.proveDead}
             </button>
             <button
               disabled={busy || !selectedGroup}
               onClick={() => selectedGroup && onResumePlay("alive", selectedGroup.representative)}
               type="button"
             >
-              <Play size={18} /> Challenge a dead mark
+              <Play size={18} /> {copy.challengeDead}
             </button>
             <button disabled={busy} onClick={onResign} type="button">
-              <Flag size={18} /> Resign
+              <Flag size={18} /> {copy.resign}
             </button>
           </div>
         </div>
       ) : game.status === "active" ? (
         <div className="game-actions">
           <button disabled={!yourTurn || busy} onClick={onPass} type="button">
-            <SkipForward size={18} /> Pass
+            <SkipForward size={18} /> {copy.pass}
           </button>
           <button disabled={busy} onClick={onResign} type="button">
-            <Flag size={18} /> Resign
+            <Flag size={18} /> {copy.resign}
           </button>
         </div>
       ) : (
         <>
           {game.finishReason === "score" && scoring?.finalizedAt ? (
             <div className="final-score-summary">
-              <strong>Agreed Chinese area score</strong>
-              <span>Black {scoring.preview.black} · White {scoring.preview.white}</span>
+              <strong>{copy.agreedScore}</strong>
+              <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
               <span>
-                {scoring.deadStones.length} dead {scoring.deadStones.length === 1 ? "stone" : "stones"}
-                {" · "}Chinese 2002 · GoStone v1 · {game.komi} komi · neutral points shared
+                {scoring.deadStones.length} {copy.dead.toLocaleLowerCase()} {scoring.deadStones.length === 1 ? copy.stone : copy.stones}
+                {" · "}{rulesSummary} · {copy.neutralShared}
               </span>
               <span>
-                Black: {scoring.preview.blackStones} stones + {scoring.preview.blackTerritory} territory
-                {" · "}White: {scoring.preview.whiteStones} stones + {scoring.preview.whiteTerritory} territory + {game.komi} komi
+                {copy.black}: {scoring.preview.blackStones} {copy.stones} + {scoring.preview.blackTerritory} {copy.territory}
+                {" · "}{copy.white}: {scoring.preview.whiteStones} {copy.stones} + {scoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
               </span>
               <span>
-                Neutral: {scoring.preview.neutralPoints}, shared equally · Dead: {deadCounts.black} black, {deadCounts.white} white
+                {copy.neutral}: {scoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
               </span>
             </div>
           ) : null}
           <button className="button button--primary game-leave" onClick={onLeave} type="button">
-            Find another game
+            {copy.findAnother}
           </button>
         </>
       )}

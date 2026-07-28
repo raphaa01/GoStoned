@@ -3,6 +3,7 @@
 import { Activity, ChevronRight, Database, Swords, Trophy, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type HealthState = "checking" | "online" | "offline";
 type PlatformSummary = {
@@ -13,6 +14,8 @@ type PlatformSummary = {
 };
 
 export function StatusOverview() {
+  const { dictionary, href } = useI18n();
+  const copy = dictionary.home;
   const [backend, setBackend] = useState<HealthState>("checking");
   const [database, setDatabase] = useState<HealthState>("checking");
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
@@ -53,30 +56,30 @@ export function StatusOverview() {
     <section className="platform-status">
       <div className="platform-status-heading">
         <div>
-          <span className="section-kicker">Live platform</span>
-          <h2>Live platform activity.</h2>
+          <span className="section-kicker">{copy.platformKicker}</span>
+          <h2>{copy.platformTitle}</h2>
         </div>
-        <Link href="/leaderboard">Leaderboard <ChevronRight size={17} /></Link>
+        <Link href={href("/leaderboard")}>{copy.leaderboard} <ChevronRight size={17} /></Link>
       </div>
 
       <div className="platform-metrics">
-        <article><Users size={20} /><span>Players online</span><strong>{summary?.playersOnline ?? "–"}</strong></article>
-        <article><Swords size={20} /><span>Live games</span><strong>{summary?.activeGames ?? "–"}</strong></article>
-        <article><Trophy size={20} /><span>Games today</span><strong>{summary?.gamesToday ?? "–"}</strong></article>
+        <article><Users size={20} /><span>{copy.playersOnline}</span><strong>{summary?.playersOnline ?? "–"}</strong></article>
+        <article><Swords size={20} /><span>{copy.liveGames}</span><strong>{summary?.activeGames ?? "–"}</strong></article>
+        <article><Trophy size={20} /><span>{copy.gamesToday}</span><strong>{summary?.gamesToday ?? "–"}</strong></article>
       </div>
 
       <div className="board-activity">
         {([9, 13, 19] as const).map((size) => (
-          <Link href={`/play?size=${size}`} key={size}>
+          <Link href={href(`/play?size=${size}`)} key={size}>
             <span>{size}×{size}</span>
-            <strong>{summary?.activeByBoard[size] ?? "–"} active</strong>
+            <strong>{summary?.activeByBoard[size] ?? "–"} {copy.active}</strong>
           </Link>
         ))}
       </div>
 
       <div className="service-status">
-        <span><Activity size={15} /> Game service <i className={`status-dot status-dot--${backend}`} /></span>
-        <span><Database size={15} /> Database <i className={`status-dot status-dot--${database}`} /></span>
+        <span><Activity size={15} /> {copy.gameService} <i className={`status-dot status-dot--${backend}`} /></span>
+        <span><Database size={15} /> {copy.database} <i className={`status-dot status-dot--${database}`} /></span>
       </div>
     </section>
   );

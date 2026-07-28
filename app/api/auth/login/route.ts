@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
       return apiError(error);
     }
     console.error("Login failed:", error);
-    return noStoreJson({ ok: false, error: "Could not log in." }, { status: 500 });
+    return noStoreJson(
+      { ok: false, error: "Could not log in.", code: "login_failed" },
+      { status: 500 },
+    );
   }
 }
