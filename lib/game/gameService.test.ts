@@ -16,6 +16,8 @@ import type { GameState, Stone, StoredMove } from "./types";
 const gameId = "11111111-1111-4111-8111-111111111111";
 const blackKey = "guest:black";
 const whiteKey = "guest:white";
+const blackUserKey = "user:22222222-2222-4222-8222-222222222222";
+const whiteUserKey = "user:33333333-3333-4333-8333-333333333333";
 const emptyBoardHash = boardHash(createEmptyBoard(9));
 
 function emptyBoardPassRows() {
@@ -84,6 +86,7 @@ function gameRow(overrides: Record<string, unknown> = {}) {
     black_player_name: "Black",
     white_player_name: "White",
     winner_key: null,
+    rated: false,
     status: "active",
     phase: "play",
     to_move: "black",
@@ -1268,8 +1271,15 @@ test("historical lifecycle compatibility rejects every unreachable near miss", a
   }
 });
 
-test("second score confirmation preserves the exact Chinese database and API contract", async () => {
-  const initialGame = gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 });
+test("second score confirmation rates two database-verified registered players", async () => {
+  const initialGame = gameRow({
+    black_player_key: blackUserKey,
+    white_player_key: whiteUserKey,
+    rated: true,
+    phase: "scoring",
+    to_move: null,
+    scoring_revision: 1,
+  });
   const blackConfirmedAt = new Date("2099-01-01T00:03:00.000Z");
   const stoppedBoard = createEmptyBoard(9);
   stoppedBoard[0][1] = "black";
@@ -1347,12 +1357,22 @@ test("second score confirmation preserves the exact Chinese database and API con
         gameFinishWrite = values;
         return {
           rows: [finishedScoredGame({
+            black_player_key: blackUserKey,
+            white_player_key: whiteUserKey,
+            rated: true,
             result: values[1],
             winner_key: values[2],
             finished_at: values[3],
             version: 2,
           })],
           rowCount: 1,
+        };
+      }
+      if (sql.includes("AS player_key") && sql.includes("FROM users")) {
+        assert.deepEqual(values, [blackUserKey, whiteUserKey]);
+        return {
+          rows: [{ player_key: blackUserKey }, { player_key: whiteUserKey }],
+          rowCount: 2,
         };
       }
       if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
@@ -1376,7 +1396,7 @@ test("second score confirmation preserves the exact Chinese database and API con
 
   let state: GameState;
   try {
-    state = await confirmScore(gameId, whiteKey, 1);
+    state = await confirmScore(gameId, whiteUserKey, 1);
   } finally {
     globalThis.goStonedDbPool = previousPool;
   }
@@ -1399,37 +1419,45 @@ test("second score confirmation preserves the exact Chinese database and API con
     "B+73.5",
     finalizedAt,
   ]);
-  assert.deepEqual(gameFinishWrite, [gameId, "B+73.5", blackKey, finalizedAt]);
+  assert.deepEqual(gameFinishWrite, [gameId, "B+73.5", blackUserKey, finalizedAt]);
   assert.deepEqual(
     ratingLedgerWrites.map((values) => [values[0], values[5], values[6]]),
     [
-      [blackKey, 16, "win"],
-      [whiteKey, -16, "loss"],
+      [blackUserKey, 16, "win"],
+      [whiteUserKey, -16, "loss"],
     ],
   );
-  assert.equal(state.winnerKey, blackKey);
+  assert.equal(state.winnerKey, blackUserKey);
+  assert.equal(state.rated, true);
   assert.equal(
     JSON.stringify(state.scoring?.preview),
     "{\"black\":81,\"white\":7.5,\"blackStones\":2,\"whiteStones\":0,\"blackTerritory\":79,\"whiteTerritory\":0,\"neutralPoints\":0,\"winner\":\"black\",\"margin\":73.5,\"result\":\"B+73.5\"}",
   );
 });
 
-test("resigning during scoring persists the canonical terminal lifecycle before ratings", async () => {
+test("a controlled guest can resign to an account without creating rating writes", async () => {
   const statements: string[] = [];
-  const initialGame = gameRow({ phase: "scoring", to_move: null, scoring_revision: 1 });
+  const eligibilityChecks: unknown[][] = [];
+  const initialGame = gameRow({
+    black_player_key: blackUserKey,
+    phase: "scoring",
+    to_move: null,
+    scoring_revision: 1,
+  });
   const finishedGame = gameRow({
+    black_player_key: blackUserKey,
     status: "finished",
     phase: "play",
     to_move: null,
     scoring_revision: 1,
-    winner_key: blackKey,
+    winner_key: blackUserKey,
     result: "B+R",
     finish_reason: "resignation",
     finished_at: new Date("2099-01-01T00:05:00.000Z"),
     version: 1,
   });
   const client = {
-    async query(sql: string) {
+    async query(sql: string, values: unknown[] = []) {
       statements.push(sql);
       if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
         return { rows: [], rowCount: 0 };
@@ -1443,6 +1471,10 @@ test("resigning during scoring persists the canonical terminal lifecycle before 
       if (sql.startsWith("DELETE FROM game_scoring_state")) return { rows: [], rowCount: 1 };
       if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
         return { rows: [finishedGame], rowCount: 1 };
+      }
+      if (sql.includes("AS player_key") && sql.includes("FROM users")) {
+        eligibilityChecks.push(values);
+        return { rows: [{ player_key: blackUserKey }], rowCount: 1 };
       }
       if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
         return { rows: [{ rating: 1_200 }], rowCount: 1 };
@@ -1473,13 +1505,17 @@ test("resigning during scoring persists the canonical terminal lifecycle before 
   assert.equal(state.phase, "play");
   assert.equal(state.finishReason, "resignation");
   assert.equal(state.scoring, null);
+  assert.equal(state.rated, false);
   const scoringDelete = statements.findIndex((sql) => sql.startsWith("DELETE FROM game_scoring_state"));
   const gameFinish = statements.findIndex((sql) =>
     sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'"),
   );
   const ratingWrite = statements.findIndex((sql) => sql.includes("INSERT INTO player_rating_history"));
+  const statsWrite = statements.findIndex((sql) => sql.includes("INSERT INTO player_stats"));
   assert.ok(scoringDelete >= 0);
   assert.ok(gameFinish > scoringDelete);
-  assert.ok(ratingWrite > gameFinish);
+  assert.deepEqual(eligibilityChecks, [[blackUserKey, whiteKey]]);
+  assert.equal(ratingWrite, -1);
+  assert.equal(statsWrite, -1);
   assert.equal(statements.at(-1), "COMMIT");
 });

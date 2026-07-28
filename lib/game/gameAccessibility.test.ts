@@ -14,6 +14,7 @@ function game(overrides: Partial<GameState> = {}): GameState {
     blackPlayerName: "Black player",
     whitePlayerName: "White player",
     winnerKey: null,
+    rated: false,
     status: "active",
     phase: "play",
     result: null,

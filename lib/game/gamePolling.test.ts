@@ -42,6 +42,7 @@ function gameState(): GameState {
     blackPlayerName: "Black",
     whitePlayerName: "White",
     winnerKey: null,
+    rated: false,
     status: "active",
     phase: "play",
     result: null,

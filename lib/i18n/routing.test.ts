@@ -93,6 +93,19 @@ test("English and German catalogues retain the same key shape", () => {
   assert.deepEqual(keys(de), keys(en));
 });
 
+test("English and German distinguish rated account games from guest-involved results", () => {
+  assert.match(en.game.ratedResultSaved, /rating changes/);
+  assert.match(en.game.unratedResultSaved, /did not affect ratings/);
+  assert.match(de.game.ratedResultSaved, /Wertungsänderungen/);
+  assert.match(de.game.unratedResultSaved, /Wertungen nicht verändert/);
+  assert.equal(en.profile.rated, "Rated");
+  assert.equal(en.profile.unrated, "Unrated");
+  assert.equal(de.profile.rated, "Gewertet");
+  assert.equal(de.profile.unrated, "Ungewertet");
+  assert.match(en.leaderboard.empty, /first rated game/);
+  assert.match(de.leaderboard.empty, /erste gewertete Partie/);
+});
+
 test("API error codes resolve through the active catalogue without exposing unknown server copy", () => {
   assert.equal(
     localizedApiError(de, { code: "not_your_turn" }, "fallback"),

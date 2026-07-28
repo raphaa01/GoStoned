@@ -30,6 +30,10 @@ import {
   type ChineseAreaComputation,
   type ScoredOutcome,
 } from "./scoreContract";
+import {
+  hasExactlyRegisteredParticipants,
+  type RegisteredPlayerRow,
+} from "./ratingPolicy";
 import type {
   Board,
   BoardSize,
@@ -51,6 +55,7 @@ type GameRow = {
   black_player_name: string;
   white_player_name: string;
   winner_key: string | null;
+  rated: boolean;
   status: "active" | "finished";
   phase: "play" | "scoring";
   to_move: Stone | null;
@@ -441,7 +446,17 @@ async function loadGame(
               NULLIF(BTRIM(white_user.display_name), ''),
               white_user.username,
               'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
-            ) AS white_player_name
+            ) AS white_player_name,
+            CASE
+              WHEN g.status = 'finished' THEN (
+                SELECT COUNT(DISTINCT history.player_key) = 2
+                  FROM player_rating_history history
+                 WHERE history.game_id = g.id
+                   AND history.player_key IN (g.black_player_key, g.white_player_key)
+              )
+              ELSE g.black_player_key <> g.white_player_key
+                AND black_user.id IS NOT NULL AND white_user.id IS NOT NULL
+            END AS rated
        FROM games g
        LEFT JOIN users black_user
          ON g.black_player_key = 'user:' || black_user.id::text
@@ -815,6 +830,7 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     blackPlayerName: game.black_player_name,
     whitePlayerName: game.white_player_name,
     winnerKey: game.winner_key,
+    rated: game.rated,
     status: game.status,
     phase: game.phase,
     result: game.result,
@@ -863,6 +879,7 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
       ...row,
       black_player_name: loaded.game.black_player_name,
       white_player_name: loaded.game.white_player_name,
+      rated: loaded.game.rated,
     },
   };
 }
@@ -872,6 +889,17 @@ async function recordFinishedStats(
   game: GameRow,
   winnerKey: string | null,
 ) {
+  const registered = await client.query<RegisteredPlayerRow>(
+    `SELECT 'user:' || id::text AS player_key
+       FROM users
+      WHERE 'user:' || id::text IN ($1::text, $2::text)`,
+    [game.black_player_key, game.white_player_key],
+  );
+  if (!hasExactlyRegisteredParticipants(
+    [game.black_player_key, game.white_player_key],
+    registered.rows,
+  )) return false;
+
   for (const playerKey of [game.black_player_key, game.white_player_key].sort()) {
     const won = winnerKey === playerKey;
     const draw = winnerKey === null;
@@ -930,6 +958,7 @@ async function recordFinishedStats(
       ],
     );
   }
+  return true;
 }
 
 async function finishOnTime(
@@ -955,8 +984,11 @@ async function finishOnTime(
     [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
   );
   const nextLoaded = withUpdatedGame(loaded, updated.rows[0]);
-  await recordFinishedStats(client, nextLoaded.game, winnerKey);
-  return serializeGame(nextLoaded, now);
+  const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+  return serializeGame({
+    ...nextLoaded,
+    game: { ...nextLoaded.game, rated },
+  }, now);
 }
 
 function assertScoringPhase(loaded: LoadedGame, expectedRevision: number): ScoringRow {
@@ -1217,8 +1249,11 @@ export async function submitMove(
           ],
         );
         const legacyLoaded = withUpdatedGame(loaded, updated.rows[0]);
-        await recordFinishedStats(client, legacyLoaded.game, winnerKey);
-        return serializeGame(legacyLoaded, now);
+        const rated = await recordFinishedStats(client, legacyLoaded.game, winnerKey);
+        return serializeGame({
+          ...legacyLoaded,
+          game: { ...legacyLoaded.game, rated },
+        }, now);
       }
       const responseWindowMs = rules.policy.scoringResponseWindowMs;
       if (responseWindowMs === null) {
@@ -1503,8 +1538,11 @@ export async function confirmScore(
       ...withUpdatedGame(nextLoaded, finished.rows[0]),
       scoring: finalScoring.rows[0],
     };
-    await recordFinishedStats(client, finalLoaded.game, winnerKey);
-    return serializeGame(finalLoaded, now);
+    const rated = await recordFinishedStats(client, finalLoaded.game, winnerKey);
+    return serializeGame({
+      ...finalLoaded,
+      game: { ...finalLoaded.game, rated },
+    }, now);
   });
 }
 
@@ -1610,7 +1648,10 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
       scoring: null,
       deadRows: [],
     };
-    await recordFinishedStats(client, nextLoaded.game, winnerKey);
-    return serializeGame(nextLoaded, now);
+    const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+    return serializeGame({
+      ...nextLoaded,
+      game: { ...nextLoaded.game, rated },
+    }, now);
   });
 }

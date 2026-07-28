@@ -105,20 +105,18 @@ async function setupScoringFixture(): Promise<ScoringFixture> {
   return { black, white, gameId, revision: markedRevision };
 }
 
-async function assertOneLedgerEvent(fixture: ScoringFixture) {
-  const ledger = await query<{ player_key: string; games: number; history_count: number }>(
-    `SELECT stats.player_key, stats.games, COUNT(history.id)::int AS history_count
-       FROM player_stats stats
-       LEFT JOIN player_rating_history history
-         ON history.player_key = stats.player_key AND history.game_id = $1
-      WHERE stats.player_key = ANY($2::text[]) AND stats.board_size = 9
-      GROUP BY stats.player_key, stats.games
-      ORDER BY stats.player_key`,
+async function assertNoGuestLedgerEvent(fixture: ScoringFixture) {
+  const ledger = await query<{ stats_count: number; history_count: number }>(
+    `SELECT
+       (SELECT COUNT(*)::int
+          FROM player_stats
+         WHERE player_key = ANY($2::text[]) AND board_size = 9) AS stats_count,
+       (SELECT COUNT(*)::int
+          FROM player_rating_history
+         WHERE game_id = $1 AND player_key = ANY($2::text[])) AS history_count`,
     [fixture.gameId, [fixture.black.playerKey, fixture.white.playerKey]],
   );
-  assert.equal(ledger.rows.length, 2);
-  assert.equal(ledger.rows.every((row) => row.games === 1), true);
-  assert.equal(ledger.rows.every((row) => row.history_count === 1), true);
+  assert.deepEqual(ledger.rows[0], { stats_count: 0, history_count: 0 });
 }
 
 async function assertLegacyDeploymentWindowCompatibility() {
@@ -160,10 +158,11 @@ async function assertLegacyDeploymentWindowCompatibility() {
   assert.equal((whitePass.body.game as { consecutivePasses: number }).consecutivePasses, 1);
   const blackPass = await postGame(gameId, "/moves", { isPass: true }, black.cookie);
   assert.equal(blackPass.response.status, 200);
-  const finished = blackPass.body.game as { status: string; finishReason: string };
+  const finished = blackPass.body.game as { status: string; finishReason: string; rated: boolean };
   assert.equal(finished.status, "finished");
   assert.equal(finished.finishReason, "legacy_score");
-  await assertOneLedgerEvent({ black, white, gameId, revision: 0 });
+  assert.equal(finished.rated, false);
+  await assertNoGuestLedgerEvent({ black, white, gameId, revision: 0 });
 }
 
 async function run() {
@@ -196,13 +195,17 @@ async function run() {
     status: string;
     phase: string;
     turn: string | null;
+    rated: boolean;
   };
   assert.equal(
     (firstGame.status === "finished" && firstGame.phase === "scoring")
       || (firstGame.status === "active" && firstGame.phase === "play" && firstGame.turn === "black"),
     true,
   );
-  if (firstGame.status === "finished") await assertOneLedgerEvent(confirmResume);
+  if (firstGame.status === "finished") {
+    assert.equal(firstGame.rated, false);
+    await assertNoGuestLedgerEvent(confirmResume);
+  }
 
   const confirmResign = await setupScoringFixture();
   const confirmResignResults = await Promise.all([
@@ -220,8 +223,10 @@ async function run() {
     { method: "GET" },
     confirmResign.black.cookie,
   );
-  assert.equal((confirmResignState.body.game as { status: string }).status, "finished");
-  await assertOneLedgerEvent(confirmResign);
+  const resignedGame = confirmResignState.body.game as { status: string; rated: boolean };
+  assert.equal(resignedGame.status, "finished");
+  assert.equal(resignedGame.rated, false);
+  await assertNoGuestLedgerEvent(confirmResign);
 
   const deadline = await setupScoringFixture();
   await assert.rejects(
@@ -270,7 +275,7 @@ async function run() {
   assert.equal(resumed.lastResume.claim, "deadline");
 
   console.log(
-    "Legacy rollout compatibility, scoring races, ledger idempotency, deadline recovery, and DB constraints passed.",
+    "Legacy rollout compatibility, scoring races, unrated guest results, deadline recovery, and DB constraints passed.",
   );
 }
 
