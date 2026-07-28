@@ -1,4 +1,5 @@
 import { query, withTransaction } from "@/lib/db";
+import { DEFAULT_MATCH_RULES, resolveRulesConfiguration } from "@/lib/game/rulesPolicy";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 
@@ -68,6 +69,13 @@ export async function joinMatchmaking(
   timeControlId: TimeControlId,
 ): Promise<MatchmakingStatus> {
   const timeControl = getTimeControl(timeControlId);
+  const rules = resolveRulesConfiguration({
+    ruleset: DEFAULT_MATCH_RULES.ruleset,
+    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
+    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
+    komi: DEFAULT_MATCH_RULES.komi,
+    handicap: DEFAULT_MATCH_RULES.handicap,
+  });
   return withTransaction(async (client) => {
     await client.query(
       `DELETE FROM matchmaking_queue
@@ -131,8 +139,8 @@ export async function joinMatchmaking(
        )
        VALUES (
          $1, $2, $3, $4,
-         'chinese', 'chinese-2002-gostone-v1', 'area', 7.5, 0, 'play', 'black',
-         $5, $6, $7, $8, $8, $6, $6, NOW()
+         $5, $6, $7, $8, $9, 'play', $10,
+         $11, $12, $13, $14, $14, $12, $12, NOW()
        )
        RETURNING id`,
       [
@@ -140,6 +148,12 @@ export async function joinMatchmaking(
         opponent.player_key,
         playerKey,
         timeControlId,
+        rules.ruleset,
+        rules.rulesProfile,
+        rules.scoringMethod,
+        rules.komi,
+        rules.handicap,
+        rules.policy.initialTurn,
         timeControl.mainTimeSeconds,
         timeControl.byoYomiPeriods,
         timeControl.byoYomiSeconds,

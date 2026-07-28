@@ -117,7 +117,7 @@ test("counts living seki stones while leaving their shared liberties neutral", (
   assert.equal(score.result, "W+1");
 });
 
-test("uses the current 7.5 komi default for Chinese games", () => {
-  const score = scoreChinese(createEmptyBoard(9));
+test("uses the explicitly supplied 7.5 komi for current Chinese games", () => {
+  const score = scoreChinese(createEmptyBoard(9), 7.5);
   assert.equal(score.result, "W+7.5");
 });

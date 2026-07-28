@@ -126,7 +126,7 @@ export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
   return board;
 }
 
-export function scoreChinese(board: Board, komi = 7.5): Score {
+export function scoreChinese(board: Board, komi: number): Score {
   let blackStones = 0;
   let whiteStones = 0;
   let blackTerritory = 0;
