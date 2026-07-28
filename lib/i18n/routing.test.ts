@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { POST as setLocale } from "@/app/api/locale/route";
+import { createRateLimitKey, RATE_LIMIT_POLICIES } from "@/lib/auth/rateLimit";
 import { de } from "./catalogs/de";
 import { en } from "./catalogs/en";
 import { isLocale, preferredLocale } from "./config";
@@ -161,6 +162,7 @@ test("rules summaries use persisted game parameters and localized labels", () =>
 });
 
 test("locale preference endpoint rejects tampering and sets an isolated hardened cookie", async () => {
+  globalThis.goStoneEphemeralRateLimits = new Map();
   const rejected = await setLocale(new NextRequest("https://gostone.test/api/locale", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -185,6 +187,7 @@ test("locale preference endpoint rejects tampering and sets an isolated hardened
 });
 
 test("locale preference endpoint rejects cross-site, non-JSON, and malformed requests", async () => {
+  globalThis.goStoneEphemeralRateLimits = new Map();
   const crossSite = await setLocale(new NextRequest("https://gostone.test/api/locale", {
     method: "POST",
     headers: {
@@ -215,6 +218,65 @@ test("locale preference endpoint rejects cross-site, non-JSON, and malformed req
   }));
   assert.equal(malformed.status, 400);
   assert.equal(malformed.headers.get("set-cookie"), null);
+});
+
+test("locale preference endpoint rejects excess input without mutating an existing preference", async () => {
+  globalThis.goStoneEphemeralRateLimits = new Map();
+  for (const [url, body] of [
+    ["https://gostone.test/api/locale", JSON.stringify({ locale: "en", padding: "x" })],
+    ["https://gostone.test/api/locale", JSON.stringify({
+      locale: "en",
+      padding: "x".repeat(1_024),
+    })],
+    ["https://gostone.test/api/locale?cache-bust=1", JSON.stringify({ locale: "en" })],
+  ] as const) {
+    const response = await setLocale(new NextRequest(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "gostone_locale=de",
+        "x-real-ip": "203.0.113.210",
+      },
+      body,
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal((await response.json()).code, "invalid_locale");
+  }
+});
+
+test("locale preference rate denial happens before a stalled body is read", async () => {
+  const policy = RATE_LIMIT_POLICIES.localePreference;
+  const address = "203.0.113.211";
+  const key = createRateLimitKey(policy.scope, "ip", address);
+  globalThis.goStoneEphemeralRateLimits = new Map([[key, {
+    attempts: policy.limit,
+    windowStartedAt: Date.now(),
+    blockedUntil: null,
+  }]]);
+  const stalled = new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise<void>(() => undefined);
+    },
+  });
+  const request = new NextRequest("https://gostone.test/api/locale", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-real-ip": address,
+    },
+    body: stalled,
+    duplex: "half",
+  });
+  assert.equal(request.bodyUsed, false);
+  const response = await setLocale(request);
+  assert.equal(response.status, 429);
+  assert.equal(request.bodyUsed, false);
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+  assert.ok(Number(response.headers.get("retry-after")) > 0);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal((await response.json()).code, "rate_limited");
 });
 
 test("localized catch-all responses are real, pre-hydration-safe 404 documents", async () => {
