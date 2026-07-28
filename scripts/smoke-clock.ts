@@ -97,7 +97,13 @@ async function run() {
   }>(
     await fetch(
       `${baseUrl}/api/games/${gameId}`,
-      { cache: "no-store", headers: { Cookie: black.cookie } },
+      {
+        cache: "no-store",
+        headers: {
+          Cookie: black.cookie,
+          [EXPECTED_PLAYER_HEADER]: black.playerKey,
+        },
+      },
     ),
   );
 

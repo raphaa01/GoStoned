@@ -200,7 +200,7 @@ async function run() {
   await new Promise((resolve) => setTimeout(resolve, 75));
   const frozen = await request<{
     game: { clock: { black: { mainTimeMs: number }; white: { mainTimeMs: number } } };
-  }>(`/api/games/${gameId}`, undefined, black.cookie);
+  }>(`/api/games/${gameId}`, undefined, black.cookie, black.playerKey);
   assert.equal(frozen.game.clock.black.mainTimeMs, stopped.game.clock.black.mainTimeMs);
   assert.equal(frozen.game.clock.white.mainTimeMs, stopped.game.clock.white.mainTimeMs);
 
@@ -353,7 +353,7 @@ async function run() {
       };
       resumeEvents?: unknown;
     };
-  }>(`/api/games/${gameId}`, undefined, white.cookie);
+  }>(`/api/games/${gameId}`, undefined, white.cookie, white.playerKey);
   assert.deepEqual(latestOnly.game.lastResume, {
     claim: "dead",
     requestedBy: "black",

@@ -141,7 +141,12 @@ async function run() {
 
   const game = await request(
     `/api/games/${gameId}`,
-    { headers: { Cookie: firstLogin.cookie! } },
+    {
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
   assert.equal((game.body.game as { blackPlayerName: string }).blackPlayerName, firstUsername);
 
@@ -169,7 +174,12 @@ async function run() {
   assert.equal(blockedChat.body.code, "message_blocked");
   const chat = await request(
     `/api/games/${gameId}/chat`,
-    { headers: { Cookie: firstLogin.cookie! } },
+    {
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
   assert.deepEqual(
     (chat.body.messages as Array<{ message: string }>).map((message) => message.message),
@@ -227,7 +237,10 @@ async function run() {
   assert.equal(firstRecentGames[0].rated, true);
 
   const storedGame = await request(`/api/games/${gameId}`, {
-    headers: { Cookie: firstLogin.cookie! },
+    headers: {
+      Cookie: firstLogin.cookie!,
+      [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+    },
   });
   assert.equal((storedGame.body.game as { rated: boolean }).rated, true);
 

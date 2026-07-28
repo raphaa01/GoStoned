@@ -1,12 +1,22 @@
 import type { GamePollResponse, GameState } from "./types";
 
 export const FULL_GAME_REFRESH_INTERVAL_MS = 30_000;
+export const MAX_PERSISTED_GAME_VERSION = 2_147_483_647;
 
-export function parseKnownGameVersion(searchParams: URLSearchParams): number | null {
-  const values = searchParams.getAll("knownVersion");
-  if (values.length !== 1 || !/^(0|[1-9]\d*)$/.test(values[0])) return null;
-  const version = Number(values[0]);
-  return Number.isSafeInteger(version) ? version : null;
+export type KnownGameVersionQuery =
+  | { kind: "full" }
+  | { kind: "version"; knownVersion: number }
+  | { kind: "invalid" };
+
+export function parseKnownGameVersion(search: string): KnownGameVersionQuery {
+  if (search === "") return { kind: "full" };
+  const match = /^\?knownVersion=(0|[1-9]\d*)$/.exec(search);
+  if (!match) return { kind: "invalid" };
+  const knownVersion = Number(match[1]);
+  return Number.isSafeInteger(knownVersion)
+      && knownVersion <= MAX_PERSISTED_GAME_VERSION
+    ? { kind: "version", knownVersion }
+    : { kind: "invalid" };
 }
 
 export function gamePollUrl(
@@ -21,6 +31,7 @@ export function gamePollUrl(
   if (
     !Number.isSafeInteger(knownVersion)
     || knownVersion < 0
+    || knownVersion > MAX_PERSISTED_GAME_VERSION
     || lastFullResponseAt <= 0
     || now - lastFullResponseAt >= FULL_GAME_REFRESH_INTERVAL_MS
   ) {
