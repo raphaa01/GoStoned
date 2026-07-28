@@ -136,6 +136,7 @@ export const en = {
     invalid_matchmaking_request: "Choose a supported board size and time control.",
     invalid_activity_request: "Reload the activity snapshot without extra parameters.",
     invalid_stats_request: "Choose exactly one supported leaderboard board size.",
+    invalid_game_mutation_request: "Reload the game before trying that action again.",
     game_not_found: "Game not found.",
     not_participant: "You are not a participant in this game.",
     invalid_scoring_revision: "A valid scoring revision is required.",

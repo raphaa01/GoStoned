@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { apiError, noStoreJson } from "@/lib/api/responses";
+import { noStoreJson } from "@/lib/api/responses";
 import {
   consumeEphemeralIpPolicyRateLimit,
   consumePolicyRateLimit,
@@ -8,6 +8,12 @@ import {
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { confirmScore } from "@/lib/game/gameService";
+import {
+  assertGameMutationMetadata,
+  gameMutationRouteError,
+  invalidGameMutationRequest,
+  readGameMutationJson,
+} from "@/lib/game/gameMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,22 +23,20 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
+    const { gameId } = await context.params;
+    assertGameMutationMetadata(request, gameId, "json");
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.scoringDecisionBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.scoringDecision, playerKey);
-    const body = (await request.json()) as { expectedRevision?: unknown };
-    if (!Number.isInteger(body.expectedRevision)) {
-      return noStoreJson(
-        { ok: false, error: "A valid scoring revision is required." },
-        { status: 400 },
-      );
+    const body = await readGameMutationJson(request, [["expectedRevision"]]);
+    if (!Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) {
+      throw invalidGameMutationRequest();
     }
-    const { gameId } = await context.params;
     const game = await confirmScore(gameId, playerKey, body.expectedRevision as number);
     return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
-    return apiError(error);
+    return gameMutationRouteError(error);
   }
 }

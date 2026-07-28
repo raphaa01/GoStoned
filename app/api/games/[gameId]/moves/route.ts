@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { apiError, noStoreJson } from "@/lib/api/responses";
+import { noStoreJson } from "@/lib/api/responses";
 import {
   consumeEphemeralIpPolicyRateLimit,
   consumePolicyRateLimit,
@@ -8,6 +8,12 @@ import {
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { submitMove } from "@/lib/game/gameService";
+import {
+  assertGameMutationMetadata,
+  gameMutationRouteError,
+  invalidGameMutationRequest,
+  readGameMutationJson,
+} from "@/lib/game/gameMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,28 +23,33 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
+    const { gameId } = await context.params;
+    assertGameMutationMetadata(request, gameId, "json");
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.moveBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.move, playerKey);
-    const body = (await request.json()) as {
-      x?: unknown;
-      y?: unknown;
-      isPass?: unknown;
-    };
-    if (body.isPass !== true && (!Number.isInteger(body.x) || !Number.isInteger(body.y))) {
-      return noStoreJson({ ok: false, error: "Integer x and y are required." }, { status: 400 });
+    const body = await readGameMutationJson(
+      request,
+      [["x", "y"], ["isPass"], ["x", "y", "isPass"]],
+    );
+    const isPass = body.isPass === true;
+    if (
+      (isPass && ("x" in body || "y" in body))
+      || (!isPass && body.isPass !== undefined && body.isPass !== false)
+      || (!isPass && (!Number.isSafeInteger(body.x) || !Number.isSafeInteger(body.y)))
+    ) {
+      throw invalidGameMutationRequest();
     }
 
-    const { gameId } = await context.params;
     const game = await submitMove(gameId, playerKey, {
       x: body.x as number | undefined,
       y: body.y as number | undefined,
-      isPass: body.isPass === true,
+      isPass,
     });
     return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
-    return apiError(error);
+    return gameMutationRouteError(error);
   }
 }
