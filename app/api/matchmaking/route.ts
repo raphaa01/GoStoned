@@ -9,13 +9,18 @@ import {
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { isTimeControlId } from "@/lib/game/timeControls";
-import { GameServiceError } from "@/lib/game/gameService";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
   isBoardSize,
   joinMatchmaking,
 } from "@/lib/matchmaking/matchmakingService";
+import {
+  assertMatchmakingMutationMetadata,
+  invalidMatchmakingRequest,
+  matchmakingMutationRouteError,
+  readMatchmakingJoinRequest,
+} from "@/lib/matchmaking/matchmakingMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,41 +40,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    assertMatchmakingMutationMetadata(request, "json");
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoinBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoin, playerKey);
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      throw new GameServiceError(
-        "The matchmaking request must contain valid JSON.",
-        400,
-        "invalid_matchmaking_request",
-      );
-    }
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      throw new GameServiceError(
-        "A valid board size and time control are required.",
-        400,
-        "invalid_matchmaking_request",
-      );
-    }
-    const input = body as {
-      boardSize?: unknown;
-      timeControl?: unknown;
-    };
+    const input = await readMatchmakingJoinRequest(request);
     if (!isBoardSize(input.boardSize) || !isTimeControlId(input.timeControl)) {
-      return noStoreJson(
-        {
-          ok: false,
-          error: "A valid board size and time control are required.",
-          code: "invalid_matchmaking_request",
-        },
-        { status: 400 },
-      );
+      throw invalidMatchmakingRequest();
     }
     const matchmaking = await joinMatchmaking(
       playerKey,
@@ -78,12 +57,13 @@ export async function POST(request: NextRequest) {
     );
     return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
-    return apiError(error);
+    return matchmakingMutationRouteError(error);
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    assertMatchmakingMutationMetadata(request, "none");
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
@@ -91,6 +71,6 @@ export async function DELETE(request: NextRequest) {
     const matchmaking = await cancelMatchmaking(playerKey);
     return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
-    return apiError(error);
+    return matchmakingMutationRouteError(error);
   }
 }
