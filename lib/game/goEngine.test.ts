@@ -76,8 +76,48 @@ test("scores stones, surrounded territory, and komi with Chinese area scoring", 
   board[8][8] = "white";
 
   const score = scoreChinese(board, 0.5);
-  assert.equal(score.black, 5);
-  assert.equal(score.white, 1.5);
+  assert.equal(score.blackStones, 4);
+  assert.equal(score.whiteStones, 1);
+  assert.equal(score.blackTerritory, 1);
+  assert.equal(score.whiteTerritory, 0);
+  assert.equal(score.neutralPoints, 75);
+  assert.equal(score.black, 42.5);
+  assert.equal(score.white, 39);
   assert.equal(score.winner, "black");
   assert.equal(score.result, "B+3.5");
+});
+
+test("splits an odd number of neutral dame points equally", () => {
+  const board = [
+    ["black", null, "white"],
+    ["black", null, "white"],
+    ["black", null, "white"],
+  ] as const;
+
+  const score = scoreChinese(board.map((row) => [...row]), 0);
+  assert.equal(score.neutralPoints, 3);
+  assert.equal(score.black, 4.5);
+  assert.equal(score.white, 4.5);
+  assert.equal(score.result, "Draw");
+});
+
+test("counts living seki stones while leaving their shared liberties neutral", () => {
+  const board = [
+    ["black", "black", "white"],
+    ["black", null, "white"],
+    [null, "white", "white"],
+  ] as const;
+
+  const score = scoreChinese(board.map((row) => [...row]), 0);
+  assert.equal(score.blackStones, 3);
+  assert.equal(score.whiteStones, 4);
+  assert.equal(score.neutralPoints, 2);
+  assert.equal(score.blackTerritory, 0);
+  assert.equal(score.whiteTerritory, 0);
+  assert.equal(score.result, "W+1");
+});
+
+test("uses the current 7.5 komi default for Chinese games", () => {
+  const score = scoreChinese(createEmptyBoard(9));
+  assert.equal(score.result, "W+7.5");
 });

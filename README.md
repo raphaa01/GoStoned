@@ -17,7 +17,8 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - auswählbare Blitz-, Rapid- und Classic-Uhren mit japanischem Byo-yomi
 - serverseitige Zeitmessung und automatisch gespeicherter Sieg auf Zeit
 - serverseitige Zugreihenfolge, Captures, Suicide- und Superko-Prüfung
-- Pass, zwei aufeinanderfolgende Pässe, Chinese Area Scoring und Resign
+- Pass, pausierte Wertungsphase nach zwei Pässen, beiderseitige
+  Totstein-Bestätigung, Wiederaufnahme und Chinese Area Scoring
 - dauerhaft gespeicherte Spiele, Züge, Ergebnisse und Statistiken
 - responsive Desktop- und Mobile-Oberfläche
 - lokale PostgreSQL-Datenbank mit Docker
@@ -73,18 +74,26 @@ npm run test:auth
 npm run test:live
 npm run test:clock
 npm run test:rate-limit
+npm run test:scoring-races
 ```
 
 `test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
 Spieler, Matchmaking, Chat und Resign. `test:live` prüft zusätzlich eine
-vollständige Gastpartie mit serverseitiger Wertung und weist nach, dass eine
-Gast-Sitzung nicht als der andere Spieler handeln kann.
+vollständige Gastpartie einschließlich Wertungsstopp, Wiederaufnahme,
+monotoner Wertungsrevision, Totstein-Markierung und beiderseitiger Bestätigung.
+Außerdem weist der Test nach, dass eine Gast-Sitzung nicht als der andere
+Spieler handeln kann.
 `test:clock` erzwingt kontrolliert einen Zeitablauf und prüft das serverseitige
 Ergebnis.
 `test:rate-limit` startet 100 gleichzeitige Limit-Anfragen und prüft die atomare
 Sperre sowie deren Ablauf. Der Test verändert Limit-Zeilen und verweigert deshalb
 jede nicht-lokale `DATABASE_URL`; er darf niemals gegen Supabase oder Produktion
 ausgeführt werden.
+`test:scoring-races` prüft lokal konkurrierende Bestätigung/Wiederaufnahme- und
+Bestätigung/Resign-Übergänge, exakt einen Rating-Ledger-Eintrag pro Spieler,
+die automatische Wiederaufnahme nach Ablauf des Entscheidungsfensters sowie
+die Datenbank-Constraints für beiderseitige Bestätigung. Auch dieser Test
+verweigert jede nicht-lokale `DATABASE_URL`.
 
 ## Datenbank und Migrationen
 
@@ -100,6 +109,47 @@ Cookie-basierte Autorisierung weiterhin erzwingt. Ein vollständiges Zurückroll
 auf die frühere Client-ID-Autorisierung würde die neuen Partien wieder für
 Gast-Impersonation öffnen; falls keine sichere Zwischenversion verfügbar ist,
 muss Gast-Spielbetrieb bis zur Korrektur pausiert werden.
+
+Migration `008_chinese_scoring_agreement.sql` ersetzt die sofortige Wertung
+nach zwei Pässen durch eine pausierte, gemeinsam bestätigte Wertungsphase. Sie
+speichert die unveränderliche Brettposition, vollständige Totstein-Gruppen,
+Bestätigungen, Punktdetails und eine monotone Wertungsrevision. Das aktivierte
+Regelprofil ist ausdrücklich
+[`chinese-2002-gostone-v1`](https://wqwh.weiqi.org.cn/rules/): Wer behauptet, dass eine
+markierte Gruppe tot ist, spielt bei der Wiederaufnahme zuerst. Wer diese
+Tot-Markierung bestreitet, lässt deshalb die Gegenseite zuerst spielen. Bleibt
+die Wertungsphase zehn Minuten lang ungelöst, setzt GoStone die Partie ohne
+Wertung automatisch in der normalen Zugreihenfolge fort. Japanische Wertung,
+alternative chinesische Regelprofile und Handicap-Platzierung sind noch nicht
+freigeschaltet.
+
+Bereits vor Migration 008 gestartete oder beendete Partien behalten dagegen
+das Profil `legacy-immediate-area`. Das gilt auch für Partien, die eine noch
+laufende alte Anwendungsinstanz zwischen Datenbankmigration und
+Anwendungswechsel erstellt. Die neue Matchmaking-Version aktiviert das neue
+Profil pro Partie ausdrücklich; der Datenbankstandard bleibt in diesem
+Expand-Schritt absichtlich auf `legacy-immediate-area`. Bei aktiven
+Legacy-Partien leitet die neue Version Zugrecht und Passfolge aus dem
+unveränderlichen Zugprotokoll ab, sodass Züge während dieses Rollout-Fensters
+nicht zu einem doppelten Zug oder einem dritten erforderlichen Pass führen.
+
+Die Migration ändert nur den Standard neuer Partien auf 7,5 Komi; gespeicherte
+Komi- und Ergebniswerte historischer Partien werden nicht neu berechnet. Vor
+dem Rollout muss geprüft werden, dass in Produktion ausschließlich
+`rules='chinese'` gespeichert ist; andernfalls bricht die Migration bewusst ab.
+Migration 008 ist die rückwärtskompatible Expand-Phase: Sie setzt noch keinen
+strikten Lifecycle-Constraint, den die vorige Anwendung bei Abschluss einer
+Partie verletzen würde. Ein solcher Contract-Schritt darf erst in einer späteren
+Migration erfolgen, nachdem keine alte Instanz mehr Anfragen verarbeitet.
+
+Der sichere Rollout ist deshalb: Migration 008 anwenden, die neue Anwendung
+ausrollen, Health- und Zwei-Spieler-Smokes prüfen und erst danach in einer
+eigenen späteren Migration über strengere Lifecycle-Constraints entscheiden.
+Sobald die neue Anwendung eine Partie mit
+`chinese-2002-gostone-v1` erstellt hat, ist ein Rollback auf eine alte
+Anwendungsversion unsicher, weil diese die Wertungsphase nicht versteht. In
+diesem Fall neue Partien stoppen und vorwärts korrigieren, statt Wertungszustände
+zu löschen oder automatisch in laufende Partien umzuwandeln.
 
 Mutierende Aktionslimits werden dauerhaft und getrennt nach der serverseitig
 verifizierten Spieler-ID und der von Vercel gesetzten Client-Adresse geführt.

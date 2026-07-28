@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import "dotenv/config";
+import { isLocalDatabase } from "../lib/env";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
+const databaseUrl = process.env.DATABASE_URL;
+const smokeHost = new URL(baseUrl).hostname;
+
+if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
+  throw new Error("The auth/chat smoke test only runs against an isolated local server.");
+}
+if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+  throw new Error("The auth/chat smoke test requires an isolated local DATABASE_URL.");
+}
 
 type ApiBody = { ok: boolean; error?: string; [key: string]: unknown };
 
