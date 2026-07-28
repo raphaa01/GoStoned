@@ -14,7 +14,13 @@ type FormError = {
   fields: AuthField[];
 };
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+type AuthFormProps = {
+  mode: "login" | "register";
+  reauthenticate?: boolean;
+  returnTo?: string | null;
+};
+
+export function AuthForm({ mode, reauthenticate = false, returnTo = null }: AuthFormProps) {
   const { user, refresh } = useAuth();
   const { dictionary, href } = useI18n();
   const router = useRouter();
@@ -51,7 +57,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         return;
       }
       await refresh();
-      router.push(href(mode === "register" ? "/profile" : "/play"));
+      router.push(href(returnTo ?? (mode === "register" ? "/profile" : "/play")));
       router.refresh();
     } catch (requestError) {
       setError({
@@ -65,7 +71,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     }
   }
 
-  if (user) {
+  if (user && !reauthenticate) {
     return (
       <section className="auth-card auth-card--signed-in">
         <span className="auth-icon"><UserRound size={24} /></span>

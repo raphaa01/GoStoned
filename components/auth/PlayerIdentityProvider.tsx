@@ -46,12 +46,20 @@ export function usePlayerIdentity() {
 
   return useMemo(() => {
     if (authLoading) {
-      return { playerKey: null, playerName: null, loading: true, error: null, retry };
+      return {
+        playerKey: null,
+        playerName: null,
+        identityKind: null,
+        loading: true,
+        error: null,
+        retry,
+      };
     }
     if (user) {
       return {
         playerKey: user.playerKey,
         playerName: user.displayName,
+        identityKind: "account" as const,
         loading: false,
         error: null,
         retry,
@@ -61,6 +69,7 @@ export function usePlayerIdentity() {
       return {
         playerKey: null,
         playerName: null,
+        identityKind: null,
         loading: false,
         error: authError,
         retry,
@@ -69,6 +78,7 @@ export function usePlayerIdentity() {
     return {
       playerKey: guest?.playerKey ?? null,
       playerName: guest?.displayName ?? null,
+      identityKind: guest ? "guest" as const : null,
       loading: !guest && !guestError,
       error: guestError,
       retry,

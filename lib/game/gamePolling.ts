@@ -32,16 +32,33 @@ export function gamePollUrl(
 export function gameStateFromPoll(
   current: GameState | null,
   response: GamePollResponse,
+  clientReceivedAt = Date.now(),
 ): GameState | null {
-  if ("game" in response) return response.game;
-  if (
-    !current
-    || response.gameId !== current.id
-    || response.version !== current.version
-  ) {
-    return null;
+  const candidate = "game" in response
+    ? response.game
+    : current
+      && response.gameId === current.id
+      && response.version === current.version
+      ? { ...current, clock: response.clock }
+      : null;
+  if (!candidate) return null;
+
+  const candidateServerNow = Date.parse(candidate.clock.serverNow);
+  if (!Number.isFinite(candidateServerNow)) return null;
+  if (current) {
+    if (candidate.id !== current.id || candidate.version < current.version) return null;
+    if (current.status === "finished" && candidate.status !== "finished") return null;
+    if (candidate.version === current.version) {
+      const currentServerNow = Date.parse(current.clock.serverNow);
+      if (!Number.isFinite(currentServerNow) || candidateServerNow <= currentServerNow) {
+        return null;
+      }
+    }
   }
-  return { ...current, clock: response.clock };
+  return {
+    ...candidate,
+    clock: { ...candidate.clock, clientReceivedAt },
+  };
 }
 
 export function gamePollResponseBody(response: GamePollResponse) {

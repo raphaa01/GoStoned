@@ -109,10 +109,12 @@ test("heartbeats update only the authoritative clock for the matching cached ver
     gameId: current.id,
     version: current.version,
     clock: nextClock,
-  });
+  }, 1_000_000);
   assert.ok(next);
   assert.notEqual(next, current);
-  assert.equal(next.clock, nextClock);
+  assert.notEqual(next.clock, nextClock);
+  assert.equal(next.clock.serverNow, nextClock.serverNow);
+  assert.equal(next.clock.clientReceivedAt, 1_000_000);
   assert.equal(next.board, current.board);
   assert.equal(next.moves, current.moves);
   assert.equal(next.scoring, current.scoring);
@@ -145,14 +147,82 @@ test("heartbeats update only the authoritative clock for the matching cached ver
 
 test("full poll responses replace the cached state", () => {
   const current = gameState();
-  const replacement = { ...current, version: 5 };
-  assert.equal(gameStateFromPoll(current, { game: replacement }), replacement);
+  const replacement = {
+    ...current,
+    version: 5,
+    clock: clock({ serverNow: "2026-07-28T10:01:00.000Z" }),
+  };
+  const accepted = gameStateFromPoll(current, { game: replacement }, 1_000_000);
+  assert.ok(accepted);
+  assert.equal(accepted.version, 5);
+  assert.equal(accepted.clock.clientReceivedAt, 1_000_000);
 
   const receivedAt = 1_000_000;
   assert.equal(
     gamePollUrl(replacement.id, replacement.version, receivedAt, receivedAt + 900),
     "/api/games/game%20one?knownVersion=5",
   );
+});
+
+test("poll application is monotonic across versions and authoritative clock anchors", () => {
+  const current = gameState();
+  const newerClock = clock({ serverNow: "2026-07-28T10:00:01.000Z" });
+  const olderClock = clock({ serverNow: "2026-07-28T09:59:59.000Z" });
+  assert.ok(gameStateFromPoll(current, {
+    unchanged: true,
+    gameId: current.id,
+    version: current.version,
+    clock: newerClock,
+  }, 2_000));
+  assert.equal(gameStateFromPoll(current, {
+    unchanged: true,
+    gameId: current.id,
+    version: current.version,
+    clock: olderClock,
+  }, 3_000), null);
+  assert.equal(gameStateFromPoll(current, {
+    unchanged: true,
+    gameId: current.id,
+    version: current.version,
+    clock: current.clock,
+  }, 3_000), null);
+  assert.equal(gameStateFromPoll(current, {
+    unchanged: true,
+    gameId: current.id,
+    version: current.version,
+    clock: clock({ serverNow: "not-a-date" }),
+  }, 3_000), null);
+
+  assert.equal(gameStateFromPoll(current, {
+    game: { ...current, id: "another-game", version: 5, clock: newerClock },
+  }, 3_000), null);
+  assert.equal(gameStateFromPoll(current, {
+    game: { ...current, version: 3, clock: newerClock },
+  }, 3_000), null);
+  assert.ok(gameStateFromPoll(current, {
+    game: { ...current, version: 5, clock: olderClock },
+  }, 3_000));
+});
+
+test("a verified terminal state cannot regress to active", () => {
+  const finished = {
+    ...gameState(),
+    status: "finished" as const,
+    turn: null,
+    result: "B+R",
+    finishReason: "resignation" as const,
+    winnerKey: "guest:black",
+    finishedAt: "2026-07-28T10:00:00.000Z",
+    version: 5,
+    clock: clock({ serverNow: "2026-07-28T10:01:00.000Z" }),
+  };
+  assert.equal(gameStateFromPoll(finished, {
+    game: {
+      ...gameState(),
+      version: 6,
+      clock: clock({ serverNow: "2026-07-28T10:02:00.000Z" }),
+    },
+  }), null);
 });
 
 test("route payloads keep the legacy full shape and add a distinct heartbeat", () => {
