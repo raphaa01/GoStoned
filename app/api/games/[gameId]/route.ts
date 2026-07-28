@@ -6,7 +6,8 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
-import { getGameState } from "@/lib/game/gameService";
+import { gamePollResponseBody, parseKnownGameVersion } from "@/lib/game/gamePolling";
+import { pollGameState } from "@/lib/game/gameService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,8 +21,9 @@ export async function GET(
     const playerKey = await resolvePlayerKey(request);
     consumeEphemeralPolicyRateLimit(request, RATE_LIMIT_POLICIES.gameRead, playerKey);
     const { gameId } = await context.params;
-    const game = await getGameState(gameId, playerKey);
-    return noStoreJson({ ok: true, game });
+    const knownVersion = parseKnownGameVersion(request.nextUrl.searchParams);
+    const result = await pollGameState(gameId, playerKey, knownVersion);
+    return noStoreJson(gamePollResponseBody(result));
   } catch (error) {
     return apiError(error);
   }

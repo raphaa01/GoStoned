@@ -34,6 +34,8 @@ import type {
   Board,
   BoardSize,
   ChineseAreaScore,
+  GameClockState,
+  GamePollHeartbeat,
   GameState,
   Position,
   Stone,
@@ -133,6 +135,37 @@ type LoadedGame = {
   positionHistory: readonly string[];
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
+};
+
+type PollGameRow = Pick<
+  GameRow,
+  | "id"
+  | "black_player_key"
+  | "white_player_key"
+  | "status"
+  | "phase"
+  | "to_move"
+  | "scoring_revision"
+  | "finish_reason"
+  | "rules"
+  | "rules_profile"
+  | "scoring_method"
+  | "komi"
+  | "handicap"
+  | "main_time_seconds"
+  | "byo_yomi_periods"
+  | "byo_yomi_seconds"
+  | "black_time_remaining_ms"
+  | "white_time_remaining_ms"
+  | "black_periods_remaining"
+  | "white_periods_remaining"
+  | "turn_started_at"
+  | "version"
+>;
+
+type PollScoringRow = {
+  revision: number;
+  expires_at: Date;
 };
 
 export class GameServiceError extends Error {
@@ -303,7 +336,10 @@ function normalizeHistoricalRulesLifecycle(
   return { game, scoring };
 }
 
-function assertParticipant(game: GameRow, playerKey: string) {
+function assertParticipant(
+  game: Pick<GameRow, "black_player_key" | "white_player_key">,
+  playerKey: string,
+) {
   if (playerKey !== game.black_player_key && playerKey !== game.white_player_key) {
     throw new GameServiceError("You are not a participant in this game.", 403, "not_participant");
   }
@@ -502,8 +538,20 @@ function effectiveConsecutivePasses(
   return moveRows.at(-1)?.is_pass ? 1 : 0;
 }
 
+type ClockGameRow = Pick<
+  GameRow,
+  | "main_time_seconds"
+  | "byo_yomi_periods"
+  | "byo_yomi_seconds"
+  | "black_time_remaining_ms"
+  | "white_time_remaining_ms"
+  | "black_periods_remaining"
+  | "white_periods_remaining"
+  | "turn_started_at"
+>;
+
 function calculateClocks(
-  game: GameRow,
+  game: ClockGameRow,
   turn: Stone | null,
   now: Date,
 ): { black: ClockAdvance; white: ClockAdvance } {
@@ -526,6 +574,32 @@ function calculateClocks(
     white: turn === "white"
       ? advanceClock({ ...whiteInput, elapsedMs })
       : restingClock(whiteInput.mainTimeMs, whiteInput.periodsRemaining, whiteInput.periodTimeMs),
+  };
+}
+
+function serializeGameClock(
+  game: ClockGameRow,
+  turn: Stone | null,
+  now: Date,
+): GameClockState {
+  const clocks = calculateClocks(game, turn, now);
+  return {
+    serverNow: now.toISOString(),
+    mainTimeSeconds: game.main_time_seconds,
+    byoYomiPeriods: game.byo_yomi_periods,
+    byoYomiSeconds: game.byo_yomi_seconds,
+    black: {
+      mainTimeMs: clocks.black.mainTimeMs,
+      periodsRemaining: clocks.black.periodsRemaining,
+      displayTimeMs: clocks.black.displayTimeMs,
+      phase: clocks.black.phase,
+    },
+    white: {
+      mainTimeMs: clocks.white.mainTimeMs,
+      periodsRemaining: clocks.white.periodsRemaining,
+      displayTimeMs: clocks.white.displayTimeMs,
+      phase: clocks.white.phase,
+    },
   };
 }
 
@@ -727,7 +801,6 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
   const { game, rules, moveRows, board, scoring } = loaded;
   const moves = mapMoves(moveRows);
   const turn = currentTurn(game, moveRows, rules.policy);
-  const clocks = calculateClocks(game, turn, now);
   const validatedScoring = scoring ? validateScoringSnapshot(loaded, board) : null;
   const deadStones = validatedScoring?.deadStones ?? [];
   const preview = scoring
@@ -775,24 +848,7 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     startedAt: game.started_at.toISOString(),
     finishedAt: game.finished_at?.toISOString() ?? null,
     timeControl: game.time_control,
-    clock: {
-      serverNow: now.toISOString(),
-      mainTimeSeconds: game.main_time_seconds,
-      byoYomiPeriods: game.byo_yomi_periods,
-      byoYomiSeconds: game.byo_yomi_seconds,
-      black: {
-        mainTimeMs: clocks.black.mainTimeMs,
-        periodsRemaining: clocks.black.periodsRemaining,
-        displayTimeMs: clocks.black.displayTimeMs,
-        phase: clocks.black.phase,
-      },
-      white: {
-        mainTimeMs: clocks.white.mainTimeMs,
-        periodsRemaining: clocks.white.periodsRemaining,
-        displayTimeMs: clocks.white.displayTimeMs,
-        phase: clocks.white.phase,
-      },
-    },
+    clock: serializeGameClock(game, turn, now),
     turn,
     moveCount: moves.length,
     board,
@@ -960,19 +1016,110 @@ function stoppedBoard(loaded: LoadedGame, scoring: ScoringRow): Board {
   return loaded.board;
 }
 
-export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
-  return withTransaction(async (client) => {
-    const loaded = await loadGame(client, gameId, playerKey, true);
-    const now = new Date();
-    const resumed = await resumeExpiredScoring(client, loaded, now);
-    if (resumed) return serializeGame(resumed, now);
-    const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
-    if (turn) {
-      const clocks = calculateClocks(loaded.game, turn, now);
-      if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
+async function resolveGameState(
+  client: PoolClient,
+  gameId: string,
+  playerKey: string,
+): Promise<GameState> {
+  const loaded = await loadGame(client, gameId, playerKey, true);
+  const now = new Date();
+  const resumed = await resumeExpiredScoring(client, loaded, now);
+  if (resumed) return serializeGame(resumed, now);
+  const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
+  if (turn) {
+    const clocks = calculateClocks(loaded.game, turn, now);
+    if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
+  }
+  return serializeGame(loaded, now);
+}
+
+async function pollHeader(gameId: string): Promise<PollGameRow> {
+  const result = await query<PollGameRow>(
+    `SELECT g.id, g.black_player_key, g.white_player_key, g.status, g.phase,
+            g.to_move, g.scoring_revision, g.finish_reason, g.rules,
+            g.rules_profile, g.scoring_method, g.komi, g.handicap,
+            g.main_time_seconds, g.byo_yomi_periods, g.byo_yomi_seconds,
+            g.black_time_remaining_ms, g.white_time_remaining_ms,
+            g.black_periods_remaining, g.white_periods_remaining,
+            g.turn_started_at, g.version
+       FROM games g
+      WHERE g.id = $1`,
+    [gameId],
+  );
+  const game = result.rows[0];
+  if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
+  return game;
+}
+
+function heartbeat(game: PollGameRow, turn: Stone | null, now: Date): GamePollHeartbeat {
+  return {
+    unchanged: true,
+    gameId: game.id,
+    version: game.version,
+    clock: serializeGameClock(game, turn, now),
+  };
+}
+
+export async function pollGameState(
+  gameId: string,
+  playerKey: string,
+  knownVersion: number | null,
+): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
+  if (knownVersion === null) {
+    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+  }
+
+  const game = await pollHeader(gameId);
+  assertParticipant(game, playerKey);
+  if (game.version !== knownVersion) {
+    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+  }
+
+  const rules = storedRulesConfiguration(game);
+  const now = new Date();
+  if (game.status === "finished") return heartbeat(game, null, now);
+
+  if (
+    game.status === "active"
+    && game.phase === "play"
+    && game.finish_reason === null
+    && rules.policy.turnSource !== "move-log"
+    && game.to_move !== null
+  ) {
+    const clocks = calculateClocks(game, game.to_move, now);
+    if (!clocks[game.to_move].timedOut) return heartbeat(game, game.to_move, now);
+  }
+
+  if (
+    game.status === "active"
+    && game.phase === "scoring"
+    && game.finish_reason === null
+    && rules.policy.scoringLifecycle === "agreement"
+  ) {
+    const scoring = await query<PollScoringRow>(
+      `SELECT scoring.revision, scoring.expires_at
+         FROM game_scoring_state scoring
+         JOIN games g ON g.id = scoring.game_id
+        WHERE scoring.game_id = $1
+          AND g.version = $2
+          AND ($3 = g.black_player_key OR $3 = g.white_player_key)`,
+      [gameId, knownVersion, playerKey],
+    );
+    const snapshot = scoring.rows[0];
+    if (
+      snapshot
+      && snapshot.revision === game.scoring_revision
+      && !scoringDeadlineExpired(snapshot.expires_at, now)
+    ) {
+      return heartbeat(game, null, now);
     }
-    return serializeGame(loaded, now);
-  });
+  }
+
+  return { unchanged: false, game: await getGameState(gameId, playerKey) };
+}
+
+export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
+  return withTransaction((client) => resolveGameState(client, gameId, playerKey));
 }
 
 export async function submitMove(
