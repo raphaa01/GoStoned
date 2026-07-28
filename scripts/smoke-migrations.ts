@@ -10,33 +10,36 @@ import {
   assertSmokeDatabaseIdentity,
   getSmokeDatabaseExpectation,
 } from "../lib/smokeDatabase";
-
-const NONTRANSACTIONAL_INDEXES = {
-  "012_leaderboard_rating_history_index.sql": {
-    name: "idx_player_rating_history_board_player_time",
-    fragments: [
-      "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
-      "INCLUDE (game_id, rating_before, rating_after, result)",
-    ],
-  },
-  "015_matchmaking_stale_cleanup_index.sql": {
-    name: "idx_matchmaking_waiting_pool_updated_at",
-    fragments: [
-      "ON public.matchmaking_queue USING btree (board_size, time_control, rules_profile, updated_at, player_key)",
-      "WHERE (status = 'waiting'::text)",
-    ],
-  },
-} as const;
+import {
+  assertExactUsableConcurrentIndex,
+  CONCURRENT_INDEX_SPECS,
+} from "./migrationIndexes";
 
 type MigrationSnapshot = Readonly<{
   databaseName: string;
   roleName: string;
   migrations: ReadonlyArray<Readonly<{ filename: string; appliedAt: string }>>;
   indexes: ReadonlyArray<Readonly<{
+    relationOid: number;
     name: string;
-    definition: string;
+    relationPersistence: string;
+    tablespaceOid: number;
+    relationOptions: string[] | null;
+    ownerName: string;
+    tableSchema: string | null;
+    tableName: string | null;
+    tableOid: number | null;
+    tableKind: string | null;
+    tableOwnerName: string | null;
+    method: string | null;
+    keyExpressions: string[] | null;
+    includeExpressions: string[] | null;
+    predicate: string | null;
     ready: boolean;
     valid: boolean;
+    live: boolean;
+    constraintCount: number;
+    activeBuildCount: number;
   }>>;
 }>;
 
@@ -58,7 +61,7 @@ async function expectedMigrationFiles(): Promise<string[]> {
       nonTransactional.push(filename);
     }
   }
-  assert.deepEqual(nonTransactional, Object.keys(NONTRANSACTIONAL_INDEXES));
+  assert.deepEqual(nonTransactional, CONCURRENT_INDEX_SPECS.map(({ filename }) => filename));
   return files;
 }
 
@@ -70,6 +73,17 @@ function runMigrations(): string {
     maxBuffer: 2 * 1024 * 1024,
     timeout: 120_000,
   });
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  const databaseUrl = getDatabaseUrl();
+  const encodedPassword = new URL(databaseUrl).password;
+  const decodedPassword = decodeURIComponent(encodedPassword);
+  assert.equal(output.includes(databaseUrl), false, "Migration output exposed DATABASE_URL.");
+  if (encodedPassword) {
+    assert.equal(output.includes(encodedPassword), false, "Migration output exposed a password.");
+  }
+  if (decodedPassword) {
+    assert.equal(output.includes(decodedPassword), false, "Migration output exposed a password.");
+  }
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.error || result.status !== 0) throw new Error("Database migration command failed.");
@@ -131,36 +145,38 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   ]);
 
   const ledger = await query<{ filename: string; applied_at: Date }>(
-    "SELECT filename, applied_at FROM schema_migrations ORDER BY filename",
+    "SELECT filename, applied_at FROM public.schema_migrations ORDER BY filename",
   );
   assert.deepEqual(ledger.rows.map(({ filename }) => filename), expectedFiles);
 
-  const indexNames = Object.values(NONTRANSACTIONAL_INDEXES).map(({ name }) => name);
-  const indexes = await query<{
-    name: string;
-    definition: string;
-    ready: boolean;
-    valid: boolean;
-  }>(
-    `SELECT relation.relname AS name,
-            pg_get_indexdef(indexes.indexrelid) AS definition,
-            indexes.indisready AS ready,
-            indexes.indisvalid AS valid
-       FROM pg_index AS indexes
-       JOIN pg_class AS relation ON relation.oid = indexes.indexrelid
-       JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
-      WHERE namespace.nspname = 'public'
-        AND relation.relname = ANY($1::text[])
-      ORDER BY relation.relname`,
-    [indexNames],
-  );
-  assert.deepEqual(indexes.rows.map(({ name }) => name), [...indexNames].sort());
-  for (const index of indexes.rows) {
-    const expectedIndex = Object.values(NONTRANSACTIONAL_INDEXES).find(({ name }) => name === index.name);
-    assert.ok(expectedIndex, "Unexpected concurrent index.");
-    assert.equal(index.ready, true, "Concurrent index is not ready.");
-    assert.equal(index.valid, true, "Concurrent index is not valid.");
-    for (const fragment of expectedIndex.fragments) assert.ok(index.definition.includes(fragment));
+  const indexes: Array<MigrationSnapshot["indexes"][number]> = [];
+  for (const spec of CONCURRENT_INDEX_SPECS) {
+    const inspection = await assertExactUsableConcurrentIndex(getPool(), spec, connected.role_name);
+    assert.equal(inspection.ready, true, "Concurrent index is not ready.");
+    assert.equal(inspection.valid, true, "Concurrent index is not valid.");
+    assert.equal(inspection.live, true, "Concurrent index is not live.");
+    indexes.push({
+      relationOid: inspection.relationOid,
+      name: spec.name,
+      relationPersistence: inspection.relationPersistence,
+      tablespaceOid: inspection.tablespaceOid,
+      relationOptions: inspection.relationOptions,
+      ownerName: inspection.ownerName,
+      tableSchema: inspection.tableSchema,
+      tableName: inspection.tableName,
+      tableOid: inspection.tableOid,
+      tableKind: inspection.tableKind,
+      tableOwnerName: inspection.tableOwnerName,
+      method: inspection.method,
+      keyExpressions: inspection.keyExpressions,
+      includeExpressions: inspection.includeExpressions,
+      predicate: inspection.predicate,
+      ready: inspection.ready,
+      valid: inspection.valid,
+      live: inspection.live,
+      constraintCount: inspection.constraintCount,
+      activeBuildCount: inspection.activeBuildCount,
+    });
   }
 
   return {
@@ -170,7 +186,7 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
       filename,
       appliedAt: applied_at.toISOString(),
     })),
-    indexes: indexes.rows,
+    indexes,
   };
 }
 

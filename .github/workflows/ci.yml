@@ -120,6 +120,9 @@ jobs:
       - name: Verify fresh and idempotent migration chain
         run: npm run test:migrations-db
 
+      - name: Verify migration serialization and recovery
+        run: npm run test:migration-recovery
+
       - name: Run direct PostgreSQL concurrency smokes
         run: |
           npm run test:matchmaking-races
