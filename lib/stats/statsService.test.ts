@@ -16,35 +16,113 @@ async function withPool<T>(pool: Pool, action: () => Promise<T>): Promise<T> {
 test("leaderboard joins registered users and excludes guest or orphan stats", async () => {
   let statement = "";
   let values: readonly unknown[] = [];
+  const observedAt = new Date("2026-07-28T10:00:00.000Z");
   const pool = {
     async query(sql: string, parameters: readonly unknown[]) {
       statement = sql.replace(/\s+/g, " ").trim();
       values = parameters;
       return {
         rows: [{
-          player_name: "Registered Player",
-          board_size: 9,
-          games: 4,
-          wins: 3,
-          losses: 1,
-          draws: 0,
-          rating: 1_232,
-          highest_rating: 1_248,
-          updated_at: new Date("2026-07-28T10:00:00.000Z"),
+          observed_at: observedAt,
+          entries: [{
+            position: 1,
+            playerName: "Registered Player",
+            games: 4,
+            wins: 3,
+            rating: 1_232,
+          }],
         }],
         rowCount: 1,
       };
     },
   } as unknown as Pool;
 
-  const leaderboard = await withPool(pool, () => getLeaderboard(9, 500));
+  const snapshot = await withPool(pool, () => getLeaderboard(9, 500));
 
   assert.match(statement, /FROM player_stats ps JOIN users u/);
   assert.match(statement, /ps\.player_key = 'user:' \|\| u\.id::text/);
   assert.doesNotMatch(statement, /LEFT JOIN users u/);
   assert.doesNotMatch(statement, /ps\.player_key LIKE 'guest:%'/);
+  assert.match(statement, /ps\.games > 0/);
+  assert.match(statement, /JOIN users black_user/);
+  assert.match(statement, /JOIN users white_user/);
+  assert.match(statement, /game_record\.status = 'finished'/);
+  assert.match(statement, /history\.board_size = \$1/);
+  assert.match(statement, /history\.player_key IN \( game_record\.black_player_key, game_record\.white_player_key \)/);
+  assert.match(statement, /total_game_ledger_rows/);
+  assert.match(statement, /COUNT\(DISTINCT player_key\) = 2/);
+  assert.match(statement, /winner_key = player_key/);
+  assert.match(statement, /BOOL_AND\(winner_key IS NULL\)/);
+  assert.match(statement, /COUNT\(\*\) FILTER \(WHERE winner_key = player_key\) = 1/);
+  assert.match(statement, /history_inventory/);
+  assert.match(statement, /FROM player_rating_history WHERE board_size = \$1 GROUP BY player_key, board_size/);
+  assert.match(statement, /inventory\.games = totals\.games/);
+  assert.match(statement, /LAG\(rating_after, 1, 1200\)/);
+  assert.match(statement, /rating_before = expected_rating_before/);
+  assert.match(statement, /rating_after = rating_before \+ 16/);
+  assert.match(statement, /rating_after = GREATEST\(100, rating_before - 16\)/);
+  assert.match(statement, /ps\.games = totals\.games/);
+  assert.match(statement, /ps\.wins = totals\.wins/);
+  assert.match(statement, /ps\.losses = totals\.losses/);
+  assert.match(statement, /ps\.draws = totals\.draws/);
+  assert.match(statement, /ps\.rating = latest\.rating_after/);
+  assert.match(statement, /ps\.rating >= 100/);
+  assert.match(statement, /CHAR_LENGTH/);
+  assert.match(
+    statement,
+    /ROW_NUMBER\(\) OVER \( ORDER BY rating DESC, games DESC, player_key ASC \)/,
+  );
+  assert.match(statement, /statement_timestamp\(\) AS observed_at/);
+  assert.match(statement, /'playerName', player_name/);
+  assert.doesNotMatch(statement, /highest_rating/);
+  assert.doesNotMatch(statement, /updated_at/);
   assert.deepEqual(values, [9, 100]);
-  assert.equal(leaderboard[0].player_name, "Registered Player");
+  assert.deepEqual(snapshot, {
+    entries: [{
+      position: 1,
+      playerName: "Registered Player",
+      games: 4,
+      wins: 3,
+      rating: 1_232,
+    }],
+    observedAt,
+  });
+});
+
+test("leaderboard SQL quarantines legacy guest and mixed rating histories", async () => {
+  let statement = "";
+  const pool = {
+    async query(sql: string) {
+      statement = sql.replace(/\s+/g, " ").trim();
+      return {
+        rows: [{ observed_at: new Date("2026-07-28T10:00:00.000Z"), entries: [] }],
+        rowCount: 1,
+      };
+    },
+  } as unknown as Pool;
+
+  await withPool(pool, () => getLeaderboard(19));
+
+  assert.match(
+    statement,
+    /game_record\.black_player_key = 'user:' \|\| black_user\.id::text/,
+  );
+  assert.match(
+    statement,
+    /game_record\.white_player_key = 'user:' \|\| white_user\.id::text/,
+  );
+  assert.match(
+    statement,
+    /SELECT COUNT\(\*\)::int FROM player_rating_history game_history WHERE game_history\.game_id = history\.game_id/,
+  );
+  assert.match(statement, /HAVING COUNT\(\*\) = 2/);
+  assert.match(statement, /COUNT\(DISTINCT player_key\) = 2/);
+  assert.match(statement, /total_game_ledger_rows = 2/);
+  assert.match(statement, /winner_key IS NULL THEN result = 'draw'/);
+  assert.match(statement, /winner_key = player_key THEN result = 'win'/);
+  assert.match(statement, /inventory\.games = totals\.games/);
+  assert.match(statement, /ps\.rating = latest\.rating_after/);
+  assert.doesNotMatch(statement, /LIKE 'guest:%'/);
 });
 
 test("profiles retain guest games and distinguish unrated results from rated account games", async () => {

@@ -43,16 +43,27 @@ async function migrate() {
     }
 
     const sql = await readFile(path.join(migrationsPath, filename), "utf8");
+    const nonTransactional = sql.trimStart().startsWith(
+      "-- gostone:migration-mode=nontransactional",
+    );
     const client = await pool.connect();
     try {
       console.log(`Applying ${filename}...`);
+      if (nonTransactional) {
+        await client.query(sql);
+        await client.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [filename]);
+        console.log(`Applied ${filename}.`);
+        continue;
+      }
       await client.query("BEGIN");
       await client.query(sql);
       await client.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [filename]);
       await client.query("COMMIT");
       console.log(`Applied ${filename}.`);
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (!nonTransactional) {
+        await client.query("ROLLBACK");
+      }
       throw error;
     } finally {
       client.release();

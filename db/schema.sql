@@ -1061,6 +1061,9 @@ CREATE INDEX IF NOT EXISTS idx_player_stats_board_rating
   ON player_stats(board_size, rating DESC, games DESC);
 CREATE INDEX IF NOT EXISTS idx_player_rating_history_player_board_time
   ON player_rating_history(player_key, board_size, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_player_rating_history_board_player_time
+  ON player_rating_history(board_size, player_key, recorded_at, id)
+  INCLUDE (game_id, rating_before, rating_after, result);
 CREATE INDEX IF NOT EXISTS idx_player_rating_history_game_id
   ON player_rating_history(game_id);
 CREATE INDEX IF NOT EXISTS idx_games_black_player_finished

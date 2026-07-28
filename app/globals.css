@@ -2698,8 +2698,23 @@ a {
   color: var(--green-hover);
 }
 
+.leaderboard-method,
+.leaderboard-snapshot {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 12px 3px 0;
+}
+
+.leaderboard-snapshot {
+  color: var(--muted-2);
+}
+
 .leaderboard-table {
+  margin-top: 12px;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
 }
 
 .leaderboard-table table {

@@ -26,6 +26,11 @@ test("selectors and leaderboard retain explicit selection and table semantics", 
   assert.match(leaderboard, /<table>/);
   assert.match(leaderboard, /<th scope="col">/);
   assert.match(leaderboard, /<th scope="row">/);
+  assert.match(leaderboard, /role="region"/);
+  assert.match(leaderboard, /tabIndex=\{0\}/);
+  assert.match(leaderboard, /aria-label=\{tableLabel\}/);
+  assert.match(leaderboard, /aria-atomic="true"/);
+  assert.match(leaderboard, /copy\.snapshotSummary/);
 });
 
 test("board and modal event contracts retain their accessibility guards", () => {
