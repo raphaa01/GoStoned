@@ -7,9 +7,11 @@ import {
   consumeIpPolicyRateLimit,
   consumePolicyRateLimit,
   consumeRateLimit,
+  consumeSubjectPolicyRateLimit,
   createRateLimitKey,
   RATE_LIMIT_POLICIES,
   RateLimitError,
+  reserveLoginAccountAttempt,
 } from "./rateLimit";
 
 type FakeRow = {
@@ -95,6 +97,99 @@ test("concurrent actor requests allow exactly the configured count", async () =>
   for (const result of results) {
     if (result.status === "rejected") assert.ok(result.reason instanceof RateLimitError);
   }
+});
+
+test("subject budgets atomically bind one normalized username", async () => {
+  const execute = atomicMemoryExecutor();
+  const policy = {
+    scope: "shared-login-test",
+    limit: 5,
+    windowMinutes: 15,
+  };
+  const results = await Promise.allSettled(
+    Array.from({ length: 20 }, (_value, index) =>
+      consumeSubjectPolicyRateLimit(
+        policy,
+        index % 2 === 0 ? "NamedPlayer" : "namedplayer",
+        execute,
+      ),
+    ),
+  );
+
+  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 5);
+  assert.equal(results.filter(({ status }) => status === "rejected").length, 15);
+  const fulfilledKeys = results.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  assert.equal(new Set(fulfilledKeys).size, 1);
+  assert.match(fulfilledKeys[0], /^[0-9a-f]{64}$/);
+  assert.doesNotMatch(fulfilledKeys[0], /NamedPlayer/i);
+});
+
+test("login account reservations use sparse recovery after the sustained budget", async () => {
+  const username = "NamedPlayer";
+  const keys = {
+    burst: createRateLimitKey(
+      RATE_LIMIT_POLICIES.loginAccountBurst.scope,
+      "subject",
+      username,
+    ),
+    sustained: createRateLimitKey(
+      RATE_LIMIT_POLICIES.loginAccountSustained.scope,
+      "subject",
+      username,
+    ),
+    recovery: createRateLimitKey(
+      RATE_LIMIT_POLICIES.loginAccountRecovery.scope,
+      "subject",
+      username,
+    ),
+  };
+  const observed: string[] = [];
+  const reserved = await reserveLoginAccountAttempt(username, async (_sql, values) => {
+    const key = String(values[0]);
+    observed.push(key);
+    const denied = key === keys.sustained;
+    return {
+      rows: [{
+        attempts: denied ? 11 : 1,
+        window_started_at: new Date(),
+        blocked_until: denied ? new Date(Date.now() + 60_000) : null,
+        retry_after_seconds: denied ? 3_600 : 300,
+      }],
+    };
+  });
+
+  assert.deepEqual(observed, [keys.burst, keys.sustained, keys.recovery]);
+  assert.deepEqual(reserved, [keys.burst, keys.sustained, keys.recovery]);
+});
+
+test("login account reservations deny when the sparse recovery probe is unavailable", async () => {
+  const username = "NamedPlayer";
+  const burstKey = createRateLimitKey(
+    RATE_LIMIT_POLICIES.loginAccountBurst.scope,
+    "subject",
+    username,
+  );
+  const attempts: string[] = [];
+
+  await assert.rejects(
+    reserveLoginAccountAttempt(username, async (_sql, values) => {
+      const key = String(values[0]);
+      attempts.push(key);
+      const denied = key !== burstKey;
+      return {
+        rows: [{
+          attempts: denied ? 11 : 1,
+          window_started_at: new Date(),
+          blocked_until: denied ? new Date(Date.now() + 60_000) : null,
+          retry_after_seconds: key === burstKey ? 1 : attempts.length === 2 ? 2 : 300,
+        }],
+      };
+    }),
+    (error) => error instanceof RateLimitError && error.retryAfterSeconds === 2,
+  );
+  assert.equal(attempts.length, 3);
 });
 
 test("actor and address buckets are independently enforced", async () => {

@@ -38,6 +38,12 @@ export const RATE_LIMIT_POLICIES = {
   guestSessionLookup: { scope: "guest-session-lookup", limit: 120, windowMinutes: 1 },
   accountSessionLookup: { scope: "account-session-lookup", limit: 120, windowMinutes: 1 },
   loginTarget: { scope: "login-target", limit: 8, windowMinutes: 15 },
+  // The burst gate bounds parallel verification. Once the sustained budget is
+  // exhausted, sparse recovery probes remain possible so a burst cannot create
+  // a complete unauthenticated account lockout.
+  loginAccountBurst: { scope: "login-account-burst", limit: 1, windowMinutes: 1 / 60 },
+  loginAccountSustained: { scope: "login-account-sustained", limit: 10, windowMinutes: 60 },
+  loginAccountRecovery: { scope: "login-account-recovery", limit: 1, windowMinutes: 5 },
   loginAddress: { scope: "login-address", limit: 120, windowMinutes: 15 },
   registerTarget: { scope: "register-target", limit: 3, windowMinutes: 60 },
   registerAddress: { scope: "register-address", limit: 30, windowMinutes: 60 },
@@ -155,7 +161,7 @@ function requestAddress(request: NextRequest): string {
 
 export function createRateLimitKey(
   scope: string,
-  dimension: "actor" | "ip" | "ip-subject",
+  dimension: "actor" | "ip" | "ip-subject" | "subject",
   subject: string,
 ): string {
   return createHash("sha256")
@@ -182,6 +188,50 @@ export async function consumeRateLimit(
   const row = await recordRateLimit(key, limit, windowMinutes, execute);
   throwIfDenied(row, limit);
   return key;
+}
+
+function subjectRateLimitKey(policy: RateLimitPolicy, subject: string): string {
+  return createRateLimitKey(policy.scope, "subject", subject);
+}
+
+export async function consumeSubjectPolicyRateLimit(
+  policy: RateLimitPolicy,
+  subject: string,
+  execute: RateLimitExecutor = executeRateLimit,
+): Promise<string> {
+  const key = subjectRateLimitKey(policy, subject);
+  const row = await recordRateLimit(key, policy.limit, policy.windowMinutes, execute);
+  throwIfDenied(row, policy.limit);
+  return key;
+}
+
+export async function reserveLoginAccountAttempt(
+  subject: string,
+  execute: RateLimitExecutor = executeRateLimit,
+): Promise<string[]> {
+  const policies = RATE_LIMIT_POLICIES;
+  const keys = [
+    subjectRateLimitKey(policies.loginAccountBurst, subject),
+    subjectRateLimitKey(policies.loginAccountSustained, subject),
+    subjectRateLimitKey(policies.loginAccountRecovery, subject),
+  ];
+
+  await consumeSubjectPolicyRateLimit(policies.loginAccountBurst, subject, execute);
+  try {
+    await consumeSubjectPolicyRateLimit(policies.loginAccountSustained, subject, execute);
+  } catch (sustainedError) {
+    if (!(sustainedError instanceof RateLimitError)) throw sustainedError;
+    try {
+      await consumeSubjectPolicyRateLimit(policies.loginAccountRecovery, subject, execute);
+    } catch (recoveryError) {
+      if (!(recoveryError instanceof RateLimitError)) throw recoveryError;
+      throw new RateLimitError(Math.min(
+        sustainedError.retryAfterSeconds,
+        recoveryError.retryAfterSeconds,
+      ));
+    }
+  }
+  return keys;
 }
 
 async function recordRateLimit(
