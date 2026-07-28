@@ -86,6 +86,13 @@ const requiredResumeEventColumns = [
   "resumed_at",
 ] as const;
 
+const requiredIndexDefinitions = {
+  idx_player_rating_history_board_player_time: [
+    "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
+    "INCLUDE (game_id, rating_before, rating_after, result)",
+  ],
+} as const;
+
 const requiredConstraintSignatures = [
   "games_rules_identity_unique:games:u",
   "games_supported_rules_tuple_check:games:c",
@@ -273,6 +280,8 @@ async function checkMvp() {
     public_can_execute_guard_functions: boolean;
     client_roles_can_execute_guard_functions: boolean;
     guard_function_definitions: Record<string, string>;
+    index_definitions: Record<string, string>;
+    index_states: Record<string, { isReady: boolean; isValid: boolean }>;
     rules_profile_default: string | null;
   }>(
     `SELECT NOW() AS now,
@@ -465,6 +474,34 @@ async function checkMvp() {
                 FROM UNNEST($14::text[]) AS guard_function(function_name)
             ) AS guard_function_definitions,
             (
+              SELECT COALESCE(
+                JSONB_OBJECT_AGG(indexname, indexdef),
+                '{}'::jsonb
+              )
+                FROM pg_indexes
+               WHERE schemaname = 'public'
+                 AND indexname = ANY($15::text[])
+            ) AS index_definitions,
+            (
+              SELECT COALESCE(
+                JSONB_OBJECT_AGG(
+                  index_relation.relname,
+                  JSONB_BUILD_OBJECT(
+                    'isReady', index_row.indisready,
+                    'isValid', index_row.indisvalid
+                  )
+                ),
+                '{}'::jsonb
+              )
+                FROM pg_index index_row
+                JOIN pg_class index_relation
+                  ON index_relation.oid = index_row.indexrelid
+                JOIN pg_namespace index_namespace
+                  ON index_namespace.oid = index_relation.relnamespace
+               WHERE index_namespace.nspname = 'public'
+                 AND index_relation.relname = ANY($15::text[])
+            ) AS index_states,
+            (
               SELECT column_default
                 FROM information_schema.columns
                WHERE table_schema = 'public'
@@ -486,10 +523,23 @@ async function checkMvp() {
       requiredRolloutConstraintSignatures,
       requiredResumeEventColumns,
       Object.keys(requiredGuardFunctionDefinitions),
+      Object.keys(requiredIndexDefinitions),
     ],
   );
 
   const row = database.rows[0];
+  for (const [indexName, fragments] of Object.entries(requiredIndexDefinitions)) {
+    const definition = row.index_definitions[indexName];
+    const state = row.index_states[indexName];
+    if (
+      !definition
+      || fragments.some((fragment) => !definition.includes(fragment))
+      || !state?.isReady
+      || !state.isValid
+    ) {
+      throw new Error(`Database index is incomplete: ${indexName}`);
+    }
+  }
   const absentTables = requiredTables.filter((table) => !row.tables.includes(table));
   if (absentTables.length > 0) {
     throw new Error(

@@ -93,7 +93,7 @@ test("English and German catalogues retain the same key shape", () => {
   assert.deepEqual(keys(de), keys(en));
 });
 
-test("English and German distinguish rated account games from guest-involved results", () => {
+test("English and German distinguish rated account games and disclose leaderboard eligibility", () => {
   assert.match(en.game.ratedResultSaved, /rating changes/);
   assert.match(en.game.unratedResultSaved, /did not affect ratings/);
   assert.match(de.game.ratedResultSaved, /Wertungsänderungen/);
@@ -102,8 +102,20 @@ test("English and German distinguish rated account games from guest-involved res
   assert.equal(en.profile.unrated, "Unrated");
   assert.equal(de.profile.rated, "Gewertet");
   assert.equal(de.profile.unrated, "Ungewertet");
-  assert.match(en.leaderboard.empty, /first rated game/);
-  assert.match(de.leaderboard.empty, /erste gewertete Partie/);
+  assert.match(en.leaderboard.description, /fully backed/);
+  assert.match(en.leaderboard.description, /other registered accounts/);
+  assert.match(de.leaderboard.description, /vollständig/);
+  assert.match(de.leaderboard.description, /andere registrierte Konten/);
+  assert.match(en.leaderboard.ratingMethod, /start at 1200/);
+  assert.match(en.leaderboard.ratingMethod, /16 points/);
+  assert.match(en.leaderboard.ratingMethod, /100-point floor/);
+  assert.match(de.leaderboard.ratingMethod, /bei 1200/);
+  assert.match(de.leaderboard.ratingMethod, /16 Punkte/);
+  assert.match(de.leaderboard.ratingMethod, /Untergrenze liegt bei 100/);
+  assert.match(en.auth.usernameHint, /visible to other players and on leaderboards/);
+  assert.match(de.auth.usernameHint, /für andere Spieler und in Ranglisten sichtbar/);
+  assert.match(en.apiErrors.invalid_stats_request, /exactly one/);
+  assert.match(de.apiErrors.invalid_stats_request, /genau eine/);
 });
 
 test("API error codes resolve through the active catalogue without exposing unknown server copy", () => {
