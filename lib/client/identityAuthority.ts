@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./api";
+
 export type IdentityRequestToken = Readonly<{
   identityKey: string;
   generation: number;
@@ -33,4 +35,12 @@ export function createIdentityRequestAuthority(
       return true;
     },
   };
+}
+
+export function assertResponseActor(actor: unknown, expectedPlayerKey: string): void {
+  if (actor === expectedPlayerKey) return;
+  throw new ApiRequestError("The player session changed.", {
+    status: 409,
+    code: "identity_changed",
+  });
 }

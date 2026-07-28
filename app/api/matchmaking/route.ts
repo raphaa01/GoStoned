@@ -7,7 +7,7 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
-import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
+import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { isTimeControlId } from "@/lib/game/timeControls";
 import { GameServiceError } from "@/lib/game/gameService";
 import {
@@ -19,15 +19,6 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function assertExpectedPlayer(request: NextRequest, playerKey: string) {
-  if (request.headers.get(EXPECTED_PLAYER_HEADER) === playerKey) return;
-  throw new GameServiceError(
-    "The player session changed. Refresh before using matchmaking.",
-    409,
-    "identity_changed",
-  );
-}
 
 export async function GET(request: NextRequest) {
   try {

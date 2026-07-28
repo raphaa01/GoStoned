@@ -6,9 +6,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { ApiRequestError, readApi } from "@/lib/client/api";
+import { readApi } from "@/lib/client/api";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
-import { createIdentityRequestAuthority, type IdentityRequestToken } from "@/lib/client/identityAuthority";
+import {
+  assertResponseActor,
+  createIdentityRequestAuthority,
+  type IdentityRequestToken,
+} from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import {
   applyMatchmakingQueueState,
@@ -167,12 +171,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     ) {
       return false;
     }
-    if (data.actor !== playerKey) {
-      throw new ApiRequestError("The player session changed.", {
-        status: 409,
-        code: "identity_changed",
-      });
-    }
+    assertResponseActor(data.actor, playerKey);
     handleQueueState(data.matchmaking, enterMatchedGame);
     queueKnown.current = true;
     enterMatchedOnSync.current = data.matchmaking.status === "waiting";

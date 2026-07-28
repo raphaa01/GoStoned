@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createIdentityRequestAuthority } from "./identityAuthority";
+import { ApiRequestError } from "./api";
+import { assertResponseActor, createIdentityRequestAuthority } from "./identityAuthority";
 
 test("identity request generations reject A-B-A response races", () => {
   const authority = createIdentityRequestAuthority("account:A");
@@ -41,4 +42,16 @@ test("a matchmaking mutation invalidates older reads for the same identity", () 
   const cancel = authority.capture();
   assert.equal(authority.isCurrent(join), false);
   assert.equal(authority.isCurrent(cancel), true);
+});
+
+test("mutation responses must echo the player that initiated the action", () => {
+  assert.doesNotThrow(() => assertResponseActor("guest:A", "guest:A"));
+  assert.throws(
+    () => assertResponseActor("account:B", "guest:A"),
+    (error) => error instanceof ApiRequestError && error.code === "identity_changed",
+  );
+  assert.throws(
+    () => assertResponseActor(undefined, "guest:A"),
+    (error) => error instanceof ApiRequestError && error.code === "identity_changed",
+  );
 });

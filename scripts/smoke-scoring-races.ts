@@ -61,7 +61,7 @@ async function postGame(
   suffix: string,
   body: Record<string, unknown>,
   cookie: string,
-  expectedPlayerKey?: string,
+  expectedPlayerKey: string,
 ) {
   return api(`/api/games/${gameId}${suffix}`, {
     method: "POST",
@@ -95,7 +95,7 @@ async function setupScoringFixture(): Promise<ScoringFixture> {
     [black, { isPass: true }],
     [white, { isPass: true }],
   ] as const) {
-    const moved = await postGame(gameId, "/moves", move, guest.cookie);
+    const moved = await postGame(gameId, "/moves", move, guest.cookie, guest.playerKey);
     assert.equal(moved.response.status, 200);
   }
 
@@ -106,12 +106,12 @@ async function setupScoringFixture(): Promise<ScoringFixture> {
     y: 2,
     dead: true,
     expectedRevision: revision,
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   assert.equal(marked.response.status, 200);
   const markedRevision = ((marked.body.game as { scoring: { revision: number } }).scoring.revision);
   const confirmed = await postGame(gameId, "/scoring/confirm", {
     expectedRevision: markedRevision,
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   assert.equal(confirmed.response.status, 200);
   return { black, white, gameId, revision: markedRevision };
 }
@@ -164,10 +164,22 @@ async function assertLegacyDeploymentWindowCompatibility() {
   assert.equal(legacyState.turn, "white");
   assert.equal(legacyState.consecutivePasses, 0);
 
-  const whitePass = await postGame(gameId, "/moves", { isPass: true }, white.cookie);
+  const whitePass = await postGame(
+    gameId,
+    "/moves",
+    { isPass: true },
+    white.cookie,
+    white.playerKey,
+  );
   assert.equal(whitePass.response.status, 200);
   assert.equal((whitePass.body.game as { consecutivePasses: number }).consecutivePasses, 1);
-  const blackPass = await postGame(gameId, "/moves", { isPass: true }, black.cookie);
+  const blackPass = await postGame(
+    gameId,
+    "/moves",
+    { isPass: true },
+    black.cookie,
+    black.playerKey,
+  );
   assert.equal(blackPass.response.status, 200);
   const finished = blackPass.body.game as { status: string; finishReason: string; rated: boolean };
   assert.equal(finished.status, "finished");
@@ -185,13 +197,13 @@ async function run() {
   const confirmResumeResults = await Promise.all([
     postGame(confirmResume.gameId, "/scoring/confirm", {
       expectedRevision: confirmResume.revision,
-    }, confirmResume.white.cookie),
+    }, confirmResume.white.cookie, confirmResume.white.playerKey),
     postGame(confirmResume.gameId, "/scoring/resume", {
       expectedRevision: confirmResume.revision,
       claim: "alive",
       x: 3,
       y: 2,
-    }, confirmResume.white.cookie),
+    }, confirmResume.white.cookie, confirmResume.white.playerKey),
   ]);
   assert.deepEqual(
     confirmResumeResults.map(({ response }) => response.status).sort(),
@@ -222,7 +234,7 @@ async function run() {
   const confirmResignResults = await Promise.all([
     postGame(confirmResign.gameId, "/scoring/confirm", {
       expectedRevision: confirmResign.revision,
-    }, confirmResign.white.cookie),
+    }, confirmResign.white.cookie, confirmResign.white.playerKey),
     postGame(
       confirmResign.gameId,
       "/resign",

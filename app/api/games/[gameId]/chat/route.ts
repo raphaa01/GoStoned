@@ -7,6 +7,7 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { getGameMessages, sendGameMessage } from "@/lib/game/chatService";
 
 export const dynamic = "force-dynamic";
@@ -40,12 +41,13 @@ export async function POST(
   try {
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.chatSendBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.chatSend, playerKey);
     const body = (await request.json()) as { message?: unknown };
     const { gameId } = await context.params;
     const message = await sendGameMessage(gameId, playerKey, body.message);
-    return noStoreJson({ ok: true, message }, { status: 201 });
+    return noStoreJson({ ok: true, actor: playerKey, message }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }

@@ -79,7 +79,7 @@ test("an authoritative matched cancellation preserves the active game", async ()
   globalThis.fetch = async () => {
     call += 1;
     if (call === 1) {
-      return apiResponse({ ok: true, game: { id: gameId } });
+      return apiResponse({ ok: true, actor: playerKey, game: { id: gameId } });
     }
     return apiResponse({
       ok: true,

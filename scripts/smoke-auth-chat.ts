@@ -147,20 +147,22 @@ async function run() {
 
   await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { message: "Good luck!" }, firstLogin.cookie!),
+    json("POST", { message: "Good luck!" }, firstLogin.cookie!, firstUser.playerKey),
     201,
   );
-  await request(
+  const secondMessage = await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { message: "Have fun!" }, registeredSecond.cookie!),
+    json("POST", { message: "Have fun!" }, registeredSecond.cookie!, secondUser.playerKey),
     201,
   );
+  assert.equal(secondMessage.body.actor, secondUser.playerKey);
   const blockedChat = await request(
     `/api/games/${gameId}/chat`,
     json(
       "POST",
       { message: "f.u.c.k" },
       firstLogin.cookie!,
+      firstUser.playerKey,
     ),
     400,
   );
