@@ -1110,6 +1110,48 @@ function assertScoringPhase(loaded: LoadedGame, expectedRevision: number): Scori
   return loaded.scoring;
 }
 
+async function appendScoringResumeEvidence(
+  client: PoolClient,
+  loaded: LoadedGame & { scoring: ScoringRow },
+  event: Readonly<{
+    claim: "dead" | "alive" | "deadline";
+    requestedBy: Stone | null;
+    disputedStone: Position | null;
+    resumedToMove: Stone;
+    resumedAt: Date;
+  }>,
+): Promise<void> {
+  const { scoring, rules } = loaded;
+  await client.query(
+    `INSERT INTO game_scoring_resume_events
+       (game_id, scoring_revision, board_hash, stopped_move_number,
+        rules, rules_profile, scoring_method, komi, handicap,
+        fallback_to_move, scoring_expires_at, resume_claim,
+        requested_by_color, disputed_x, disputed_y, resumed_to_move, resumed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+             $10, $11, $12, $13, $14, $15, $16, $17)`,
+    [
+      loaded.game.id,
+      scoring.revision,
+      scoring.board_hash,
+      scoring.stopped_move_number,
+      rules.ruleset,
+      rules.rulesProfile,
+      rules.scoringMethod,
+      rules.komi,
+      rules.handicap,
+      scoring.fallback_to_move,
+      scoring.expires_at,
+      event.claim,
+      event.requestedBy,
+      event.disputedStone?.x ?? null,
+      event.disputedStone?.y ?? null,
+      event.resumedToMove,
+      event.resumedAt,
+    ],
+  );
+}
+
 async function resumeExpiredScoring(
   client: PoolClient,
   loaded: LoadedGame,
@@ -1123,6 +1165,18 @@ async function resumeExpiredScoring(
   ) {
     return null;
   }
+  const scoring = loaded.scoring;
+  await appendScoringResumeEvidence(
+    client,
+    { ...loaded, scoring },
+    {
+      claim: "deadline",
+      requestedBy: null,
+      disputedStone: null,
+      resumedToMove: scoring.fallback_to_move,
+      resumedAt: now,
+    },
+  );
   await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [loaded.game.id]);
   const updated = await client.query<GameRow>(
     `UPDATE games
@@ -1133,7 +1187,7 @@ async function resumeExpiredScoring(
             turn_started_at = $3, updated_at = $3, version = version + 1
       WHERE id = $1
       RETURNING *`,
-    [loaded.game.id, loaded.scoring.fallback_to_move, now],
+    [loaded.game.id, scoring.fallback_to_move, now],
   );
   return {
     ...withUpdatedGame(loaded, updated.rows[0]),
@@ -1661,7 +1715,8 @@ export async function resumePlay(
 ): Promise<GameState> {
   return withTransaction(async (client) => {
     const loaded = await loadGame(client, gameId, playerKey, true);
-    const expired = await resumeExpiredScoring(client, loaded, new Date());
+    const decisionAt = new Date();
+    const expired = await resumeExpiredScoring(client, loaded, decisionAt);
     if (expired) return serializeGame(expired);
     const scoring = assertScoringPhase(loaded, expectedRevision);
     if (claim !== "dead" && claim !== "alive") {
@@ -1687,7 +1742,19 @@ export async function resumePlay(
         "disputed_group_not_marked_dead",
       );
     }
-    const now = new Date();
+    const requestedBy = playerColor(loaded.game, playerKey);
+    const resumedToMove = resumeTurnForPolicy(loaded.rules.policy, requestedBy, claim);
+    await appendScoringResumeEvidence(
+      client,
+      { ...loaded, scoring },
+      {
+        claim,
+        requestedBy,
+        disputedStone,
+        resumedToMove,
+        resumedAt: decisionAt,
+      },
+    );
     await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [loaded.game.id]);
     const updated = await client.query<GameRow>(
       `UPDATE games
@@ -1700,19 +1767,19 @@ export async function resumePlay(
         RETURNING *`,
       [
         loaded.game.id,
-        resumeTurnForPolicy(loaded.rules.policy, playerColor(loaded.game, playerKey), claim),
+        resumedToMove,
         claim,
-        playerColor(loaded.game, playerKey),
+        requestedBy,
         disputedStone.x,
         disputedStone.y,
-        now,
+        decisionAt,
       ],
     );
     return serializeGame({
       ...withUpdatedGame(loaded, updated.rows[0]),
       scoring: null,
       deadRows: [],
-    }, now);
+    }, decisionAt);
   });
 }
 

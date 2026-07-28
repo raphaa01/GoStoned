@@ -740,8 +740,10 @@ test("move history trust boundary derives positions and rejects contradictory ev
       stopped_move_number: moveRows.length,
       fallback_to_move: "white",
     });
+    const expectedScoringExpiresAt = currentScoring.expires_at;
     let currentDeadRows: Record<string, unknown>[] = [{ x: 8, y: 8, color: "black" }];
     const statements: string[] = [];
+    const resumeEvidenceWrites: unknown[][] = [];
     const client = {
       async query(sql: string, values: unknown[] = []) {
         statements.push(sql);
@@ -755,6 +757,10 @@ test("move history trust boundary derives positions and rejects contradictory ev
         }
         if (sql.includes("FROM game_dead_stones")) {
           return { rows: currentDeadRows, rowCount: currentDeadRows.length };
+        }
+        if (sql.includes("INSERT INTO game_scoring_resume_events")) {
+          resumeEvidenceWrites.push(values);
+          return { rows: [], rowCount: 1 };
         }
         if (sql.startsWith("DELETE FROM game_scoring_state")) {
           currentScoring = null;
@@ -817,6 +823,37 @@ test("move history trust boundary derives positions and rejects contradictory ev
       assert.equal(resumed.phase, "play");
       assert.equal(resumed.turn, "black");
       assert.equal(resumed.moveCount, 11);
+      assert.equal(resumeEvidenceWrites.length, 1);
+      assert.deepEqual(resumeEvidenceWrites[0].slice(0, 16), [
+        gameId,
+        1,
+        moveRows.at(-1)!.board_hash,
+        moveRows.length,
+        "chinese",
+        "chinese-2002-gostone-v1",
+        "area",
+        7.5,
+        0,
+        "white",
+        expectedScoringExpiresAt,
+        "dead",
+        "black",
+        8,
+        8,
+        "black",
+      ]);
+      assert.ok(resumeEvidenceWrites[0][16] instanceof Date);
+      assert.equal(currentGame.turn_started_at, resumeEvidenceWrites[0][16]);
+      const lockedGameRead = statements.findIndex((sql) => sql.includes("FOR UPDATE OF g"));
+      const evidenceInsert = statements.findIndex((sql) =>
+        sql.includes("INSERT INTO game_scoring_resume_events"),
+      );
+      const scoringDelete = statements.findIndex((sql) =>
+        sql.startsWith("DELETE FROM game_scoring_state"),
+      );
+      assert.ok(lockedGameRead >= 0);
+      assert.ok(evidenceInsert > lockedGameRead);
+      assert.ok(scoringDelete > evidenceInsert);
 
       const passed = await submitMove(gameId, blackKey, { isPass: true });
       assert.equal(passed.turn, "white");
@@ -840,6 +877,181 @@ test("move history trust boundary derives positions and rejects contradictory ev
       globalThis.goStonedDbPool = previousPool;
     }
   });
+});
+
+test("an expired scoring snapshot records deadline evidence before resuming play", async () => {
+  const expiresAt = new Date(Date.now() - 60_000);
+  const initialGame = gameRow({
+    phase: "scoring",
+    to_move: null,
+    consecutive_passes: 2,
+    scoring_revision: 1,
+  });
+  let currentScoring: Record<string, unknown> | null = scoringRow({
+    expires_at: expiresAt,
+    started_at: new Date(expiresAt.getTime() - 600_000),
+    updated_at: new Date(expiresAt.getTime() - 600_000),
+  });
+  const statements: string[] = [];
+  const evidenceWrites: unknown[][] = [];
+  const client = {
+    async query(sql: string, values: unknown[] = []) {
+      statements.push(sql);
+      if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
+      if (sql.includes("FROM moves")) return { rows: emptyBoardPassRows(), rowCount: 2 };
+      if (sql.includes("FROM game_scoring_state")) {
+        return { rows: currentScoring ? [currentScoring] : [], rowCount: currentScoring ? 1 : 0 };
+      }
+      if (sql.includes("FROM game_dead_stones")) return { rows: [], rowCount: 0 };
+      if (sql.includes("INSERT INTO game_scoring_resume_events")) {
+        evidenceWrites.push(values);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("DELETE FROM game_scoring_state")) {
+        currentScoring = null;
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("last_resume_claim = 'deadline'")) {
+        return {
+          rows: [{
+            ...initialGame,
+            phase: "play",
+            to_move: values[1],
+            consecutive_passes: 0,
+            scoring_revision: 2,
+            last_resume_claim: "deadline",
+            last_resume_by: null,
+            last_resume_x: null,
+            last_resume_y: null,
+            turn_started_at: values[2],
+            version: 1,
+          }],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected database statement in deadline-evidence test: ${sql}`);
+    },
+    release() {},
+  };
+  const previousPool = globalThis.goStonedDbPool;
+  globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+
+  let state: GameState;
+  try {
+    state = await getGameState(gameId, blackKey);
+  } finally {
+    globalThis.goStonedDbPool = previousPool;
+  }
+
+  assert.equal(state.phase, "play");
+  assert.equal(state.lastResume?.claim, "deadline");
+  assert.equal(state.lastResume?.requestedBy, null);
+  assert.equal("resumeEvents" in state, false);
+  assert.equal(evidenceWrites.length, 1);
+  assert.deepEqual(evidenceWrites[0].slice(0, 16), [
+    gameId,
+    1,
+    emptyBoardHash,
+    2,
+    "chinese",
+    "chinese-2002-gostone-v1",
+    "area",
+    7.5,
+    0,
+    "black",
+    expiresAt,
+    "deadline",
+    null,
+    null,
+    null,
+    "black",
+  ]);
+  assert.ok(evidenceWrites[0][16] instanceof Date);
+  assert.ok((evidenceWrites[0][16] as Date).getTime() >= expiresAt.getTime());
+  const lock = statements.findIndex((sql) => sql.includes("FOR UPDATE OF g"));
+  const evidenceInsert = statements.findIndex((sql) =>
+    sql.includes("INSERT INTO game_scoring_resume_events"),
+  );
+  const scoringDelete = statements.findIndex((sql) =>
+    sql.startsWith("DELETE FROM game_scoring_state"),
+  );
+  const gameUpdate = statements.findIndex((sql) => sql.includes("last_resume_claim = 'deadline'"));
+  assert.ok(lock >= 0);
+  assert.ok(evidenceInsert > lock);
+  assert.ok(scoringDelete > evidenceInsert);
+  assert.ok(gameUpdate > scoringDelete);
+  assert.equal(statements.at(-1), "COMMIT");
+});
+
+test("resume transactions roll back evidence and mutable state together", async (t) => {
+  for (const failure of ["evidence insert", "game update"] as const) {
+    await t.test(failure, async () => {
+      const expiresAt = new Date(Date.now() - 60_000);
+      const initialGame = gameRow({
+        phase: "scoring",
+        to_move: null,
+        consecutive_passes: 2,
+        scoring_revision: 1,
+      });
+      const currentScoring = scoringRow({
+        expires_at: expiresAt,
+        started_at: new Date(expiresAt.getTime() - 600_000),
+        updated_at: new Date(expiresAt.getTime() - 600_000),
+      });
+      const statements: string[] = [];
+      const client = {
+        async query(sql: string) {
+          statements.push(sql);
+          if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "ROLLBACK") {
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
+          if (sql.includes("FROM moves")) return { rows: emptyBoardPassRows(), rowCount: 2 };
+          if (sql.includes("FROM game_scoring_state")) {
+            return { rows: [currentScoring], rowCount: 1 };
+          }
+          if (sql.includes("FROM game_dead_stones")) return { rows: [], rowCount: 0 };
+          if (sql.includes("INSERT INTO game_scoring_resume_events")) {
+            if (failure === "evidence insert") throw new Error("evidence write failed");
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql.startsWith("DELETE FROM game_scoring_state")) {
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql.includes("last_resume_claim = 'deadline'")) {
+            throw new Error("game lifecycle write failed");
+          }
+          throw new Error(`Unexpected database statement in evidence-rollback test: ${sql}`);
+        },
+        release() {},
+      };
+      const previousPool = globalThis.goStonedDbPool;
+      globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+
+      try {
+        await assert.rejects(
+          () => getGameState(gameId, blackKey),
+          failure === "evidence insert" ? /evidence write failed/ : /game lifecycle write failed/,
+        );
+      } finally {
+        globalThis.goStonedDbPool = previousPool;
+      }
+
+      assert.equal(
+        statements.some((sql) => sql.startsWith("DELETE FROM game_scoring_state")),
+        failure === "game update",
+      );
+      assert.equal(
+        statements.some((sql) => sql.includes("last_resume_claim = 'deadline'")),
+        failure === "game update",
+      );
+      assert.equal(statements.includes("COMMIT"), false);
+      assert.equal(statements.at(-1), "ROLLBACK");
+    });
+  }
 });
 
 test("database rules boundary rejects malformed state before any gameplay or rating write", async (t) => {

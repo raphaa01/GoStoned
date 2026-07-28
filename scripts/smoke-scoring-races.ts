@@ -130,6 +130,22 @@ async function assertNoGuestLedgerEvent(fixture: ScoringFixture) {
   assert.deepEqual(ledger.rows[0], { stats_count: 0, history_count: 0 });
 }
 
+async function resumeEvents(gameId: string) {
+  const result = await query<{
+    scoring_revision: number;
+    resume_claim: "dead" | "alive" | "deadline";
+    requested_by_color: "black" | "white" | null;
+    resumed_to_move: "black" | "white";
+  }>(
+    `SELECT scoring_revision, resume_claim, requested_by_color, resumed_to_move
+       FROM game_scoring_resume_events
+      WHERE game_id = $1
+      ORDER BY scoring_revision`,
+    [gameId],
+  );
+  return result.rows;
+}
+
 async function assertLegacyDeploymentWindowCompatibility() {
   const black = await createGuest();
   const white = await createGuest();
@@ -228,7 +244,122 @@ async function run() {
   if (firstGame.status === "finished") {
     assert.equal(firstGame.rated, false);
     await assertNoGuestLedgerEvent(confirmResume);
+    assert.deepEqual(await resumeEvents(confirmResume.gameId), []);
+  } else {
+    assert.deepEqual(await resumeEvents(confirmResume.gameId), [{
+      scoring_revision: confirmResume.revision,
+      resume_claim: "alive",
+      requested_by_color: "white",
+      resumed_to_move: "black",
+    }]);
   }
+
+  const doubleResume = await setupScoringFixture();
+  await assert.rejects(
+    query(
+      `INSERT INTO game_scoring_resume_events
+         (game_id, scoring_revision, board_hash, stopped_move_number,
+          rules, rules_profile, scoring_method, komi, handicap,
+          fallback_to_move, scoring_expires_at, resume_claim,
+          requested_by_color, disputed_x, disputed_y, resumed_to_move, resumed_at)
+       SELECT game.id, scoring.revision, scoring.board_hash, scoring.stopped_move_number,
+              game.rules, game.rules_profile, game.scoring_method, game.komi, game.handicap,
+              scoring.fallback_to_move, scoring.expires_at, 'alive',
+              'black', 3, 2, 'white', NOW()
+         FROM games AS game
+         JOIN game_scoring_state AS scoring ON scoring.game_id = game.id
+        WHERE game.id = $1`,
+      [doubleResume.gameId],
+    ),
+    (error: { code?: string }) => error.code === "23514",
+  );
+  await assert.rejects(
+    query(
+      `INSERT INTO game_scoring_resume_events
+         (game_id, scoring_revision, board_hash, stopped_move_number,
+          rules, rules_profile, scoring_method, komi, handicap,
+          fallback_to_move, scoring_expires_at, resume_claim,
+          requested_by_color, disputed_x, disputed_y, resumed_to_move, resumed_at)
+       SELECT game.id, scoring.revision, scoring.board_hash, scoring.stopped_move_number,
+              game.rules, game.rules_profile, game.scoring_method, game.komi, game.handicap,
+              scoring.fallback_to_move, scoring.expires_at, 'alive',
+              'black', 18, 18, 'white', NOW()
+         FROM games AS game
+         JOIN game_scoring_state AS scoring ON scoring.game_id = game.id
+        WHERE game.id = $1`,
+      [doubleResume.gameId],
+    ),
+    (error: { code?: string }) => error.code === "23514",
+  );
+  const doubleResumeResults = await Promise.all([
+    postGame(doubleResume.gameId, "/scoring/resume", {
+      expectedRevision: doubleResume.revision,
+      claim: "alive",
+      x: 3,
+      y: 2,
+    }, doubleResume.black.cookie, doubleResume.black.playerKey),
+    postGame(doubleResume.gameId, "/scoring/resume", {
+      expectedRevision: doubleResume.revision,
+      claim: "alive",
+      x: 3,
+      y: 2,
+    }, doubleResume.white.cookie, doubleResume.white.playerKey),
+  ]);
+  assert.deepEqual(
+    doubleResumeResults.map(({ response }) => response.status).sort(),
+    [200, 409],
+  );
+  const doubleResumeEvidence = await resumeEvents(doubleResume.gameId);
+  assert.equal(doubleResumeEvidence.length, 1);
+  assert.equal(doubleResumeEvidence[0].scoring_revision, doubleResume.revision);
+  assert.equal(doubleResumeEvidence[0].resume_claim, "alive");
+  assert.equal(
+    doubleResumeEvidence[0].resumed_to_move,
+    doubleResumeEvidence[0].requested_by_color === "black" ? "white" : "black",
+  );
+  for (const statement of [
+    `UPDATE game_scoring_resume_events
+        SET resume_claim = resume_claim
+      WHERE game_id = $1`,
+    "DELETE FROM game_scoring_resume_events WHERE game_id = $1",
+    "TRUNCATE game_scoring_resume_events",
+    "TRUNCATE games CASCADE",
+    `INSERT INTO game_scoring_resume_events
+     SELECT * FROM game_scoring_resume_events WHERE game_id = $1
+     ON CONFLICT (game_id, scoring_revision)
+     DO UPDATE SET resumed_at = EXCLUDED.resumed_at`,
+  ]) {
+    await assert.rejects(
+      query(statement, statement.includes("$1") ? [doubleResume.gameId] : []),
+      (error: { code?: string }) => error.code === "23514",
+    );
+  }
+  const clientRoleAccess = await query<{
+    role_name: string;
+    has_table_access: boolean;
+    has_column_access: boolean;
+  }>(
+    `SELECT role.rolname AS role_name,
+            has_table_privilege(
+              role.oid,
+              'public.game_scoring_resume_events',
+              'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+            ) AS has_table_access,
+            has_any_column_privilege(
+              role.oid,
+              'public.game_scoring_resume_events',
+              'SELECT, INSERT, UPDATE, REFERENCES'
+            ) AS has_column_access
+       FROM pg_roles AS role
+      WHERE role.rolname IN ('anon', 'authenticated')
+      ORDER BY role.rolname`,
+  );
+  for (const role of clientRoleAccess.rows) {
+    assert.equal(role.has_table_access, false, `${role.role_name} has table access`);
+    assert.equal(role.has_column_access, false, `${role.role_name} has column access`);
+  }
+  await query("DELETE FROM games WHERE id = $1", [doubleResume.gameId]);
+  assert.deepEqual(await resumeEvents(doubleResume.gameId), []);
 
   const confirmResign = await setupScoringFixture();
   const confirmResignResults = await Promise.all([
@@ -302,9 +433,22 @@ async function run() {
   assert.equal(resumed.turn, "black");
   assert.equal(resumed.scoring, null);
   assert.equal(resumed.lastResume.claim, "deadline");
+  assert.deepEqual(await resumeEvents(deadline.gameId), [{
+    scoring_revision: deadline.revision,
+    resume_claim: "deadline",
+    requested_by_color: null,
+    resumed_to_move: "black",
+  }]);
+  const deadlineRetry = await api(
+    `/api/games/${deadline.gameId}`,
+    { method: "GET" },
+    deadline.white.cookie,
+  );
+  assert.equal((deadlineRetry.body.game as { phase: string }).phase, "play");
+  assert.equal((await resumeEvents(deadline.gameId)).length, 1);
 
   console.log(
-    "Legacy rollout compatibility, scoring races, unrated guest results, deadline recovery, and DB constraints passed.",
+    "Legacy rollout compatibility, scoring races, immutable resume evidence, unrated guest results, deadline recovery, and DB constraints passed.",
   );
 }
 

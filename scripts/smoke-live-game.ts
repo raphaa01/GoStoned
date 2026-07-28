@@ -222,6 +222,30 @@ async function run() {
   assert.equal(resumed.game.turn, "black");
   assert.equal(resumed.game.scoring, null);
 
+  const resumeEvents = await query<{
+    scoring_revision: number;
+    resume_claim: string;
+    requested_by_color: string | null;
+    disputed_x: number | null;
+    disputed_y: number | null;
+    resumed_to_move: string;
+  }>(
+    `SELECT scoring_revision, resume_claim, requested_by_color,
+            disputed_x, disputed_y, resumed_to_move
+       FROM game_scoring_resume_events
+      WHERE game_id = $1
+      ORDER BY scoring_revision`,
+    [gameId],
+  );
+  assert.deepEqual(resumeEvents.rows, [{
+    scoring_revision: challengedProposal.game.scoring.revision,
+    resume_claim: "alive",
+    requested_by_color: "white",
+    disputed_x: 3,
+    disputed_y: 2,
+    resumed_to_move: "black",
+  }]);
+
   await post(`/api/games/${gameId}/moves`, { x: 4, y: 2 }, black.cookie, black.playerKey);
   await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
   const restopped = await post<{
@@ -229,6 +253,13 @@ async function run() {
   }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
   assert.equal(restopped.game.phase, "scoring");
   assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
+  const retainedResumeEvidence = await query<{ event_count: number }>(
+    `SELECT COUNT(*)::int AS event_count
+       FROM game_scoring_resume_events
+      WHERE game_id = $1`,
+    [gameId],
+  );
+  assert.equal(retainedResumeEvidence.rows[0].event_count, 1);
 
   const staleConfirmation = await fetch(`${baseUrl}/api/games/${gameId}/scoring/confirm`, {
     method: "POST",
@@ -241,10 +272,102 @@ async function run() {
   });
   assert.equal(staleConfirmation.status, 409);
 
+  const secondProposal = await post<{
+    game: {
+      scoring: {
+        revision: number;
+        deadStones: Array<{ x: number; y: number }>;
+      };
+    };
+  }>(`/api/games/${gameId}/scoring/dead-stones`, {
+    x: 3,
+    y: 2,
+    dead: true,
+    expectedRevision: restopped.game.scoring.revision,
+  }, white.cookie, white.playerKey);
+  assert.deepEqual(secondProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+
+  const secondResumed = await post<{
+    game: {
+      phase: string;
+      turn: string;
+      scoring: null;
+      lastResume: {
+        claim: string;
+        requestedBy: string;
+        disputedStone: { x: number; y: number };
+      };
+    };
+  }>(`/api/games/${gameId}/scoring/resume`, {
+    expectedRevision: secondProposal.game.scoring.revision,
+    claim: "dead",
+    x: 3,
+    y: 2,
+  }, black.cookie, black.playerKey);
+  assert.equal(secondResumed.game.phase, "play");
+  assert.equal(secondResumed.game.turn, "black");
+  assert.equal(secondResumed.game.scoring, null);
+  assert.deepEqual(secondResumed.game.lastResume, {
+    claim: "dead",
+    requestedBy: "black",
+    disputedStone: { x: 3, y: 2 },
+  });
+
+  const repeatedResumeEvents = await query<{
+    scoring_revision: number;
+    resume_claim: string;
+    requested_by_color: string | null;
+    resumed_to_move: string;
+  }>(
+    `SELECT scoring_revision, resume_claim, requested_by_color, resumed_to_move
+       FROM game_scoring_resume_events
+      WHERE game_id = $1
+      ORDER BY scoring_revision`,
+    [gameId],
+  );
+  assert.deepEqual(repeatedResumeEvents.rows, [
+    {
+      scoring_revision: challengedProposal.game.scoring.revision,
+      resume_claim: "alive",
+      requested_by_color: "white",
+      resumed_to_move: "black",
+    },
+    {
+      scoring_revision: secondProposal.game.scoring.revision,
+      resume_claim: "dead",
+      requested_by_color: "black",
+      resumed_to_move: "black",
+    },
+  ]);
+
+  const latestOnly = await request<{
+    game: {
+      lastResume: {
+        claim: string;
+        requestedBy: string;
+        disputedStone: { x: number; y: number };
+      };
+      resumeEvents?: unknown;
+    };
+  }>(`/api/games/${gameId}`, undefined, white.cookie);
+  assert.deepEqual(latestOnly.game.lastResume, {
+    claim: "dead",
+    requestedBy: "black",
+    disputedStone: { x: 3, y: 2 },
+  });
+  assert.equal("resumeEvents" in latestOnly.game, false);
+
+  await post(`/api/games/${gameId}/moves`, { x: 5, y: 2 }, black.cookie, black.playerKey);
+  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
+  const finalScoring = await post<{
+    game: { phase: string; scoring: { revision: number } };
+  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
+  assert.equal(finalScoring.game.phase, "scoring");
+
   const firstConfirmation = await post<{
     game: { status: string; scoring: { revision: number; blackConfirmed: boolean } };
   }>(`/api/games/${gameId}/scoring/confirm`, {
-    expectedRevision: restopped.game.scoring.revision,
+    expectedRevision: finalScoring.game.scoring.revision,
   }, black.cookie, black.playerKey);
   assert.equal(firstConfirmation.game.status, "active");
   assert.equal(firstConfirmation.game.scoring.blackConfirmed, true);
@@ -286,7 +409,7 @@ async function run() {
   );
   const finished = confirmations.find(({ game }) => game.status === "finished")!;
   assert.equal(finished.game.status, "finished");
-  assert.equal(finished.game.moveCount, 7);
+  assert.equal(finished.game.moveCount, 10);
   assert.ok(finished.game.result);
   assert.equal(finished.game.rated, false);
 
