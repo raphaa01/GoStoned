@@ -103,7 +103,12 @@ async function setupScoringFixture(): Promise<ScoringFixture> {
     assert.equal(moved.response.status, 200);
   }
 
-  const state = await api(`/api/games/${gameId}`, { method: "GET" }, black.cookie);
+  const state = await api(
+    `/api/games/${gameId}`,
+    { method: "GET" },
+    black.cookie,
+    black.playerKey,
+  );
   const revision = ((state.body.game as { scoring: { revision: number } }).scoring.revision);
   const marked = await postGame(gameId, "/scoring/dead-stones", {
     x: 3,
@@ -173,7 +178,12 @@ async function assertLegacyDeploymentWindowCompatibility() {
     [gameId, boardHash(legacyMove.board)],
   );
 
-  const loaded = await api(`/api/games/${gameId}`, { method: "GET" }, white.cookie);
+  const loaded = await api(
+    `/api/games/${gameId}`,
+    { method: "GET" },
+    white.cookie,
+    white.playerKey,
+  );
   assert.equal(loaded.response.status, 200);
   const legacyState = loaded.body.game as {
     turn: string;
@@ -233,6 +243,7 @@ async function run() {
     `/api/games/${confirmResume.gameId}`,
     { method: "GET" },
     confirmResume.black.cookie,
+    confirmResume.black.playerKey,
   );
   const firstGame = confirmResumeState.body.game as {
     status: string;
@@ -386,6 +397,7 @@ async function run() {
     `/api/games/${confirmResign.gameId}`,
     { method: "GET" },
     confirmResign.black.cookie,
+    confirmResign.black.playerKey,
   );
   const resignedGame = confirmResignState.body.game as { status: string; rated: boolean };
   assert.equal(resignedGame.status, "finished");
@@ -424,6 +436,7 @@ async function run() {
     `/api/games/${deadline.gameId}`,
     { method: "GET" },
     deadline.black.cookie,
+    deadline.black.playerKey,
   );
   const resumed = expiredState.body.game as {
     status: string;
@@ -447,6 +460,7 @@ async function run() {
     `/api/games/${deadline.gameId}`,
     { method: "GET" },
     deadline.white.cookie,
+    deadline.white.playerKey,
   );
   assert.equal((deadlineRetry.body.game as { phase: string }).phase, "play");
   assert.equal((await resumeEvents(deadline.gameId)).length, 1);

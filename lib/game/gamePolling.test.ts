@@ -7,6 +7,7 @@ import {
   gamePollResponseBody,
   gamePollUrl,
   gameStateFromPoll,
+  MAX_PERSISTED_GAME_VERSION,
   parseKnownGameVersion,
 } from "./gamePolling";
 import type { GameClockState, GameState } from "./types";
@@ -68,24 +69,39 @@ function gameState(): GameState {
   };
 }
 
-test("known game versions are strict, singular, nonnegative safe integers", () => {
+test("known game versions distinguish full refreshes from invalid canonical queries", () => {
   for (const [query, expected] of [
-    ["", null],
-    ["knownVersion=0", 0],
-    ["knownVersion=17", 17],
-    ["knownVersion=-1", null],
-    ["knownVersion=1.5", null],
-    ["knownVersion=01", null],
-    ["knownVersion=1&knownVersion=1", null],
-    ["knownVersion=9007199254740992", null],
+    ["", { kind: "full" }],
+    ["?knownVersion=0", { kind: "version", knownVersion: 0 }],
+    ["?knownVersion=17", { kind: "version", knownVersion: 17 }],
+    [
+      `?knownVersion=${MAX_PERSISTED_GAME_VERSION}`,
+      { kind: "version", knownVersion: MAX_PERSISTED_GAME_VERSION },
+    ],
+    ["?knownVersion=", { kind: "invalid" }],
+    ["?knownVersion=-1", { kind: "invalid" }],
+    ["?knownVersion=+1", { kind: "invalid" }],
+    ["?knownVersion=1.5", { kind: "invalid" }],
+    ["?knownVersion=01", { kind: "invalid" }],
+    ["?knownVersion=1&knownVersion=1", { kind: "invalid" }],
+    ["?knownVersion=2147483648", { kind: "invalid" }],
+    ["?knownVersion=9007199254740992", { kind: "invalid" }],
+    ["?unknown=1", { kind: "invalid" }],
+    ["?knownVersion=1&unknown=1", { kind: "invalid" }],
+    ["?knownVersion=%31", { kind: "invalid" }],
+    ["?known%56ersion=1", { kind: "invalid" }],
   ] as const) {
-    assert.equal(parseKnownGameVersion(new URLSearchParams(query)), expected);
+    assert.deepEqual(parseKnownGameVersion(query), expected);
   }
 });
 
 test("poll URLs request deltas between periodic full integrity refreshes", () => {
   const now = 1_000_000;
   assert.equal(gamePollUrl("game one", -1, 0, now), "/api/games/game%20one");
+  assert.equal(
+    gamePollUrl("game one", MAX_PERSISTED_GAME_VERSION + 1, now - 1_000, now),
+    "/api/games/game%20one",
+  );
   assert.equal(gamePollUrl("game one", 4, now - 1_000, now), "/api/games/game%20one?knownVersion=4");
   assert.equal(
     gamePollUrl("game one", 4, now - FULL_GAME_REFRESH_INTERVAL_MS, now),

@@ -138,6 +138,7 @@ export const de = {
     invalid_matchmaking_request: "Wähle eine unterstützte Brettgröße und Bedenkzeit.",
     invalid_activity_request: "Lade die Aktivitätsübersicht ohne zusätzliche Parameter neu.",
     invalid_stats_request: "Wähle genau eine unterstützte Brettgröße für die Rangliste.",
+    invalid_game_read_request: "Lade die Partie ohne nicht unterstützte Synchronisierungsoptionen neu.",
     invalid_game_mutation_request: "Lade die Partie neu, bevor du diese Aktion erneut versuchst.",
     game_not_found: "Die Partie wurde nicht gefunden.",
     not_participant: "Du nimmst nicht an dieser Partie teil.",

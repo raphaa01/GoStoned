@@ -168,6 +168,21 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setGameAnnouncement("");
   }, []);
 
+  const recoverChangedIdentity = useCallback(() => {
+    identityAuthority.current.invalidate();
+    clearGameBoundState();
+    transitionConnection({ kind: "unavailable" });
+    setIdentityChanged(true);
+    setError(localizedApiError(
+      dictionary,
+      new ApiRequestError("The player session changed.", {
+        status: 409,
+        code: "identity_changed",
+      }),
+      copy.unavailable,
+    ));
+  }, [clearGameBoundState, copy.unavailable, dictionary, transitionConnection]);
+
   useLayoutEffect(() => {
     if (!identityAuthority.current.updateIdentity(identityKey)) return;
     clearGameBoundState();
@@ -245,8 +260,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const refreshGame = useCallback(async (
     signal: AbortSignal,
     requestIdentity: IdentityRequestToken,
+    expectedPlayerKey: string,
   ): Promise<boolean> => {
-    if (!playerKey) return false;
     const requestStartedAt = Date.now();
     const hasCurrentGameCache = acceptedGame.current?.id === gameId;
     const response = await fetch(
@@ -256,7 +271,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
         hasCurrentGameCache ? lastFullGameResponseAt.current : 0,
         requestStartedAt,
       ),
-      { cache: "no-store", signal },
+      {
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey },
+        signal,
+      },
     );
     const data = await readApi<GamePollResponse>(response);
     const receivedAt = Date.now();
@@ -264,7 +283,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const accepted = acceptGameResponse(data, receivedAt, requestIdentity);
     if (accepted && "game" in data) lastFullGameResponseAt.current = receivedAt;
     return accepted;
-  }, [acceptGameResponse, gameId, playerKey]);
+  }, [acceptGameResponse, gameId]);
 
   const refreshChat = useCallback(async (
     signal: AbortSignal,
@@ -325,6 +344,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     if (!playerKey) return;
+    const expectedPlayerKey = playerKey;
     const requestIdentity = identityAuthority.current.capture();
     let cancelled = false;
     let gameLoaded = acceptedGame.current !== null;
@@ -344,7 +364,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       const guardSignal = gameGuard.start();
       const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
       try {
-        const accepted = await refreshGame(signal, requestIdentity);
+        const accepted = await refreshGame(signal, requestIdentity, expectedPlayerKey);
         if (accepted && gameGuard.isCurrent(guardSignal)) {
           gameLoaded = true;
           setError(null);
@@ -355,6 +375,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
           gameGuard.isCurrent(guardSignal)
           && identityAuthority.current.isCurrent(requestIdentity)
         ) {
+          if (
+            caughtError instanceof ApiRequestError
+            && caughtError.code === "identity_changed"
+          ) {
+            recoverChangedIdentity();
+            return;
+          }
           const delay = nextPollDelay(900, requestError, document.hidden);
           const next = applyConnectionFailure(requestError, delay);
           if (!gameLoaded && isTerminalConnection(next)) {
@@ -531,6 +558,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     dictionary,
     identityKey,
     playerKey,
+    recoverChangedIdentity,
     refreshChat,
     refreshGame,
     transitionConnection,
@@ -649,21 +677,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
       );
     }
     immediateGameSync.current?.(affectsConnection);
-  }
-
-  function recoverChangedIdentity() {
-    identityAuthority.current.invalidate();
-    clearGameBoundState();
-    transitionConnection({ kind: "unavailable" });
-    setIdentityChanged(true);
-    setError(localizedApiError(
-      dictionary,
-      new ApiRequestError("The player session changed.", {
-        status: 409,
-        code: "identity_changed",
-      }),
-      copy.unavailable,
-    ));
   }
 
   function refreshChangedIdentity() {

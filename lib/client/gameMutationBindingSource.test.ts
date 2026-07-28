@@ -30,7 +30,11 @@ test("game mutation clients bind and verify the displayed player", () => {
   assert.match(chat, /\[EXPECTED_PLAYER_HEADER\]: playerKey/);
   assert.match(chat, /parseSentGameMessage\(data, playerKey\)/);
   assert.match(chat, /requestError\.code === "identity_changed"[\s\S]+recoverChangedIdentity\(\)/);
-  const recovery = section(room, "function recoverChangedIdentity", "function refreshChangedIdentity");
+  const recovery = section(
+    room,
+    "const recoverChangedIdentity = useCallback",
+    "useLayoutEffect(() => {",
+  );
   assert.doesNotMatch(recovery, /refreshIdentity/);
   assert.match(room, /if \(identityChanged\) recoveryAction\.current\?\.focus\(\)/);
   assert.match(room, /<p role="alert">/);
