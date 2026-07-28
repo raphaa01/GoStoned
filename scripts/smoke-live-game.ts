@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
@@ -88,7 +89,8 @@ async function createGuest() {
 }
 
 async function run() {
-  console.log(`Testing live game flow at ${baseUrl}`);
+  await assertSmokeDatabaseIdentity(getPool());
+  console.log(`Testing live game flow at ${new URL(baseUrl).origin}`);
   const black = await createGuest();
   const white = await createGuest();
 
@@ -518,7 +520,9 @@ async function run() {
   console.log(`Live game ${gameId} completed successfully (${finished.game.result}).`);
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-}).finally(closePool);
+run()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Live-game smoke failed.");
+    process.exitCode = 1;
+  })
+  .finally(closePool);

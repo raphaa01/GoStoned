@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
+import {
+  assertSmokeDatabaseIdentity,
+  withRollbackOnlyTransaction,
+} from "../lib/smokeDatabase";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -166,6 +170,24 @@ async function resumeEvents(gameId: string) {
   return result.rows;
 }
 
+async function assertRejectedMutationRollsBack(
+  statement: string,
+  values: unknown[],
+): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await assertSmokeDatabaseIdentity(client);
+    await withRollbackOnlyTransaction(client, async (transaction) => {
+      await assert.rejects(
+        transaction.query(statement, values),
+        (error: { code?: string }) => error.code === "23514",
+      );
+    });
+  } finally {
+    client.release();
+  }
+}
+
 async function assertLegacyDeploymentWindowCompatibility() {
   const black = await createGuest();
   const white = await createGuest();
@@ -230,7 +252,8 @@ async function assertLegacyDeploymentWindowCompatibility() {
 }
 
 async function run() {
-  console.log(`Testing scoring races at ${baseUrl}`);
+  await assertSmokeDatabaseIdentity(getPool());
+  console.log(`Testing scoring races at ${new URL(baseUrl).origin}`);
 
   await assertLegacyDeploymentWindowCompatibility();
 
@@ -281,9 +304,8 @@ async function run() {
   }
 
   const doubleResume = await setupScoringFixture();
-  await assert.rejects(
-    query(
-      `INSERT INTO game_scoring_resume_events
+  await assertRejectedMutationRollsBack(
+    `INSERT INTO game_scoring_resume_events
          (game_id, scoring_revision, board_hash, stopped_move_number,
           rules, rules_profile, scoring_method, komi, handicap,
           fallback_to_move, scoring_expires_at, resume_claim,
@@ -295,13 +317,10 @@ async function run() {
          FROM games AS game
          JOIN game_scoring_state AS scoring ON scoring.game_id = game.id
         WHERE game.id = $1`,
-      [doubleResume.gameId],
-    ),
-    (error: { code?: string }) => error.code === "23514",
+    [doubleResume.gameId],
   );
-  await assert.rejects(
-    query(
-      `INSERT INTO game_scoring_resume_events
+  await assertRejectedMutationRollsBack(
+    `INSERT INTO game_scoring_resume_events
          (game_id, scoring_revision, board_hash, stopped_move_number,
           rules, rules_profile, scoring_method, komi, handicap,
           fallback_to_move, scoring_expires_at, resume_claim,
@@ -313,9 +332,7 @@ async function run() {
          FROM games AS game
          JOIN game_scoring_state AS scoring ON scoring.game_id = game.id
         WHERE game.id = $1`,
-      [doubleResume.gameId],
-    ),
-    (error: { code?: string }) => error.code === "23514",
+    [doubleResume.gameId],
   );
   const doubleResumeResults = await Promise.all([
     postGame(doubleResume.gameId, "/scoring/resume", {
@@ -343,7 +360,7 @@ async function run() {
     doubleResumeEvidence[0].resumed_to_move,
     doubleResumeEvidence[0].requested_by_color === "black" ? "white" : "black",
   );
-  for (const statement of [
+  const destructiveStatements = [
     `UPDATE game_scoring_resume_events
         SET resume_claim = resume_claim
       WHERE game_id = $1`,
@@ -354,12 +371,20 @@ async function run() {
      SELECT * FROM game_scoring_resume_events WHERE game_id = $1
      ON CONFLICT (game_id, scoring_revision)
      DO UPDATE SET resumed_at = EXCLUDED.resumed_at`,
-  ]) {
-    await assert.rejects(
-      query(statement, statement.includes("$1") ? [doubleResume.gameId] : []),
-      (error: { code?: string }) => error.code === "23514",
+  ];
+  for (const statement of destructiveStatements) {
+    await assertRejectedMutationRollsBack(
+      statement,
+      statement.includes("$1") ? [doubleResume.gameId] : [],
     );
   }
+  assert.deepEqual(await resumeEvents(doubleResume.gameId), doubleResumeEvidence);
+  const preservedGame = await query<{ exists: boolean }>(
+    "SELECT EXISTS (SELECT 1 FROM games WHERE id = $1) AS exists",
+    [doubleResume.gameId],
+  );
+  assert.equal(preservedGame.rows[0].exists, true);
+
   const clientRoleAccess = await query<{
     role_name: string;
     has_table_access: boolean;
@@ -379,6 +404,11 @@ async function run() {
        FROM pg_roles AS role
       WHERE role.rolname IN ('anon', 'authenticated')
       ORDER BY role.rolname`,
+  );
+  assert.deepEqual(
+    clientRoleAccess.rows.map(({ role_name }) => role_name),
+    ["anon", "authenticated"],
+    "The isolated smoke database must contain both client roles.",
   );
   for (const role of clientRoleAccess.rows) {
     assert.equal(role.has_table_access, false, `${role.role_name} has table access`);
@@ -416,9 +446,8 @@ async function run() {
   await assertNoGuestLedgerEvent(confirmResign);
 
   const deadline = await setupScoringFixture();
-  await assert.rejects(
-    query(
-      `UPDATE game_scoring_state
+  await assertRejectedMutationRollsBack(
+    `UPDATE game_scoring_state
           SET scored_board_hash = board_hash,
               black_stones = 1,
               white_stones = 0,
@@ -432,9 +461,7 @@ async function run() {
               result = 'B+73.5',
               finalized_at = NOW()
         WHERE game_id = $1`,
-      [deadline.gameId],
-    ),
-    (error: { code?: string }) => error.code === "23514",
+    [deadline.gameId],
   );
   await query(
     `UPDATE game_scoring_state
@@ -483,7 +510,7 @@ async function run() {
 
 run()
   .catch((error) => {
-    console.error(error);
+    console.error(error instanceof Error ? error.message : "Scoring race smoke failed.");
     process.exitCode = 1;
   })
   .finally(closePool);

@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { clearRateLimit, consumeRateLimit, RateLimitError } from "../lib/auth/rateLimit";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 
 type StoredLimit = {
   attempts: number;
@@ -16,6 +17,7 @@ async function run() {
   if (!isUnambiguousLocalDatabase(databaseUrl)) {
     throw new Error("Rate-limit smoke tests may only mutate a local PostgreSQL database.");
   }
+  await assertSmokeDatabaseIdentity(getPool());
 
   const request = new NextRequest("http://localhost/api/rate-limit-smoke", {
     headers: { "x-real-ip": "127.0.0.1" },
@@ -77,7 +79,7 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : "Rate-limit smoke failed.");
     process.exitCode = 1;
   })
   .finally(closePool);

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import { reportGameOpponent } from "../lib/moderation/playerReportService";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 
 type ReportRow = {
   game_id: string;
@@ -50,6 +51,7 @@ async function cleanup() {
 }
 
 async function run() {
+  await assertSmokeDatabaseIdentity(getPool());
   const table = await query<{ table_name: string | null }>(
     "SELECT to_regclass('public.player_reports')::text AS table_name",
   );
@@ -100,7 +102,7 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : "Player-report smoke failed.");
     process.exitCode = 1;
   })
   .finally(closePool);

@@ -65,3 +65,161 @@ jobs:
           name: responsive-browser-failures
           path: test-results/
           retention-days: 5
+
+  postgres-integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_APP_NAME: GoStone
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3101
+      BASE_URL: http://127.0.0.1:3101
+      APP_URL: http://127.0.0.1:3101
+      DATABASE_POOL_MAX: "5"
+      GOSTONE_CI_DATABASE_BOOTSTRAP: gostone-ci-v1
+      GOSTONE_SMOKE_DATABASE_NAME: gostone_ci
+      GOSTONE_SMOKE_DATABASE_ROLE: gostone_ci_runner
+      DATABASE_URL: postgresql://gostone_ci_runner:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}@127.0.0.1:5432/gostone_ci
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_USER: gostone_ci_runner
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          POSTGRES_DB: gostone_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gostone_ci_runner -d gostone_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          cache: npm
+          cache-dependency-path: package-lock.json
+          node-version: 22.x
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Prepare isolated PostgreSQL owner and client roles
+        run: npm run db:prepare-ci-smoke
+
+      - name: Verify fresh and idempotent migration chain
+        run: npm run test:migrations-db
+
+      - name: Run direct PostgreSQL concurrency smokes
+        run: |
+          npm run test:matchmaking-races
+          npm run test:player-report-races
+          npm run test:move-hash-db
+          npm run test:rate-limit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Run production-server PostgreSQL smokes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          gostone_server_log="$RUNNER_TEMP/gostone-next.log"
+          gostone_server_pid=""
+
+          gostone_cleanup() {
+            local exit_status=$?
+            local cleanup_failed=0
+            trap - EXIT INT TERM
+
+            if [[ -n "$gostone_server_pid" ]]; then
+              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
+                kill -TERM -- "-$gostone_server_pid" 2>/dev/null || true
+                for _ in {1..50}; do
+                  if ! kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
+                    break
+                  fi
+                  sleep 0.1
+                done
+              fi
+
+              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
+                kill -KILL -- "-$gostone_server_pid" 2>/dev/null || true
+              fi
+              wait "$gostone_server_pid" 2>/dev/null || true
+
+              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
+                echo "::error::GoStone server process group survived cleanup."
+                cleanup_failed=1
+              else
+                echo "Verified GoStone server process group exited."
+              fi
+            fi
+
+            if (( exit_status != 0 || cleanup_failed != 0 )); then
+              echo "::group::GoStone server log"
+              if [[ -f "$gostone_server_log" ]]; then
+                tail -n 500 "$gostone_server_log" || true
+              else
+                echo "Server log was not created."
+              fi
+              echo "::endgroup::"
+            fi
+
+            if (( cleanup_failed != 0 )); then exit_status=1; fi
+            exit "$exit_status"
+          }
+          trap gostone_cleanup EXIT
+          trap 'exit 130' INT TERM
+
+          setsid npm run start -- --hostname 127.0.0.1 --port 3101 \
+            >"$gostone_server_log" 2>&1 &
+          gostone_server_pid=$!
+
+          gostone_server_pgid="$(ps -o pgid= -p "$gostone_server_pid" | tr -d '[:space:]')"
+          if [[ "$gostone_server_pgid" != "$gostone_server_pid" ]]; then
+            echo "::error::GoStone server does not own its process group."
+            exit 1
+          fi
+
+          gostone_ready=0
+          for _ in {1..60}; do
+            if curl --fail --silent --max-time 2 \
+              http://127.0.0.1:3101/api/health >/dev/null 2>&1; then
+              gostone_ready=1
+              break
+            fi
+            if ! kill -0 "$gostone_server_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if (( gostone_ready != 1 )); then
+            echo "::error::GoStone did not become ready on the isolated port."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3101/api/db-health >/dev/null
+          npm run test:auth
+          npm run test:live
+          npm run test:clock
+          npm run test:scoring-races
+
+      - name: Reverify migration and concurrent-index state
+        run: npm run test:migrations-db -- --verify-only
+
+      - name: Print PostgreSQL logs on failure
+        if: failure()
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: docker logs "$POSTGRES_CONTAINER_ID" 2>&1 || true

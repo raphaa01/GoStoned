@@ -74,8 +74,20 @@ npm run test:auth
 npm run test:live
 npm run test:clock
 npm run test:rate-limit
+npm run test:matchmaking-races
+npm run test:player-report-races
+npm run test:move-hash-db
 npm run test:scoring-races
 ```
+
+Diese mutierenden Smokes verlangen zusätzlich die expliziten Werte
+`GOSTONE_SMOKE_DATABASE_NAME` und `GOSTONE_SMOKE_DATABASE_ROLE` aus
+`.env.example`. Vor jeder Mutation gleichen sie diese Angaben mit der tatsächlich
+verbundenen Datenbank und Rolle ab. Für `test:scoring-races` müssen im lokalen
+PostgreSQL-Cluster außerdem die Supabase-kompatiblen Rollen `anon` und
+`authenticated` als `NOLOGIN` existieren; der isolierte CI-Job legt sie immer
+vor den Migrationen an. Die Smokes dürfen nur gegen eine entbehrliche lokale
+Testdatenbank laufen, weil einige Abläufe absichtlich Fixtures zurücklassen.
 
 `test:auth` prüft Registrierung, Login, Logout, Sitzungen, zwei registrierte
 Spieler, Matchmaking, Chat und Resign. `test:live` prüft zusätzlich eine
@@ -97,7 +109,14 @@ verweigert jede nicht-lokale `DATABASE_URL`.
 
 ## Datenbank und Migrationen
 
-`npm run db:migrate` führt alle noch nicht angewendeten Dateien aus `db/migrations/` in Reihenfolge und jeweils in einer Transaktion aus. Die Tabelle `schema_migrations` merkt sich den Stand. `db/schema.sql` bleibt die lesbare, idempotente Darstellung des aktuellen Gesamtschemas.
+`npm run db:migrate` führt alle noch nicht angewendeten Dateien aus
+`db/migrations/` in Reihenfolge aus. Normale Migrationen und ihr Ledger-Eintrag
+laufen jeweils in einer Transaktion. Ausdrücklich markierte, gleichzeitig
+erstellte Indizes laufen außerhalb einer Transaktion; CI prüft deshalb zusätzlich
+ihren `ready`- und `valid`-Status sowie einen unveränderten zweiten
+Migrationsdurchlauf. Die Tabelle `schema_migrations` merkt sich den Stand.
+`db/schema.sql` bleibt die lesbare, idempotente Darstellung des aktuellen
+Gesamtschemas.
 
 Migration `007_guest_sessions.sql` führt sichere, serverseitige Gast-Sitzungen
 ein. Frühere, ausschließlich im Browser erzeugte Gast-IDs werden bewusst nicht

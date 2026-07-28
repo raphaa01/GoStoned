@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -145,6 +146,7 @@ async function verifyContestedCancellation() {
 }
 
 async function run() {
+  await assertSmokeDatabaseIdentity(getPool());
   await assertIsolatedPools();
   await cleanup();
   try {
@@ -189,7 +191,7 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : "Matchmaking race smoke failed.");
     process.exitCode = 1;
   })
   .finally(closePool);

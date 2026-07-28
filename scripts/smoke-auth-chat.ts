@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
+import { closePool, getPool } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
@@ -55,12 +57,13 @@ function json(
 }
 
 async function run() {
+  await assertSmokeDatabaseIdentity(getPool());
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
   const firstUsername = `black_${suffix}`;
   const secondUsername = `white_${suffix}`;
   const password = "Test-password-42";
 
-  console.log(`Testing account and chat flow at ${baseUrl}`);
+  console.log(`Testing account and chat flow at ${new URL(baseUrl).origin}`);
 
   const registeredFirst = await request(
     "/api/auth/register",
@@ -259,7 +262,9 @@ async function run() {
   console.log(`Accounts, sessions, matchmaking, chat, rating history, and game ${gameId} passed.`);
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+run()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Auth/chat smoke failed.");
+    process.exitCode = 1;
+  })
+  .finally(closePool);

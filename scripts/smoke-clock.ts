@@ -1,7 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
@@ -58,7 +59,8 @@ async function createGuest() {
 }
 
 async function run() {
-  console.log(`Testing server-authoritative clock at ${baseUrl}`);
+  await assertSmokeDatabaseIdentity(getPool());
+  console.log(`Testing server-authoritative clock at ${new URL(baseUrl).origin}`);
   const black = await createGuest();
   const white = await createGuest();
   await post("/api/matchmaking", {
@@ -128,7 +130,7 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : "Clock smoke failed.");
     process.exitCode = 1;
   })
   .finally(async () => {
