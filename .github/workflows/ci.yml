@@ -130,90 +130,36 @@ jobs:
       - name: Build production application
         run: npm run build
 
-      - name: Run production-server PostgreSQL smokes
+      - name: Verify production-server cleanup fault paths
         shell: bash
         run: |
           set -Eeuo pipefail
 
-          gostone_server_log="$RUNNER_TEMP/gostone-next.log"
-          gostone_server_pid=""
+          run_expected_fault() {
+            local fault=$1
+            local expected_status=$2
+            local observed_status=0
 
-          gostone_cleanup() {
-            local exit_status=$?
-            local cleanup_failed=0
-            trap - EXIT INT TERM
-
-            if [[ -n "$gostone_server_pid" ]]; then
-              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
-                kill -TERM -- "-$gostone_server_pid" 2>/dev/null || true
-                for _ in {1..50}; do
-                  if ! kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
-                    break
-                  fi
-                  sleep 0.1
-                done
-              fi
-
-              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
-                kill -KILL -- "-$gostone_server_pid" 2>/dev/null || true
-              fi
-              wait "$gostone_server_pid" 2>/dev/null || true
-
-              if kill -0 -- "-$gostone_server_pid" 2>/dev/null; then
-                echo "::error::GoStone server process group survived cleanup."
-                cleanup_failed=1
-              else
-                echo "Verified GoStone server process group exited."
-              fi
+            if GOSTONE_CI_SERVER_FAULT="$fault" \
+              bash scripts/run-ci-production-smokes.sh; then
+              echo "::error::Expected server harness fault '$fault' did not fail."
+              exit 1
+            else
+              observed_status=$?
             fi
-
-            if (( exit_status != 0 || cleanup_failed != 0 )); then
-              echo "::group::GoStone server log"
-              if [[ -f "$gostone_server_log" ]]; then
-                tail -n 500 "$gostone_server_log" || true
-              else
-                echo "Server log was not created."
-              fi
-              echo "::endgroup::"
+            if (( observed_status != expected_status )); then
+              echo "::error::Server harness fault '$fault' exited with $observed_status, expected $expected_status."
+              exit 1
             fi
-
-            if (( cleanup_failed != 0 )); then exit_status=1; fi
-            exit "$exit_status"
           }
-          trap gostone_cleanup EXIT
-          trap 'exit 130' INT TERM
 
-          setsid npm run start -- --hostname 127.0.0.1 --port 3101 \
-            >"$gostone_server_log" 2>&1 &
-          gostone_server_pid=$!
+          run_expected_fault after-pid-publication 97
+          run_expected_fault supervisor-loss 98
+          run_expected_fault validated-supervisor-loss 99
 
-          gostone_server_pgid="$(ps -o pgid= -p "$gostone_server_pid" | tr -d '[:space:]')"
-          if [[ "$gostone_server_pgid" != "$gostone_server_pid" ]]; then
-            echo "::error::GoStone server does not own its process group."
-            exit 1
-          fi
-
-          gostone_ready=0
-          for _ in {1..60}; do
-            if curl --fail --silent --max-time 2 \
-              http://127.0.0.1:3101/api/health >/dev/null 2>&1; then
-              gostone_ready=1
-              break
-            fi
-            if ! kill -0 "$gostone_server_pid" 2>/dev/null; then break; fi
-            sleep 1
-          done
-          if (( gostone_ready != 1 )); then
-            echo "::error::GoStone did not become ready on the isolated port."
-            exit 1
-          fi
-
-          curl --fail --silent --show-error --max-time 10 \
-            http://127.0.0.1:3101/api/db-health >/dev/null
-          npm run test:auth
-          npm run test:live
-          npm run test:clock
-          npm run test:scoring-races
+      - name: Run production-server PostgreSQL smokes
+        shell: bash
+        run: bash scripts/run-ci-production-smokes.sh
 
       - name: Reverify migration and concurrent-index state
         run: npm run test:migrations-db -- --verify-only
