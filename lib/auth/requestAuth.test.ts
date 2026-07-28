@@ -97,6 +97,29 @@ test("an authenticated account takes precedence over a guest cookie", async () =
   assert.equal(playerKey, account.playerKey);
 });
 
+test("a presented invalid account session fails closed instead of falling back to guest", async () => {
+  const request = requestWithCookies("https://gostone.test/api/matchmaking", {
+    [SESSION_COOKIE]: "expired-account-token",
+    [GUEST_SESSION_COOKIE]: "guest-a-token",
+  });
+  let guestLookups = 0;
+
+  await assert.rejects(
+    resolvePlayerKey(request, {
+      getAccount: async () => null,
+      getGuest: async () => {
+        guestLookups += 1;
+        return guestA;
+      },
+    }),
+    (error) =>
+      error instanceof GameServiceError
+      && error.status === 401
+      && error.code === "session_expired",
+  );
+  assert.equal(guestLookups, 0);
+});
+
 test("guest tokens are hashed and use hardened cookie options", () => {
   const generatedToken = createGuestSessionToken();
   assert.equal(Buffer.from(generatedToken, "base64url").byteLength, 32);

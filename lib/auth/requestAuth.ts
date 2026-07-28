@@ -32,8 +32,16 @@ export async function resolvePlayerKey(
   request: NextRequest,
   resolvers: IdentityResolvers = defaultIdentityResolvers,
 ): Promise<string> {
-  const account = await resolvers.getAccount(request.cookies.get(SESSION_COOKIE)?.value);
-  if (account) return account.playerKey;
+  const accountToken = request.cookies.get(SESSION_COOKIE)?.value;
+  if (accountToken !== undefined) {
+    const account = await resolvers.getAccount(accountToken);
+    if (account) return account.playerKey;
+    throw new GameServiceError(
+      "Your account session has expired. Please sign in again.",
+      401,
+      "session_expired",
+    );
+  }
 
   const guest = await resolvers.getGuest(request.cookies.get(GUEST_SESSION_COOKIE)?.value);
   if (guest) return guest.playerKey;

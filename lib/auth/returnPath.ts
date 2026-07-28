@@ -14,3 +14,19 @@ export function safeGameReturnPath(value: string | string[] | undefined): string
   const logicalPath = stripLocalePrefix(parsed.pathname);
   return GAME_PATH.test(logicalPath) ? logicalPath : null;
 }
+
+export function safeReauthenticationReturnPath(
+  value: string | string[] | undefined,
+): string | null {
+  const gamePath = safeGameReturnPath(value);
+  if (gamePath) return gamePath;
+  if (typeof value !== "string" || !isSafeInternalPath(value)) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value, "https://gostone.invalid");
+  } catch {
+    return null;
+  }
+  if (parsed.origin !== "https://gostone.invalid" || parsed.search || parsed.hash) return null;
+  return stripLocalePrefix(parsed.pathname) === "/play" ? "/play" : null;
+}

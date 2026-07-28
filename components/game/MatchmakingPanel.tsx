@@ -3,6 +3,7 @@
 import { Radio, RefreshCw, Search, Users, X } from "lucide-react";
 import type { RefObject } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import type { MatchmakingConnectionState } from "@/lib/client/matchmakingConnection";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,10 +14,15 @@ type MatchmakingPanelProps = {
   status: "idle" | "waiting";
   busy: boolean;
   ready: boolean;
+  connectionKind: MatchmakingConnectionState["kind"];
+  connectionLabel: string;
+  connectionDescription: string | null;
+  recoveryLabel: string;
   playerName: string | null;
   error: string | null;
   onFind: () => void;
   onCancel: () => void;
+  onRecover: () => void;
   onRetry: () => void;
   primaryActionRef?: RefObject<HTMLButtonElement | null>;
 };
@@ -27,10 +33,15 @@ export function MatchmakingPanel({
   status,
   busy,
   ready,
+  connectionKind,
+  connectionLabel,
+  connectionDescription,
+  recoveryLabel,
   playerName,
   error,
   onFind,
   onCancel,
+  onRecover,
   onRetry,
   primaryActionRef,
 }: MatchmakingPanelProps) {
@@ -38,9 +49,23 @@ export function MatchmakingPanel({
   const copy = dictionary.play;
   const waiting = status === "waiting";
   const selectedTime = dictionary.timeControls[timeControl];
+  const terminal = connectionKind === "session_expired"
+    || connectionKind === "identity_changed"
+    || connectionKind === "unavailable";
+  const identityUnavailable = !playerName && Boolean(error);
+  const presentedConnectionLabel = identityUnavailable ? copy.unavailable : connectionLabel;
+  const presentedConnectionDescription = identityUnavailable
+    ? copy.secureSessionUnavailable
+    : connectionDescription;
+  const statusAnnouncement = presentedConnectionDescription
+    ? `${presentedConnectionLabel}. ${presentedConnectionDescription}`
+    : presentedConnectionLabel;
+  const waitingDescription = copy.lookingForPlayer
+    .replace("{board}", `${boardSize}×${boardSize}`)
+    .replace("{time}", selectedTime.name);
 
   return (
-    <section className="matchmaking-panel" aria-live="polite">
+    <section className="matchmaking-panel">
       <div className="panel-heading">
         <div>
           <span className="panel-icon"><Radio size={18} /></span>
@@ -48,17 +73,32 @@ export function MatchmakingPanel({
             <h2>{waiting ? copy.findingPlayer : copy.quickMatch}</h2>
             <p>
               {waiting
-                ? copy.keepOpen
-                : !ready && error
-                  ? copy.secureSessionUnavailable
+                ? presentedConnectionDescription ?? copy.keepOpen
+                : !ready
+                  ? presentedConnectionDescription
+                    ?? (error ? copy.secureSessionUnavailable : copy.checkingQueueDescription)
                   : `${copy.readyAs} ${playerName ?? copy.player}.`}
             </p>
           </div>
         </div>
         <Badge tone={ready ? "green" : "neutral"}>
-          {waiting ? copy.searching : ready ? copy.online : error ? copy.unavailable : copy.preparing}
+          {presentedConnectionLabel}
         </Badge>
       </div>
+
+      <p
+        aria-atomic="true"
+        aria-label={statusAnnouncement}
+        aria-live="polite"
+        className="match-connection-status"
+        data-state={connectionKind}
+        role="status"
+      >
+        <strong>{presentedConnectionLabel}</strong>
+        {presentedConnectionDescription
+          ? <span>{presentedConnectionDescription}</span>
+          : null}
+      </p>
 
       <div className="match-settings">
         <div>
@@ -79,37 +119,48 @@ export function MatchmakingPanel({
         <>
           <div className="queue-indicator">
             <Search className="spin" size={20} />
-            <span>
-              {copy.lookingFor} {boardSize}×{boardSize}{" "}
-              {selectedTime.name.toLocaleLowerCase()} {copy.playerSuffix}
-            </span>
+            <span>{waitingDescription}</span>
           </div>
-          <Button className="match-button" disabled={busy} onClick={onCancel} size="lg" variant="secondary">
-            <X size={20} />
-            {copy.cancelSearch}
-          </Button>
+          {terminal ? (
+            <Button className="match-button" disabled={busy} onClick={onRecover} ref={primaryActionRef} size="lg">
+              <RefreshCw size={20} />
+              {recoveryLabel}
+            </Button>
+          ) : (
+            <Button className="match-button" disabled={busy || !ready} onClick={onCancel} ref={primaryActionRef} size="lg" variant="secondary">
+              <X size={20} />
+              {copy.cancelSearch}
+            </Button>
+          )}
         </>
       ) : (
         <Button
           className="match-button"
-          disabled={busy || (!ready && !error)}
-          onClick={ready ? onFind : onRetry}
+          disabled={busy || (!ready && !terminal && !identityUnavailable)}
+          onClick={terminal ? onRecover : ready ? onFind : onRetry}
           ref={primaryActionRef}
           size="lg"
         >
           {busy ? (
             <Search className="spin" size={20} />
-          ) : !ready && error ? (
-            <RefreshCw size={20} />
+          ) : terminal || identityUnavailable || !ready ? (
+            <RefreshCw
+              className={!ready && !terminal && !identityUnavailable ? "spin" : undefined}
+              size={20}
+            />
           ) : (
             <Users size={20} />
           )}
-          {!ready
-            ? error ? copy.retrySession : copy.preparingGuest
+          {terminal
+            ? recoveryLabel
+            : identityUnavailable
+              ? copy.retrySession
+              : !ready
+                ? connectionLabel
             : busy ? copy.joiningQueue : copy.findOpponent}
         </Button>
       )}
-      {error ? <p className="match-error">{error}</p> : null}
+      {error ? <p className="match-error" role="alert">{error}</p> : null}
       <p className="panel-note">
         {copy.matchingNote}
       </p>

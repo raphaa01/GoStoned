@@ -5,6 +5,8 @@ import type { Pool } from "pg";
 import { POST as login } from "@/app/api/auth/login/route";
 import { POST as logout } from "@/app/api/auth/logout/route";
 import { POST as register } from "@/app/api/auth/register/route";
+import { GET as readSession } from "@/app/api/auth/session/route";
+import { SESSION_COOKIE } from "./session";
 import { hashPassword } from "./password";
 import { createRateLimitKey, RATE_LIMIT_POLICIES } from "./rateLimit";
 
@@ -58,6 +60,30 @@ function allowedRateLimitRow() {
     }],
   };
 }
+
+test("session lookup clears a presented invalid account cookie", async () => {
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("INSERT INTO auth_rate_limits")) return allowedRateLimitRow();
+      if (sql.includes("FROM user_sessions s")) return { rows: [], rowCount: 0 };
+      throw new Error(`Unexpected statement: ${sql}`);
+    },
+  } as unknown as Pool;
+  const response = await withPool(pool, () => readSession(new NextRequest(
+    "https://gostone.test/api/auth/session",
+    {
+      headers: {
+        Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}`,
+        "x-real-ip": "203.0.113.60",
+      },
+    },
+  )));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, user: null });
+  assert.match(response.headers.get("set-cookie") ?? "", /Max-Age=0/i);
+  assert.match(response.headers.get("set-cookie") ?? "", /HttpOnly/i);
+});
 
 test("login and registration rate-limit the address before parsing malformed JSON", async () => {
   for (const [path, handler] of [

@@ -44,6 +44,17 @@ export function usePlayerIdentity() {
     setGuestError(null);
   }, [authError, refreshAuth]);
 
+  const restartGuest = useCallback(() => {
+    setGuest(null);
+    setGuestError(null);
+  }, []);
+
+  const refreshIdentity = useCallback(async () => {
+    setGuest(null);
+    setGuestError(null);
+    await refreshAuth();
+  }, [refreshAuth]);
+
   return useMemo(() => {
     if (authLoading) {
       return {
@@ -53,6 +64,8 @@ export function usePlayerIdentity() {
         loading: true,
         error: null,
         retry,
+        restartGuest,
+        refreshIdentity,
       };
     }
     if (user) {
@@ -63,6 +76,8 @@ export function usePlayerIdentity() {
         loading: false,
         error: null,
         retry,
+        restartGuest,
+        refreshIdentity,
       };
     }
     if (authError) {
@@ -73,6 +88,8 @@ export function usePlayerIdentity() {
         loading: false,
         error: authError,
         retry,
+        restartGuest,
+        refreshIdentity,
       };
     }
     return {
@@ -82,6 +99,17 @@ export function usePlayerIdentity() {
       loading: !guest && !guestError,
       error: guestError,
       retry,
+      restartGuest,
+      refreshIdentity,
     };
-  }, [authError, authLoading, guest, guestError, retry, user]);
+  }, [
+    authError,
+    authLoading,
+    guest,
+    guestError,
+    refreshIdentity,
+    restartGuest,
+    retry,
+    user,
+  ]);
 }

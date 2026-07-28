@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
 import { isLocalDatabase } from "../lib/env";
+import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -14,12 +15,20 @@ if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
   throw new Error("The live-game smoke test requires an isolated local DATABASE_URL.");
 }
 
-async function request<T>(path: string, init?: RequestInit, cookie?: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  cookie?: string,
+  expectedPlayerKey?: string,
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       ...init?.headers,
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(expectedPlayerKey
+        ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }
+        : {}),
     },
   });
   const body = (await response.json()) as { ok: boolean; error?: string } & T;
@@ -28,12 +37,17 @@ async function request<T>(path: string, init?: RequestInit, cookie?: string): Pr
   return body;
 }
 
-async function post<T>(path: string, body: object, cookie: string): Promise<T> {
+async function post<T>(
+  path: string,
+  body: object,
+  cookie: string,
+  expectedPlayerKey?: string,
+): Promise<T> {
   return request<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }, cookie);
+  }, cookie, expectedPlayerKey);
 }
 
 async function createGuest() {
@@ -61,24 +75,29 @@ async function run() {
   });
   assert.equal(tampered.status, 401);
 
-  const first = await post<{ matchmaking: { status: string } }>("/api/matchmaking", {
+  const first = await post<{ actor: string; matchmaking: { status: string } }>("/api/matchmaking", {
     boardSize: 9,
     timeControl: "rapid",
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
+  assert.equal(first.actor, black.playerKey);
   assert.equal(first.matchmaking.status, "waiting");
 
-  const second = await post<{ matchmaking: { status: string; gameId: string } }>(
+  const second = await post<{ actor: string; matchmaking: { status: string; gameId: string } }>(
     "/api/matchmaking",
     { boardSize: 9, timeControl: "rapid" },
     white.cookie,
+    white.playerKey,
   );
+  assert.equal(second.actor, white.playerKey);
   assert.equal(second.matchmaking.status, "matched");
   assert.ok(second.matchmaking.gameId);
   const gameId = second.matchmaking.gameId;
 
   const firstStatus = await request<{
+    actor: string;
     matchmaking: { status: string; gameId: string };
-  }>("/api/matchmaking", undefined, black.cookie);
+  }>("/api/matchmaking", undefined, black.cookie, black.playerKey);
+  assert.equal(firstStatus.actor, black.playerKey);
   assert.equal(firstStatus.matchmaking.gameId, gameId);
 
   const impersonationAttempt = await fetch(`${baseUrl}/api/games/${gameId}/moves`, {
@@ -153,7 +172,11 @@ async function run() {
   ] as const) {
     const outsiderAction = await fetch(`${baseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: outsider.cookie },
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: outsider.cookie,
+        [EXPECTED_PLAYER_HEADER]: outsider.playerKey,
+      },
       body: JSON.stringify(body),
     });
     assert.equal(outsiderAction.status, 403, `${path} must reject an outsider`);

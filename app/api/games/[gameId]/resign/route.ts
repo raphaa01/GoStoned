@@ -6,7 +6,8 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
-import { resignGame } from "@/lib/game/gameService";
+import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
+import { GameServiceError, resignGame } from "@/lib/game/gameService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +19,13 @@ export async function POST(
   try {
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
+    if (request.headers.get(EXPECTED_PLAYER_HEADER) !== playerKey) {
+      throw new GameServiceError(
+        "The player session changed. Refresh before resigning.",
+        409,
+        "identity_changed",
+      );
+    }
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.resignBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.resign, playerKey);
     const { gameId } = await context.params;

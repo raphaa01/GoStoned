@@ -7,6 +7,7 @@ import {
   POST as joinMatchmaking,
 } from "@/app/api/matchmaking/route";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 
 type Statement = { sql: string; values: readonly unknown[] };
 
@@ -27,6 +28,7 @@ function request(body: string, authenticated = true, method = "POST") {
     headers: {
       "Content-Type": "application/json",
       "x-real-ip": "203.0.113.120",
+      [EXPECTED_PLAYER_HEADER]: "user:11111111-1111-4111-8111-111111111111",
       ...(authenticated ? { Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}` } : {}),
     },
     body,
@@ -212,6 +214,7 @@ test("cancellation returns the authoritative active match after locking", async 
   assert.equal(response.headers.get("set-cookie"), null);
   assert.deepEqual(await response.json(), {
     ok: true,
+    actor: "user:11111111-1111-4111-8111-111111111111",
     matchmaking: {
       status: "matched",
       gameId: matched.gameId,
@@ -223,4 +226,20 @@ test("cancellation returns the authoritative active match after locking", async 
   const queueLock = matched.statements.findIndex(({ sql }) => sql.includes("FOR UPDATE OF q"));
   const gameRead = matched.statements.findIndex(({ sql }) => sql.includes("SELECT status FROM games"));
   assert.ok(queueLock >= 0 && gameRead > queueLock);
+});
+
+test("matchmaking rejects a stale displayed actor before queue mutation", async () => {
+  const { pool, statements } = authenticatedPool();
+  const staleRequest = request(JSON.stringify({ boardSize: 9, timeControl: "rapid" }));
+  staleRequest.headers.set(
+    EXPECTED_PLAYER_HEADER,
+    "user:22222222-2222-4222-8222-222222222222",
+  );
+
+  const response = await withPool(pool, () => joinMatchmaking(staleRequest));
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, "identity_changed");
+  assert.equal(statements.filter(({ sql }) => sql.includes("auth_rate_limits")).length, 0);
+  assert.equal(statements.filter(({ sql }) => sql.includes("matchmaking_queue")).length, 0);
 });
