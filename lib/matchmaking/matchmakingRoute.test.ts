@@ -1,0 +1,226 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { NextRequest } from "next/server";
+import type { Pool } from "pg";
+import {
+  DELETE as cancelMatchmaking,
+  POST as joinMatchmaking,
+} from "@/app/api/matchmaking/route";
+import { SESSION_COOKIE } from "@/lib/auth/session";
+
+type Statement = { sql: string; values: readonly unknown[] };
+
+async function withPool<T>(pool: Pool, action: () => Promise<T>) {
+  const previous = globalThis.goStonedDbPool;
+  globalThis.goStonedDbPool = pool;
+  globalThis.goStoneEphemeralRateLimits = new Map();
+  try {
+    return await action();
+  } finally {
+    globalThis.goStonedDbPool = previous;
+  }
+}
+
+function request(body: string, authenticated = true, method = "POST") {
+  return new NextRequest("https://gostone.test/api/matchmaking", {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "x-real-ip": "203.0.113.120",
+      ...(authenticated ? { Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}` } : {}),
+    },
+    body,
+  });
+}
+
+function matchedCancellationPool() {
+  const statements: Statement[] = [];
+  const gameId = "22222222-2222-4222-8222-222222222222";
+  const client = {
+    async query(sql: string, values: readonly unknown[] = []) {
+      statements.push({ sql, values });
+      const normalized = sql.replace(/\s+/g, " ").trim();
+      if (
+        normalized === "BEGIN"
+        || normalized === "COMMIT"
+        || normalized === "ROLLBACK"
+        || normalized.startsWith("SET LOCAL")
+      ) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.includes("FROM matchmaking_queue q") && normalized.includes("FOR UPDATE OF q")) {
+        return {
+          rows: [{
+            player_key: "user:route_player",
+            board_size: 9,
+            time_control: "rapid",
+            rules_profile: "chinese-2002-gostone-v1",
+            status: "matched",
+            game_id: gameId,
+            created_at: new Date(),
+            is_stale: false,
+          }],
+          rowCount: 1,
+        };
+      }
+      if (normalized === "SELECT status FROM games WHERE id = $1") {
+        return { rows: [{ status: "active" }], rowCount: 1 };
+      }
+      throw new Error(`Unexpected transaction query: ${normalized}`);
+    },
+    release() {},
+  };
+  let rateLimitWrites = 0;
+  const pool = {
+    async query(sql: string, values: readonly unknown[] = []) {
+      statements.push({ sql, values });
+      if (sql.includes("FROM user_sessions s")) {
+        return {
+          rows: [{
+            id: "11111111-1111-4111-8111-111111111111",
+            username: "route_player",
+            display_name: "Route Player",
+            expires_at: new Date(Date.now() + 60_000),
+          }],
+        };
+      }
+      if (sql.includes("INSERT INTO auth_rate_limits")) {
+        rateLimitWrites += 1;
+        return {
+          rows: [{
+            attempts: 1,
+            window_started_at: new Date(),
+            blocked_until: null,
+            retry_after_seconds: 60,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  return { pool, statements, gameId, getRateLimitWrites: () => rateLimitWrites };
+}
+
+function authenticatedPool(
+  onRateLimit: (writeNumber: number) => object = () => ({
+    rows: [{
+      attempts: 1,
+      window_started_at: new Date(),
+      blocked_until: null,
+      retry_after_seconds: 60,
+    }],
+  }),
+) {
+  const statements: Statement[] = [];
+  let rateLimitWrites = 0;
+  const pool = {
+    async query(sql: string, values: readonly unknown[] = []) {
+      statements.push({ sql, values });
+      if (sql.includes("FROM user_sessions s")) {
+        return {
+          rows: [{
+            id: "11111111-1111-4111-8111-111111111111",
+            username: "route_player",
+            display_name: "Route Player",
+            expires_at: new Date(Date.now() + 60_000),
+          }],
+        };
+      }
+      if (sql.includes("INSERT INTO auth_rate_limits")) {
+        rateLimitWrites += 1;
+        return onRateLimit(rateLimitWrites);
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  } as unknown as Pool;
+  return { pool, statements };
+}
+
+test("malformed and invalid matchmaking bodies return a metered 400", async () => {
+  for (const body of [
+    "{",
+    "null",
+    "[]",
+    JSON.stringify({ boardSize: 7, timeControl: "instant" }),
+  ]) {
+    const { pool, statements } = authenticatedPool();
+    const response = await withPool(pool, () => joinMatchmaking(request(body)));
+
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal((await response.json()).code, "invalid_matchmaking_request");
+    assert.equal(statements.filter(({ sql }) => sql.includes("auth_rate_limits")).length, 4);
+    assert.equal(statements.length, 5);
+  }
+});
+
+test("matchmaking join preserves 401, 429, and 500 failure contracts", async () => {
+  const noSession = await joinMatchmaking(request(
+    JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
+    false,
+  ));
+  assert.equal(noSession.status, 401);
+  assert.equal((await noSession.json()).code, "session_expired");
+
+  const limited = authenticatedPool(() => ({
+    rows: [{
+      attempts: 2,
+      window_started_at: new Date(),
+      blocked_until: new Date(Date.now() + 11_000),
+      retry_after_seconds: 11,
+    }],
+  }));
+  const limitedResponse = await withPool(limited.pool, () => joinMatchmaking(request(
+    JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
+  )));
+  assert.equal(limitedResponse.status, 429);
+  assert.equal(limitedResponse.headers.get("Retry-After"), "11");
+  assert.equal(limitedResponse.headers.get("set-cookie"), null);
+
+  const failed = authenticatedPool(() => {
+    throw new Error("database unavailable");
+  });
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const failedResponse = await withPool(failed.pool, () => joinMatchmaking(request(
+      JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
+    )));
+    assert.equal(failedResponse.status, 500);
+    assert.equal(failedResponse.headers.get("Cache-Control"), "no-store, max-age=0");
+    assert.equal(failedResponse.headers.get("set-cookie"), null);
+    assert.equal((await failedResponse.json()).code, "internal_error");
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
+test("cancellation returns the authoritative active match after locking", async () => {
+  const matched = matchedCancellationPool();
+  const response = await withPool(matched.pool, () => cancelMatchmaking(request(
+    "",
+    true,
+    "DELETE",
+  )));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    matchmaking: {
+      status: "matched",
+      gameId: matched.gameId,
+      boardSize: 9,
+      timeControl: "rapid",
+    },
+  });
+  assert.equal(matched.getRateLimitWrites(), 2);
+  const queueLock = matched.statements.findIndex(({ sql }) => sql.includes("FOR UPDATE OF q"));
+  const gameRead = matched.statements.findIndex(({ sql }) => sql.includes("SELECT status FROM games"));
+  assert.ok(queueLock >= 0 && gameRead > queueLock);
+});

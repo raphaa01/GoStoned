@@ -126,6 +126,7 @@ export const en = {
     guest_session_failed: "Could not prepare a secure guest session.",
     authentication_required: "Please log in first.",
     session_expired: "Your player session expired. Please retry.",
+    invalid_matchmaking_request: "Choose a supported board size and time control.",
     game_not_found: "Game not found.",
     not_participant: "You are not a participant in this game.",
     invalid_scoring_revision: "A valid scoring revision is required.",

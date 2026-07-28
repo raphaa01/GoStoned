@@ -8,6 +8,10 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
+import {
+  applyMatchmakingQueueState,
+  type MatchmakingQueueState,
+} from "@/lib/client/matchmaking";
 import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -15,13 +19,6 @@ import { ActiveGamePanel } from "./ActiveGamePanel";
 import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
 import { TimeControlSelector } from "./TimeControlSelector";
-
-type QueueState = {
-  status: "idle" | "waiting" | "matched";
-  gameId: string | null;
-  boardSize: BoardSize | null;
-  timeControl: TimeControlId | null;
-};
 
 export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) {
   const router = useRouter();
@@ -47,29 +44,17 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const [confirmLeave, setConfirmLeave] = useState(false);
   const matchmakingAction = useRef<HTMLButtonElement>(null);
 
-  const handleQueueState = useCallback((queue: QueueState, enterMatchedGame: boolean) => {
-    if (queue.boardSize) setBoardSize(queue.boardSize);
-    if (queue.timeControl) setTimeControl(queue.timeControl);
-    if (
-      queue.status === "matched" &&
-      queue.gameId &&
-      queue.boardSize &&
-      queue.timeControl
-    ) {
-      if (enterMatchedGame) {
-        router.replace(href(`/game/${queue.gameId}`));
-      } else {
-        setActiveGame({
-          gameId: queue.gameId,
-          boardSize: queue.boardSize,
-          timeControl: queue.timeControl,
-        });
-        setQueueStatus("idle");
-      }
-      return;
-    }
-    setActiveGame(null);
-    setQueueStatus(queue.status === "waiting" ? "waiting" : "idle");
+  const handleQueueState = useCallback((
+    queue: MatchmakingQueueState,
+    enterMatchedGame: boolean,
+  ) => {
+    applyMatchmakingQueueState(queue, enterMatchedGame, {
+      enterGame: (gameId) => router.replace(href(`/game/${gameId}`)),
+      selectBoardSize: setBoardSize,
+      selectTimeControl: setTimeControl,
+      setActiveGame,
+      setQueueStatus,
+    });
   }, [href, router]);
 
   const refreshQueue = useCallback(async (
@@ -78,7 +63,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   ) => {
     if (!playerKey) return;
     const response = await fetch("/api/matchmaking", { cache: "no-store", signal });
-    const data = await readApi<{ matchmaking: QueueState }>(response);
+    const data = await readApi<{ matchmaking: MatchmakingQueueState }>(response);
     if (signal?.aborted) return;
     handleQueueState(data.matchmaking, enterMatchedGame);
   }, [handleQueueState, playerKey]);
@@ -140,7 +125,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ boardSize, timeControl }),
       });
-      const data = await readApi<{ matchmaking: QueueState }>(response);
+      const data = await readApi<{ matchmaking: MatchmakingQueueState }>(response);
       handleQueueState(data.matchmaking, true);
     } catch (requestError) {
       setError(localizedApiError(dictionary, requestError, copy.joinFailed));
@@ -153,12 +138,12 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     if (!playerKey) return;
     setBusy(true);
     try {
-      await readApi(
+      const data = await readApi<{ matchmaking: MatchmakingQueueState }>(
         await fetch("/api/matchmaking", {
           method: "DELETE",
         }),
       );
-      setQueueStatus("idle");
+      handleQueueState(data.matchmaking, true);
     } catch (requestError) {
       setError(localizedApiError(dictionary, requestError, copy.cancelFailed));
     } finally {

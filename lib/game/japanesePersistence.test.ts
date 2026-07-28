@@ -74,9 +74,10 @@ test("keeps both Chinese queue profiles rollout-compatible and Japanese closed",
   assert.ok(migration.includes("SET LOCAL lock_timeout = '5s'"));
   assert.ok(migration.includes("SET LOCAL statement_timeout = '60s'"));
   assert.ok(
-    matchmakingService.includes("rules_profile = EXCLUDED.rules_profile"),
+    matchmakingService.includes("SET player_key = EXCLUDED.player_key"),
   );
-  assert.ok(matchmakingService.includes("AND rules_profile = $3"));
+  assert.ok(matchmakingService.includes("rules_profile = $4,"));
+  assert.ok(matchmakingService.includes("AND q.rules_profile = $3"));
   assert.ok(matchmakingService.includes("rules_profile = $2"));
   assert.equal(
     tableDefinition(schema, "matchmaking_queue").includes(
