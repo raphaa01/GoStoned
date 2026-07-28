@@ -67,10 +67,21 @@ async function postGame(
   cookie: string,
   expectedPlayerKey: string,
 ) {
+  const versionedBody = suffix === "/moves"
+    ? {
+        ...body,
+        expectedVersion: ((await api(
+          `/api/games/${gameId}`,
+          { method: "GET" },
+          cookie,
+          expectedPlayerKey,
+        )).body.game as { version: number }).version,
+      }
+    : body;
   return api(`/api/games/${gameId}${suffix}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(versionedBody),
   }, cookie, expectedPlayerKey);
 }
 

@@ -28,6 +28,7 @@ import {
 } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
+import { createOperationLatch } from "@/lib/client/operationLatch";
 import {
   deriveGameOpponent,
   parseGameChatSnapshot,
@@ -86,6 +87,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [blockError, setBlockError] = useState<string | null>(null);
   const [blockAnnouncement, setBlockAnnouncement] = useState("");
   const [blockReadNonce, setBlockReadNonce] = useState(0);
+  const [moveOperationLatch] = useState(createOperationLatch);
   const lastMessageId = useRef(0);
   const chatTerminal = useRef(false);
   const chatPolicyUnavailableRef = useRef(false);
@@ -143,6 +145,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [connectionAnnouncementText]);
 
   const clearGameBoundState = useCallback(() => {
+    moveOperationLatch.invalidate();
     acceptedGame.current = null;
     gameStatus.current = null;
     latestGameVersion.current = -1;
@@ -166,7 +169,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setConfirmation(null);
     setShowResult(false);
     setGameAnnouncement("");
-  }, []);
+  }, [moveOperationLatch]);
 
   const recoverChangedIdentity = useCallback(() => {
     identityAuthority.current.invalidate();
@@ -685,9 +688,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
       .finally(() => router.replace(href("/play")));
   }
 
-  async function makeMove(move: { x?: number; y?: number; isPass?: boolean }) {
+  async function makeMove(
+    move: { x?: number; y?: number; isPass?: boolean },
+    expectedVersion: number,
+  ) {
     if (!game || !playerKey || !gameInteractionAllowed || busy) return;
     const requestIdentity = identityAuthority.current.capture();
+    const operationToken = moveOperationLatch.acquire();
+    if (!operationToken) return;
     setBusy(true);
     setError(null);
     try {
@@ -697,7 +705,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           "Content-Type": "application/json",
           [EXPECTED_PLAYER_HEADER]: playerKey,
         },
-        body: JSON.stringify(move),
+        body: JSON.stringify({ ...move, expectedVersion }),
       });
       const data = await readApi<{ actor: string; game: GameState }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
@@ -713,7 +721,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setError(localizedApiError(dictionary, requestError, copy.moveFailed));
       reconcileAfterOperation(requestError);
     } finally {
-      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
+      if (
+        moveOperationLatch.release(operationToken)
+        && identityAuthority.current.isCurrent(requestIdentity)
+      ) {
+        setBusy(false);
+      }
     }
   }
 
@@ -1213,9 +1226,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   );
                   void scoringAction("dead-stones", { x, y, dead });
                 } else {
-                  void makeMove({ x, y });
+                  void makeMove({ x, y }, game.version);
                 }
               }}
+              precisionRevision={JSON.stringify([
+                game.version,
+                game.status,
+                game.phase,
+                game.turn ?? "none",
+                identityKey,
+                connectionState.kind,
+                busy ? "busy" : "idle",
+              ])}
             />
           </div>
           {game.phase === "scoring" || game.boardSize > 9 ? (
@@ -1235,7 +1257,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             game={game}
             interactionDisabled={!gameInteractionAllowed}
             onLeave={() => clearFinishedGame("/play")}
-            onPass={() => makeMove({ isPass: true })}
+            onPass={() => makeMove({ isPass: true }, game.version)}
             onConfirmScore={() => scoringAction("confirm", {})}
             onResign={() => {
               if (!gameInteractionAllowed) return;
