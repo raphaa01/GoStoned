@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
-import { closePool, getPool, query } from "../lib/db";
+import { closePool, getPool, query, withTransaction } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
@@ -179,6 +179,36 @@ async function resumeEvents(gameId: string) {
     [gameId],
   );
   return result.rows;
+}
+
+async function deleteMatchedGameAndAssertEvidenceCascade(
+  fixture: ScoringFixture,
+): Promise<void> {
+  await withTransaction(async (transaction) => {
+    await assertSmokeDatabaseIdentity(transaction);
+    const removedQueue = await transaction.query<{ player_key: string }>(
+      `DELETE FROM matchmaking_queue
+        WHERE game_id = $1
+        RETURNING player_key`,
+      [fixture.gameId],
+    );
+    assert.deepEqual(
+      removedQueue.rows.map(({ player_key }) => player_key).sort(),
+      [fixture.black.playerKey, fixture.white.playerKey].sort(),
+    );
+
+    const removedGame = await transaction.query<{ id: string }>(
+      "DELETE FROM games WHERE id = $1 RETURNING id",
+      [fixture.gameId],
+    );
+    assert.deepEqual(removedGame.rows, [{ id: fixture.gameId }]);
+
+    const remainingEvidence = await transaction.query(
+      "SELECT 1 FROM game_scoring_resume_events WHERE game_id = $1",
+      [fixture.gameId],
+    );
+    assert.equal(remainingEvidence.rowCount, 0);
+  });
 }
 
 async function assertRejectedMutationRollsBack(
@@ -446,7 +476,7 @@ async function run() {
     assert.equal(role.has_table_access, false, `${role.role_name} has table access`);
     assert.equal(role.has_column_access, false, `${role.role_name} has column access`);
   }
-  await query("DELETE FROM games WHERE id = $1", [doubleResume.gameId]);
+  await deleteMatchedGameAndAssertEvidenceCascade(doubleResume);
   assert.deepEqual(await resumeEvents(doubleResume.gameId), []);
 
   const confirmResign = await setupScoringFixture();
