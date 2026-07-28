@@ -1,4 +1,8 @@
 import { getGroup, scoreChinese } from "./goEngine";
+import {
+  type RulesPolicy,
+  UnsupportedRulesPolicyError,
+} from "./rulesPolicy";
 import type { Board, Position, Score, Stone } from "./types";
 
 export type MarkedDeadGroup = {
@@ -94,9 +98,74 @@ export function scoreChineseAgreement(
   return scoreChinese(removeDeadStones(board, deadStones), komi);
 }
 
+export function scoreImmediatePosition(
+  policy: RulesPolicy,
+  board: Board,
+  komi: number,
+): Score {
+  if (policy.scoringLifecycle !== "immediate") {
+    throw new UnsupportedRulesPolicyError(
+      "rules_policy_mismatch",
+      "This rules profile does not permit immediate scoring.",
+    );
+  }
+  if (policy.scoringRule === "chinese-area") return scoreChinese(board, komi);
+  throw new UnsupportedRulesPolicyError(
+    "rules_policy_mismatch",
+    "This scoring rule is not supported by the engine.",
+  );
+}
+
+export function scoreAgreementPosition(
+  policy: RulesPolicy,
+  board: Board,
+  deadStones: Position[],
+  komi: number,
+): Score {
+  if (policy.scoringLifecycle !== "agreement") {
+    throw new UnsupportedRulesPolicyError(
+      "rules_policy_mismatch",
+      "This rules profile does not permit agreement scoring.",
+    );
+  }
+  if (policy.scoringRule === "chinese-area") {
+    return scoreChineseAgreement(board, deadStones, komi);
+  }
+  throw new UnsupportedRulesPolicyError(
+    "rules_policy_mismatch",
+    "This scoring rule is not supported by the engine.",
+  );
+}
+
+export function isRepeatedPositionForbidden(
+  policy: RulesPolicy,
+  nextHash: string,
+  priorHashes: ReadonlySet<string>,
+): boolean {
+  if (policy.repetitionRule === "positional-superko") return priorHashes.has(nextHash);
+  throw new UnsupportedRulesPolicyError(
+    "rules_policy_mismatch",
+    "This repetition rule is not supported by the engine.",
+  );
+}
+
 export function resumeTurnForClaim(requester: Stone, claim: "dead" | "alive"): Stone {
   if (claim === "dead") return requester;
   return requester === "black" ? "white" : "black";
+}
+
+export function resumeTurnForPolicy(
+  policy: RulesPolicy,
+  requester: Stone,
+  claim: "dead" | "alive",
+): Stone {
+  if (policy.resumeTurnRule !== "claim-dependent") {
+    throw new UnsupportedRulesPolicyError(
+      "rules_policy_mismatch",
+      "This rules profile does not permit agreement disputes.",
+    );
+  }
+  return resumeTurnForClaim(requester, claim);
 }
 
 export function scoringDeadlineExpired(expiresAt: Date, now: Date): boolean {

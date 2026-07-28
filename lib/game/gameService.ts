@@ -6,15 +6,23 @@ import {
   createEmptyBoard,
   getGroup,
   replayMoves,
-  scoreChinese,
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import {
-  resumeTurnForClaim,
-  scoreChineseAgreement,
+  isRepeatedPositionForbidden,
+  resumeTurnForPolicy,
+  scoreAgreementPosition,
+  scoreImmediatePosition,
   scoringDeadlineExpired,
   toggleDeadGroup,
 } from "./scoring";
+import {
+  resolveRulesConfiguration,
+  resolveScoringConfiguration,
+  type ResolvedRulesConfiguration,
+  type RulesPolicy,
+  UnsupportedRulesPolicyError,
+} from "./rulesPolicy";
 import type {
   Board,
   BoardSize,
@@ -46,9 +54,9 @@ type GameRow = {
   last_resume_x: number | null;
   last_resume_y: number | null;
   komi: string | number;
-  rules: "chinese";
-  rules_profile: "legacy-immediate-area" | "chinese-2002-gostone-v1";
-  scoring_method: "area";
+  rules: unknown;
+  rules_profile: unknown;
+  scoring_method: unknown;
   handicap: number;
   time_control: TimeControlId;
   main_time_seconds: number;
@@ -79,9 +87,9 @@ type ScoringRow = {
   board_hash: string;
   stopped_move_number: number;
   revision: number;
-  rules: "chinese";
-  rules_profile: "chinese-2002-gostone-v1";
-  scoring_method: "area";
+  rules: unknown;
+  rules_profile: unknown;
+  scoring_method: unknown;
   komi: string | number;
   handicap: number;
   fallback_to_move: Stone;
@@ -112,12 +120,11 @@ type DeadStoneRow = Position & {
 
 type LoadedGame = {
   game: GameRow;
+  rules: ResolvedRulesConfiguration;
   moveRows: MoveRow[];
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
 };
-
-const SCORING_RESPONSE_WINDOW_MS = 10 * 60 * 1_000;
 
 export class GameServiceError extends Error {
   constructor(
@@ -127,6 +134,164 @@ export class GameServiceError extends Error {
   ) {
     super(message);
   }
+}
+
+function storedRulesConfiguration(input: {
+  rules: unknown;
+  rules_profile: unknown;
+  scoring_method: unknown;
+  komi: unknown;
+  handicap: unknown;
+}): ResolvedRulesConfiguration {
+  try {
+    return resolveRulesConfiguration({
+      ruleset: input.rules,
+      rulesProfile: input.rules_profile,
+      scoringMethod: input.scoring_method,
+      komi: input.komi,
+      handicap: input.handicap,
+    });
+  } catch (error) {
+    if (error instanceof UnsupportedRulesPolicyError) {
+      throw new GameServiceError(
+        "The stored rules configuration is not supported.",
+        500,
+        "rules_configuration_unsupported",
+      );
+    }
+    throw error;
+  }
+}
+
+function storedScoringConfiguration(
+  game: ResolvedRulesConfiguration,
+  input: {
+    rules: unknown;
+    rules_profile: unknown;
+    scoring_method: unknown;
+    komi: unknown;
+    handicap: unknown;
+  },
+): ResolvedRulesConfiguration {
+  try {
+    return resolveScoringConfiguration(game, {
+      ruleset: input.rules,
+      rulesProfile: input.rules_profile,
+      scoringMethod: input.scoring_method,
+      komi: input.komi,
+      handicap: input.handicap,
+    });
+  } catch (error) {
+    if (error instanceof UnsupportedRulesPolicyError) {
+      throw new GameServiceError(
+        "The scoring snapshot does not match the game's rules configuration.",
+        500,
+        "rules_configuration_mismatch",
+      );
+    }
+    throw error;
+  }
+}
+
+function assertRulesLifecycle(
+  game: GameRow,
+  policy: RulesPolicy,
+  scoring: ScoringRow | null,
+): void {
+  const activePlay = game.status === "active"
+    && game.phase === "play"
+    && game.finish_reason === null;
+  const activeScoring = game.status === "active"
+    && game.phase === "scoring"
+    && game.finish_reason === null;
+  const finishedAgreementScore = game.status === "finished"
+    && game.phase === "scoring"
+    && game.finish_reason === "score";
+  const finishedWithoutScoring = game.status === "finished"
+    && game.phase === "play"
+    && (game.finish_reason === "resignation" || game.finish_reason === "timeout");
+  const finishedLegacyScore = game.status === "finished"
+    && game.phase === "play"
+    && game.finish_reason === "legacy_score";
+
+  const lifecycleValid = policy.scoringLifecycle === "agreement"
+    ? activePlay || activeScoring || finishedAgreementScore || finishedWithoutScoring
+    : activePlay || finishedWithoutScoring || finishedLegacyScore;
+  const scoringPresenceValid = policy.scoringLifecycle === "agreement"
+    && (activeScoring || finishedAgreementScore)
+    ? scoring !== null
+    : scoring === null;
+
+  if (!lifecycleValid || !scoringPresenceValid) {
+    throw new GameServiceError(
+      "The stored scoring lifecycle does not match the game's rules configuration.",
+      500,
+      "rules_configuration_mismatch",
+    );
+  }
+}
+
+function normalizeHistoricalRulesLifecycle(
+  game: GameRow,
+  policy: RulesPolicy,
+  scoring: ScoringRow | null,
+): { game: GameRow; scoring: ScoringRow | null } {
+  const winnerMatchesResult = game.result?.startsWith("B+")
+    ? game.winner_key === game.black_player_key
+    : game.result?.startsWith("W+")
+      ? game.winner_key === game.white_player_key
+      : false;
+
+  // The agreement-scoring release originally allowed resignation without
+  // clearing its snapshot or returning the terminal game to the play phase.
+  // Preserve those exact terminal rows as a canonical, read-only resignation.
+  if (
+    policy.scoringLifecycle === "agreement"
+    && game.status === "finished"
+    && game.phase === "scoring"
+    && game.finish_reason === "resignation"
+    && game.result !== null
+    && /^[BW]\+R$/.test(game.result)
+    && winnerMatchesResult
+    && game.finished_at !== null
+    && game.to_move === null
+    && game.scoring_revision === scoring?.revision
+    && scoring?.finalized_at === null
+    && scoring.result === null
+    && scoring.scored_board_hash === null
+  ) {
+    return {
+      game: { ...game, phase: "play" },
+      scoring: null,
+    };
+  }
+
+  // Migration 008 deliberately retained the legacy default while older app
+  // instances drained. A game they finished after the one-time backfill has
+  // no finish_reason, so derive the same value the migration would have used.
+  if (
+    policy.scoringLifecycle === "immediate"
+    && game.status === "finished"
+    && game.phase === "play"
+    && game.finish_reason === null
+    && game.result !== null
+    && /^[BW]\+(?:R|T|\d+(?:\.5)?)$/.test(game.result)
+    && winnerMatchesResult
+    && game.finished_at !== null
+    && scoring === null
+  ) {
+    const finishReason = game.result.endsWith("+R")
+      ? "resignation"
+      : game.result.endsWith("+T")
+        ? "timeout"
+        : "legacy_score";
+    return {
+      game: { ...game, finish_reason: finishReason },
+      scoring,
+    };
+  }
+
+  return { game, scoring };
 }
 
 function assertParticipant(game: GameRow, playerKey: string) {
@@ -189,8 +354,9 @@ async function loadGame(
       WHERE g.id = $1${lock ? " FOR UPDATE OF g" : ""}`,
     [gameId],
   );
-  const game = gameResult.rows[0];
+  let game = gameResult.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
+  const rules = storedRulesConfiguration(game);
 
   const movesResult = await execute<MoveRow>(
     `SELECT move_number, color, x, y, is_pass, board_hash, created_at
@@ -200,42 +366,52 @@ async function loadGame(
     [gameId],
   );
 
-  let scoring: ScoringRow | null = null;
+  const scoringResult = await execute<ScoringRow>(
+    `SELECT * FROM game_scoring_state WHERE game_id = $1${lock ? " FOR UPDATE" : ""}`,
+    [gameId],
+  );
+  let scoring: ScoringRow | null = scoringResult.rows[0] ?? null;
   let deadRows: DeadStoneRow[] = [];
-  if (game.phase === "scoring" || game.finish_reason === "score") {
-    const scoringResult = await execute<ScoringRow>(
-      `SELECT * FROM game_scoring_state WHERE game_id = $1${lock ? " FOR UPDATE" : ""}`,
+  if (scoring) storedScoringConfiguration(rules, scoring);
+  const normalized = normalizeHistoricalRulesLifecycle(game, rules.policy, scoring);
+  game = normalized.game;
+  scoring = normalized.scoring;
+  assertRulesLifecycle(game, rules.policy, scoring);
+  if (scoring) {
+    const deadResult = await execute<DeadStoneRow>(
+      `SELECT x, y, color
+         FROM game_dead_stones
+        WHERE game_id = $1
+        ORDER BY y, x`,
       [gameId],
     );
-    scoring = scoringResult.rows[0] ?? null;
-    if (scoring) {
-      const deadResult = await execute<DeadStoneRow>(
-        `SELECT x, y, color
-           FROM game_dead_stones
-          WHERE game_id = $1
-          ORDER BY y, x`,
-        [gameId],
-      );
-      deadRows = deadResult.rows;
-    }
+    deadRows = deadResult.rows;
   }
 
-  return { game, moveRows: movesResult.rows, scoring, deadRows };
+  return { game, rules, moveRows: movesResult.rows, scoring, deadRows };
 }
 
-function currentTurn(game: GameRow, moveRows: MoveRow[]): Stone | null {
+function currentTurn(
+  game: GameRow,
+  moveRows: MoveRow[],
+  policy: RulesPolicy,
+): Stone | null {
   if (game.status !== "active" || game.phase !== "play") return null;
   // Migration 008 is a schema-first expand step. The previous application
   // does not maintain to_move, so a legacy game remains move-log-authoritative
   // even if it was active during the deployment window.
-  if (game.rules_profile === "legacy-immediate-area") {
+  if (policy.turnSource === "move-log") {
     return moveRows.length % 2 === 0 ? "black" : "white";
   }
   return game.to_move;
 }
 
-function effectiveConsecutivePasses(game: GameRow, moveRows: MoveRow[]): number {
-  if (game.rules_profile !== "legacy-immediate-area") return game.consecutive_passes;
+function effectiveConsecutivePasses(
+  game: GameRow,
+  moveRows: MoveRow[],
+  policy: RulesPolicy,
+): number {
+  if (policy.turnSource !== "move-log") return game.consecutive_passes;
   return moveRows.at(-1)?.is_pass ? 1 : 0;
 }
 
@@ -287,14 +463,15 @@ function storedFinalScore(scoring: ScoringRow): Score | null {
 }
 
 function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
-  const { game, moveRows, scoring, deadRows } = loaded;
+  const { game, rules, moveRows, scoring, deadRows } = loaded;
   const moves = mapMoves(moveRows);
-  const turn = currentTurn(game, moveRows);
+  const turn = currentTurn(game, moveRows, rules.policy);
   const clocks = calculateClocks(game, turn, now);
   const board = replayMoves(game.board_size, moves);
   const deadStones = deadRows.map(({ x, y }) => ({ x, y }));
   const preview = scoring
-    ? storedFinalScore(scoring) ?? scoreChineseAgreement(board, deadStones, Number(scoring.komi))
+    ? storedFinalScore(scoring)
+      ?? scoreAgreementPosition(rules.policy, board, deadStones, rules.komi)
     : null;
   return {
     id: game.id,
@@ -308,12 +485,12 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     phase: game.phase,
     result: game.result,
     finishReason: game.finish_reason,
-    komi: Number(game.komi),
-    ruleset: game.rules,
-    rulesProfile: game.rules_profile,
-    scoringMethod: game.scoring_method,
-    handicap: game.handicap,
-    consecutivePasses: effectiveConsecutivePasses(game, moveRows),
+    komi: rules.komi,
+    ruleset: rules.ruleset,
+    rulesProfile: rules.rulesProfile,
+    scoringMethod: rules.scoringMethod,
+    handicap: rules.handicap,
+    consecutivePasses: effectiveConsecutivePasses(game, moveRows, rules.policy),
     scoringRevision: game.scoring_revision,
     lastResume: game.last_resume_claim ? {
       claim: game.last_resume_claim,
@@ -537,7 +714,7 @@ export async function getGameState(gameId: string, playerKey: string): Promise<G
     const now = new Date();
     const resumed = await resumeExpiredScoring(client, loaded, now);
     if (resumed) return serializeGame(resumed, now);
-    const turn = currentTurn(loaded.game, loaded.moveRows);
+    const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
     if (turn) {
       const clocks = calculateClocks(loaded.game, turn, now);
       if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
@@ -556,11 +733,11 @@ export async function submitMove(
     assertParticipant(loaded.game, playerKey);
     const resumed = await resumeExpiredScoring(client, loaded, new Date());
     if (resumed) return serializeGame(resumed);
-    const { game, moveRows } = loaded;
+    const { game, moveRows, rules } = loaded;
     if (game.status !== "active") {
       throw new GameServiceError("This game is already finished.", 409, "game_finished");
     }
-    const color = currentTurn(game, moveRows);
+    const color = currentTurn(game, moveRows, rules.policy);
     if (game.phase !== "play" || !color) {
       throw new GameServiceError("Agree on the score or resume play first.", 409, "game_in_scoring");
     }
@@ -590,7 +767,7 @@ export async function submitMove(
         boardHash(createEmptyBoard(game.board_size)),
         ...moveRows.filter((row) => !row.is_pass && row.board_hash).map((row) => row.board_hash!),
       ]);
-      if (previousHashes.has(nextHash)) {
+      if (isRepeatedPositionForbidden(rules.policy, nextHash, previousHashes)) {
         throw new GameServiceError(
           "Illegal move: this position repeats an earlier board.",
           409,
@@ -607,12 +784,16 @@ export async function submitMove(
       [game.id, nextMoveNumber, color, isPass ? null : move.x, isPass ? null : move.y, isPass, nextHash],
     );
     moveRows.push(inserted.rows[0]);
-    const previousPasses = effectiveConsecutivePasses(game, moveRows.slice(0, -1));
+    const previousPasses = effectiveConsecutivePasses(
+      game,
+      moveRows.slice(0, -1),
+      rules.policy,
+    );
     const consecutivePasses = isPass ? previousPasses + 1 : 0;
 
     if (consecutivePasses >= 2) {
-      if (game.rules_profile === "legacy-immediate-area") {
-        const score = scoreChinese(currentBoard, Number(game.komi));
+      if (rules.policy.scoringLifecycle === "immediate") {
+        const score = scoreImmediatePosition(rules.policy, currentBoard, rules.komi);
         const winnerKey = score.winner === "black"
           ? game.black_player_key
           : score.winner === "white"
@@ -643,6 +824,14 @@ export async function submitMove(
         await recordFinishedStats(client, legacyLoaded.game, winnerKey);
         return serializeGame(legacyLoaded, now);
       }
+      const responseWindowMs = rules.policy.scoringResponseWindowMs;
+      if (responseWindowMs === null) {
+        throw new GameServiceError(
+          "The rules profile does not support agreement scoring.",
+          500,
+          "rules_configuration_unsupported",
+        );
+      }
       const revision = game.scoring_revision + 1;
       await client.query(
         `INSERT INTO game_scoring_state (
@@ -655,13 +844,13 @@ export async function submitMove(
           nextHash,
           nextMoveNumber,
           revision,
-          game.rules,
-          game.rules_profile,
-          game.scoring_method,
-          game.komi,
-          game.handicap,
+          rules.ruleset,
+          rules.rulesProfile,
+          rules.scoringMethod,
+          rules.komi,
+          rules.handicap,
           opposite(color),
-          new Date(now.getTime() + SCORING_RESPONSE_WINDOW_MS),
+          new Date(now.getTime() + responseWindowMs),
         ],
       );
       const updated = await client.query<GameRow>(
@@ -688,13 +877,13 @@ export async function submitMove(
         board_hash: nextHash,
         stopped_move_number: nextMoveNumber,
         revision,
-        rules: game.rules,
-        rules_profile: game.rules_profile,
-        scoring_method: game.scoring_method,
-        komi: game.komi,
-        handicap: game.handicap,
+        rules: rules.ruleset,
+        rules_profile: rules.rulesProfile,
+        scoring_method: rules.scoringMethod,
+        komi: rules.komi,
+        handicap: rules.handicap,
         fallback_to_move: opposite(color),
-        expires_at: new Date(now.getTime() + SCORING_RESPONSE_WINDOW_MS),
+        expires_at: new Date(now.getTime() + responseWindowMs),
         black_confirmed_revision: null,
         white_confirmed_revision: null,
         black_confirmed_at: null,
@@ -867,7 +1056,12 @@ export async function confirmScore(
 
     const board = stoppedBoard(nextLoaded, nextLoaded.scoring);
     const deadStones = nextLoaded.deadRows.map(({ x, y }) => ({ x, y }));
-    const score = scoreChineseAgreement(board, deadStones, Number(nextLoaded.scoring.komi));
+    const score = scoreAgreementPosition(
+      nextLoaded.rules.policy,
+      board,
+      deadStones,
+      nextLoaded.rules.komi,
+    );
     const winnerKey = score.winner === "black"
       ? loaded.game.black_player_key
       : score.winner === "white"
@@ -972,7 +1166,7 @@ export async function resumePlay(
         RETURNING *`,
       [
         loaded.game.id,
-        resumeTurnForClaim(playerColor(loaded.game, playerKey), claim),
+        resumeTurnForPolicy(loaded.rules.policy, playerColor(loaded.game, playerKey), claim),
         claim,
         playerColor(loaded.game, playerKey),
         disputedStone.x,
@@ -999,7 +1193,7 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
     }
 
     const now = new Date();
-    const turn = currentTurn(game, loaded.moveRows);
+    const turn = currentTurn(game, loaded.moveRows, loaded.rules.policy);
     if (turn) {
       const clocks = calculateClocks(game, turn, now);
       if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
@@ -1009,16 +1203,24 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
       ? game.white_player_key
       : game.black_player_key;
     const winnerColor = winnerKey === game.black_player_key ? "B" : "W";
+    if (loaded.scoring) {
+      await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [game.id]);
+    }
     const updated = await client.query<GameRow>(
       `UPDATE games
-          SET status = 'finished', to_move = NULL, finish_reason = 'resignation',
+          SET status = 'finished', phase = 'play', to_move = NULL,
+              finish_reason = 'resignation',
               result = $2, winner_key = $3,
               finished_at = $4, updated_at = $4, version = version + 1
         WHERE id = $1
         RETURNING *`,
       [game.id, `${winnerColor}+R`, winnerKey, now],
     );
-    const nextLoaded = withUpdatedGame(loaded, updated.rows[0]);
+    const nextLoaded = {
+      ...withUpdatedGame(loaded, updated.rows[0]),
+      scoring: null,
+      deadRows: [],
+    };
     await recordFinishedStats(client, nextLoaded.game, winnerKey);
     return serializeGame(nextLoaded, now);
   });

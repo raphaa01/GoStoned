@@ -1,14 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createEmptyBoard } from "./goEngine";
+import { createEmptyBoard, scoreChinese } from "./goEngine";
 import {
   groupMarkedDeadStones,
+  isRepeatedPositionForbidden,
   removeDeadStones,
   resumeTurnForClaim,
+  resumeTurnForPolicy,
+  scoreAgreementPosition,
   scoreChineseAgreement,
+  scoreImmediatePosition,
   scoringDeadlineExpired,
   toggleDeadGroup,
 } from "./scoring";
+import {
+  DEFAULT_RULES_PROFILE,
+  LEGACY_IMMEDIATE_AREA_PROFILE,
+  resolveRulesPolicy,
+  UnsupportedRulesPolicyError,
+} from "./rulesPolicy";
 
 test("marked dead stones are presented as distinct selectable groups", () => {
   const board = createEmptyBoard(9);
@@ -84,11 +94,50 @@ test("Chinese agreement scoring removes dead stones without adding prisoners", (
   assert.equal(score.result, "B+73.5");
 });
 
+test("policy dispatch preserves immediate and agreement scoring boundaries", () => {
+  const board = createEmptyBoard(9);
+  board[0][0] = "black";
+  board[8][8] = "white";
+  const legacy = resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE);
+  const current = resolveRulesPolicy(DEFAULT_RULES_PROFILE);
+  assert.deepEqual(scoreImmediatePosition(legacy, board, 6.5), scoreChinese(board, 6.5));
+  assert.deepEqual(
+    scoreAgreementPosition(current, board, [{ x: 8, y: 8 }], 7.5),
+    scoreChineseAgreement(board, [{ x: 8, y: 8 }], 7.5),
+  );
+  assert.throws(
+    () => scoreImmediatePosition(current, board, 7.5),
+    UnsupportedRulesPolicyError,
+  );
+  assert.throws(
+    () => scoreAgreementPosition(legacy, board, [], 6.5),
+    UnsupportedRulesPolicyError,
+  );
+});
+
+test("both current profiles explicitly preserve positional superko", () => {
+  const priorHashes = new Set(["seen"]);
+  for (const profile of [LEGACY_IMMEDIATE_AREA_PROFILE, DEFAULT_RULES_PROFILE]) {
+    const policy = resolveRulesPolicy(profile);
+    assert.equal(isRepeatedPositionForbidden(policy, "seen", priorHashes), true);
+    assert.equal(isRepeatedPositionForbidden(policy, "new", priorHashes), false);
+  }
+});
+
 test("Chinese dispute resumption gives the first move to the player claiming death", () => {
   assert.equal(resumeTurnForClaim("black", "dead"), "black");
   assert.equal(resumeTurnForClaim("black", "alive"), "white");
   assert.equal(resumeTurnForClaim("white", "dead"), "white");
   assert.equal(resumeTurnForClaim("white", "alive"), "black");
+  const current = resolveRulesPolicy(DEFAULT_RULES_PROFILE);
+  assert.equal(resumeTurnForPolicy(current, "black", "dead"), "black");
+  assert.equal(resumeTurnForPolicy(current, "black", "alive"), "white");
+  assert.equal(resumeTurnForPolicy(current, "white", "dead"), "white");
+  assert.equal(resumeTurnForPolicy(current, "white", "alive"), "black");
+  assert.throws(
+    () => resumeTurnForPolicy(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE), "black", "dead"),
+    UnsupportedRulesPolicyError,
+  );
 });
 
 test("the scoring decision deadline expires at an exact server timestamp", () => {

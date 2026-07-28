@@ -1,3 +1,5 @@
+import type { Ruleset, RulesProfile, ScoringMethod } from "./rulesPolicy";
+
 export type BoardSize = 9 | 13 | 19;
 export type TimeControlId = "blitz" | "rapid" | "classic";
 export type Stone = "black" | "white";
@@ -45,9 +47,9 @@ export type GameState = {
   result: string | null;
   finishReason: "score" | "resignation" | "timeout" | "legacy_score" | null;
   komi: number;
-  ruleset: "chinese";
-  rulesProfile: "legacy-immediate-area" | "chinese-2002-gostone-v1";
-  scoringMethod: "area";
+  ruleset: Ruleset;
+  rulesProfile: RulesProfile;
+  scoringMethod: ScoringMethod;
   handicap: number;
   consecutivePasses: number;
   scoringRevision: number;

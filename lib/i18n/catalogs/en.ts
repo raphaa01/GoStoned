@@ -130,6 +130,8 @@ export const en = {
     not_scoring: "This game is not in scoring.",
     scoring_revision_conflict: "The scoring proposal changed. Review the latest position.",
     scoring_snapshot_mismatch: "The stored scoring position could not be verified.",
+    rules_configuration_unsupported: "This game's stored rules are not supported by this server version.",
+    rules_configuration_mismatch: "This game's scoring record does not match its stored rules.",
     game_finished: "This game is already finished.",
     game_in_scoring: "Agree on the score or resume play first.",
     not_your_turn: "It is not your turn.",
