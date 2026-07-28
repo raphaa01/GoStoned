@@ -1024,6 +1024,28 @@ a {
   font-size: 25px;
 }
 
+.platform-activity-status {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 12px;
+}
+
+.platform-activity-note {
+  color: var(--muted-2);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.platform-activity-status .button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
 .board-activity {
   display: grid;
   gap: 10px;
