@@ -71,6 +71,7 @@ class LockQueue {
 class MatchmakingPool {
   readonly queue = new Map<string, StoredQueue>();
   readonly games = new Map<string, StoredGame>();
+  readonly blocks = new Set<string>();
   readonly locks = new LockQueue();
   readonly opponentLocked = deferred();
   readonly continueAfterOpponent = deferred();
@@ -80,6 +81,9 @@ class MatchmakingPool {
   pauseAfterOpponent = false;
   pauseAfterCancellation = false;
   publicationRowCountOverride: number | null = null;
+  blockOnPairRecheck: [string, string] | null = null;
+  blockRechecksRemaining = 0;
+  pairRecheckCount = 0;
   private gameSequence = 0;
 
   seedWaiting(
@@ -128,6 +132,15 @@ class MatchmakingPool {
       started_at: new Date(),
     });
     return id;
+  }
+
+  seedBlock(blockerKey: string, blockedKey: string) {
+    this.blocks.add(`${blockerKey}\0${blockedKey}`);
+  }
+
+  isPairBlocked(firstPlayerKey: string, secondPlayerKey: string) {
+    return this.blocks.has(`${firstPlayerKey}\0${secondPlayerKey}`)
+      || this.blocks.has(`${secondPlayerKey}\0${firstPlayerKey}`);
   }
 
   async connect() {
@@ -214,6 +227,27 @@ class MatchmakingClient {
       const release = await this.pool.locks.acquire(`advisory:${String(values[0])}`);
       this.releases.push(release);
       return { rows: [{}], rowCount: 1 };
+    }
+    if (normalized.startsWith("SELECT ( EXISTS") && normalized.includes("FROM player_blocks")) {
+      const firstPlayerKey = String(values[0]);
+      const secondPlayerKey = String(values[1]);
+      this.pool.pairRecheckCount += 1;
+      if (this.pool.blockRechecksRemaining > 0) {
+        this.pool.seedBlock(firstPlayerKey, secondPlayerKey);
+        this.pool.blockRechecksRemaining -= 1;
+      }
+      if (
+        this.pool.blockOnPairRecheck
+        && this.pool.blockOnPairRecheck.includes(firstPlayerKey)
+        && this.pool.blockOnPairRecheck.includes(secondPlayerKey)
+      ) {
+        this.pool.seedBlock(firstPlayerKey, secondPlayerKey);
+        this.pool.blockOnPairRecheck = null;
+      }
+      return {
+        rows: [{ blocked: this.pool.isPairBlocked(firstPlayerKey, secondPlayerKey) }],
+        rowCount: 1,
+      };
     }
     if (
       normalized.startsWith("DELETE FROM matchmaking_queue")
@@ -359,6 +393,7 @@ class MatchmakingClient {
           && row.time_control === timeControl
           && row.rules_profile === profile
           && row.status === "waiting"
+          && !this.pool.isPairBlocked(playerKey, row.player_key)
           && !this.pool.locks.isHeld(`row:${row.player_key}`)
           && ![...this.pool.games.values()].some((game) =>
             game.status === "active"
@@ -366,7 +401,9 @@ class MatchmakingClient {
               game.black_player_key === row.player_key
               || game.white_player_key === row.player_key
             )))
-        .sort((left, right) => left.created_at.getTime() - right.created_at.getTime());
+        .sort((left, right) =>
+          left.created_at.getTime() - right.created_at.getTime()
+          || (left.player_key < right.player_key ? -1 : left.player_key > right.player_key ? 1 : 0));
       const opponent = candidates[0];
       if (!opponent) return { rows: [], rowCount: 0 };
       await this.lockRow(opponent.player_key);
@@ -709,4 +746,72 @@ test("different pools and corrupt active participants are never selected as oppo
   ));
   assert.equal(newcomer.status, "waiting");
   assert.equal(corrupt.games.size, 1);
+});
+
+test("either block direction excludes the pair and selects the next eligible player", async (t) => {
+  for (const direction of ["requester", "candidate"] as const) {
+    await t.test(direction, async () => {
+      const pool = new MatchmakingPool();
+      pool.seedWaiting("guest:blocked-oldest");
+      pool.seedWaiting("guest:eligible-next");
+      pool.queue.get("guest:blocked-oldest")!.created_at = new Date(1);
+      pool.queue.get("guest:eligible-next")!.created_at = new Date(2);
+      if (direction === "requester") {
+        pool.seedBlock("guest:joining", "guest:blocked-oldest");
+      } else {
+        pool.seedBlock("guest:blocked-oldest", "guest:joining");
+      }
+
+      const match = await withPool(pool, () => joinMatchmaking(
+        "guest:joining",
+        9,
+        "rapid",
+      ));
+
+      assert.equal(match.status, "matched");
+      const game = pool.games.get(match.gameId!);
+      assert.equal(game?.black_player_key, "guest:eligible-next");
+      assert.equal(game?.white_player_key, "guest:joining");
+      assert.equal(pool.queue.get("guest:blocked-oldest")?.status, "waiting");
+    });
+  }
+});
+
+test("a simulated committed block after selection exercises the bounded retry path", async () => {
+  const pool = new MatchmakingPool();
+  pool.seedWaiting("guest:first-candidate");
+  pool.seedWaiting("guest:next-candidate");
+  pool.queue.get("guest:first-candidate")!.created_at = new Date(1);
+  pool.queue.get("guest:next-candidate")!.created_at = new Date(2);
+  pool.blockOnPairRecheck = ["guest:joining", "guest:first-candidate"];
+
+  const match = await withPool(pool, () => joinMatchmaking(
+    "guest:joining",
+    9,
+    "rapid",
+  ));
+
+  assert.equal(match.status, "matched");
+  assert.equal(pool.games.get(match.gameId!)?.black_player_key, "guest:next-candidate");
+  assert.equal(pool.queue.get("guest:first-candidate")?.status, "waiting");
+});
+
+test("repeated simulated block races retain at most eight candidate and pair locks", async () => {
+  const pool = new MatchmakingPool();
+  for (let index = 0; index < 9; index += 1) {
+    const playerKey = `guest:candidate-${index}`;
+    pool.seedWaiting(playerKey);
+    pool.queue.get(playerKey)!.created_at = new Date(index + 1);
+  }
+  pool.blockRechecksRemaining = 9;
+
+  const result = await withPool(pool, () => joinMatchmaking(
+    "guest:joining",
+    9,
+    "rapid",
+  ));
+
+  assert.equal(result.status, "waiting");
+  assert.equal(pool.pairRecheckCount, 8);
+  assert.equal(pool.games.size, 0);
 });

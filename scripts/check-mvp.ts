@@ -21,6 +21,7 @@ const requiredTables = [
   "moves",
   "matchmaking_queue",
   "game_messages",
+  "player_blocks",
   "player_stats",
   "player_rating_history",
   "game_scoring_state",
@@ -91,6 +92,14 @@ const requiredIndexDefinitions = {
     "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
     "INCLUDE (game_id, rating_before, rating_after, result)",
   ],
+  idx_player_blocks_blocked_blocker: [
+    "ON public.player_blocks USING btree (blocked_key, blocker_key)",
+  ],
+  idx_player_blocks_guest_retention: [
+    "ON public.player_blocks USING btree (created_at, blocker_key, blocked_key)",
+    "WHERE",
+    "guest:%",
+  ],
 } as const;
 
 const requiredConstraintSignatures = [
@@ -102,6 +111,9 @@ const requiredConstraintSignatures = [
   "game_scoring_resume_events_claim_shape_check:game_scoring_resume_events:c",
   "game_scoring_resume_events_game_rules_fk:game_scoring_resume_events:f",
   "matchmaking_queue_rules_profile_compatibility_check:matchmaking_queue:c",
+  "player_blocks_pkey:player_blocks:p",
+  "player_blocks_distinct_players_check:player_blocks:c",
+  "player_blocks_key_bounds_check:player_blocks:c",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -178,6 +190,18 @@ const requiredConstraintDefinitions = {
     includes: ["legacy-immediate-area", "chinese-2002-gostone-v1"],
     excludes: ["japanese-1989-gostone-v1"],
   },
+  player_blocks_pkey: {
+    includes: ["PRIMARY KEY (blocker_key, blocked_key)"],
+    excludes: [],
+  },
+  player_blocks_distinct_players_check: {
+    includes: ["CHECK ((blocker_key <> blocked_key))"],
+    excludes: [],
+  },
+  player_blocks_key_bounds_check: {
+    includes: ["user|guest", "blocker_key", "blocked_key"],
+    excludes: [],
+  },
 } as const;
 
 const requiredTriggerSignatures = [
@@ -208,6 +232,7 @@ const requiredTriggerDefinitions = {
 } as const;
 
 const requiredProtectedTables = [
+  "player_blocks",
   "game_scoring_resume_events",
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",

@@ -48,7 +48,38 @@ export async function createGuestSession(): Promise<{
   const tokenHash = hashGuestSessionToken(token);
 
   const guestId = await withTransaction(async (client) => {
-    await client.query("DELETE FROM guest_sessions WHERE expires_at <= NOW()");
+    await client.query(
+      `WITH expired_guests AS MATERIALIZED (
+         SELECT guest_id
+           FROM guest_sessions
+          WHERE expires_at <= NOW()
+          ORDER BY expires_at, guest_id
+          LIMIT 200
+          FOR UPDATE SKIP LOCKED
+       )
+       DELETE FROM guest_sessions AS guest_session
+       USING expired_guests AS expired
+       WHERE guest_session.guest_id = expired.guest_id`,
+    );
+    await client.query(
+      `WITH expired_guest_blocks AS MATERIALIZED (
+         SELECT player_block.ctid
+           FROM player_blocks AS player_block
+          WHERE player_block.created_at < NOW() - INTERVAL '30 days'
+            AND (
+              player_block.blocker_key LIKE 'guest:%'
+              OR player_block.blocked_key LIKE 'guest:%'
+            )
+          ORDER BY player_block.created_at,
+                   player_block.blocker_key,
+                   player_block.blocked_key
+          LIMIT 200
+          FOR UPDATE OF player_block SKIP LOCKED
+       )
+       DELETE FROM player_blocks AS player_block
+       USING expired_guest_blocks AS expired
+       WHERE player_block.ctid = expired.ctid`,
+    );
     await client.query(
       `WITH stale AS (
          SELECT key_hash

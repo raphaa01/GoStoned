@@ -253,6 +253,27 @@ test("ephemeral read guards enforce actor limits without a database executor", (
   );
 });
 
+test("player blocking has separate bounded read, burst, and sustained policies", () => {
+  assert.deepEqual(RATE_LIMIT_POLICIES.playerBlockRead, {
+    scope: "player-block-read",
+    limit: 30,
+    ipLimit: 300,
+    windowMinutes: 1,
+  });
+  assert.deepEqual(RATE_LIMIT_POLICIES.playerBlockMutationBurst, {
+    scope: "player-block-mutation-burst",
+    limit: 2,
+    ipLimit: 20,
+    windowMinutes: 1 / 6,
+  });
+  assert.deepEqual(RATE_LIMIT_POLICIES.playerBlockMutation, {
+    scope: "player-block-mutation",
+    limit: 10,
+    ipLimit: 100,
+    windowMinutes: 1,
+  });
+});
+
 test("ephemeral guards keep their process-local store bounded", () => {
   globalThis.goStoneEphemeralRateLimits = new Map();
   for (let index = 0; index < 10_001; index += 1) {
