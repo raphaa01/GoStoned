@@ -53,10 +53,11 @@ export function LeaderboardView() {
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>
         </div>
-        <div className="leaderboard-filter" aria-label={copy.boardSize}>
+        <div className="leaderboard-filter" aria-label={copy.boardSize} role="group">
           {([9, 13, 19] as const).map((size) => (
             <button
               className={boardSize === size ? "is-selected" : ""}
+              aria-pressed={boardSize === size}
               key={size}
               onClick={() => setBoardSize(size)}
               type="button"
@@ -70,7 +71,7 @@ export function LeaderboardView() {
       <section className="leaderboard-card">
         <div className="leaderboard-title"><Trophy size={20} /><strong>{boardSize}×{boardSize} {copy.players}</strong></div>
         {loading ? (
-          <p className="empty-state">{copy.loading}</p>
+          <p aria-live="polite" className="empty-state" role="status">{copy.loading}</p>
         ) : error ? (
           <div className="empty-state" role="alert">
             <p>{error}</p>
@@ -79,21 +80,42 @@ export function LeaderboardView() {
             </button>
           </div>
         ) : entries.length === 0 ? (
-          <p className="empty-state">{copy.empty}</p>
+          <p aria-live="polite" className="empty-state" role="status">{copy.empty}</p>
         ) : (
           <div className="leaderboard-table">
-            <div className="leaderboard-row leaderboard-row--head">
-              <span>{copy.rank}</span><span>{copy.player}</span><span>{copy.games}</span><span>{copy.wins}</span><span>{copy.rating}</span>
-            </div>
-            {entries.map((entry, index) => (
-              <div className="leaderboard-row" key={`${entry.player_name}-${index}`}>
-                <span className={`rank rank--${index + 1}`}>{index < 3 ? <Medal size={18} /> : index + 1}</span>
-                <strong>{entry.player_name}</strong>
-                <span>{entry.games}</span>
-                <span>{entry.wins}</span>
-                <strong>{entry.rating}</strong>
-              </div>
-            ))}
+            <table>
+              <caption className="sr-only">
+                {boardSize}×{boardSize} {copy.players}. {copy.resultCount.replace("{count}", String(entries.length))}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{copy.rank}</th>
+                  <th scope="col">{copy.player}</th>
+                  <th scope="col">{copy.games}</th>
+                  <th scope="col">{copy.wins}</th>
+                  <th scope="col">{copy.rating}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, index) => (
+                  <tr key={`${entry.player_name}-${index}`}>
+                    <td>
+                      <span className={`rank rank--${index + 1}`}>
+                        <span className="sr-only">{index + 1}</span>
+                        {index < 3 ? <Medal aria-hidden="true" size={18} /> : <span aria-hidden="true">{index + 1}</span>}
+                      </span>
+                    </td>
+                    <th scope="row">{entry.player_name}</th>
+                    <td>{entry.games}</td>
+                    <td>{entry.wins}</td>
+                    <td><strong>{entry.rating}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p aria-live="polite" className="sr-only" role="status">
+              {copy.resultCount.replace("{count}", String(entries.length))}
+            </p>
           </div>
         )}
       </section>

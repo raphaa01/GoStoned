@@ -17,10 +17,15 @@ export function BoardSizeSelector({ value, onChange, disabled = false }: BoardSi
     { value: 19, label: "19×19", pace: dictionary.play.boardClassic },
   ];
   return (
-    <div className="size-selector" aria-label={dictionary.play.boardSelectorLabel}>
+    <div
+      aria-label={dictionary.play.boardSelectorLabel}
+      className="size-selector"
+      role="group"
+    >
       {sizes.map((size) => (
         <button
           className={value === size.value ? "is-selected" : ""}
+          aria-pressed={value === size.value}
           disabled={disabled}
           key={size.value}
           onClick={() => onChange(size.value)}

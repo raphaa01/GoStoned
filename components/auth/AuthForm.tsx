@@ -3,10 +3,16 @@
 import { KeyRound, LoaderCircle, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { affectedAuthFields, type AuthField } from "@/lib/auth/errorFields";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
+
+type FormError = {
+  message: string;
+  fields: AuthField[];
+};
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { user, refresh } = useAuth();
@@ -15,7 +21,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
+  const usernameHintId = useId();
+  const errorId = useId();
+  const usernameInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,17 +39,27 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       });
       const body = (await response.json()) as { ok: boolean; code?: string };
       if (!response.ok || !body.ok) {
-        throw new Error(localizedAuthError(dictionary, body.code, "request_failed"));
+        const fields = affectedAuthFields(body.code);
+        setError({
+          message: localizedAuthError(dictionary, body.code, "request_failed"),
+          fields,
+        });
+        window.requestAnimationFrame(() => {
+          if (fields[0] === "username") usernameInput.current?.focus();
+          else if (fields[0] === "password") passwordInput.current?.focus();
+        });
+        return;
       }
       await refresh();
       router.push(href(mode === "register" ? "/profile" : "/play"));
       router.refresh();
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
+      setError({
+        message: requestError instanceof Error
           ? requestError.message
           : dictionary.auth.errors.request_failed,
-      );
+        fields: [],
+      });
     } finally {
       setBusy(false);
     }
@@ -73,37 +93,53 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <span className="input-wrap">
             <UserRound size={18} />
             <input
+              aria-describedby={registering
+                ? `${usernameHintId}${error?.fields.includes("username") ? ` ${errorId}` : ""}`
+                : error?.fields.includes("username") ? errorId : undefined}
+              aria-invalid={error?.fields.includes("username") || undefined}
+              aria-label={dictionary.auth.username}
               autoComplete="username"
               autoFocus
               maxLength={20}
               minLength={3}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                if (error) setError(null);
+              }}
               pattern="[A-Za-z0-9_]+"
               placeholder={dictionary.auth.usernamePlaceholder}
               required
+              ref={usernameInput}
               value={username}
             />
           </span>
-          {registering ? <small>{dictionary.auth.usernameHint}</small> : null}
+          {registering ? <small id={usernameHintId}>{dictionary.auth.usernameHint}</small> : null}
         </label>
         <label>
           <span>{dictionary.auth.password}</span>
           <span className="input-wrap">
             <KeyRound size={18} />
             <input
+              aria-describedby={error?.fields.includes("password") ? errorId : undefined}
+              aria-invalid={error?.fields.includes("password") || undefined}
+              aria-label={dictionary.auth.password}
               autoComplete={registering ? "new-password" : "current-password"}
               maxLength={128}
               minLength={8}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError(null);
+              }}
               placeholder={dictionary.auth.passwordPlaceholder}
               required
+              ref={passwordInput}
               type="password"
               value={password}
             />
           </span>
         </label>
 
-        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}
           {busy

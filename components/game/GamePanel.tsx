@@ -3,6 +3,7 @@
 import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
@@ -70,7 +71,7 @@ export function GamePanel({
         : copy.opponentTurn;
 
   return (
-    <aside className="game-panel" aria-live="polite">
+    <aside className="game-panel">
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
@@ -163,7 +164,11 @@ export function GamePanel({
               {disputeGroups.length === 0 ? <option value="">{copy.markGroupFirst}</option> : null}
               {disputeGroups.map((group) => (
                 <option key={group.key} value={group.key}>
-                  {group.color === "black" ? copy.black : copy.white} {copy.groupAt} {group.representative.x + 1}, {copy.row} {group.representative.y + 1} · {group.stones.length} {group.stones.length === 1 ? copy.stone : copy.stones}
+                  {formatBoardLabel(copy.groupOptionLabel, {
+                    group: group.color === "black" ? copy.blackGroupOption : copy.whiteGroupOption,
+                    coordinate: goCoordinate(game.boardSize, group.representative.x, group.representative.y),
+                    stoneCount: `${group.stones.length} ${group.stones.length === 1 ? copy.stone : copy.stones}`,
+                  })}
                 </option>
               ))}
             </select>

@@ -3,7 +3,7 @@
 import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
@@ -15,6 +15,8 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const { dictionary, href } = useI18n();
   const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const menuButton = useRef<HTMLButtonElement>(null);
   const links = [
     { href: "/play", label: dictionary.nav.play, icon: Gamepad2 },
     { href: "/learn", label: dictionary.nav.learn, icon: BookOpen },
@@ -22,6 +24,18 @@ export function Navbar() {
     { href: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
     { href: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: user ? UserRound : LogIn },
   ];
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      menuButton.current?.focus();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
 
   async function signOut() {
     try {
@@ -41,16 +55,22 @@ export function Navbar() {
         <span>GoStone</span>
       </Link>
       <button
+        aria-controls={menuId}
         aria-expanded={open}
         aria-label={open ? dictionary.nav.closeMenu : dictionary.nav.openMenu}
         className="icon-button"
         onClick={() => setOpen((current) => !current)}
+        ref={menuButton}
         type="button"
       >
         {open ? <X size={22} /> : <Menu size={22} />}
       </button>
-      {open ? (
-        <nav className="mobile-menu" aria-label={dictionary.nav.mobileLabel}>
+      <nav
+        aria-label={dictionary.nav.mobileLabel}
+        className="mobile-menu"
+        hidden={!open}
+        id={menuId}
+      >
           {links.map(({ href: path, label, icon: Icon }) => (
             <Link
               className={isRouteActive(pathname, path) ? "is-active" : ""}
@@ -68,8 +88,7 @@ export function Navbar() {
           {user ? (
             <button onClick={signOut} type="button"><LogOut size={18} /> {dictionary.nav.logout}</button>
           ) : null}
-        </nav>
-      ) : null}
+      </nav>
     </header>
   );
 }
