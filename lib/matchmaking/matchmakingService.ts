@@ -92,9 +92,26 @@ export async function joinMatchmaking(
       [`matchmaking-pool:v1:${boardSize}:${timeControlId}:${rules.rulesProfile}`],
     );
     await client.query(
-      `DELETE FROM matchmaking_queue
-        WHERE board_size = $1 AND time_control = $2 AND rules_profile = $3
-          AND status = 'waiting' AND updated_at < NOW() - INTERVAL '5 minutes'`,
+      `WITH stale_waiting AS MATERIALIZED (
+         SELECT queued.player_key
+           FROM matchmaking_queue AS queued
+          WHERE queued.board_size = $1
+            AND queued.time_control = $2
+            AND queued.rules_profile = $3
+            AND queued.status = 'waiting'
+            AND queued.updated_at < NOW() - INTERVAL '5 minutes'
+          ORDER BY queued.updated_at, queued.player_key
+          LIMIT 200
+          FOR UPDATE OF queued SKIP LOCKED
+       )
+       DELETE FROM matchmaking_queue AS queued
+       USING stale_waiting AS stale
+       WHERE queued.player_key = stale.player_key
+         AND queued.board_size = $1
+         AND queued.time_control = $2
+         AND queued.rules_profile = $3
+         AND queued.status = 'waiting'
+         AND queued.updated_at < NOW() - INTERVAL '5 minutes'`,
       [boardSize, timeControlId, rules.rulesProfile],
     );
 
@@ -174,6 +191,7 @@ export async function joinMatchmaking(
           WHERE q.board_size = $1 AND q.time_control = $2
             AND q.rules_profile = $3
             AND q.status = 'waiting' AND q.player_key <> $4
+            AND q.updated_at >= NOW() - INTERVAL '5 minutes'
             AND NOT EXISTS (
               SELECT 1
                 FROM games active_game

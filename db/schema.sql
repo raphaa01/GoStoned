@@ -1090,6 +1090,9 @@ DROP INDEX IF EXISTS idx_matchmaking_waiting;
 CREATE INDEX IF NOT EXISTS idx_matchmaking_waiting
   ON matchmaking_queue(board_size, time_control, created_at)
   WHERE status = 'waiting';
+CREATE INDEX IF NOT EXISTS idx_matchmaking_waiting_pool_updated_at
+  ON matchmaking_queue(board_size, time_control, rules_profile, updated_at, player_key)
+  WHERE status = 'waiting';
 CREATE INDEX IF NOT EXISTS idx_matchmaking_game_id ON matchmaking_queue(game_id);
 CREATE INDEX IF NOT EXISTS idx_games_active_board
   ON games(board_size)
