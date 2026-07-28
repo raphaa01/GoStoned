@@ -1431,6 +1431,20 @@ a {
   color: #b5d892;
 }
 
+.game-connection[data-state="reconnecting"],
+.game-connection[data-state="delayed"] {
+  color: #f0c982;
+}
+
+.game-connection[data-state="session_expired"],
+.game-connection[data-state="unavailable"] {
+  color: #f2a7a0;
+}
+
+.game-connection[data-state="final"] {
+  color: #c7d8e8;
+}
+
 .game-exit {
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
@@ -1463,6 +1477,48 @@ a {
   max-width: 1480px;
   min-height: calc(100dvh - 58px);
   padding: clamp(12px, 2vw, 24px);
+}
+
+.game-connection-notice {
+  align-items: center;
+  background: rgba(210, 167, 93, 0.08);
+  border: 1px solid rgba(210, 167, 93, 0.32);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 11px 13px;
+}
+
+.game-connection-notice[data-state="session_expired"] {
+  background: rgba(178, 77, 68, 0.09);
+  border-color: rgba(217, 115, 105, 0.35);
+}
+
+.game-connection-notice > p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.game-connection-notice strong {
+  font-size: 12px;
+}
+
+.game-connection-notice span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.game-connection-notice .button {
+  align-items: center;
+  display: flex;
+  font-size: 10px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .focused-board-panel {
@@ -1579,6 +1635,15 @@ a {
 
 .player-clock.is-byo-yomi strong {
   color: #f0c982;
+}
+
+.player-clock.is-estimated {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.player-clock.is-estimated span {
+  letter-spacing: 0.03em;
 }
 
 .player-stone {
@@ -3253,6 +3318,16 @@ a {
     width: 100%;
   }
 
+  .game-connection-notice {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .game-connection-notice .button {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+  }
+
   .content-split,
   .content-split--review {
     grid-template-columns: 1fr;
@@ -3487,12 +3562,26 @@ a {
   }
 
   .game-topbar {
+    gap: 7px;
     grid-template-columns: 1fr auto auto;
     padding-inline: 10px;
   }
 
   .game-connection {
-    display: none;
+    border-top: 1px solid var(--line);
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: 7px;
+  }
+
+  .game-topbar .language-switcher {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .game-exit {
+    grid-column: 3;
+    grid-row: 1;
   }
 
   .game-panel-player {

@@ -1,19 +1,36 @@
 "use client";
 
-import { LogOut, ShieldCheck, Wifi } from "lucide-react";
+import { LogIn, LogOut, RefreshCw, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { readApi } from "@/lib/client/api";
+import { ApiRequestError, readApi } from "@/lib/client/api";
+import {
+  connectionAfterFailure,
+  connectionAfterSuccess,
+  connectionAllowsChat,
+  connectionAllowsGamePolling,
+  connectionAllowsMutations,
+  connectionAwaitingRefresh,
+  connectionClockObservedAt,
+  type GameConnectionState,
+  INITIAL_GAME_CONNECTION,
+  isTerminalConnection,
+  operationAffectsConnection,
+} from "@/lib/client/gameConnection";
+import {
+  createIdentityRequestAuthority,
+  type IdentityRequestToken,
+} from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
+import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
 import {
   createPollingRequestGuard,
   nextChatPollDelay,
   nextPollDelay,
-  shouldPollGame,
 } from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
@@ -33,6 +50,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const copy = dictionary.game;
   const {
     playerKey,
+    identityKind,
     loading,
     error: identityError,
     retry: retryIdentity,
@@ -44,32 +62,137 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
   const [gameAnnouncement, setGameAnnouncement] = useState("");
+  const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
+  const [connectionState, setConnectionState] = useState<GameConnectionState>(
+    INITIAL_GAME_CONNECTION,
+  );
+  const [chatAvailable, setChatAvailable] = useState(false);
   const lastMessageId = useRef(0);
+  const chatTerminal = useRef(false);
   const resultShownForGame = useRef<string | null>(null);
   const latestGameVersion = useRef(-1);
-  const latestGameId = useRef<string | null>(null);
   const lastFullGameResponseAt = useRef(0);
   const gameStatus = useRef<GameState["status"] | null>(null);
   const acceptedGame = useRef<GameState | null>(null);
+  const connectionStateRef = useRef<GameConnectionState>(INITIAL_GAME_CONNECTION);
+  const identityKey = `${identityKind ?? "none"}:${playerKey ?? "none"}:${gameId}`;
+  const identityAuthority = useRef(createIdentityRequestAuthority(identityKey));
+  const immediateGameSync = useRef<((markReconnecting?: boolean) => void) | null>(null);
   const boardStatus = useRef<HTMLDivElement>(null);
 
-  const acceptGameState = useCallback((nextGame: GameState) => {
-    if (nextGame.id !== gameId) return;
-    if (latestGameId.current !== gameId) {
-      latestGameId.current = gameId;
-      latestGameVersion.current = -1;
-      lastFullGameResponseAt.current = 0;
+  const connectionAnnouncementText = useCallback((state: GameConnectionState) => {
+    if (state.kind === "live") return copy.live;
+    if (state.kind === "final") return copy.resultVerified;
+    if (state.kind === "session_expired") return copy.sessionExpired;
+    if (state.kind === "unavailable") return copy.unavailable;
+    if (state.kind === "reconnecting") {
+      return state.reason === "rate_limited" ? copy.syncDelayed : copy.reconnecting;
     }
-    if (nextGame.version < latestGameVersion.current) return;
+    return copy.connecting;
+  }, [copy]);
+
+  const transitionConnection = useCallback((
+    next: GameConnectionState,
+    announce = true,
+  ) => {
+    const previous = connectionStateRef.current;
+    const presentationChanged = previous.kind !== next.kind
+      || (previous.kind === "reconnecting"
+        && next.kind === "reconnecting"
+        && previous.reason !== next.reason);
+    connectionStateRef.current = next;
+    setConnectionState(next);
+    if (next.kind === "session_expired" || next.kind === "unavailable") {
+      setConfirmation(null);
+      setShowResult(false);
+      setBusy(false);
+    }
+    if (presentationChanged) {
+      setConnectionAnnouncement(announce ? connectionAnnouncementText(next) : "");
+    }
+  }, [connectionAnnouncementText]);
+
+  const clearGameBoundState = useCallback(() => {
+    acceptedGame.current = null;
+    gameStatus.current = null;
+    latestGameVersion.current = -1;
+    lastFullGameResponseAt.current = 0;
+    lastMessageId.current = 0;
+    chatTerminal.current = false;
+    resultShownForGame.current = null;
+    setGame(null);
+    setMessages([]);
+    setChatAvailable(false);
+    setConfirmation(null);
+    setShowResult(false);
+    setGameAnnouncement("");
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!identityAuthority.current.updateIdentity(identityKey)) return;
+    clearGameBoundState();
+    connectionStateRef.current = INITIAL_GAME_CONNECTION;
+    setConnectionState(INITIAL_GAME_CONNECTION);
+    setConnectionAnnouncement("");
+    setError(null);
+    setBusy(false);
+  }, [clearGameBoundState, identityKey]);
+
+  const applyConnectionFailure = useCallback((
+    requestError: unknown,
+    retryDelayMs: number,
+  ) => {
+    const previous = connectionStateRef.current;
+    const next = connectionAfterFailure(
+      previous,
+      requestError,
+      Date.now(),
+      retryDelayMs,
+    );
+    if (
+      previous.kind !== next.kind
+      && (next.kind === "session_expired" || next.kind === "unavailable")
+    ) {
+      identityAuthority.current.invalidate();
+    }
+    transitionConnection(next);
+    if (next.kind === "unavailable") clearGameBoundState();
+    return next;
+  }, [clearGameBoundState, transitionConnection]);
+
+  const acceptGameResponse = useCallback((
+    response: GamePollResponse,
+    receivedAt: number,
+    requestIdentity: IdentityRequestToken,
+  ): boolean => {
+    if (
+      !identityAuthority.current.isCurrent(requestIdentity)
+      || !playerKey
+      || isTerminalConnection(connectionStateRef.current)
+    ) {
+      return false;
+    }
+    const nextGame = gameStateFromPoll(acceptedGame.current, response, receivedAt);
+    if (!nextGame) return false;
+    if (
+      nextGame.blackPlayerKey !== playerKey
+      && nextGame.whitePlayerKey !== playerKey
+    ) {
+      identityAuthority.current.invalidate();
+      transitionConnection({ kind: "unavailable" });
+      clearGameBoundState();
+      return false;
+    }
     latestGameVersion.current = nextGame.version;
     gameStatus.current = nextGame.status;
     const announcement = describeGameChange(acceptedGame.current, nextGame, copy);
     acceptedGame.current = nextGame;
     if (announcement) setGameAnnouncement(announcement);
-    setGame({
-      ...nextGame,
-      clock: { ...nextGame.clock, clientReceivedAt: Date.now() },
-    });
+    setGame(nextGame);
+    transitionConnection(
+      connectionAfterSuccess(receivedAt, nextGame.status),
+      !announcement,
+    );
     if (
       nextGame.status === "finished" &&
       resultShownForGame.current !== nextGame.id
@@ -78,12 +201,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setConfirmation(null);
       setShowResult(true);
     }
-  }, [copy, gameId]);
+    return true;
+  }, [clearGameBoundState, copy, playerKey, transitionConnection]);
 
-  const refreshGame = useCallback(async (signal?: AbortSignal) => {
-    if (!playerKey) return;
+  const refreshGame = useCallback(async (
+    signal: AbortSignal,
+    requestIdentity: IdentityRequestToken,
+  ): Promise<boolean> => {
+    if (!playerKey) return false;
     const requestStartedAt = Date.now();
-    const hasCurrentGameCache = latestGameId.current === gameId;
+    const hasCurrentGameCache = acceptedGame.current?.id === gameId;
     const response = await fetch(
       gamePollUrl(
         gameId,
@@ -94,63 +221,92 @@ export function GameRoom({ gameId }: { gameId: string }) {
       { cache: "no-store", signal },
     );
     const data = await readApi<GamePollResponse>(response);
-    if (signal?.aborted) return;
-    const nextGame = gameStateFromPoll(acceptedGame.current, data);
-    if (nextGame) acceptGameState(nextGame);
-    if (
-      "game" in data
-      && data.game.id === gameId
-      && data.game.version >= latestGameVersion.current
-    ) {
-      lastFullGameResponseAt.current = Date.now();
-    }
-  }, [acceptGameState, gameId, playerKey]);
+    const receivedAt = Date.now();
+    if (signal.aborted || !identityAuthority.current.isCurrent(requestIdentity)) return false;
+    const accepted = acceptGameResponse(data, receivedAt, requestIdentity);
+    if (accepted && "game" in data) lastFullGameResponseAt.current = receivedAt;
+    return accepted;
+  }, [acceptGameResponse, gameId, playerKey]);
 
-  const refreshChat = useCallback(async (signal?: AbortSignal) => {
-    if (!playerKey) return;
+  const refreshChat = useCallback(async (
+    signal: AbortSignal,
+    requestIdentity: IdentityRequestToken,
+  ): Promise<GameMessage[] | null> => {
+    if (!playerKey) return null;
     const response = await fetch(
       `/api/games/${gameId}/chat?after=${lastMessageId.current}`,
       { cache: "no-store", signal },
     );
     const data = await readApi<{ messages: GameMessage[] }>(response);
-    if (signal?.aborted) return;
-    if (data.messages.length > 0) {
-      lastMessageId.current = Number(data.messages[data.messages.length - 1].id);
-      setMessages((current) => {
-        const known = new Set(current.map((message) => message.id));
-        return [...current, ...data.messages.filter((message) => !known.has(message.id))];
-      });
-    }
+    if (signal.aborted || !identityAuthority.current.isCurrent(requestIdentity)) return null;
+    return data.messages;
   }, [gameId, playerKey]);
+
+  const applyChatMessages = useCallback((
+    incoming: readonly GameMessage[],
+    requestIdentity: IdentityRequestToken,
+  ) => {
+    if (
+      !identityAuthority.current.isCurrent(requestIdentity)
+      || isTerminalConnection(connectionStateRef.current)
+      || chatTerminal.current
+    ) {
+      return false;
+    }
+    lastMessageId.current = Math.max(
+      lastMessageId.current,
+      latestGameMessageId(incoming),
+    );
+    if (incoming.length > 0) {
+      setMessages((current) => mergeGameMessages(current, incoming));
+    }
+    return true;
+  }, []);
 
   useEffect(() => {
     if (!playerKey) return;
-    gameStatus.current = null;
+    const requestIdentity = identityAuthority.current.capture();
     let cancelled = false;
-    let gameLoaded = false;
-    let gameTimer: number;
-    let chatTimer: number;
+    let gameLoaded = acceptedGame.current !== null;
+    let gameTimer: number | undefined;
+    let chatTimer: number | undefined;
     const gameGuard = createPollingRequestGuard();
     const chatGuard = createPollingRequestGuard();
 
     const pollGame = async () => {
-      if (!shouldPollGame(gameStatus.current)) return;
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || !connectionAllowsGamePolling(connectionStateRef.current, gameStatus.current)
+      ) {
+        return;
+      }
       let requestError: unknown = null;
-      const signal = gameGuard.start();
+      const guardSignal = gameGuard.start();
+      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
       try {
-        await refreshGame(signal);
-        if (!gameLoaded && gameGuard.isCurrent(signal)) setError(null);
-        gameLoaded = true;
-      } catch (error) {
-        requestError = error;
-        if (!gameLoaded && gameGuard.isCurrent(signal)) {
-          setError(localizedApiError(dictionary, error, copy.loadFailed));
+        const accepted = await refreshGame(signal, requestIdentity);
+        if (accepted && gameGuard.isCurrent(guardSignal)) {
+          gameLoaded = true;
+          setError(null);
+        }
+      } catch (caughtError) {
+        requestError = caughtError;
+        if (
+          gameGuard.isCurrent(guardSignal)
+          && identityAuthority.current.isCurrent(requestIdentity)
+        ) {
+          const delay = nextPollDelay(900, requestError, document.hidden);
+          const next = applyConnectionFailure(requestError, delay);
+          if (!gameLoaded && isTerminalConnection(next)) {
+            setError(localizedApiError(dictionary, requestError, copy.loadFailed));
+          }
         }
       } finally {
         if (
           !cancelled
-          && gameGuard.isCurrent(signal)
-          && shouldPollGame(gameStatus.current)
+          && gameGuard.isCurrent(guardSignal)
+          && identityAuthority.current.isCurrent(requestIdentity)
+          && connectionAllowsGamePolling(connectionStateRef.current, gameStatus.current)
         ) {
           gameTimer = window.setTimeout(
             pollGame,
@@ -161,14 +317,51 @@ export function GameRoom({ gameId }: { gameId: string }) {
     };
 
     const pollChat = async () => {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || isTerminalConnection(connectionStateRef.current)
+        || chatTerminal.current
+      ) {
+        return;
+      }
       let requestError: unknown = null;
-      const signal = chatGuard.start();
+      const guardSignal = chatGuard.start();
+      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
       try {
-        await refreshChat(signal);
-      } catch (error) {
-        requestError = error;
+        const incoming = await refreshChat(signal, requestIdentity);
+        if (
+          incoming
+          && chatGuard.isCurrent(guardSignal)
+          && applyChatMessages(incoming, requestIdentity)
+        ) {
+          setChatAvailable(true);
+        }
+      } catch (caughtError) {
+        requestError = caughtError;
+        if (
+          chatGuard.isCurrent(guardSignal)
+          && identityAuthority.current.isCurrent(requestIdentity)
+        ) {
+          setChatAvailable(false);
+          if (
+            caughtError instanceof ApiRequestError
+            && [401, 403, 404].includes(caughtError.status)
+          ) {
+            chatTerminal.current = true;
+            applyConnectionFailure(
+              caughtError,
+              nextChatPollDelay(gameStatus.current, caughtError, document.hidden),
+            );
+          }
+        }
       } finally {
-        if (!cancelled && chatGuard.isCurrent(signal)) {
+        if (
+          !cancelled
+          && chatGuard.isCurrent(guardSignal)
+          && identityAuthority.current.isCurrent(requestIdentity)
+          && !isTerminalConnection(connectionStateRef.current)
+          && !chatTerminal.current
+        ) {
           chatTimer = window.setTimeout(
             pollChat,
             nextChatPollDelay(gameStatus.current, requestError, document.hidden),
@@ -177,21 +370,84 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
     };
 
+    const requestImmediateSync = (markReconnecting = true) => {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || !connectionAllowsGamePolling(connectionStateRef.current, gameStatus.current)
+      ) {
+        return;
+      }
+      if (markReconnecting && acceptedGame.current) {
+        transitionConnection(connectionAwaitingRefresh(
+          connectionStateRef.current,
+          "network",
+          Date.now(),
+        ));
+      }
+      if (gameTimer !== undefined) window.clearTimeout(gameTimer);
+      void pollGame();
+    };
+    immediateGameSync.current = requestImmediateSync;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) requestImmediateSync(true);
+    };
+    const handleOnline = () => requestImmediateSync(true);
+    const handleOffline = () => {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || !acceptedGame.current
+      ) {
+        return;
+      }
+      setChatAvailable(false);
+      transitionConnection(connectionAwaitingRefresh(
+        connectionStateRef.current,
+        "offline",
+        Date.now(),
+      ));
+    };
+
     gameTimer = window.setTimeout(pollGame, 0);
     chatTimer = window.setTimeout(pollChat, 0);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     return () => {
       cancelled = true;
+      if (immediateGameSync.current === requestImmediateSync) {
+        immediateGameSync.current = null;
+      }
       gameGuard.cancel();
       chatGuard.cancel();
-      window.clearTimeout(gameTimer);
-      window.clearTimeout(chatTimer);
+      if (gameTimer !== undefined) window.clearTimeout(gameTimer);
+      if (chatTimer !== undefined) window.clearTimeout(chatTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
-  }, [copy.loadFailed, dictionary, playerKey, refreshChat, refreshGame]);
+  }, [
+    applyChatMessages,
+    applyConnectionFailure,
+    copy.loadFailed,
+    dictionary,
+    identityKey,
+    playerKey,
+    refreshChat,
+    refreshGame,
+    transitionConnection,
+  ]);
 
   const yourColor: Stone | null =
     game && playerKey
-      ? game.blackPlayerKey === playerKey ? "black" : "white"
+      ? game.blackPlayerKey === playerKey
+        ? "black"
+        : game.whitePlayerKey === playerKey
+          ? "white"
+          : null
       : null;
+  const gameInteractionAllowed = connectionAllowsMutations(connectionState)
+    && Boolean(yourColor);
   const canMove =
     Boolean(
       game
@@ -199,13 +455,29 @@ export function GameRoom({ gameId }: { gameId: string }) {
       && game.status === "active"
       && game.phase === "play"
       && game.turn === yourColor,
-    ) && !busy;
+    ) && gameInteractionAllowed && !busy;
   const canMarkDead = Boolean(
-    game && game.status === "active" && game.phase === "scoring" && game.scoring,
-  ) && !busy;
+    game
+    && yourColor
+    && game.status === "active"
+    && game.phase === "scoring"
+    && game.scoring,
+  ) && gameInteractionAllowed && !busy;
+
+  function reconcileAfterOperation(requestError: unknown) {
+    const affectsConnection = operationAffectsConnection(requestError);
+    if (affectsConnection) {
+      applyConnectionFailure(
+        requestError,
+        nextPollDelay(900, requestError, document.hidden),
+      );
+    }
+    immediateGameSync.current?.(affectsConnection);
+  }
 
   async function makeMove(move: { x?: number; y?: number; isPass?: boolean }) {
-    if (!game || !playerKey || busy) return;
+    if (!game || !playerKey || !gameInteractionAllowed || busy) return;
+    const requestIdentity = identityAuthority.current.capture();
     setBusy(true);
     setError(null);
     try {
@@ -215,17 +487,25 @@ export function GameRoom({ gameId }: { gameId: string }) {
         body: JSON.stringify(move),
       });
       const data = await readApi<{ game: GameState }>(response);
-      acceptGameState(data.game);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || isTerminalConnection(connectionStateRef.current)
+      ) {
+        return;
+      }
       setError(localizedApiError(dictionary, requestError, copy.moveFailed));
-      await refreshGame().catch(() => undefined);
+      reconcileAfterOperation(requestError);
     } finally {
-      setBusy(false);
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
     }
   }
 
   async function resign() {
-    if (!game || !playerKey || busy) return;
+    if (!game || !playerKey || !gameInteractionAllowed || busy) return;
+    const requestIdentity = identityAuthority.current.capture();
     setBusy(true);
     setError(null);
     try {
@@ -233,12 +513,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
         method: "POST",
       });
       const data = await readApi<{ game: GameState }>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
       setConfirmation(null);
-      acceptGameState(data.game);
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || isTerminalConnection(connectionStateRef.current)
+      ) {
+        return;
+      }
       setError(localizedApiError(dictionary, requestError, copy.resignFailed));
+      reconcileAfterOperation(requestError);
     } finally {
-      setBusy(false);
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
     }
   }
 
@@ -246,7 +534,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     action: "dead-stones" | "confirm" | "resume",
     body: Record<string, unknown>,
   ) {
-    if (!game || !game.scoring || !playerKey || busy) return;
+    if (!game || !game.scoring || !playerKey || !gameInteractionAllowed || busy) return;
+    const requestIdentity = identityAuthority.current.capture();
     setBusy(true);
     setError(null);
     try {
@@ -259,71 +548,219 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }),
       });
       const data = await readApi<{ game: GameState }>(response);
-      acceptGameState(data.game);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || isTerminalConnection(connectionStateRef.current)
+      ) {
+        return;
+      }
       setError(localizedApiError(dictionary, requestError, copy.scoringFailed));
-      await refreshGame().catch(() => undefined);
+      reconcileAfterOperation(requestError);
     } finally {
-      setBusy(false);
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
     }
   }
 
   async function sendMessage(message: string) {
-    if (!playerKey) return;
-    const response = await fetch(`/api/games/${gameId}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-    const data = await readApi<{ message: GameMessage }>(response);
-    lastMessageId.current = Math.max(lastMessageId.current, Number(data.message.id));
-    setMessages((current) => [...current, data.message]);
+    if (
+      !playerKey
+      || !yourColor
+      || !chatAvailable
+      || chatTerminal.current
+      || !connectionAllowsChat(connectionState)
+    ) {
+      return;
+    }
+    const requestIdentity = identityAuthority.current.capture();
+    try {
+      const response = await fetch(`/api/games/${gameId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await readApi<{ message: GameMessage }>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) {
+        if (identityAuthority.current.capture().identityKey === requestIdentity.identityKey) {
+          throw new ApiRequestError("Message response lost request authority.", {
+            status: 409,
+            code: "session_expired",
+          });
+        }
+        return;
+      }
+      applyChatMessages([data.message], requestIdentity);
+    } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) {
+        if (identityAuthority.current.capture().identityKey === requestIdentity.identityKey) {
+          throw requestError;
+        }
+        return;
+      }
+      setChatAvailable(false);
+      if (
+        requestError instanceof ApiRequestError
+        && [401, 403, 404].includes(requestError.status)
+      ) {
+        chatTerminal.current = true;
+        applyConnectionFailure(
+          requestError,
+          nextChatPollDelay(gameStatus.current, requestError, document.hidden),
+        );
+      }
+      throw requestError;
+    }
   }
 
   async function clearFinishedGame(destination: "/" | "/play") {
-    if (playerKey) {
-      await fetch("/api/matchmaking", {
-        method: "DELETE",
-        signal: AbortSignal.timeout(5_000),
-      }).catch(() => undefined);
+    if (connectionStateRef.current.kind === "session_expired") {
+      recoverExpiredSession();
+      return;
     }
+    const requestIdentity = identityAuthority.current.capture();
+    if (playerKey) {
+      try {
+        await readApi<Record<string, unknown>>(await fetch("/api/matchmaking", {
+          method: "DELETE",
+          signal: AbortSignal.timeout(5_000),
+        }));
+      } catch (requestError) {
+        if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+        if (requestError instanceof ApiRequestError && requestError.status === 401) {
+          applyConnectionFailure(requestError, 0);
+          recoverExpiredSession();
+          return;
+        }
+      }
+    }
+    if (!identityAuthority.current.isCurrent(requestIdentity)) return;
     router.replace(href(destination));
   }
 
   async function leaveGameRoom() {
-    if (!game || !playerKey || busy) return;
+    if (!game || !playerKey || !yourColor) return;
+    if (isTerminalConnection(connectionStateRef.current)) {
+      router.replace(href("/"));
+      return;
+    }
+    if (busy) return;
+    if (game.status === "active" && !gameInteractionAllowed) {
+      router.replace(href("/"));
+      return;
+    }
     if (game.status === "active" && confirmation !== "leave") {
       setError(null);
       setConfirmation("leave");
       return;
     }
+    const requestIdentity = identityAuthority.current.capture();
     setBusy(true);
     setError(null);
     try {
       await leaveGameAndQueue(game.id);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
       setConfirmation(null);
       router.replace(href("/"));
     } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
       setError(localizedApiError(dictionary, requestError, copy.leaveFailed));
-      setBusy(false);
+      reconcileAfterOperation(requestError);
+    } finally {
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
     }
   }
 
-  if (loading || (!playerKey && !identityError) || (!game && !error && !identityError)) {
-    return <main className="game-loading"><span className="spin-ring" /><p>{copy.loading}</p></main>;
+  function recoverExpiredSession() {
+    if (identityKind === "account") {
+      const returnTo = `/game/${encodeURIComponent(gameId)}`;
+      router.push(
+        `${href("/login")}?reauthenticate=1&returnTo=${encodeURIComponent(returnTo)}`,
+      );
+      return;
+    }
+    router.replace(href("/play"));
+  }
+
+  const connectionLabel = connectionState.kind === "live"
+    ? copy.live
+    : connectionState.kind === "final"
+      ? copy.resultVerified
+      : connectionState.kind === "session_expired"
+        ? copy.sessionExpired
+        : connectionState.kind === "reconnecting"
+          ? connectionState.reason === "rate_limited"
+            ? copy.syncDelayed
+            : copy.reconnecting
+          : connectionState.kind === "unavailable"
+            ? copy.unavailable
+            : copy.connecting;
+  const connectionDescription = connectionState.kind === "session_expired"
+    ? identityKind === "account"
+      ? copy.sessionExpiredAccountDescription
+      : copy.sessionExpiredGuestDescription
+    : connectionState.kind === "reconnecting"
+      ? connectionState.reason === "rate_limited"
+        ? copy.syncDelayedDescription
+        : copy.reconnectingDescription
+      : null;
+  const connectionDataState = connectionState.kind === "reconnecting"
+    && connectionState.reason === "rate_limited"
+    ? "delayed"
+    : connectionState.kind;
+  const ClockStatusIcon = connectionState.kind === "live"
+    ? Wifi
+    : connectionState.kind === "final"
+      ? ShieldCheck
+      : connectionState.kind === "reconnecting"
+        ? RefreshCw
+        : WifiOff;
+  const clockObservedAt = connectionClockObservedAt(connectionState);
+
+  if (
+    loading
+    || (!playerKey && !identityError)
+    || (!game
+      && !identityError
+      && (connectionState.kind === "connecting" || connectionState.kind === "reconnecting"))
+  ) {
+    return (
+      <main aria-busy="true" className="game-loading">
+        <span className="spin-ring" />
+        <p aria-atomic="true" aria-live="polite" role="status">
+          {connectionState.kind === "reconnecting" ? connectionLabel : copy.loading}
+        </p>
+        {connectionDescription ? <small>{connectionDescription}</small> : null}
+      </main>
+    );
   }
 
   if (!playerKey || !game) {
+    const sessionExpired = connectionState.kind === "session_expired";
     return (
       <main className="game-loading">
-        <h1>{copy.unavailable}</h1>
-        <p>{identityError ?? error ?? copy.unavailableDescription}</p>
+        <h1>{sessionExpired ? copy.sessionExpired : copy.unavailable}</h1>
+        <p>
+          {identityError
+            ?? (sessionExpired ? connectionDescription : null)
+            ?? error
+            ?? copy.unavailableDescription}
+        </p>
         <button
           className="button button--primary"
-          onClick={identityError ? retryIdentity : () => router.replace(href("/play"))}
+          onClick={identityError
+            ? retryIdentity
+            : sessionExpired
+              ? recoverExpiredSession
+              : () => router.replace(href("/play"))}
           type="button"
         >
-          {identityError ? copy.retrySession : copy.returnToPlay}
+          {identityError
+            ? copy.retrySession
+            : sessionExpired
+              ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
+              : copy.returnToPlay}
         </button>
       </main>
     );
@@ -334,25 +771,64 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
         {gameAnnouncement}
       </p>
+      <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {connectionAnnouncement}
+      </p>
       <header className="game-topbar">
         <span className="game-brand">
           <span className="brand-mark"><span /><span /></span>
           GoStone
         </span>
-        <span className="game-security"><ShieldCheck size={15} /> {copy.serverVerified}</span>
-        <span className="game-connection"><Wifi size={15} /> {copy.live}</span>
+        <span className="game-security">
+          <ShieldCheck size={15} />
+          {connectionState.kind === "live" || connectionState.kind === "final"
+            ? copy.serverVerified
+            : copy.lastVerifiedState}
+        </span>
+        <span className="game-connection" data-state={connectionDataState}>
+          <ClockStatusIcon
+            aria-hidden="true"
+            className={connectionState.kind === "reconnecting" ? "spin" : undefined}
+            size={15}
+          />
+          {connectionLabel}
+        </span>
         <LanguageSwitcher compact />
-        <button className="game-exit" disabled={busy} onClick={leaveGameRoom} type="button">
+        <button
+          className="game-exit"
+          disabled={busy && gameInteractionAllowed}
+          onClick={leaveGameRoom}
+          type="button"
+        >
           <LogOut size={15} />
-          {copy.leaveGame}
+          {game.status === "active" && !gameInteractionAllowed
+            ? copy.leaveView
+            : copy.leaveGame}
         </button>
       </header>
 
       <main className="focused-game-layout">
+        {connectionDescription ? (
+          <section className="game-connection-notice" data-state={connectionDataState}>
+            <ClockStatusIcon aria-hidden="true" size={18} />
+            <p>
+              <strong>{connectionLabel}</strong>
+              <span>{connectionDescription}</span>
+            </p>
+            {connectionState.kind === "session_expired" ? (
+              <button className="button button--primary" onClick={recoverExpiredSession} type="button">
+                <LogIn size={17} />
+                {identityKind === "account" ? copy.signInAgain : copy.startNewSession}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
         <section className="focused-board-panel">
           <div className="focused-board-status" ref={boardStatus} tabIndex={-1}>
             <strong>
-              {canMove
+              {game.status === "active" && !gameInteractionAllowed
+                ? copy.controlsPaused
+                : canMove
                 ? copy.yourTurn
                 : game.status === "finished"
                   ? `${copy.gameOver} · ${game.result}`
@@ -400,11 +876,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <aside className="focused-game-side">
           <GamePanel
             busy={busy}
+            clockObservedAt={clockObservedAt}
             game={game}
+            interactionDisabled={!gameInteractionAllowed}
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true })}
             onConfirmScore={() => scoringAction("confirm", {})}
             onResign={() => {
+              if (!gameInteractionAllowed) return;
               setError(null);
               setConfirmation("resign");
             }}
@@ -418,7 +897,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
             playerKey={playerKey}
           />
           <ChatPanel
-            disabled={false}
+            disabled={
+              !chatAvailable
+              || !connectionAllowsChat(connectionState)
+            }
+            key={identityKey}
             messages={messages}
             onSend={sendMessage}
             playerKey={playerKey}
@@ -436,7 +919,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error={error}
         onCancel={() => setConfirmation(null)}
         onConfirm={confirmation === "resign" ? resign : leaveGameRoom}
-        open={confirmation !== null}
+        open={confirmation !== null && gameInteractionAllowed}
         title={confirmation === "resign" ? copy.resignTitle : copy.leaveTitle}
       />
       <GameResultModal

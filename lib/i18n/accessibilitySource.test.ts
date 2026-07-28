@@ -39,3 +39,28 @@ test("board and modal event contracts retain their accessibility guards", () => 
   assert.match(confirmation, /initialFocusRef=\{cancelButton\}/);
   assert.match(confirmation, /role="alertdialog"/);
 });
+
+test("game reconnect status remains perceivable and locks stale controls", () => {
+  const room = source("components/game/GameRoom.tsx");
+  const panel = source("components/game/GamePanel.tsx");
+  const clock = source("components/game/PlayerClock.tsx");
+  const styles = source("app/globals.css");
+  assert.match(room, /connectionAnnouncement/);
+  assert.match(room, /aria-live="polite"[^>]+role="status"/);
+  assert.match(room, /document\.addEventListener\("visibilitychange"/);
+  assert.match(room, /window\.addEventListener\("online"/);
+  assert.match(room, /interactionDisabled=\{!gameInteractionAllowed\}/);
+  assert.equal(room.match(/!connectionAllowsChat\(connectionState\)/g)?.length, 2);
+  assert.match(room, /key=\{identityKey\}/);
+  assert.match(room, /useLayoutEffect\(\(\) => \{/);
+  assert.match(room, /connectionStateRef\.current\.kind === "session_expired"/);
+  assert.match(room, /setShowResult\(false\);\s+setBusy\(false\)/);
+  assert.match(panel, /controlsDisabled = busy \|\| interactionDisabled \|\| !yourColor/);
+  assert.match(panel, /!interactionDisabled\s+&& yourColor/);
+  assert.match(panel, /interactionDisabled\s+\? copy\.controlsPaused/);
+  assert.match(clock, /copy\.clockEstimated/);
+  assert.match(clock, /const estimated = observedAt !== null/);
+  assert.match(clock, /copy\.awaitingServer/);
+  assert.doesNotMatch(clock, /!running \|\| observedAt !== null/);
+  assert.doesNotMatch(styles, /\.game-connection\s*\{\s*display:\s*none/);
+});

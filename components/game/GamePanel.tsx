@@ -24,6 +24,8 @@ type GamePanelProps = {
   game: GameState;
   playerKey: string;
   busy: boolean;
+  clockObservedAt: number | null;
+  interactionDisabled: boolean;
   onPass: () => void;
   onResign: () => void;
   onConfirmScore: () => void;
@@ -35,6 +37,8 @@ export function GamePanel({
   game,
   playerKey,
   busy,
+  clockObservedAt,
+  interactionDisabled,
   onPass,
   onResign,
   onConfirmScore,
@@ -45,8 +49,18 @@ export function GamePanel({
   const copy = dictionary.game;
   const rulesSummary = localizedRulesSummary(game, dictionary);
   const [selectedGroupKey, setSelectedGroupKey] = useState("");
-  const yourColor: Stone = game.blackPlayerKey === playerKey ? "black" : "white";
-  const yourTurn = game.status === "active" && game.turn === yourColor;
+  const yourColor: Stone | null = game.blackPlayerKey === playerKey
+    ? "black"
+    : game.whitePlayerKey === playerKey
+      ? "white"
+      : null;
+  const controlsDisabled = busy || interactionDisabled || !yourColor;
+  const yourTurn = Boolean(
+    !interactionDisabled
+    && yourColor
+    && game.status === "active"
+    && game.turn === yourColor,
+  );
   const scoring = game.phase === "scoring" ? game.scoring : null;
   const activeScoring = game.status === "active" ? scoring : null;
   const disputeGroups = groupMarkedDeadStones(game.board, game.scoring?.deadStones ?? []);
@@ -56,14 +70,20 @@ export function GamePanel({
   const deadCounts = deadStoneCounts(game);
   const youConfirmed = yourColor === "black"
     ? scoring?.blackConfirmed
-    : scoring?.whiteConfirmed;
+    : yourColor === "white"
+      ? scoring?.whiteConfirmed
+      : false;
   const resultText =
     game.status === "finished"
-      ? game.winnerKey === playerKey
+      ? !yourColor
+        ? `${copy.gameOver} · ${game.result}`
+        : game.winnerKey === playerKey
         ? `${copy.youWon} · ${game.result}`
         : game.winnerKey
           ? `${copy.youLost} · ${game.result}`
           : `${copy.draw} · ${game.result}`
+        : interactionDisabled
+        ? copy.controlsPaused
         : activeScoring
         ? copy.agreeFinalPosition
         : yourTurn
@@ -81,6 +101,7 @@ export function GamePanel({
         <PlayerClock
           clock={game.clock}
           color="white"
+          observedAt={clockObservedAt}
           running={game.status === "active" && game.turn === "white"}
         />
       </div>
@@ -92,12 +113,14 @@ export function GamePanel({
       </div>
 
       <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
-        <span className={`player-stone player-stone--${game.turn ?? yourColor}`} />
+        <span className={`player-stone player-stone--${game.turn ?? yourColor ?? "black"}`} />
         <div>
           <strong>{resultText}</strong>
           <span>
             {game.status === "finished"
               ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
+              : interactionDisabled
+                ? copy.lastVerifiedState
               : activeScoring
                 ? copy.scoringInstructions
               : game.lastResume?.claim === "deadline"
@@ -118,6 +141,7 @@ export function GamePanel({
         <PlayerClock
           clock={game.clock}
           color="black"
+          observedAt={clockObservedAt}
           running={game.status === "active" && game.turn === "black"}
         />
       </div>
@@ -157,7 +181,7 @@ export function GamePanel({
           <label className="scoring-dispute-picker">
             <span>{copy.markedGroup}</span>
             <select
-              disabled={busy || disputeGroups.length === 0}
+              disabled={controlsDisabled || disputeGroups.length === 0}
               onChange={(event) => setSelectedGroupKey(event.target.value)}
               value={selectedGroup?.key ?? ""}
             >
@@ -174,34 +198,34 @@ export function GamePanel({
             </select>
           </label>
           <div className="game-actions scoring-actions">
-            <button disabled={busy || Boolean(youConfirmed)} onClick={onConfirmScore} type="button">
+            <button disabled={controlsDisabled || Boolean(youConfirmed)} onClick={onConfirmScore} type="button">
               <Check size={18} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
             </button>
             <button
-              disabled={busy || !selectedGroup}
+              disabled={controlsDisabled || !selectedGroup}
               onClick={() => selectedGroup && onResumePlay("dead", selectedGroup.representative)}
               type="button"
             >
               <Play size={18} /> {copy.proveDead}
             </button>
             <button
-              disabled={busy || !selectedGroup}
+              disabled={controlsDisabled || !selectedGroup}
               onClick={() => selectedGroup && onResumePlay("alive", selectedGroup.representative)}
               type="button"
             >
               <Play size={18} /> {copy.challengeDead}
             </button>
-            <button disabled={busy} onClick={onResign} type="button">
+            <button disabled={controlsDisabled} onClick={onResign} type="button">
               <Flag size={18} /> {copy.resign}
             </button>
           </div>
         </div>
       ) : game.status === "active" ? (
         <div className="game-actions">
-          <button disabled={!yourTurn || busy} onClick={onPass} type="button">
+          <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
             <SkipForward size={18} /> {copy.pass}
           </button>
-          <button disabled={busy} onClick={onResign} type="button">
+          <button disabled={controlsDisabled} onClick={onResign} type="button">
             <Flag size={18} /> {copy.resign}
           </button>
         </div>
