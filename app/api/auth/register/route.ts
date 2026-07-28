@@ -12,7 +12,6 @@ import {
   RateLimitError,
 } from "@/lib/auth/rateLimit";
 import {
-  createSession,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/auth/session";
@@ -32,8 +31,7 @@ export async function POST(request: NextRequest) {
       RATE_LIMIT_POLICIES.registerTarget.limit,
       RATE_LIMIT_POLICIES.registerTarget.windowMinutes,
     );
-    const user = await registerAccount(credentials.username, credentials.password);
-    const token = await createSession(user.id);
+    const { user, token } = await registerAccount(credentials.username, credentials.password);
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,

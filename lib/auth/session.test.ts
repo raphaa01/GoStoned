@@ -154,6 +154,6 @@ test("registered-session expiry cleanup retains its existing indexed preflight c
   );
   assert.match(
     preflight,
-    /const requiredProtectedTables = \[\s*"user_sessions",/,
+    /const requiredProtectedTables = \[\s*"users",\s*"user_sessions",/,
   );
 });

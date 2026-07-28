@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import type { Pool } from "pg";
@@ -400,6 +401,206 @@ test("session issuance failure after authentication rolls back and sets no login
     assert.equal(transactionStatements.includes("COMMIT"), false);
   } finally {
     console.error = originalConsoleError;
+  }
+});
+
+test("successful registration exposes only the committed user and hardened session cookie", async () => {
+  const transactionStatements: string[] = [];
+  let storedTokenHash: string | null = null;
+  let committed = false;
+  const userId = "88888888-8888-4888-8888-888888888888";
+  const client = {
+    async query(sql: string, values: readonly unknown[] = []) {
+      transactionStatements.push(sql.replace(/\s+/g, " ").trim());
+      if (sql === "BEGIN" || sql.startsWith("SET LOCAL")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("INSERT INTO users")) {
+        return {
+          rows: [{ id: userId, username: values[0], display_name: values[0] }],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("INSERT INTO user_sessions")) {
+        storedTokenHash = String(values[1]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("WITH expired_sessions AS MATERIALIZED")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql === "COMMIT") {
+        committed = true;
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql === "ROLLBACK") return { rows: [], rowCount: 0 };
+      throw new Error(`Unexpected transaction statement: ${sql}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("INSERT INTO auth_rate_limits")) return allowedRateLimitRow();
+      throw new Error(`Unexpected pool statement: ${sql}`);
+    },
+    connect: async () => client,
+  } as unknown as Pool;
+
+  const response = await withPool(pool, () => register(credentialRequest(
+    "/api/auth/register",
+    "203.0.113.99",
+    {},
+    JSON.stringify({ username: "atomic_player", password: "password123" }),
+  )));
+
+  assert.equal(committed, true);
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+  assert.deepEqual(await response.clone().json(), {
+    ok: true,
+    user: {
+      id: userId,
+      username: "atomic_player",
+      displayName: "atomic_player",
+      playerKey: `user:${userId}`,
+    },
+  });
+  assert.deepEqual(transactionStatements.slice(2), [
+    "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $1) RETURNING id, username, display_name",
+    "INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')",
+    "WITH expired_sessions AS MATERIALIZED ( SELECT user_session.id FROM user_sessions AS user_session WHERE user_session.expires_at <= NOW() ORDER BY user_session.expires_at, user_session.id LIMIT 200 FOR UPDATE OF user_session SKIP LOCKED ) DELETE FROM user_sessions AS user_session USING expired_sessions AS expired WHERE user_session.id = expired.id",
+    "COMMIT",
+  ]);
+
+  const cookie = response.headers.get("set-cookie") ?? "";
+  const token = cookie.match(/^gostoned_session=([^;]+)/)?.[1];
+  assert.ok(token);
+  assert.equal(createHash("sha256").update(token).digest("hex"), storedTokenHash);
+  assert.match(cookie, /HttpOnly/i);
+  assert.match(cookie, /SameSite=lax/i);
+  assert.match(cookie, /Path=\//i);
+  assert.match(cookie, /Max-Age=2592000/i);
+  assert.match(cookie, /Priority=high/i);
+});
+
+test("registration failures roll back the account and never set a session cookie", async (t) => {
+  const cases = [
+    { stage: "username", status: 409, code: "username_taken" },
+    { stage: "user-primary", status: 500, code: "register_failed" },
+    { stage: "session", status: 500, code: "register_failed" },
+    { stage: "cleanup", status: 500, code: "register_failed" },
+    { stage: "commit-rejected", status: 500, code: "register_failed" },
+  ] as const;
+
+  for (const [index, failure] of cases.entries()) {
+    await t.test(failure.stage, async () => {
+      const transactionStatements: string[] = [];
+      let stagedUser = false;
+      let committedUser = false;
+      let released = false;
+      const client = {
+        async query(sql: string, values: readonly unknown[] = []) {
+          transactionStatements.push(sql.replace(/\s+/g, " ").trim());
+          if (sql === "BEGIN" || sql.startsWith("SET LOCAL")) {
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql.includes("INSERT INTO users")) {
+            if (failure.stage === "username" || failure.stage === "user-primary") {
+              throw Object.assign(new Error("unique user conflict"), {
+                code: "23505",
+                constraint: failure.stage === "username" ? "users_username_key" : "users_pkey",
+              });
+            }
+            stagedUser = true;
+            return {
+              rows: [{
+                id: "88888888-8888-4888-8888-888888888888",
+                username: values[0],
+                display_name: values[0],
+              }],
+              rowCount: 1,
+            };
+          }
+          if (sql.includes("INSERT INTO user_sessions")) {
+            if (failure.stage === "session") {
+              throw Object.assign(new Error("duplicate session token"), {
+                code: "23505",
+                constraint: "user_sessions_token_hash_key",
+              });
+            }
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql.includes("WITH expired_sessions AS MATERIALIZED")) {
+            if (failure.stage === "cleanup") throw new Error("cleanup unavailable");
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql === "COMMIT") {
+            // This is a deterministic database rejection, not an ambiguous
+            // connection loss after the server may already have committed.
+            if (failure.stage === "commit-rejected") throw new Error("commit rejected");
+            committedUser = stagedUser;
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql === "ROLLBACK") {
+            stagedUser = false;
+            return { rows: [], rowCount: 0 };
+          }
+          throw new Error(`Unexpected transaction statement: ${sql}`);
+        },
+        release() {
+          released = true;
+        },
+      };
+      const pool = {
+        async query(sql: string) {
+          if (sql.includes("INSERT INTO auth_rate_limits")) return allowedRateLimitRow();
+          throw new Error(`Unexpected pool statement: ${sql}`);
+        },
+        connect: async () => client,
+      } as unknown as Pool;
+      const originalConsoleError = console.error;
+      console.error = () => {};
+      try {
+        const response = await withPool(pool, () => register(credentialRequest(
+          "/api/auth/register",
+          `203.0.113.${100 + index}`,
+          {},
+          JSON.stringify({ username: `atomic_${index}`, password: "password123" }),
+        )));
+
+        assert.equal(response.status, failure.status);
+        assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+        assert.equal(response.headers.get("set-cookie"), null);
+        const body = await response.json();
+        if (failure.code === "username_taken") {
+          assert.deepEqual(body, {
+            ok: false,
+            error: "This username is already taken.",
+            code: "username_taken",
+          });
+        } else {
+          assert.deepEqual(body, {
+            ok: false,
+            error: "Could not create the account.",
+            code: "register_failed",
+          });
+        }
+        assert.equal(committedUser, false);
+        assert.equal(released, true);
+        assert.equal(transactionStatements.at(-1), "ROLLBACK");
+        const sessionInsert = transactionStatements.findIndex(
+          (sql) => sql.includes("INSERT INTO user_sessions"),
+        );
+        if (failure.stage === "username" || failure.stage === "user-primary") {
+          assert.equal(sessionInsert, -1);
+        } else {
+          assert.ok(transactionStatements.indexOf(
+            "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $1) RETURNING id, username, display_name",
+          ) < sessionInsert);
+        }
+      } finally {
+        console.error = originalConsoleError;
+      }
+    });
   }
 });
 
