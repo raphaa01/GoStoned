@@ -8,11 +8,12 @@ type MetadataPage = keyof ReturnType<typeof getDictionary>["metadata"];
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function openGraphImage(locale: Locale) {
+  const alt = getDictionary(locale).metadata.home.title;
   return {
     url: new URL(`/og/${locale}`, APP_URL).toString(),
     width: 1200,
     height: 630,
-    alt: locale === "de" ? "GoStone — Go online spielen" : "GoStone — Play Go Online",
+    alt,
   };
 }
 

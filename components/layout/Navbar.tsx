@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Gamepad2, LogIn, LogOut, Menu, UserRound, X } from "lucide-react";
+import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -17,6 +17,8 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const links = [
     { href: "/play", label: dictionary.nav.play, icon: Gamepad2 },
+    { href: "/learn", label: dictionary.nav.learn, icon: BookOpen },
+    { href: "/review", label: dictionary.nav.review, icon: Search },
     { href: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
     { href: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: user ? UserRound : LogIn },
   ];
@@ -55,6 +57,7 @@ export function Navbar() {
               href={href(path)}
               key={path}
               onClick={() => setOpen(false)}
+              aria-current={isRouteActive(pathname, path) ? "page" : undefined}
             >
               <Icon size={18} /> {label}
             </Link>

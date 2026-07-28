@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Gamepad2, LogIn, LogOut, UserRound, UserRoundPlus } from "lucide-react";
+import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Search, UserRound, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -15,6 +15,8 @@ export function Sidebar() {
   const { dictionary, href: localizedHref } = useI18n();
   const items = [
     { href: "/play", label: dictionary.nav.play, icon: Gamepad2 },
+    { href: "/learn", label: dictionary.nav.learn, icon: BookOpen },
+    { href: "/review", label: dictionary.nav.review, icon: Search },
     { href: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
     { href: "/profile", label: dictionary.nav.profile, icon: UserRound },
   ];
@@ -43,6 +45,7 @@ export function Sidebar() {
               className={`nav-link ${isRouteActive(pathname, path) ? "is-active" : ""}`}
               href={localizedHref(path)}
               key={path}
+              aria-current={isRouteActive(pathname, path) ? "page" : undefined}
             >
               <Icon size={19} strokeWidth={1.9} />
               <span>{label}</span>
