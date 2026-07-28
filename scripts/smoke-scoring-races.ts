@@ -199,6 +199,27 @@ async function assertRejectedMutationRollsBack(
   }
 }
 
+async function assertDeferredResumeGuardRollsBack(
+  statement: string,
+  values: unknown[],
+): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await assertSmokeDatabaseIdentity(client);
+    await withRollbackOnlyTransaction(client, async (transaction) => {
+      await transaction.query(statement, values);
+      await assert.rejects(
+        transaction.query(
+          "SET CONSTRAINTS game_scoring_resume_events_commit_guard IMMEDIATE",
+        ),
+        (error: { code?: string }) => error.code === "23514",
+      );
+    });
+  } finally {
+    client.release();
+  }
+}
+
 async function assertLegacyDeploymentWindowCompatibility() {
   const black = await createGuest();
   const white = await createGuest();
@@ -315,7 +336,7 @@ async function run() {
   }
 
   const doubleResume = await setupScoringFixture();
-  await assertRejectedMutationRollsBack(
+  await assertDeferredResumeGuardRollsBack(
     `INSERT INTO game_scoring_resume_events
          (game_id, scoring_revision, board_hash, stopped_move_number,
           rules, rules_profile, scoring_method, komi, handicap,
