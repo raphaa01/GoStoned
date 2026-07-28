@@ -15,11 +15,11 @@ const migrationRunner = readFileSync(
 test("fresh and upgraded databases share one role-and-database statement timeout", () => {
   assert.ok(schema.endsWith(migration), "Canonical schema must end with migration 016.");
   assert.match(migration, /current_user <> session_user/);
-  assert.match(migration, /has_parameter_privilege\(current_user, 'statement_timeout', 'SET'\)/);
   assert.match(
     migration,
     /ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L[\s\S]+current_user,[\s\S]+current_database\(\),[\s\S]+'8s'/,
   );
+  assert.match(migration, /'statement_timeout=8s' = ANY\(setting\.setconfig\)/);
   assert.doesNotMatch(migration, /ALTER DATABASE|ALTER ROLE ALL|ALTER ROLE %I SET statement_timeout/);
 });
 

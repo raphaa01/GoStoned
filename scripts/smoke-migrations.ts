@@ -101,7 +101,6 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
     session_role: string;
     owner_name: string;
     active_statement_timeout: string;
-    can_set_statement_timeout: boolean;
     rolcanlogin: boolean;
     rolsuper: boolean;
     rolcreatedb: boolean;
@@ -114,11 +113,6 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
             session_user AS session_role,
             pg_get_userbyid(database.datdba) AS owner_name,
             pg_catalog.current_setting('statement_timeout') AS active_statement_timeout,
-            pg_catalog.has_parameter_privilege(
-              current_user,
-              'statement_timeout',
-              'SET'
-            ) AS can_set_statement_timeout,
             role.rolcanlogin,
             role.rolsuper,
             role.rolcreatedb,
@@ -136,7 +130,6 @@ async function snapshot(expectedFiles: readonly string[]): Promise<MigrationSnap
   assert.equal(connected.session_role, expected.roleName, "Migration smoke identity check failed.");
   assert.equal(connected.owner_name, expected.roleName, "Migration smoke owner check failed.");
   assert.equal(connected.active_statement_timeout, "8s", "Database statement timeout is not active.");
-  assert.equal(connected.can_set_statement_timeout, true, "Migration role cannot set statement_timeout.");
   assert.equal(connected.rolcanlogin, true, "Migration smoke role check failed.");
   assert.equal(connected.rolsuper, false, "Migration smoke role check failed.");
   assert.equal(connected.rolcreatedb, false, "Migration smoke role check failed.");
