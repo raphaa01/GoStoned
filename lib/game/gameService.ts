@@ -7,6 +7,7 @@ import {
   replayMovesWithPrisoners,
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
+import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
 import {
   isRepeatedPositionForbidden,
   removeDeadStones,
@@ -1317,10 +1318,28 @@ export async function getGameState(gameId: string, playerKey: string): Promise<G
 export async function submitMove(
   gameId: string,
   playerKey: string,
-  move: { x?: number; y?: number; isPass?: boolean },
+  move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
 ): Promise<GameState> {
   return withTransaction(async (client) => {
     const loaded = await loadGame(client, gameId, playerKey, true);
+    if (
+      !Number.isSafeInteger(move.expectedVersion)
+      || move.expectedVersion < 0
+      || move.expectedVersion > MAX_PERSISTED_GAME_VERSION
+    ) {
+      throw new GameServiceError(
+        "A valid expected game version is required.",
+        400,
+        "invalid_game_mutation_request",
+      );
+    }
+    if (loaded.game.version !== move.expectedVersion) {
+      throw new GameServiceError(
+        "The game changed. Review the latest position before moving.",
+        409,
+        "game_version_conflict",
+      );
+    }
     const resumed = await resumeExpiredScoring(client, loaded, new Date());
     if (resumed) return serializeGame(resumed);
     const { game, moveRows, rules, positionHistory } = loaded;

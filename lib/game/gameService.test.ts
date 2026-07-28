@@ -282,6 +282,7 @@ async function assertRejectedWithoutWrites(
   },
   expectedCode: string,
   action: () => Promise<unknown>,
+  expectedStatus = 500,
 ) {
   let rejection: unknown;
   const statements = await withFakeDatabase(rows, async () => {
@@ -292,7 +293,7 @@ async function assertRejectedWithoutWrites(
     }
   });
   assert.ok(rejection instanceof GameServiceError);
-  assert.equal(rejection.status, 500);
+  assert.equal(rejection.status, expectedStatus);
   assert.equal(rejection.code, expectedCode);
   assert.deepEqual(
     statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
@@ -301,6 +302,61 @@ async function assertRejectedWithoutWrites(
   assert.equal(statements.includes("ROLLBACK"), true);
   assert.equal(statements.includes("COMMIT"), false);
 }
+
+test("move versions are bounded and stale intents fail before gameplay writes", async (t) => {
+  for (const [name, expectedVersion] of [
+    ["missing", undefined],
+    ["fractional", 0.5],
+    ["negative", -1],
+    ["PostgreSQL integer overflow", 2_147_483_648],
+  ] as const) {
+    await t.test(name, async () => {
+      await assertRejectedWithoutWrites(
+        { game: gameRow({ version: 0 }), scoring: null },
+        "invalid_game_mutation_request",
+        () => submitMove(gameId, blackKey, {
+          x: 0,
+          y: 0,
+          expectedVersion: expectedVersion as number,
+        }),
+        400,
+      );
+    });
+  }
+
+  await t.test("stale placement", async () => {
+    const statements: string[] = [];
+    let rejection: unknown;
+    statements.push(...await withFakeDatabase(
+      { game: gameRow({ version: 8 }), scoring: null, allowMoveWrite: true },
+      async () => {
+        try {
+          await submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 7 });
+        } catch (error) {
+          rejection = error;
+        }
+      },
+    ));
+    assert.ok(rejection instanceof GameServiceError);
+    assert.equal(rejection.status, 409);
+    assert.equal(rejection.code, "game_version_conflict");
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), true);
+    assert.deepEqual(
+      statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
+      [],
+    );
+    assert.equal(statements.at(-1), "ROLLBACK");
+  });
+
+  await t.test("stale pass", async () => {
+    await assertRejectedWithoutWrites(
+      { game: gameRow({ version: 2 }), scoring: null, allowMoveWrite: true },
+      "game_version_conflict",
+      () => submitMove(gameId, blackKey, { isPass: true, expectedVersion: 1 }),
+      409,
+    );
+  });
+});
 
 async function loadState(
   game: Record<string, unknown>,
@@ -569,7 +625,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
         ],
       },
       "move_history_mismatch",
-      () => submitMove(gameId, blackKey, { x: 1, y: 0 }),
+      () => submitMove(gameId, blackKey, { x: 1, y: 0, expectedVersion: 0 }),
     );
   });
 
@@ -582,7 +638,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
     await assertRejectedWithoutWrites(
       { game: gameRow({ to_move: "black" }), scoring: null, moveRows: moves },
       "move_history_mismatch",
-      () => submitMove(gameId, blackKey, { x: 2, y: 0 }),
+      () => submitMove(gameId, blackKey, { x: 2, y: 0, expectedVersion: 0 }),
     );
   });
 
@@ -619,7 +675,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
         allowMoveWrite: true,
       },
       async () => {
-        state = await submitMove(gameId, whiteKey, { x: 1, y: 0 });
+        state = await submitMove(gameId, whiteKey, { x: 1, y: 0, expectedVersion: 0 });
       },
     );
     assert.ok(state);
@@ -642,7 +698,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
         allowMoveWrite: true,
       },
       async () => {
-        state = await submitMove(gameId, whiteKey, { isPass: true });
+        state = await submitMove(gameId, whiteKey, { isPass: true, expectedVersion: 0 });
       },
     );
     assert.ok(state);
@@ -674,7 +730,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
       },
       async () => {
         try {
-          await submitMove(gameId, whiteKey, { x: 1, y: 1 });
+          await submitMove(gameId, whiteKey, { x: 1, y: 1, expectedVersion: 0 });
         } catch (error) {
           rejection = error;
         }
@@ -855,14 +911,21 @@ test("move history trust boundary derives positions and rejects contradictory ev
       assert.ok(evidenceInsert > lockedGameRead);
       assert.ok(scoringDelete > evidenceInsert);
 
-      const passed = await submitMove(gameId, blackKey, { isPass: true });
+      const passed = await submitMove(gameId, blackKey, {
+        isPass: true,
+        expectedVersion: Number(currentGame.version),
+      });
       assert.equal(passed.turn, "white");
       assert.equal(passed.moveCount, 12);
       assert.equal(passed.consecutivePasses, 1);
 
       const writeCount = statements.filter((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)).length;
       await assert.rejects(
-        () => submitMove(gameId, whiteKey, { x: 1, y: 1 }),
+        () => submitMove(gameId, whiteKey, {
+          x: 1,
+          y: 1,
+          expectedVersion: Number(currentGame.version),
+        }),
         (error: unknown) => error instanceof GameServiceError
           && error.status === 409
           && error.code === "ko",
@@ -1062,7 +1125,7 @@ test("database rules boundary rejects malformed state before any gameplay or rat
         scoring: null,
       },
       "rules_configuration_unsupported",
-      () => submitMove(gameId, blackKey, { x: 0, y: 0 }),
+      () => submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 0 }),
     );
   });
 
@@ -1070,7 +1133,7 @@ test("database rules boundary rejects malformed state before any gameplay or rat
     await assertRejectedWithoutWrites(
       { game: gameRow({ komi: "0.5" }), scoring: null },
       "rules_configuration_unsupported",
-      () => submitMove(gameId, blackKey, { x: 0, y: 0 }),
+      () => submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 0 }),
     );
   });
 
@@ -1078,7 +1141,7 @@ test("database rules boundary rejects malformed state before any gameplay or rat
     await assertRejectedWithoutWrites(
       { game: gameRow(), scoring: scoringRow() },
       "rules_configuration_mismatch",
-      () => submitMove(gameId, blackKey, { x: 0, y: 0 }),
+      () => submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 0 }),
     );
   });
 
@@ -1659,7 +1722,7 @@ test("historical lifecycle compatibility rejects every unreachable near miss", a
       await assertRejectedWithoutWrites(
         { game, scoring: null },
         "rules_configuration_mismatch",
-        () => submitMove(gameId, blackKey, { x: 0, y: 0 }),
+        () => submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 0 }),
       );
     });
   }

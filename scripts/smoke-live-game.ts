@@ -50,6 +50,26 @@ async function post<T>(
   }, cookie, expectedPlayerKey);
 }
 
+async function postMove<T>(
+  gameId: string,
+  move: { x?: number; y?: number; isPass?: boolean },
+  cookie: string,
+  expectedPlayerKey: string,
+): Promise<T> {
+  const current = await request<{ game: { version: number } }>(
+    `/api/games/${gameId}`,
+    undefined,
+    cookie,
+    expectedPlayerKey,
+  );
+  return post<T>(
+    `/api/games/${gameId}/moves`,
+    { ...move, expectedVersion: current.game.version },
+    cookie,
+    expectedPlayerKey,
+  );
+}
+
 async function createGuest() {
   const response = await fetch(`${baseUrl}/api/auth/guest`, {
     method: "POST",
@@ -109,26 +129,82 @@ async function run() {
     headers: {
       "Content-Type": "application/json",
       Cookie: white.cookie,
-      [EXPECTED_PLAYER_HEADER]: white.playerKey,
+      [EXPECTED_PLAYER_HEADER]: black.playerKey,
     },
-    body: JSON.stringify({ playerKey: black.playerKey, x: 1, y: 1 }),
+    body: JSON.stringify({ x: 1, y: 1, expectedVersion: 0 }),
   });
   assert.equal(impersonationAttempt.status, 409);
   const impersonationBody = (await impersonationAttempt.json()) as { code?: string };
-  assert.equal(impersonationBody.code, "not_your_turn");
+  assert.equal(impersonationBody.code, "identity_changed");
 
-  const blackMove = await post<{ actor: string; game: { moveCount: number; turn: string } }>(
-    `/api/games/${gameId}/moves`,
-    { x: 2, y: 2 },
-    black.cookie,
-    black.playerKey,
+  const raceBlack = await createGuest();
+  const raceWhite = await createGuest();
+  await post<{ matchmaking: { status: string } }>("/api/matchmaking", {
+    boardSize: 9,
+    timeControl: "rapid",
+  }, raceBlack.cookie, raceBlack.playerKey);
+  const raceMatch = await post<{ matchmaking: { status: string; gameId: string } }>(
+    "/api/matchmaking",
+    { boardSize: 9, timeControl: "rapid" },
+    raceWhite.cookie,
+    raceWhite.playerKey,
   );
+  assert.equal(raceMatch.matchmaking.status, "matched");
+  const raceGameId = raceMatch.matchmaking.gameId;
+  assert.ok(raceGameId);
+
+  const initialRaceGame = await request<{ game: { version: number } }>(
+    `/api/games/${raceGameId}`,
+    undefined,
+    raceBlack.cookie,
+    raceBlack.playerKey,
+  );
+  const sameVersionAttempts = await Promise.all([0, 1].map(async () => {
+    const response = await fetch(`${baseUrl}/api/games/${raceGameId}/moves`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: raceBlack.cookie,
+        [EXPECTED_PLAYER_HEADER]: raceBlack.playerKey,
+      },
+      body: JSON.stringify({ x: 2, y: 2, expectedVersion: initialRaceGame.game.version }),
+    });
+    return {
+      response,
+      body: await response.json() as {
+        actor?: string;
+        code?: string;
+        game?: { moveCount: number; turn: string };
+      },
+    };
+  }));
+  assert.deepEqual(
+    sameVersionAttempts.map(({ response }) => response.status).sort((a, b) => a - b),
+    [200, 409],
+  );
+  const acceptedMove = sameVersionAttempts.find(({ response }) => response.status === 200);
+  const staleMove = sameVersionAttempts.find(({ response }) => response.status === 409);
+  assert.ok(acceptedMove?.body.game);
+  assert.equal(staleMove?.body.code, "game_version_conflict");
+  assert.equal(staleMove?.response.headers.get("cache-control"), "no-store, max-age=0");
+  const raceBlackMove = acceptedMove.body as {
+    actor: string;
+    game: { moveCount: number; turn: string };
+  };
+  assert.equal(raceBlackMove.actor, raceBlack.playerKey);
+  assert.equal(raceBlackMove.game.moveCount, 1);
+  assert.equal(raceBlackMove.game.turn, "white");
+
+  const blackMove = await postMove<{
+    actor: string;
+    game: { moveCount: number; turn: string };
+  }>(gameId, { x: 2, y: 2 }, black.cookie, black.playerKey);
   assert.equal(blackMove.actor, black.playerKey);
   assert.equal(blackMove.game.moveCount, 1);
   assert.equal(blackMove.game.turn, "white");
 
-  const whiteMove = await post<{ game: { moveCount: number; turn: string } }>(
-    `/api/games/${gameId}/moves`,
+  const whiteMove = await postMove<{ game: { moveCount: number; turn: string } }>(
+    gameId,
     { x: 3, y: 2 },
     white.cookie,
     white.playerKey,
@@ -136,8 +212,8 @@ async function run() {
   assert.equal(whiteMove.game.moveCount, 2);
   assert.equal(whiteMove.game.turn, "black");
 
-  await post(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
-  const stopped = await post<{
+  await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
+  const stopped = await postMove<{
     game: {
       status: string;
       phase: string;
@@ -146,7 +222,7 @@ async function run() {
       scoring: { revision: number };
       clock: { black: { mainTimeMs: number }; white: { mainTimeMs: number } };
     };
-  }>(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
+  }>(gameId, { isPass: true }, white.cookie, white.playerKey);
   assert.equal(stopped.game.status, "active");
   assert.equal(stopped.game.phase, "scoring");
   assert.equal(stopped.game.result, null);
@@ -250,11 +326,11 @@ async function run() {
     resumed_to_move: "black",
   }]);
 
-  await post(`/api/games/${gameId}/moves`, { x: 4, y: 2 }, black.cookie, black.playerKey);
-  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
-  const restopped = await post<{
+  await postMove(gameId, { x: 4, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
+  const restopped = await postMove<{
     game: { phase: string; scoring: { revision: number } };
-  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
+  }>(gameId, { isPass: true }, black.cookie, black.playerKey);
   assert.equal(restopped.game.phase, "scoring");
   assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
   const retainedResumeEvidence = await query<{ event_count: number }>(
@@ -361,11 +437,11 @@ async function run() {
   });
   assert.equal("resumeEvents" in latestOnly.game, false);
 
-  await post(`/api/games/${gameId}/moves`, { x: 5, y: 2 }, black.cookie, black.playerKey);
-  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
-  const finalScoring = await post<{
+  await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
+  const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
-  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
+  }>(gameId, { isPass: true }, black.cookie, black.playerKey);
   assert.equal(finalScoring.game.phase, "scoring");
 
   const firstConfirmation = await post<{

@@ -11,9 +11,11 @@ import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import {
   assertGameMutationMetadata,
+  gameMutationRouteError,
   MAX_GAME_MUTATION_BODY_BYTES,
   readGameMutationJson,
 } from "./gameMutationRequest";
+import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
 import { GameServiceError } from "./gameService";
 
 const gameId = "33333333-3333-4333-8333-333333333333";
@@ -31,7 +33,12 @@ const mutations: Array<{
   handler: MutationHandler;
   body: string | null;
 }> = [
-  { name: "move", path: "moves", handler: submitMove, body: JSON.stringify({ x: 2, y: 3 }) },
+  {
+    name: "move",
+    path: "moves",
+    handler: submitMove,
+    body: JSON.stringify({ x: 2, y: 3, expectedVersion: 0 }),
+  },
   { name: "resign", path: "resign", handler: resignGame, body: null },
   {
     name: "score confirmation",
@@ -260,12 +267,12 @@ test("valid game mutation payloads pass route semantics and reach the service bo
     mutation: (typeof mutations)[number];
     body: BodyInit | null;
   }> = [
-    { name: "move", mutation: move, body: JSON.stringify({ x: 2, y: 3 }) },
-    { name: "pass", mutation: move, body: JSON.stringify({ isPass: true }) },
+    { name: "move", mutation: move, body: JSON.stringify({ x: 2, y: 3, expectedVersion: 0 }) },
+    { name: "pass", mutation: move, body: JSON.stringify({ isPass: true, expectedVersion: 0 }) },
     {
       name: "explicit non-pass",
       mutation: move,
-      body: JSON.stringify({ x: 2, y: 3, isPass: false }),
+      body: JSON.stringify({ x: 2, y: 3, isPass: false, expectedVersion: MAX_PERSISTED_GAME_VERSION }),
     },
     {
       name: "score confirmation",
@@ -302,18 +309,47 @@ test("invalid semantic payloads are metered and stop before the service boundary
     {
       name: "pass with coordinates",
       mutation: move,
-      body: JSON.stringify({ x: 2, y: 3, isPass: true }),
+      body: JSON.stringify({ x: 2, y: 3, isPass: true, expectedVersion: 0 }),
     },
     {
       name: "explicit non-pass without coordinates",
       mutation: move,
-      body: JSON.stringify({ isPass: false }),
+      body: JSON.stringify({ isPass: false, expectedVersion: 0 }),
     },
-    { name: "fractional move", mutation: move, body: JSON.stringify({ x: 2.5, y: 3 }) },
+    {
+      name: "missing expected version",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3 }),
+    },
+    {
+      name: "missing pass expected version",
+      mutation: move,
+      body: JSON.stringify({ isPass: true }),
+    },
+    {
+      name: "fractional expected version",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3, expectedVersion: 0.5 }),
+    },
+    {
+      name: "negative expected version",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3, expectedVersion: -1 }),
+    },
+    {
+      name: "overflow expected version",
+      mutation: move,
+      body: JSON.stringify({ x: 2, y: 3, expectedVersion: MAX_PERSISTED_GAME_VERSION + 1 }),
+    },
+    {
+      name: "fractional move",
+      mutation: move,
+      body: JSON.stringify({ x: 2.5, y: 3, expectedVersion: 0 }),
+    },
     {
       name: "unsafe move integer",
       mutation: move,
-      body: JSON.stringify({ x: Number.MAX_SAFE_INTEGER + 1, y: 3 }),
+      body: JSON.stringify({ x: Number.MAX_SAFE_INTEGER + 1, y: 3, expectedVersion: 0 }),
     },
     {
       name: "zero confirmation revision",
@@ -381,11 +417,29 @@ test("bounded parser accepts every current client payload shape", async () => {
     body: Record<string, unknown>;
     fields: readonly (readonly string[])[];
   }> = [
-    { body: { x: 2, y: 3 }, fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]] },
-    { body: { isPass: true }, fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]] },
     {
-      body: { x: 2, y: 3, isPass: false },
-      fields: [["x", "y"], ["isPass"], ["x", "y", "isPass"]],
+      body: { x: 2, y: 3, expectedVersion: 0 },
+      fields: [
+        ["x", "y", "expectedVersion"],
+        ["isPass", "expectedVersion"],
+        ["x", "y", "isPass", "expectedVersion"],
+      ],
+    },
+    {
+      body: { isPass: true, expectedVersion: MAX_PERSISTED_GAME_VERSION },
+      fields: [
+        ["x", "y", "expectedVersion"],
+        ["isPass", "expectedVersion"],
+        ["x", "y", "isPass", "expectedVersion"],
+      ],
+    },
+    {
+      body: { x: 2, y: 3, isPass: false, expectedVersion: 7 },
+      fields: [
+        ["x", "y", "expectedVersion"],
+        ["isPass", "expectedVersion"],
+        ["x", "y", "isPass", "expectedVersion"],
+      ],
     },
     { body: { expectedRevision: 2 }, fields: [["expectedRevision"]] },
     {
@@ -440,4 +494,19 @@ test("bounded parser rejects malformed, non-object, oversized, non-UTF-8, and ex
         && error.code === "invalid_game_mutation_request",
     );
   }
+});
+
+test("game version conflicts are stable no-store mutation responses", async () => {
+  const response = gameMutationRouteError(new GameServiceError(
+    "The game changed. Review the latest position before moving.",
+    409,
+    "game_version_conflict",
+  ));
+  assert.equal(response.status, 409);
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    error: "The game changed. Review the latest position before moving.",
+    code: "game_version_conflict",
+  });
 });
