@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { clearRateLimit, consumeRateLimit, RateLimitError } from "../lib/auth/rateLimit";
 import { closePool, query } from "../lib/db";
-import { getDatabaseUrl, isLocalDatabase } from "../lib/env";
+import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 
 type StoredLimit = {
   attempts: number;
@@ -13,7 +13,7 @@ type StoredLimit = {
 
 async function run() {
   const databaseUrl = getDatabaseUrl();
-  if (!isLocalDatabase(databaseUrl)) {
+  if (!isUnambiguousLocalDatabase(databaseUrl)) {
     throw new Error("Rate-limit smoke tests may only mutate a local PostgreSQL database.");
   }
 

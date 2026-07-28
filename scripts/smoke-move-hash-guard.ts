@@ -4,11 +4,11 @@ import path from "node:path";
 import "dotenv/config";
 import type { PoolClient } from "pg";
 import { closePool, getPool } from "../lib/db";
-import { isLocalDatabase } from "../lib/env";
+import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("The move-hash database smoke requires an isolated local DATABASE_URL.");
 }
 

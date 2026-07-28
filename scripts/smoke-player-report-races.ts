@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
-import { getDatabaseUrl, isLocalDatabase } from "../lib/env";
+import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import { reportGameOpponent } from "../lib/moderation/playerReportService";
 
 type ReportRow = {
@@ -13,7 +13,7 @@ type ReportRow = {
 };
 
 const databaseUrl = getDatabaseUrl();
-if (!isLocalDatabase(databaseUrl)) {
+if (!isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("Player-report race smoke tests may only mutate a local PostgreSQL database.");
 }
 
