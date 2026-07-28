@@ -25,6 +25,7 @@ const requiredTables = [
   "player_rating_history",
   "game_scoring_state",
   "game_dead_stones",
+  "game_scoring_resume_events",
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
@@ -65,11 +66,34 @@ const requiredJapaneseScoringColumns = [
   "scored_proposal_hash",
 ] as const;
 
+const requiredResumeEventColumns = [
+  "game_id",
+  "scoring_revision",
+  "board_hash",
+  "stopped_move_number",
+  "rules",
+  "rules_profile",
+  "scoring_method",
+  "komi",
+  "handicap",
+  "fallback_to_move",
+  "scoring_expires_at",
+  "resume_claim",
+  "requested_by_color",
+  "disputed_x",
+  "disputed_y",
+  "resumed_to_move",
+  "resumed_at",
+] as const;
+
 const requiredConstraintSignatures = [
   "games_rules_identity_unique:games:u",
   "games_supported_rules_tuple_check:games:c",
   "game_scoring_state_game_rules_fk:game_scoring_state:f",
   "game_japanese_scoring_game_rules_fk:game_japanese_scoring_state:f",
+  "game_scoring_resume_events_pkey:game_scoring_resume_events:p",
+  "game_scoring_resume_events_claim_shape_check:game_scoring_resume_events:c",
+  "game_scoring_resume_events_game_rules_fk:game_scoring_resume_events:f",
   "matchmaking_queue_rules_profile_compatibility_check:matchmaking_queue:c",
 ] as const;
 
@@ -118,6 +142,31 @@ const requiredConstraintDefinitions = {
     ],
     excludes: [],
   },
+  game_scoring_resume_events_pkey: {
+    includes: ["PRIMARY KEY (game_id, scoring_revision)"],
+    excludes: [],
+  },
+  game_scoring_resume_events_claim_shape_check: {
+    includes: [
+      "resume_claim = 'dead'::text",
+      "resume_claim = 'alive'::text",
+      "resume_claim = 'deadline'::text",
+      "resumed_to_move = requested_by_color",
+      "resumed_to_move <> requested_by_color",
+      "resumed_at < scoring_expires_at",
+      "resumed_to_move = fallback_to_move",
+      "scoring_expires_at <= resumed_at",
+    ],
+    excludes: [],
+  },
+  game_scoring_resume_events_game_rules_fk: {
+    includes: [
+      "FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)",
+      "REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)",
+      "ON DELETE CASCADE",
+    ],
+    excludes: [],
+  },
   matchmaking_queue_rules_profile_compatibility_check: {
     includes: ["legacy-immediate-area", "chinese-2002-gostone-v1"],
     excludes: ["japanese-1989-gostone-v1"],
@@ -127,6 +176,10 @@ const requiredConstraintDefinitions = {
 const requiredTriggerSignatures = [
   "matchmaking_rules_profile_guard:matchmaking_queue:public:enforce_matchmaking_rules_profile:23",
   "game_rules_identity_mutation_guard:games:public:guard_game_rules_identity_mutation:19",
+  "game_scoring_resume_events_insert_guard:game_scoring_resume_events:public:validate_game_scoring_resume_event_insert:7",
+  "game_scoring_resume_events_commit_guard:game_scoring_resume_events:public:validate_game_scoring_resume_event_commit:5",
+  "game_scoring_resume_events_immutable_guard:game_scoring_resume_events:public:guard_game_scoring_resume_event_mutation:27",
+  "game_scoring_resume_events_truncate_guard:game_scoring_resume_events:public:guard_game_scoring_resume_event_mutation:34",
   "game_japanese_scoring_state_mutation_guard:game_japanese_scoring_state:public:guard_japanese_scoring_state_mutation:27",
   "game_japanese_dead_stones_mutation_guard:game_japanese_dead_stones:public:guard_japanese_scoring_evidence_mutation:31",
   "game_japanese_neutral_seeds_mutation_guard:game_japanese_neutral_region_seeds:public:guard_japanese_scoring_evidence_mutation:31",
@@ -137,9 +190,18 @@ const requiredTriggerDefinitions = {
     "UPDATE OF status, game_id, rules_profile",
   game_rules_identity_mutation_guard:
     "UPDATE OF rules, rules_profile, scoring_method, komi, handicap",
+  game_scoring_resume_events_insert_guard:
+    "BEFORE INSERT ON public.game_scoring_resume_events",
+  game_scoring_resume_events_commit_guard:
+    "AFTER INSERT ON public.game_scoring_resume_events DEFERRABLE INITIALLY DEFERRED",
+  game_scoring_resume_events_immutable_guard:
+    "BEFORE DELETE OR UPDATE ON public.game_scoring_resume_events",
+  game_scoring_resume_events_truncate_guard:
+    "BEFORE TRUNCATE ON public.game_scoring_resume_events",
 } as const;
 
 const requiredProtectedTables = [
+  "game_scoring_resume_events",
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
@@ -148,9 +210,30 @@ const requiredProtectedTables = [
 const requiredGuardFunctions = [
   "public.enforce_matchmaking_rules_profile()",
   "public.guard_game_rules_identity_mutation()",
+  "public.validate_game_scoring_resume_event_insert()",
+  "public.validate_game_scoring_resume_event_commit()",
+  "public.guard_game_scoring_resume_event_mutation()",
   "public.guard_japanese_scoring_state_mutation()",
   "public.guard_japanese_scoring_evidence_mutation()",
 ] as const;
+
+const requiredGuardFunctionDefinitions = {
+  "public.validate_game_scoring_resume_event_insert()": [
+    "FOR SHARE OF game, scoring",
+    "NEW.scoring_revision IS DISTINCT FROM snapshot.snapshot_revision",
+    "FROM public.game_dead_stones AS dead_stone",
+  ],
+  "public.validate_game_scoring_resume_event_commit()": [
+    "lifecycle.scoring_revision IS DISTINCT FROM NEW.scoring_revision + 1",
+    "lifecycle.last_resume_claim IS DISTINCT FROM NEW.resume_claim",
+    "lifecycle.has_scoring_state",
+  ],
+  "public.guard_game_scoring_resume_event_mutation()": [
+    "TG_OP = 'TRUNCATE'",
+    "PERFORM 1 FROM public.games WHERE id = OLD.game_id",
+    "Game scoring resume evidence is append-only.",
+  ],
+} as const;
 
 async function checkMvp() {
   console.log("GoStone production preflight");
@@ -178,15 +261,18 @@ async function checkMvp() {
     scoring_columns: string[];
     queue_columns: string[];
     japanese_scoring_columns: string[];
+    resume_event_columns: string[];
     constraint_signatures: string[];
     rollout_constraint_signatures: string[];
     constraint_definitions: Record<string, string>;
     trigger_signatures: string[];
     trigger_definitions: Record<string, string>;
     rls_tables: string[];
+    public_has_table_access: boolean;
     client_roles_have_table_access: boolean;
     public_can_execute_guard_functions: boolean;
     client_roles_can_execute_guard_functions: boolean;
+    guard_function_definitions: Record<string, string>;
     rules_profile_default: string | null;
   }>(
     `SELECT NOW() AS now,
@@ -230,6 +316,14 @@ async function checkMvp() {
                  AND column_name = ANY($5::text[])
                ORDER BY column_name
             ) AS japanese_scoring_columns,
+            ARRAY(
+              SELECT column_name
+                FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'game_scoring_resume_events'
+                 AND column_name = ANY($13::text[])
+               ORDER BY column_name
+            ) AS resume_event_columns,
             ARRAY(
               SELECT constraint_row.conname || ':' || relation.relname || ':'
                      || constraint_row.contype::text
@@ -310,6 +404,20 @@ async function checkMvp() {
             ) AS rls_tables,
             EXISTS (
               SELECT 1
+                FROM UNNEST($8::text[]) AS protected_table(table_name)
+               WHERE has_table_privilege(
+                       'public',
+                       FORMAT('public.%I', protected_table.table_name),
+                       'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+                     )
+                  OR has_any_column_privilege(
+                       'public',
+                       FORMAT('public.%I', protected_table.table_name),
+                       'SELECT, INSERT, UPDATE, REFERENCES'
+                     )
+            ) AS public_has_table_access,
+            EXISTS (
+              SELECT 1
                 FROM pg_roles role
                 CROSS JOIN UNNEST($8::text[]) AS protected_table(table_name)
                WHERE role.rolname IN ('anon', 'authenticated')
@@ -347,6 +455,16 @@ async function checkMvp() {
                  )
             ) AS client_roles_can_execute_guard_functions,
             (
+              SELECT COALESCE(
+                JSONB_OBJECT_AGG(
+                  guard_function.function_name,
+                  pg_get_functiondef(guard_function.function_name::regprocedure)
+                ),
+                '{}'::jsonb
+              )
+                FROM UNNEST($14::text[]) AS guard_function(function_name)
+            ) AS guard_function_definitions,
+            (
               SELECT column_default
                 FROM information_schema.columns
                WHERE table_schema = 'public'
@@ -366,6 +484,8 @@ async function checkMvp() {
       Object.keys(requiredConstraintDefinitions),
       Object.keys(requiredTriggerDefinitions),
       requiredRolloutConstraintSignatures,
+      requiredResumeEventColumns,
+      Object.keys(requiredGuardFunctionDefinitions),
     ],
   );
 
@@ -406,6 +526,14 @@ async function checkMvp() {
   if (absentJapaneseScoringColumns.length > 0) {
     throw new Error(
       `Database Japanese persistence migration is incomplete. Missing scoring columns: ${absentJapaneseScoringColumns.join(", ")}`,
+    );
+  }
+  const absentResumeEventColumns = requiredResumeEventColumns.filter(
+    (column) => !row.resume_event_columns.includes(column),
+  );
+  if (absentResumeEventColumns.length > 0) {
+    throw new Error(
+      `Database resume evidence migration is incomplete. Missing columns: ${absentResumeEventColumns.join(", ")}`,
     );
   }
   const absentConstraints = requiredConstraintSignatures.filter(
@@ -457,9 +585,14 @@ async function checkMvp() {
       `Database client isolation is incomplete. RLS is disabled on: ${absentRls.join(", ")}`,
     );
   }
+  if (row.public_has_table_access) {
+    throw new Error(
+      "Database client isolation is incomplete: PUBLIC can access protected server tables.",
+    );
+  }
   if (row.client_roles_have_table_access) {
     throw new Error(
-      "Database client isolation is incomplete: anon/authenticated can access Japanese persistence tables.",
+      "Database client isolation is incomplete: anon/authenticated can access protected server tables.",
     );
   }
   if (row.public_can_execute_guard_functions) {
@@ -471,6 +604,12 @@ async function checkMvp() {
     throw new Error(
       "Database persistence guards are callable through anon/authenticated roles.",
     );
+  }
+  for (const [name, fragments] of Object.entries(requiredGuardFunctionDefinitions)) {
+    const definition = row.guard_function_definitions[name] ?? "";
+    if (fragments.some((fragment) => !definition.includes(fragment))) {
+      throw new Error(`Database guard function definition is unsafe: ${name}`);
+    }
   }
   if (!row.rules_profile_default?.includes("legacy-immediate-area")) {
     throw new Error(
