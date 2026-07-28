@@ -77,6 +77,7 @@ async function run() {
       status: string;
       result: string;
       winnerKey: string;
+      rated: boolean;
       clock: { black: { periodsRemaining: number } };
     };
   }>(
@@ -89,7 +90,19 @@ async function run() {
   assert.equal(finished.game.status, "finished");
   assert.equal(finished.game.result, "W+T");
   assert.equal(finished.game.winnerKey, white.playerKey);
+  assert.equal(finished.game.rated, false);
   assert.equal(finished.game.clock.black.periodsRemaining, 0);
+  const ratingRows = await query<{ stats_count: number; history_count: number }>(
+    `SELECT
+       (SELECT COUNT(*)::int
+          FROM player_stats
+         WHERE player_key = ANY($2::text[]) AND board_size = 9) AS stats_count,
+       (SELECT COUNT(*)::int
+          FROM player_rating_history
+         WHERE game_id = $1 AND player_key = ANY($2::text[])) AS history_count`,
+    [gameId, [black.playerKey, white.playerKey]],
+  );
+  assert.deepEqual(ratingRows.rows[0], { stats_count: 0, history_count: 0 });
   console.log(`Clock flow passed for game ${gameId}.`);
 }
 

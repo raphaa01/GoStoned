@@ -42,6 +42,7 @@ export type GameState = {
   blackPlayerName: string;
   whitePlayerName: string;
   winnerKey: string | null;
+  rated: boolean;
   status: "active" | "finished";
   phase: "play" | "scoring";
   result: string | null;

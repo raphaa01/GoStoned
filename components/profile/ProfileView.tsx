@@ -24,6 +24,7 @@ import type {
   RatingHistoryEntry,
   RecentGame,
 } from "@/lib/stats/statsService";
+import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
 
 const BOARD_SIZES: BoardSize[] = [9, 13, 19];
 
@@ -226,24 +227,36 @@ export function ProfileView() {
         </div>
         {selectedGames.length > 0 ? (
           <div className="profile-history__list">
-            {selectedGames.slice(0, 12).map((game) => (
-              <Link
-                className="history-game"
-                href={href(`/game/${game.gameId}`)}
-                key={game.gameId}
-              >
-                <span className={`history-game__result history-game__result--${game.result}`}>
-                  {game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}
-                </span>
-                <div>
-                  <strong>{game.result === "win" ? copy.victory : game.result === "loss" ? copy.defeat : copy.draw} {copy.versus} {game.opponentName}</strong>
-                  <span>{formatDate(game.finishedAt, locale)} · {dictionary.timeControls[game.timeControl].name} · {game.gameResult ?? copy.completed}</span>
-                </div>
-                <strong className={game.ratingChange && game.ratingChange > 0 ? "is-positive" : game.ratingChange && game.ratingChange < 0 ? "is-negative" : ""}>
-                  {game.ratingChange === null ? copy.recorded : signedRating(game.ratingChange)}
-                </strong>
-              </Link>
-            ))}
+            {selectedGames.slice(0, 12).map((game) => {
+              const rating = getRecentGameRatingPresentation(game);
+              const ratingClass = rating.kind === "change" && rating.value > 0
+                ? "is-positive"
+                : rating.kind === "change" && rating.value < 0
+                  ? "is-negative"
+                  : "";
+              const ratingLabel = rating.kind === "unrated"
+                ? copy.unrated
+                : rating.kind === "rated"
+                  ? copy.rated
+                  : signedRating(rating.value);
+
+              return (
+                <Link
+                  className="history-game"
+                  href={href(`/game/${game.gameId}`)}
+                  key={game.gameId}
+                >
+                  <span className={`history-game__result history-game__result--${game.result}`}>
+                    {game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}
+                  </span>
+                  <div>
+                    <strong>{game.result === "win" ? copy.victory : game.result === "loss" ? copy.defeat : copy.draw} {copy.versus} {game.opponentName}</strong>
+                    <span>{formatDate(game.finishedAt, locale)} · {dictionary.timeControls[game.timeControl].name} · {game.gameResult ?? copy.completed}</span>
+                  </div>
+                  <strong className={ratingClass}>{ratingLabel}</strong>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <div className="profile-history__empty">

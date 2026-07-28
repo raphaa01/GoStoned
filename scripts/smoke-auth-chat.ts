@@ -160,10 +160,11 @@ async function run() {
     ["Good luck!", "Have fun!"],
   );
 
-  await request(
+  const resigned = await request(
     `/api/games/${gameId}/resign`,
     json("POST", {}, firstLogin.cookie!),
   );
+  assert.equal((resigned.body.game as { rated: boolean }).rated, true);
 
   const firstProfile = await request("/api/profile", {
     headers: { Cookie: firstLogin.cookie! },
@@ -189,6 +190,7 @@ async function run() {
     gameId: string;
     result: string;
     ratingChange: number;
+    rated: boolean;
   }>;
   const firstGameHistory = firstHistory.find((entry) => entry.gameId === gameId);
   const firstBoardStat = firstStats.find((stat) => stat.boardSize === 9);
@@ -206,6 +208,12 @@ async function run() {
   assert.equal(firstRecentGames[0].gameId, gameId);
   assert.equal(firstRecentGames[0].result, "loss");
   assert.equal(firstRecentGames[0].ratingChange, -16);
+  assert.equal(firstRecentGames[0].rated, true);
+
+  const storedGame = await request(`/api/games/${gameId}`, {
+    headers: { Cookie: firstLogin.cookie! },
+  });
+  assert.equal((storedGame.body.game as { rated: boolean }).rated, true);
 
   const secondProfile = await request("/api/profile", {
     headers: { Cookie: registeredSecond.cookie! },

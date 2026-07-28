@@ -10,7 +10,7 @@
     "lint": "eslint . && npm run lint:i18n",
     "lint:i18n": "tsx scripts/check-i18n.ts",
     "mvp:check": "tsx scripts/check-mvp.ts",
-    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts",
+    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts lib/stats/*.test.ts",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",

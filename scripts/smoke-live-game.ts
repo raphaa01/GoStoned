@@ -229,12 +229,12 @@ async function run() {
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
   const confirmations = await Promise.all([
-    post<{ game: { status: string; result: string | null; moveCount: number } }>(
+    post<{ game: { status: string; result: string | null; moveCount: number; rated: boolean } }>(
       `/api/games/${gameId}/scoring/confirm`,
       { expectedRevision: marked.game.scoring.revision },
       black.cookie,
     ),
-    post<{ game: { status: string; result: string | null; moveCount: number } }>(
+    post<{ game: { status: string; result: string | null; moveCount: number; rated: boolean } }>(
       `/api/games/${gameId}/scoring/confirm`,
       { expectedRevision: marked.game.scoring.revision },
       white.cookie,
@@ -248,29 +248,28 @@ async function run() {
   assert.equal(finished.game.status, "finished");
   assert.equal(finished.game.moveCount, 7);
   assert.ok(finished.game.result);
+  assert.equal(finished.game.rated, false);
 
-  const retry = await post<{ game: { status: string; result: string } }>(
+  const retry = await post<{ game: { status: string; result: string; rated: boolean } }>(
     `/api/games/${gameId}/scoring/confirm`,
     { expectedRevision: marked.game.scoring.revision },
     black.cookie,
   );
   assert.equal(retry.game.status, "finished");
   assert.equal(retry.game.result, finished.game.result);
+  assert.equal(retry.game.rated, false);
 
-  const ledger = await query<{ player_key: string; games: number; history_count: number }>(
-    `SELECT stats.player_key, stats.games,
-            COUNT(history.id)::int AS history_count
-       FROM player_stats stats
-       LEFT JOIN player_rating_history history
-         ON history.player_key = stats.player_key AND history.game_id = $1
-      WHERE stats.player_key = ANY($2::text[]) AND stats.board_size = 9
-      GROUP BY stats.player_key, stats.games
-      ORDER BY stats.player_key`,
+  const ledger = await query<{ stats_count: number; history_count: number }>(
+    `SELECT
+       (SELECT COUNT(*)::int
+          FROM player_stats
+         WHERE player_key = ANY($2::text[]) AND board_size = 9) AS stats_count,
+       (SELECT COUNT(*)::int
+          FROM player_rating_history
+         WHERE game_id = $1 AND player_key = ANY($2::text[])) AS history_count`,
     [gameId, [black.playerKey, white.playerKey]],
   );
-  assert.equal(ledger.rows.length, 2);
-  assert.equal(ledger.rows.every((row) => row.games === 1), true);
-  assert.equal(ledger.rows.every((row) => row.history_count === 1), true);
+  assert.deepEqual(ledger.rows[0], { stats_count: 0, history_count: 0 });
 
   console.log(`Live game ${gameId} completed successfully (${finished.game.result}).`);
 }

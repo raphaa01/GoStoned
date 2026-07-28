@@ -97,7 +97,7 @@ export function GamePanel({
           <strong>{resultText}</strong>
           <span>
             {game.status === "finished"
-              ? copy.resultSaved
+              ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
               : activeScoring
                 ? copy.scoringInstructions
               : game.lastResume?.claim === "deadline"

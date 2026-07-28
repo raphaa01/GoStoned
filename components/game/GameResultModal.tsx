@@ -79,7 +79,11 @@ export function GameResultModal({
           <div>
             <span className="result-modal-kicker">{copy.complete}</span>
             <h2 id={titleId}>{outcome}</h2>
-            <p id={descriptionId}>{localizedGameResult(game.result, copy)}</p>
+            <p id={descriptionId}>
+              {localizedGameResult(game.result, copy)} {game.rated
+                ? copy.ratedResultSaved
+                : copy.unratedResultSaved}
+            </p>
           </div>
           <strong className="result-code">{game.result ?? copy.draw}</strong>
         </div>
