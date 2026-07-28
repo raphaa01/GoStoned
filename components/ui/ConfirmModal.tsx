@@ -2,6 +2,7 @@
 
 import { AlertTriangle, X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type ConfirmModalProps = {
   busy?: boolean;
@@ -16,7 +17,7 @@ type ConfirmModalProps = {
 
 export function ConfirmModal({
   busy = false,
-  cancelLabel = "Cancel",
+  cancelLabel,
   confirmLabel,
   description,
   open,
@@ -24,6 +25,7 @@ export function ConfirmModal({
   onCancel,
   onConfirm,
 }: ConfirmModalProps) {
+  const { dictionary } = useI18n();
   const titleId = useId();
   const dialog = useRef<HTMLElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
@@ -121,7 +123,7 @@ export function ConfirmModal({
         tabIndex={-1}
       >
         <button
-          aria-label="Close dialog"
+          aria-label={dictionary.common.closeDialog}
           className="modal-close"
           disabled={busy}
           onClick={onCancel}
@@ -139,7 +141,7 @@ export function ConfirmModal({
             onClick={onCancel}
             type="button"
           >
-            {cancelLabel}
+            {cancelLabel ?? dictionary.common.cancel}
           </button>
           <button
             className="button button--danger"
@@ -148,7 +150,7 @@ export function ConfirmModal({
             ref={confirmButton}
             type="button"
           >
-            {busy ? "Please wait…" : confirmLabel}
+            {busy ? dictionary.common.pleaseWait : confirmLabel}
           </button>
         </div>
       </section>

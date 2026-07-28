@@ -4,10 +4,13 @@ import { KeyRound, LoaderCircle, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { user, refresh } = useAuth();
+  const { dictionary, href } = useI18n();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -24,13 +27,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-      const body = (await response.json()) as { ok: boolean; error?: string };
-      if (!response.ok || !body.ok) throw new Error(body.error ?? "Request failed.");
+      const body = (await response.json()) as { ok: boolean; code?: string };
+      if (!response.ok || !body.ok) {
+        throw new Error(localizedAuthError(dictionary, body.code, "request_failed"));
+      }
       await refresh();
-      router.push(mode === "register" ? "/profile" : "/play");
+      router.push(href(mode === "register" ? "/profile" : "/play"));
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed.");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : dictionary.auth.errors.request_failed,
+      );
     } finally {
       setBusy(false);
     }
@@ -40,9 +49,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     return (
       <section className="auth-card auth-card--signed-in">
         <span className="auth-icon"><UserRound size={24} /></span>
-        <h1>You are already logged in</h1>
-        <p>Continue as <strong>{user.displayName}</strong>.</p>
-        <Link className="button button--primary button--lg" href="/play">Find a game</Link>
+        <h1>{dictionary.auth.alreadyLoggedIn}</h1>
+        <p>{dictionary.auth.continueAs} <strong>{user.displayName}</strong>.</p>
+        <Link className="button button--primary button--lg" href={href("/play")}>{dictionary.auth.findGame}</Link>
       </section>
     );
   }
@@ -50,17 +59,17 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const registering = mode === "register";
   return (
     <section className="auth-card">
-      <span className="section-kicker">{registering ? "New player" : "Welcome back"}</span>
-      <h1>{registering ? "Create your account" : "Log in"}</h1>
+      <span className="section-kicker">{registering ? dictionary.auth.newPlayer : dictionary.auth.welcomeBack}</span>
+      <h1>{registering ? dictionary.auth.createTitle : dictionary.auth.loginTitle}</h1>
       <p>
         {registering
-          ? "Keep your ratings and play under one username."
-          : "Continue with your saved profile and ratings."}
+          ? dictionary.auth.createDescription
+          : dictionary.auth.loginDescription}
       </p>
 
       <form className="auth-form" onSubmit={submit}>
         <label>
-          <span>Username</span>
+          <span>{dictionary.auth.username}</span>
           <span className="input-wrap">
             <UserRound size={18} />
             <input
@@ -70,15 +79,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               minLength={3}
               onChange={(event) => setUsername(event.target.value)}
               pattern="[A-Za-z0-9_]+"
-              placeholder="Your username"
+              placeholder={dictionary.auth.usernamePlaceholder}
               required
               value={username}
             />
           </span>
-          {registering ? <small>3–20 letters, numbers, or underscores.</small> : null}
+          {registering ? <small>{dictionary.auth.usernameHint}</small> : null}
         </label>
         <label>
-          <span>Password</span>
+          <span>{dictionary.auth.password}</span>
           <span className="input-wrap">
             <KeyRound size={18} />
             <input
@@ -86,7 +95,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               maxLength={128}
               minLength={8}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 8 characters"
+              placeholder={dictionary.auth.passwordPlaceholder}
               required
               type="password"
               value={password}
@@ -98,15 +107,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}
           {busy
-            ? registering ? "Creating account…" : "Logging in…"
-            : registering ? "Create account" : "Log in"}
+            ? registering ? dictionary.auth.creating : dictionary.auth.loggingIn
+            : registering ? dictionary.auth.createAccount : dictionary.auth.login}
         </button>
       </form>
 
       <p className="auth-switch">
-        {registering ? "Already have an account?" : "New to GoStone?"}{" "}
-        <Link href={registering ? "/login" : "/register"}>
-          {registering ? "Log in" : "Create account"}
+        {registering ? dictionary.auth.haveAccount : dictionary.auth.newToGoStone}{" "}
+        <Link href={href(registering ? "/login" : "/register")}>
+          {registering ? dictionary.auth.login : dictionary.auth.createAccount}
         </Link>
       </p>
     </section>

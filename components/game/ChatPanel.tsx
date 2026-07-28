@@ -2,7 +2,9 @@
 
 import { MessageCircle, Send } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { GameMessage } from "@/lib/game/chatService";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 
 type ChatPanelProps = {
   messages: GameMessage[];
@@ -12,6 +14,8 @@ type ChatPanelProps = {
 };
 
 export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +35,7 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
       await onSend(message);
       setText("");
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Message could not be sent.");
+      setError(localizedApiError(dictionary, sendError, copy.sendFailed));
     } finally {
       setBusy(false);
     }
@@ -39,33 +43,33 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
 
   return (
     <section className="chat-panel">
-      <header><MessageCircle size={18} /><strong>Game chat</strong></header>
+      <header><MessageCircle size={18} /><strong>{copy.chatTitle}</strong></header>
       <div className="chat-list" ref={listRef} aria-live="polite">
         {messages.length === 0 ? (
-          <p className="chat-empty">No messages yet. Say hello to your opponent.</p>
+          <p className="chat-empty">{copy.chatEmpty}</p>
         ) : messages.map((message) => (
           <div
             className={`chat-message ${message.playerKey === playerKey ? "is-mine" : ""}`}
             key={message.id}
           >
-            <strong>{message.playerKey === playerKey ? "You" : message.playerName}</strong>
+            <strong>{message.playerKey === playerKey ? copy.you : message.playerName}</strong>
             <p>{message.message}</p>
           </div>
         ))}
       </div>
       <form className="chat-form" onSubmit={submit}>
         <input
-          aria-label="Chat message"
+          aria-label={copy.chatMessage}
           disabled={disabled || busy}
           maxLength={500}
           onChange={(event) => {
             setText(event.target.value);
             if (error) setError(null);
           }}
-          placeholder={disabled ? "Chat unavailable" : "Write a message…"}
+          placeholder={disabled ? copy.chatUnavailable : copy.writeMessage}
           value={text}
         />
-        <button aria-label="Send message" disabled={disabled || busy || !text.trim()} type="submit">
+        <button aria-label={copy.sendMessage} disabled={disabled || busy || !text.trim()} type="submit">
           <Send size={17} />
         </button>
       </form>

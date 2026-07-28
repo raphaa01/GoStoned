@@ -4,12 +4,15 @@ import { LogOut, ShieldCheck, Wifi } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
 import type { GameState, Stone } from "@/lib/game/types";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
@@ -19,6 +22,8 @@ type Confirmation = "resign" | "leave" | null;
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const router = useRouter();
+  const { dictionary, href } = useI18n();
+  const copy = dictionary.game;
   const {
     playerKey,
     loading,
@@ -102,7 +107,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       } catch (error) {
         requestError = error;
         if (!gameLoaded && gameGuard.isCurrent(signal)) {
-          setError(error instanceof Error ? error.message : "Could not load the game.");
+          setError(localizedApiError(dictionary, error, copy.loadFailed));
         }
       } finally {
         if (!cancelled && gameGuard.isCurrent(signal)) {
@@ -140,7 +145,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       window.clearTimeout(gameTimer);
       window.clearTimeout(chatTimer);
     };
-  }, [playerKey, refreshChat, refreshGame]);
+  }, [copy.loadFailed, dictionary, playerKey, refreshChat, refreshGame]);
 
   const yourColor: Stone | null =
     game && playerKey
@@ -171,7 +176,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       const data = await readApi<{ game: GameState }>(response);
       acceptGameState(data.game);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Move failed.");
+      setError(localizedApiError(dictionary, requestError, copy.moveFailed));
       await refreshGame().catch(() => undefined);
     } finally {
       setBusy(false);
@@ -190,7 +195,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setConfirmation(null);
       acceptGameState(data.game);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not resign.");
+      setError(localizedApiError(dictionary, requestError, copy.resignFailed));
     } finally {
       setBusy(false);
     }
@@ -215,7 +220,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       const data = await readApi<{ game: GameState }>(response);
       acceptGameState(data.game);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Scoring action failed.");
+      setError(localizedApiError(dictionary, requestError, copy.scoringFailed));
       await refreshGame().catch(() => undefined);
     } finally {
       setBusy(false);
@@ -240,7 +245,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         method: "DELETE",
       }).catch(() => undefined);
     }
-    router.replace(destination);
+    router.replace(href(destination));
   }
 
   async function leaveGameRoom() {
@@ -254,28 +259,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       await leaveGameAndQueue(game.id);
       setConfirmation(null);
-      router.replace("/");
+      router.replace(href("/"));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not leave the game.");
+      setError(localizedApiError(dictionary, requestError, copy.leaveFailed));
       setBusy(false);
     }
   }
 
   if (loading || (!playerKey && !identityError) || (!game && !error && !identityError)) {
-    return <main className="game-loading"><span className="spin-ring" /><p>Loading game…</p></main>;
+    return <main className="game-loading"><span className="spin-ring" /><p>{copy.loading}</p></main>;
   }
 
   if (!playerKey || !game) {
     return (
       <main className="game-loading">
-        <h1>Game unavailable</h1>
-        <p>{identityError ?? error ?? "This game could not be loaded."}</p>
+        <h1>{copy.unavailable}</h1>
+        <p>{identityError ?? error ?? copy.unavailableDescription}</p>
         <button
           className="button button--primary"
-          onClick={identityError ? retryIdentity : () => router.replace("/play")}
+          onClick={identityError ? retryIdentity : () => router.replace(href("/play"))}
           type="button"
         >
-          {identityError ? "Retry player session" : "Return to play"}
+          {identityError ? copy.retrySession : copy.returnToPlay}
         </button>
       </main>
     );
@@ -288,11 +293,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <span className="brand-mark"><span /><span /></span>
           GoStone
         </span>
-        <span className="game-security"><ShieldCheck size={15} /> Server verified</span>
-        <span className="game-connection"><Wifi size={15} /> Live</span>
+        <span className="game-security"><ShieldCheck size={15} /> {copy.serverVerified}</span>
+        <span className="game-connection"><Wifi size={15} /> {copy.live}</span>
+        <LanguageSwitcher compact />
         <button className="game-exit" disabled={busy} onClick={leaveGameRoom} type="button">
           <LogOut size={15} />
-          Leave game
+          {copy.leaveGame}
         </button>
       </header>
 
@@ -301,14 +307,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <div className="focused-board-status">
             <strong>
               {canMove
-                ? "Your turn"
+                ? copy.yourTurn
                 : game.status === "finished"
-                  ? `Game over · ${game.result}`
+                  ? `${copy.gameOver} · ${game.result}`
                   : game.phase === "scoring"
-                    ? "Confirm the final position"
-                    : "Opponent's turn"}
+                    ? copy.confirmFinalPosition
+                    : copy.opponentTurn}
             </strong>
-            <span>{game.boardSize}×{game.boardSize} · Move {game.moveCount}</span>
+            <span>{game.boardSize}×{game.boardSize} · {copy.move} {game.moveCount}</span>
           </div>
           <div className="focused-board-wrap">
             <GoBoard
@@ -332,8 +338,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
           {game.phase === "scoring" || game.boardSize > 9 ? (
             <p className="scoring-board-hint">
               {game.phase === "scoring"
-                ? "Tap a stone to mark its whole group. On a small screen, swipe the enlarged board for precision."
-                : "On a small screen, swipe the enlarged board for precise stone placement."}
+                ? copy.scoringBoardHint
+                : copy.boardHint}
             </p>
           ) : null}
           {error ? <p className="play-error" role="alert">{error}</p> : null}
@@ -366,16 +372,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
       </main>
       <ConfirmModal
         busy={busy}
-        confirmLabel={confirmation === "resign" ? "Resign game" : "Leave game"}
+        confirmLabel={confirmation === "resign" ? copy.resignGame : copy.leaveGame}
         description={
           confirmation === "resign"
-            ? "Your opponent will win and this result will be saved."
-            : "Leaving now counts as a resignation. Your opponent will win."
+            ? copy.resignDescription
+            : copy.leaveDescription
         }
         onCancel={() => setConfirmation(null)}
         onConfirm={confirmation === "resign" ? resign : leaveGameRoom}
         open={confirmation !== null}
-        title={confirmation === "resign" ? "Resign this game?" : "Leave this game?"}
+        title={confirmation === "resign" ? copy.resignTitle : copy.leaveTitle}
       />
       <GameResultModal
         game={game}

@@ -1,5 +1,5 @@
 import { query } from "@/lib/db";
-import { hashPassword, normalizeUsername, validatePassword, verifyPassword } from "./password";
+import { hashPassword, normalizeUsername, validatePasswordIssue, verifyPassword } from "./password";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
 
@@ -26,8 +26,8 @@ export function validateCredentials(usernameValue: unknown, passwordValue: unkno
       "invalid_username",
     );
   }
-  const passwordError = validatePassword(passwordValue);
-  if (passwordError) throw new AuthError(passwordError, 400, "invalid_password");
+  const passwordIssue = validatePasswordIssue(passwordValue);
+  if (passwordIssue) throw new AuthError(passwordIssue.message, 400, passwordIssue.code);
   return { username, password: passwordValue as string };
 }
 

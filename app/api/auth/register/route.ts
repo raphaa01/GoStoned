@@ -51,6 +51,9 @@ export async function POST(request: NextRequest) {
       return apiError(error);
     }
     console.error("Registration failed:", error);
-    return noStoreJson({ ok: false, error: "Could not create the account." }, { status: 500 });
+    return noStoreJson(
+      { ok: false, error: "Could not create the account.", code: "register_failed" },
+      { status: 500 },
+    );
   }
 }

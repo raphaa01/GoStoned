@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { GuestIdentity } from "@/lib/auth/guestSession";
 import { readApi } from "@/lib/client/api";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 
 export function usePlayerIdentity() {
+  const { dictionary } = useI18n();
   const {
     user,
     loading: authLoading,
@@ -23,11 +26,15 @@ export function usePlayerIdentity() {
       .then((body) => setGuest(body.identity))
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setGuestError(error instanceof Error ? error.message : "Could not prepare a guest session.");
+          setGuestError(localizedApiError(
+            dictionary,
+            error,
+            dictionary.apiErrors.guest_session_failed,
+          ));
         }
       });
     return () => controller.abort();
-  }, [authError, authLoading, guest, guestError, user]);
+  }, [authError, authLoading, dictionary, guest, guestError, user]);
 
   const retry = useCallback(() => {
     if (authError) {

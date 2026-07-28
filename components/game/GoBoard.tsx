@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import type { Board, Position } from "@/lib/game/types";
 
 type GoBoardProps = {
@@ -30,6 +31,8 @@ export function GoBoard({
   interactionMode = "play",
   deadStones = [],
 }: GoBoardProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
   const instructionsId = useId();
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(() => {
@@ -55,8 +58,8 @@ export function GoBoard({
       data-interaction-mode={interactionMode}
     >
       <span className="sr-only" id={instructionsId}>
-        Use the arrow keys to move across intersections. Press Enter or Space to
-        {interactionMode === "mark-dead" ? " mark or restore a stone group." : " place a stone when available."}
+        {copy.boardInstructions}{" "}
+        {interactionMode === "mark-dead" ? copy.markInstruction : copy.playInstruction}
       </span>
       <div className="go-board-grid" aria-hidden="true">
         {gridLines.map((_, index) => (
@@ -77,7 +80,7 @@ export function GoBoard({
       <div
         aria-colcount={boardSize}
         aria-describedby={instructionsId}
-        aria-label={`${boardSize} by ${boardSize} Go board`}
+        aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
         aria-rowcount={boardSize}
         className="go-board-points"
         role="grid"
@@ -88,6 +91,7 @@ export function GoBoard({
               const index = y * boardSize + x;
               const stone = boardState[y]?.[x] ?? null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
+              const stoneColor = stone === "black" ? copy.black : copy.white;
               const actionable =
                 !disabled && (interactionMode === "play" ? !stone : Boolean(stone));
               const position = (value: number) =>
@@ -102,12 +106,12 @@ export function GoBoard({
                   aria-disabled={!actionable}
                   aria-label={
                     interactionMode === "mark-dead" && stone
-                      ? `${markedDead ? "Restore" : "Mark"} ${stone} group at column ${x + 1}, row ${y + 1} ${markedDead ? "as alive" : "as dead"}`
+                      ? `${markedDead ? copy.restore : copy.mark} ${stoneColor} ${copy.groupAt} ${x + 1}, ${copy.row} ${y + 1} ${markedDead ? copy.asAlive : copy.asDead}`
                       : interactionMode === "mark-dead"
-                      ? `Empty intersection at column ${x + 1}, row ${y + 1}`
+                      ? `${copy.emptyIntersection} ${x + 1}, ${copy.row} ${y + 1}`
                       : stone
-                      ? `${stone} stone at column ${x + 1}, row ${y + 1}`
-                      : `Place stone at column ${x + 1}, row ${y + 1}`
+                      ? `${stoneColor} ${copy.stoneAt} ${x + 1}, ${copy.row} ${y + 1}`
+                      : `${copy.placeStone} ${x + 1}, ${copy.row} ${y + 1}`
                   }
                   aria-selected={interactionMode === "mark-dead" && stone ? markedDead : undefined}
                   className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""}`}
