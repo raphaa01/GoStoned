@@ -89,6 +89,17 @@ async function postGame(
   }, cookie, expectedPlayerKey);
 }
 
+async function postBodylessGame(
+  gameId: string,
+  suffix: string,
+  cookie: string,
+  expectedPlayerKey: string,
+) {
+  return api(`/api/games/${gameId}${suffix}`, {
+    method: "POST",
+  }, cookie, expectedPlayerKey);
+}
+
 async function setupScoringFixture(): Promise<ScoringFixture> {
   const black = await createGuest();
   const white = await createGuest();
@@ -422,10 +433,9 @@ async function run() {
     postGame(confirmResign.gameId, "/scoring/confirm", {
       expectedRevision: confirmResign.revision,
     }, confirmResign.white.cookie, confirmResign.white.playerKey),
-    postGame(
+    postBodylessGame(
       confirmResign.gameId,
       "/resign",
-      {},
       confirmResign.white.cookie,
       confirmResign.white.playerKey,
     ),
