@@ -1,4 +1,9 @@
+import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +18,9 @@ type GameSummaryRow = {
   waiting_players: string;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.publicGameSummary);
     const result = await query<GameSummaryRow>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'active' AND board_size = 9)::text AS active_9,

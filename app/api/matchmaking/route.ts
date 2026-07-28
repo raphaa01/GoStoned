@@ -1,5 +1,11 @@
 import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  consumeEphemeralPolicyRateLimit,
+  consumePolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { isTimeControlId } from "@/lib/game/timeControls";
 import {
@@ -14,7 +20,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
+    consumeEphemeralPolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingRead, playerKey);
     const matchmaking = await getMatchmakingStatus(playerKey);
     return noStoreJson({ ok: true, matchmaking });
   } catch (error) {
@@ -24,6 +32,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoinBurst, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoin, playerKey);
     const body = (await request.json()) as {
       boardSize?: unknown;
       timeControl?: unknown;
@@ -34,7 +46,6 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const playerKey = await resolvePlayerKey(request);
     const matchmaking = await joinMatchmaking(playerKey, body.boardSize, body.timeControl);
     return noStoreJson({ ok: true, matchmaking });
   } catch (error) {
@@ -44,7 +55,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingCancel, playerKey);
     await cancelMatchmaking(playerKey);
     return noStoreJson({ ok: true });
   } catch (error) {

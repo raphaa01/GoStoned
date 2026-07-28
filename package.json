@@ -9,10 +9,11 @@
     "start": "next start",
     "lint": "eslint .",
     "mvp:check": "tsx scripts/check-mvp.ts",
-    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/moderation/*.test.ts",
+    "test": "tsx --test lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
+    "test:rate-limit": "tsx scripts/smoke-rate-limit.ts",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts"
   },

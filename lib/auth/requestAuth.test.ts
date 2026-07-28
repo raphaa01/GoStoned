@@ -10,7 +10,12 @@ import {
   serializeGuestIdentity,
 } from "./guestSession";
 import { resolvePlayerKey } from "./requestAuth";
-import { SESSION_COOKIE } from "./session";
+import {
+  deleteSession,
+  getSessionUser,
+  isSessionTokenFormat,
+  SESSION_COOKIE,
+} from "./session";
 import type { AuthUser } from "./types";
 
 const guestA = serializeGuestIdentity("11111111-1111-4111-8111-111111111111");
@@ -107,4 +112,43 @@ test("guest tokens are hashed and use hardened cookie options", () => {
     maxAge: 2_592_000,
     priority: "high",
   });
+});
+
+test("logout skips malformed tokens but always revokes valid-shaped sessions", async () => {
+  const observedHashes: string[] = [];
+  const execute = async (tokenHash: string) => {
+    observedHashes.push(tokenHash);
+  };
+
+  await deleteSession(undefined, execute);
+  await deleteSession("attacker-controlled", execute);
+  assert.equal(observedHashes.length, 0);
+  assert.equal(isSessionTokenFormat("attacker-controlled"), false);
+
+  const validToken = "a".repeat(43);
+  assert.equal(isSessionTokenFormat(validToken), true);
+  await deleteSession(validToken, execute);
+  assert.equal(observedHashes.length, 1);
+  assert.match(observedHashes[0], /^[0-9a-f]{64}$/);
+  assert.notEqual(observedHashes[0], validToken);
+});
+
+test("account session reads validate token shape and do not require a write", async () => {
+  let lookupCount = 0;
+  const execute = async (tokenHash: string) => {
+    lookupCount += 1;
+    assert.match(tokenHash, /^[0-9a-f]{64}$/);
+    return {
+      id: "44444444-4444-4444-8444-444444444444",
+      username: "quiet_reader",
+      display_name: "Quiet Reader",
+      expires_at: new Date(Date.now() + 60_000),
+    };
+  };
+
+  assert.equal(await getSessionUser("invalid", execute), null);
+  assert.equal(lookupCount, 0);
+  const user = await getSessionUser("b".repeat(43), execute);
+  assert.equal(lookupCount, 1);
+  assert.equal(user?.playerKey, "user:44444444-4444-4444-8444-444444444444");
 });

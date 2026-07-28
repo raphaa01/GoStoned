@@ -1,7 +1,12 @@
 import { NextRequest } from "next/server";
-import { noStoreJson } from "@/lib/api/responses";
+import { apiError, noStoreJson } from "@/lib/api/responses";
 import { AuthError, registerAccount, validateCredentials } from "@/lib/auth/accountService";
-import { consumeRateLimit, RateLimitError } from "@/lib/auth/rateLimit";
+import {
+  consumeIpPolicyRateLimit,
+  consumeRateLimit,
+  RATE_LIMIT_POLICIES,
+  RateLimitError,
+} from "@/lib/auth/rateLimit";
 import {
   createSession,
   SESSION_COOKIE,
@@ -15,7 +20,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { username?: unknown; password?: unknown };
     const credentials = validateCredentials(body.username, body.password);
-    await consumeRateLimit(request, "register", "all-accounts", 5, 60);
+    await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.registerAddress);
+    await consumeRateLimit(
+      request,
+      RATE_LIMIT_POLICIES.registerTarget.scope,
+      credentials.username,
+      RATE_LIMIT_POLICIES.registerTarget.limit,
+      RATE_LIMIT_POLICIES.registerTarget.windowMinutes,
+    );
     const user = await registerAccount(credentials.username, credentials.password);
     const token = await createSession(user.id);
     const response = noStoreJson({ ok: true, user }, { status: 201 });
@@ -36,7 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (error instanceof RateLimitError) {
-      return noStoreJson({ ok: false, error: error.message }, { status: 429 });
+      return apiError(error);
     }
     console.error("Registration failed:", error);
     return noStoreJson({ ok: false, error: "Could not create the account." }, { status: 500 });

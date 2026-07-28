@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  consumePolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { submitMove } from "@/lib/game/gameService";
 
@@ -11,12 +16,15 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.moveBurst, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.move, playerKey);
     const body = (await request.json()) as {
       x?: unknown;
       y?: unknown;
       isPass?: unknown;
     };
-    const playerKey = await resolvePlayerKey(request);
     if (body.isPass !== true && (!Number.isInteger(body.x) || !Number.isInteger(body.y))) {
       return noStoreJson({ ok: false, error: "Integer x and y are required." }, { status: 400 });
     }

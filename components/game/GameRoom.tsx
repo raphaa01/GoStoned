@@ -7,6 +7,7 @@ import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
+import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
 import type { GameState, Stone } from "@/lib/game/types";
 import { ChatPanel } from "./ChatPanel";
@@ -48,20 +49,22 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }, []);
 
-  const refreshGame = useCallback(async () => {
+  const refreshGame = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey) return;
-    const response = await fetch(`/api/games/${gameId}`, { cache: "no-store" });
+    const response = await fetch(`/api/games/${gameId}`, { cache: "no-store", signal });
     const data = await readApi<{ game: GameState }>(response);
+    if (signal?.aborted) return;
     acceptGameState(data.game);
   }, [acceptGameState, gameId, playerKey]);
 
-  const refreshChat = useCallback(async () => {
+  const refreshChat = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey) return;
     const response = await fetch(
       `/api/games/${gameId}/chat?after=${lastMessageId.current}`,
-      { cache: "no-store" },
+      { cache: "no-store", signal },
     );
     const data = await readApi<{ messages: GameMessage[] }>(response);
+    if (signal?.aborted) return;
     if (data.messages.length > 0) {
       lastMessageId.current = Number(data.messages[data.messages.length - 1].id);
       setMessages((current) => {
@@ -73,17 +76,60 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     if (!playerKey) return;
-    const initial = window.setTimeout(() => {
-      Promise.all([refreshGame(), refreshChat()]).catch((requestError: unknown) => {
-        setError(requestError instanceof Error ? requestError.message : "Could not load the game.");
-      });
-    }, 0);
-    const gameInterval = window.setInterval(() => refreshGame().catch(() => undefined), 900);
-    const chatInterval = window.setInterval(() => refreshChat().catch(() => undefined), 800);
+    let cancelled = false;
+    let gameLoaded = false;
+    let gameTimer: number;
+    let chatTimer: number;
+    const gameGuard = createPollingRequestGuard();
+    const chatGuard = createPollingRequestGuard();
+
+    const pollGame = async () => {
+      let requestError: unknown = null;
+      const signal = gameGuard.start();
+      try {
+        await refreshGame(signal);
+        if (!gameLoaded && gameGuard.isCurrent(signal)) setError(null);
+        gameLoaded = true;
+      } catch (error) {
+        requestError = error;
+        if (!gameLoaded && gameGuard.isCurrent(signal)) {
+          setError(error instanceof Error ? error.message : "Could not load the game.");
+        }
+      } finally {
+        if (!cancelled && gameGuard.isCurrent(signal)) {
+          gameTimer = window.setTimeout(
+            pollGame,
+            nextPollDelay(900, requestError, document.hidden),
+          );
+        }
+      }
+    };
+
+    const pollChat = async () => {
+      let requestError: unknown = null;
+      const signal = chatGuard.start();
+      try {
+        await refreshChat(signal);
+      } catch (error) {
+        requestError = error;
+      } finally {
+        if (!cancelled && chatGuard.isCurrent(signal)) {
+          chatTimer = window.setTimeout(
+            pollChat,
+            nextPollDelay(800, requestError, document.hidden),
+          );
+        }
+      }
+    };
+
+    gameTimer = window.setTimeout(pollGame, 0);
+    chatTimer = window.setTimeout(pollChat, 0);
     return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(gameInterval);
-      window.clearInterval(chatInterval);
+      cancelled = true;
+      gameGuard.cancel();
+      chatGuard.cancel();
+      window.clearTimeout(gameTimer);
+      window.clearTimeout(chatTimer);
     };
   }, [playerKey, refreshChat, refreshGame]);
 

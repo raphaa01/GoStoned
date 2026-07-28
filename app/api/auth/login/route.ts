@@ -1,11 +1,17 @@
 import { NextRequest } from "next/server";
-import { noStoreJson } from "@/lib/api/responses";
+import { apiError, noStoreJson } from "@/lib/api/responses";
 import {
   AuthError,
   authenticateAccount,
   validateCredentials,
 } from "@/lib/auth/accountService";
-import { clearRateLimit, consumeRateLimit, RateLimitError } from "@/lib/auth/rateLimit";
+import {
+  clearRateLimit,
+  consumeIpPolicyRateLimit,
+  consumeRateLimit,
+  RATE_LIMIT_POLICIES,
+  RateLimitError,
+} from "@/lib/auth/rateLimit";
 import {
   createSession,
   SESSION_COOKIE,
@@ -19,12 +25,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { username?: unknown; password?: unknown };
     const credentials = validateCredentials(body.username, body.password);
+    await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.loginAddress);
     const rateLimitKey = await consumeRateLimit(
       request,
-      "login",
+      RATE_LIMIT_POLICIES.loginTarget.scope,
       credentials.username,
-      8,
-      15,
+      RATE_LIMIT_POLICIES.loginTarget.limit,
+      RATE_LIMIT_POLICIES.loginTarget.windowMinutes,
     );
     const user = await authenticateAccount(credentials.username, credentials.password);
     await clearRateLimit(rateLimitKey);
@@ -47,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (error instanceof RateLimitError) {
-      return noStoreJson({ ok: false, error: error.message }, { status: 429 });
+      return apiError(error);
     }
     console.error("Login failed:", error);
     return noStoreJson({ ok: false, error: "Could not log in." }, { status: 500 });

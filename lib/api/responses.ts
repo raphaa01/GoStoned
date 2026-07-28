@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { RateLimitError } from "@/lib/auth/rateLimit";
 import { GameServiceError } from "@/lib/game/gameService";
 
 export function noStoreJson(body: unknown, init?: ResponseInit) {
@@ -8,6 +9,20 @@ export function noStoreJson(body: unknown, init?: ResponseInit) {
 }
 
 export function apiError(error: unknown) {
+  if (error instanceof RateLimitError) {
+    return noStoreJson(
+      {
+        ok: false,
+        error: error.message,
+        code: "rate_limited",
+        retryAfterSeconds: error.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(error.retryAfterSeconds) },
+      },
+    );
+  }
   if (error instanceof GameServiceError) {
     return noStoreJson(
       { ok: false, error: error.message, code: error.code },

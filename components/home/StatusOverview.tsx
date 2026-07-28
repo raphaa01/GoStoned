@@ -24,9 +24,11 @@ export function StatusOverview() {
         if (!response.ok) throw new Error("Backend unavailable");
         return response.json();
       }),
-      fetch("/api/db-health").then((response) => {
+      fetch("/api/db-health").then(async (response) => {
+        if (response.status === 429) return { limited: true };
         if (!response.ok) throw new Error("Database unavailable");
-        return response.json();
+        await response.json();
+        return { limited: false };
       }),
       fetch("/api/games", { cache: "no-store" }).then(async (response) => {
         if (!response.ok) throw new Error("Game summary unavailable");
@@ -35,7 +37,11 @@ export function StatusOverview() {
     ]).then(([backendResult, databaseResult, gamesResult]) => {
       if (!active) return;
       setBackend(backendResult.status === "fulfilled" ? "online" : "offline");
-      setDatabase(databaseResult.status === "fulfilled" ? "online" : "offline");
+      setDatabase(
+        databaseResult.status === "fulfilled"
+          ? databaseResult.value.limited ? "checking" : "online"
+          : "offline",
+      );
       if (gamesResult.status === "fulfilled") setSummary(gamesResult.value.summary);
     });
     return () => {
