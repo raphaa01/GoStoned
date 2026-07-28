@@ -96,18 +96,20 @@ async function run() {
   });
   assert.equal(endedSession.body.user, null);
 
+  const firstLogin = await request(
+    "/api/auth/login",
+    json("POST", { username: firstUsername, password }),
+  );
+  assert.ok(firstLogin.cookie);
+
+  // Keep the deliberate failure after the valid login: a failed attempt correctly
+  // activates the per-account burst window for an immediate retry.
   const wrongLogin = await request(
     "/api/auth/login",
     json("POST", { username: firstUsername, password: "definitely-wrong" }),
     401,
   );
   assert.equal(wrongLogin.body.ok, false);
-
-  const firstLogin = await request(
-    "/api/auth/login",
-    json("POST", { username: firstUsername, password }),
-  );
-  assert.ok(firstLogin.cookie);
 
   const registeredSecond = await request(
     "/api/auth/register",
