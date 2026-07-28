@@ -9,6 +9,7 @@ import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { resignGame } from "@/lib/game/gameService";
 import {
+  assertEmptyGameMutationBody,
   assertGameMutationMetadata,
   gameMutationRouteError,
 } from "@/lib/game/gameMutationRequest";
@@ -24,6 +25,7 @@ export async function POST(
     const { gameId } = await context.params;
     assertGameMutationMetadata(request, gameId, "none");
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    await assertEmptyGameMutationBody(request);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.resignBurst, playerKey);
