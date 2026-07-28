@@ -253,7 +253,6 @@ async function run() {
         [EXPECTED_PLAYER_HEADER]: outsider.playerKey,
       },
       body: JSON.stringify({
-        playerKey: black.playerKey,
         expectedRevision: firstScoringRevision,
       }),
     },
