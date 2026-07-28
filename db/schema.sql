@@ -66,9 +66,10 @@ CREATE TABLE IF NOT EXISTS moves (
   x INT,
   y INT,
   is_pass BOOLEAN DEFAULT false,
-  board_hash TEXT,
+  board_hash TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE (game_id, move_number),
+  CONSTRAINT moves_board_hash_required_check CHECK (board_hash IS NOT NULL),
   CHECK (
     (is_pass = true AND x IS NULL AND y IS NULL)
     OR
@@ -452,6 +453,23 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 0;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 ALTER TABLE games ALTER COLUMN komi SET DEFAULT 7.5;
 ALTER TABLE moves ADD COLUMN IF NOT EXISTS board_hash TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'moves_board_hash_required_check'
+       AND conrelid = 'public.moves'::regclass
+  ) THEN
+    -- Historical rows from before migration 002 may remain NULL. PostgreSQL
+    -- still enforces a NOT VALID CHECK for every subsequent insert or update.
+    ALTER TABLE public.moves
+      ADD CONSTRAINT moves_board_hash_required_check
+      CHECK (board_hash IS NOT NULL) NOT VALID;
+  END IF;
+END
+$$;
 ALTER TABLE matchmaking_queue ADD COLUMN IF NOT EXISTS time_control TEXT NOT NULL DEFAULT 'rapid';
 ALTER TABLE matchmaking_queue
   ADD COLUMN IF NOT EXISTS rules_profile TEXT NOT NULL

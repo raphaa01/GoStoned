@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
 import { isLocalDatabase } from "../lib/env";
+import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -134,10 +135,13 @@ async function assertLegacyDeploymentWindowCompatibility() {
 
   // Simulate a move accepted by the previous application after migration 008:
   // it writes the move log but does not maintain the expanded lifecycle fields.
+  const legacyMove = applyMove(createEmptyBoard(9), "black", 2, 2);
+  assert.equal(legacyMove.ok, true);
+  if (!legacyMove.ok) throw new Error("The legacy smoke move must be legal.");
   await query(
     `INSERT INTO moves (game_id, move_number, color, x, y, is_pass, board_hash)
-     VALUES ($1, 1, 'black', 2, 2, FALSE, 'legacy-deployment-window')`,
-    [gameId],
+     VALUES ($1, 1, 'black', 2, 2, FALSE, $2)`,
+    [gameId, boardHash(legacyMove.board)],
   );
 
   const loaded = await api(`/api/games/${gameId}`, { method: "GET" }, white.cookie);

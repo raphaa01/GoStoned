@@ -73,7 +73,15 @@ const requiredConstraintSignatures = [
   "matchmaking_queue_rules_profile_compatibility_check:matchmaking_queue:c",
 ] as const;
 
+const requiredRolloutConstraintSignatures = [
+  "moves_board_hash_required_check:moves:c",
+] as const;
+
 const requiredConstraintDefinitions = {
+  moves_board_hash_required_check: {
+    includes: ["CHECK ((board_hash IS NOT NULL))"],
+    excludes: [],
+  },
   games_rules_identity_unique: {
     includes: [
       "UNIQUE (id, rules, rules_profile, scoring_method, komi, handicap)",
@@ -171,6 +179,7 @@ async function checkMvp() {
     queue_columns: string[];
     japanese_scoring_columns: string[];
     constraint_signatures: string[];
+    rollout_constraint_signatures: string[];
     constraint_definitions: Record<string, string>;
     trigger_signatures: string[];
     trigger_definitions: Record<string, string>;
@@ -233,6 +242,17 @@ async function checkMvp() {
                  AND constraint_row.convalidated
                ORDER BY constraint_row.conname
             ) AS constraint_signatures,
+            ARRAY(
+              SELECT constraint_row.conname || ':' || relation.relname || ':'
+                     || constraint_row.contype::text
+                FROM pg_constraint constraint_row
+                JOIN pg_class relation ON relation.oid = constraint_row.conrelid
+                JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+               WHERE constraint_row.conname || ':' || relation.relname || ':'
+                     || constraint_row.contype::text = ANY($12::text[])
+                 AND namespace.nspname = 'public'
+               ORDER BY constraint_row.conname
+            ) AS rollout_constraint_signatures,
             (
               SELECT COALESCE(
                 JSONB_OBJECT_AGG(
@@ -244,6 +264,10 @@ async function checkMvp() {
                 FROM pg_constraint constraint_row
                WHERE constraint_row.conname = ANY($10::text[])
                  AND constraint_row.connamespace = 'public'::regnamespace
+                 AND (
+                   constraint_row.conname <> 'moves_board_hash_required_check'
+                   OR constraint_row.conrelid = 'public.moves'::regclass
+                 )
             ) AS constraint_definitions,
             ARRAY(
               SELECT trigger_row.tgname || ':' || relation.relname || ':'
@@ -341,6 +365,7 @@ async function checkMvp() {
       requiredGuardFunctions,
       Object.keys(requiredConstraintDefinitions),
       Object.keys(requiredTriggerDefinitions),
+      requiredRolloutConstraintSignatures,
     ],
   );
 
@@ -389,6 +414,14 @@ async function checkMvp() {
   if (absentConstraints.length > 0) {
     throw new Error(
       `Database persistence invariants are incomplete. Missing constraints: ${absentConstraints.join(", ")}`,
+    );
+  }
+  const absentRolloutConstraints = requiredRolloutConstraintSignatures.filter(
+    (constraint) => !row.rollout_constraint_signatures.includes(constraint),
+  );
+  if (absentRolloutConstraints.length > 0) {
+    throw new Error(
+      `Database rollout invariants are incomplete. Missing constraints: ${absentRolloutConstraints.join(", ")}`,
     );
   }
   for (const [name, contract] of Object.entries(requiredConstraintDefinitions)) {
