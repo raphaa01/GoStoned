@@ -128,6 +128,7 @@ export const de = {
     guest_session_failed: "Eine sichere Gastsitzung konnte nicht vorbereitet werden.",
     authentication_required: "Bitte melde dich zuerst an.",
     session_expired: "Deine Spielersitzung ist abgelaufen. Bitte versuche es erneut.",
+    invalid_matchmaking_request: "Wähle eine unterstützte Brettgröße und Bedenkzeit.",
     game_not_found: "Die Partie wurde nicht gefunden.",
     not_participant: "Du nimmst nicht an dieser Partie teil.",
     invalid_scoring_revision: "Eine gültige Wertungsversion ist erforderlich.",
