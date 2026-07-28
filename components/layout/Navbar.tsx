@@ -49,7 +49,22 @@ export function Navbar() {
   }
 
   return (
-    <header className="mobile-nav">
+    <header
+      className="mobile-nav"
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (!open || (nextTarget instanceof Node && event.currentTarget.contains(nextTarget))) return;
+        setOpen(false);
+        if (!(nextTarget instanceof HTMLElement)) return;
+        window.requestAnimationFrame(() => {
+          if (!nextTarget.isConnected || document.activeElement !== nextTarget) return;
+          const bounds = nextTarget.getBoundingClientRect();
+          if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+            nextTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
+        });
+      }}
+    >
       <Link className="brand" href={href("/")} aria-label={dictionary.nav.homeLabel} onClick={() => setOpen(false)}>
         <span className="brand-mark"><span /><span /></span>
         <span>GoStone</span>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { SkipLink } from "@/components/layout/SkipLink";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ApiRequestError, readApi } from "@/lib/client/api";
@@ -1086,53 +1087,60 @@ export function GameRoom({ gameId }: { gameId: string }) {
       && (connectionState.kind === "connecting" || connectionState.kind === "reconnecting"))
   ) {
     return (
-      <main aria-busy="true" className="game-loading">
-        <span className="spin-ring" />
-        <p aria-atomic="true" aria-live="polite" role="status">
-          {connectionState.kind === "reconnecting" ? connectionLabel : copy.loading}
-        </p>
-        {connectionDescription ? <small>{connectionDescription}</small> : null}
-      </main>
+      <>
+        <SkipLink />
+        <main aria-busy="true" className="game-loading" id="main-content" tabIndex={-1}>
+          <span className="spin-ring" />
+          <p aria-atomic="true" aria-live="polite" role="status">
+            {connectionState.kind === "reconnecting" ? connectionLabel : copy.loading}
+          </p>
+          {connectionDescription ? <small>{connectionDescription}</small> : null}
+        </main>
+      </>
     );
   }
 
   if (!playerKey || !game) {
     const sessionExpired = connectionState.kind === "session_expired";
     return (
-      <main className="game-loading">
-        <h1>{sessionExpired ? copy.sessionExpired : copy.unavailable}</h1>
-        <p role="alert">
-          {identityError
-            ?? (sessionExpired ? connectionDescription : null)
-            ?? error
-            ?? copy.unavailableDescription}
-        </p>
-        <button
-          className="button button--primary"
-          onClick={identityError
-            ? retryIdentity
-            : identityChanged
-              ? refreshChangedIdentity
-            : sessionExpired
-              ? recoverExpiredSession
-              : () => router.replace(href("/play"))}
-          ref={recoveryAction}
-          type="button"
-        >
-          {identityError
-            ? copy.retrySession
-            : identityChanged
-              ? dictionary.play.refreshSession
-            : sessionExpired
-              ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
-              : copy.returnToPlay}
-        </button>
-      </main>
+      <>
+        <SkipLink />
+        <main className="game-loading" id="main-content" tabIndex={-1}>
+          <h1>{sessionExpired ? copy.sessionExpired : copy.unavailable}</h1>
+          <p role="alert">
+            {identityError
+              ?? (sessionExpired ? connectionDescription : null)
+              ?? error
+              ?? copy.unavailableDescription}
+          </p>
+          <button
+            className="button button--primary"
+            onClick={identityError
+              ? retryIdentity
+              : identityChanged
+                ? refreshChangedIdentity
+              : sessionExpired
+                ? recoverExpiredSession
+                : () => router.replace(href("/play"))}
+            ref={recoveryAction}
+            type="button"
+          >
+            {identityError
+              ? copy.retrySession
+              : identityChanged
+                ? dictionary.play.refreshSession
+              : sessionExpired
+                ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
+                : copy.returnToPlay}
+          </button>
+        </main>
+      </>
     );
   }
 
   return (
     <div className="focused-game-shell">
+      <SkipLink />
       <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
         {gameAnnouncement}
       </p>
@@ -1175,7 +1183,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         </button>
       </header>
 
-      <main className="focused-game-layout">
+      <main className="focused-game-layout" id="main-content" tabIndex={-1}>
         {connectionDescription ? (
           <section className="game-connection-notice" data-state={connectionDataState}>
             <ClockStatusIcon aria-hidden="true" size={18} />
