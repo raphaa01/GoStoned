@@ -42,11 +42,23 @@ export async function createSession(userId: string): Promise<string> {
   const tokenHash = hashToken(token);
 
   await withTransaction(async (client) => {
-    await client.query("DELETE FROM user_sessions WHERE expires_at <= NOW()");
     await client.query(
       `INSERT INTO user_sessions (user_id, token_hash, expires_at)
        VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
       [userId, tokenHash],
+    );
+    await client.query(
+      `WITH expired_sessions AS MATERIALIZED (
+         SELECT user_session.id
+           FROM user_sessions AS user_session
+          WHERE user_session.expires_at <= NOW()
+          ORDER BY user_session.expires_at, user_session.id
+          LIMIT 200
+          FOR UPDATE OF user_session SKIP LOCKED
+       )
+       DELETE FROM user_sessions AS user_session
+       USING expired_sessions AS expired
+       WHERE user_session.id = expired.id`,
     );
   });
 
