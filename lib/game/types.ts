@@ -77,7 +77,7 @@ export type GameScoringState = {
   deadStones: Position[];
   blackConfirmed: boolean;
   whiteConfirmed: boolean;
-  preview: Score;
+  preview: ChineseAreaScore;
   finalizedAt: string | null;
   expiresAt: string;
 };
@@ -99,7 +99,7 @@ export type GameClockState = {
   white: PlayerClockState;
 };
 
-export type Score = {
+export type ChineseAreaScore = {
   black: number;
   white: number;
   blackStones: number;
@@ -111,3 +111,6 @@ export type Score = {
   margin: number;
   result: string;
 };
+
+/** @deprecated Use the scoring-rule-specific ChineseAreaScore name. */
+export type Score = ChineseAreaScore;

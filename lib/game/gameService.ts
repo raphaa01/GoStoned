@@ -10,6 +10,7 @@ import {
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import {
   isRepeatedPositionForbidden,
+  removeDeadStones,
   resumeTurnForPolicy,
   scoreAgreementPosition,
   scoreImmediatePosition,
@@ -23,12 +24,18 @@ import {
   type RulesPolicy,
   UnsupportedRulesPolicyError,
 } from "./rulesPolicy";
+import {
+  ScoreContractError,
+  tagChineseAreaScore,
+  type ChineseAreaComputation,
+  type ScoredOutcome,
+} from "./scoreContract";
 import type {
   Board,
   BoardSize,
+  ChineseAreaScore,
   GameState,
   Position,
-  Score,
   Stone,
   StoredMove,
   TimeControlId,
@@ -256,9 +263,9 @@ function normalizeHistoricalRulesLifecycle(
     && game.finished_at !== null
     && game.to_move === null
     && game.scoring_revision === scoring?.revision
-    && scoring?.finalized_at === null
-    && scoring.result === null
-    && scoring.scored_board_hash === null
+    && scoring !== null
+    && finalScoreFields(scoring).every((value) => value === null)
+    && scoringConfirmationCount(scoring) <= 1
   ) {
     return {
       game: { ...game, phase: "play" },
@@ -372,12 +379,9 @@ async function loadGame(
   );
   let scoring: ScoringRow | null = scoringResult.rows[0] ?? null;
   let deadRows: DeadStoneRow[] = [];
-  if (scoring) storedScoringConfiguration(rules, scoring);
-  const normalized = normalizeHistoricalRulesLifecycle(game, rules.policy, scoring);
-  game = normalized.game;
-  scoring = normalized.scoring;
-  assertRulesLifecycle(game, rules.policy, scoring);
+  let scoringBoard: Board | null = null;
   if (scoring) {
+    storedScoringConfiguration(rules, scoring);
     const deadResult = await execute<DeadStoneRow>(
       `SELECT x, y, color
          FROM game_dead_stones
@@ -386,9 +390,23 @@ async function loadGame(
       [gameId],
     );
     deadRows = deadResult.rows;
+    scoringBoard = replayMoves(game.board_size, mapMoves(movesResult.rows));
+    validateScoringPosition(
+      { game, rules, moveRows: movesResult.rows, scoring, deadRows },
+      scoringBoard,
+    );
   }
+  const normalized = normalizeHistoricalRulesLifecycle(game, rules.policy, scoring);
+  game = normalized.game;
+  scoring = normalized.scoring;
+  if (!scoring) deadRows = [];
+  assertRulesLifecycle(game, rules.policy, scoring);
 
-  return { game, rules, moveRows: movesResult.rows, scoring, deadRows };
+  const loaded = { game, rules, moveRows: movesResult.rows, scoring, deadRows };
+  if (scoring) {
+    validateScoringSnapshot(loaded, scoringBoard!);
+  }
+  return loaded;
 }
 
 function currentTurn(
@@ -442,36 +460,211 @@ function calculateClocks(
   };
 }
 
-function storedFinalScore(scoring: ScoringRow): Score | null {
-  if (scoring.finalized_at === null || scoring.black_total === null || scoring.white_total === null) {
+function scoringSnapshotMismatch(): never {
+  throw new GameServiceError(
+    "The stored score does not match its Chinese area-scoring contract.",
+    500,
+    "scoring_snapshot_mismatch",
+  );
+}
+
+function requireChineseAreaBreakdown(computation: ChineseAreaComputation): ChineseAreaScore {
+  if (computation.scoringRule !== "chinese-area") return scoringSnapshotMismatch();
+  return computation.breakdown;
+}
+
+function winnerKeyForScoredOutcome(game: GameRow, outcome: ScoredOutcome): string | null {
+  if (outcome.kind === "jigo") return null;
+  return outcome.winner === "black" ? game.black_player_key : game.white_player_key;
+}
+
+function sameChineseAreaScore(left: ChineseAreaScore, right: ChineseAreaScore): boolean {
+  return left.black === right.black
+    && left.white === right.white
+    && left.blackStones === right.blackStones
+    && left.whiteStones === right.whiteStones
+    && left.blackTerritory === right.blackTerritory
+    && left.whiteTerritory === right.whiteTerritory
+    && left.neutralPoints === right.neutralPoints
+    && left.winner === right.winner
+    && left.margin === right.margin
+    && left.result === right.result;
+}
+
+function assertScoringBoardMatches(
+  loaded: LoadedGame,
+  scoring: ScoringRow,
+  board: Board,
+): void {
+  if (
+    scoring.stopped_move_number !== loaded.moveRows.length
+    || boardHash(board) !== scoring.board_hash
+  ) {
+    return scoringSnapshotMismatch();
+  }
+}
+
+function validateDeadStoneRows(board: Board, deadRows: DeadStoneRow[]): Position[] {
+  const positions: Position[] = [];
+  const seen = new Set<string>();
+  for (const { x, y, color } of deadRows) {
+    const key = `${x}:${y}`;
+    if (
+      !Number.isInteger(x)
+      || !Number.isInteger(y)
+      || seen.has(key)
+      || board[y]?.[x] !== color
+    ) {
+      return scoringSnapshotMismatch();
+    }
+    seen.add(key);
+    positions.push({ x, y });
+  }
+  for (const position of positions) {
+    if (getGroup(board, position).some((stone) => !seen.has(`${stone.x}:${stone.y}`))) {
+      return scoringSnapshotMismatch();
+    }
+  }
+  return positions;
+}
+
+function validateScoringPosition(loaded: LoadedGame, board: Board): Position[] {
+  if (!loaded.scoring) return scoringSnapshotMismatch();
+  assertScoringBoardMatches(loaded, loaded.scoring, board);
+  return validateDeadStoneRows(board, loaded.deadRows);
+}
+
+function finalScoreFields(scoring: ScoringRow): unknown[] {
+  return [
+    scoring.scored_board_hash,
+    scoring.black_stones,
+    scoring.white_stones,
+    scoring.black_territory,
+    scoring.white_territory,
+    scoring.neutral_points,
+    scoring.black_dead_stones,
+    scoring.white_dead_stones,
+    scoring.black_total,
+    scoring.white_total,
+    scoring.result,
+    scoring.finalized_at,
+  ];
+}
+
+function scoringConfirmationCount(scoring: ScoringRow): number {
+  const confirmations = [
+    [scoring.black_confirmed_revision, scoring.black_confirmed_at],
+    [scoring.white_confirmed_revision, scoring.white_confirmed_at],
+  ] as const;
+  for (const [revision, confirmedAt] of confirmations) {
+    if (
+      (revision === null) !== (confirmedAt === null)
+      || (revision !== null && revision !== scoring.revision)
+    ) {
+      return scoringSnapshotMismatch();
+    }
+  }
+  return confirmations.filter(([revision]) => revision !== null).length;
+}
+
+function storedFinalScore(scoring: ScoringRow, komi: number): ChineseAreaComputation | null {
+  const finalFields = finalScoreFields(scoring);
+  if (finalFields.every((value) => value === null)) {
     return null;
   }
+  if (finalFields.some((value) => value === null)) return scoringSnapshotMismatch();
+
   const black = Number(scoring.black_total);
   const white = Number(scoring.white_total);
-  return {
+  const score: ChineseAreaScore = {
     black,
     white,
-    blackStones: scoring.black_stones ?? 0,
-    whiteStones: scoring.white_stones ?? 0,
-    blackTerritory: scoring.black_territory ?? 0,
-    whiteTerritory: scoring.white_territory ?? 0,
-    neutralPoints: scoring.neutral_points ?? 0,
+    blackStones: scoring.black_stones!,
+    whiteStones: scoring.white_stones!,
+    blackTerritory: scoring.black_territory!,
+    whiteTerritory: scoring.white_territory!,
+    neutralPoints: scoring.neutral_points!,
     winner: black === white ? null : black > white ? "black" : "white",
     margin: Math.abs(black - white),
-    result: scoring.result ?? "Draw",
+    result: scoring.result!,
   };
+  try {
+    return tagChineseAreaScore(score, komi);
+  } catch (error) {
+    if (error instanceof ScoreContractError) return scoringSnapshotMismatch();
+    throw error;
+  }
+}
+
+type ValidatedScoringSnapshot = Readonly<{
+  deadStones: Position[];
+  expectedComputation: ChineseAreaComputation;
+  storedComputation: ChineseAreaComputation | null;
+}>;
+
+function validateScoringSnapshot(
+  loaded: LoadedGame,
+  board: Board,
+): ValidatedScoringSnapshot {
+  const { game, rules, scoring, deadRows } = loaded;
+  if (!scoring) return scoringSnapshotMismatch();
+  if (game.scoring_revision !== scoring.revision) return scoringSnapshotMismatch();
+  const deadStones = validateScoringPosition(loaded, board);
+  const expectedComputation = scoreAgreementPosition(
+    rules.policy,
+    board,
+    deadStones,
+    rules.komi,
+  );
+  const storedComputation = storedFinalScore(scoring, rules.komi);
+  const isFinalScore = game.status === "finished" && game.finish_reason === "score";
+  if ((storedComputation !== null) !== isFinalScore) return scoringSnapshotMismatch();
+  const confirmationCount = scoringConfirmationCount(scoring);
+
+  if (isFinalScore) {
+    const storedDeadCounts = deadRows.reduce(
+      (counts, stone) => ({ ...counts, [stone.color]: counts[stone.color] + 1 }),
+      { black: 0, white: 0 },
+    );
+    if (
+      !storedComputation
+      || confirmationCount !== 2
+      || game.finished_at === null
+      || game.to_move !== null
+      || storedComputation.breakdown.result !== game.result
+      || winnerKeyForScoredOutcome(game, storedComputation.outcome) !== game.winner_key
+      || !sameChineseAreaScore(storedComputation.breakdown, expectedComputation.breakdown)
+      || scoring.scored_board_hash !== boardHash(removeDeadStones(board, deadStones))
+      || scoring.black_dead_stones !== storedDeadCounts.black
+      || scoring.white_dead_stones !== storedDeadCounts.white
+    ) {
+      return scoringSnapshotMismatch();
+    }
+  } else if (
+    game.status !== "active"
+    || confirmationCount > 1
+    || game.result !== null
+    || game.winner_key !== null
+    || game.finished_at !== null
+    || game.to_move !== null
+  ) {
+    return scoringSnapshotMismatch();
+  }
+
+  return { deadStones, expectedComputation, storedComputation };
 }
 
 function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
-  const { game, rules, moveRows, scoring, deadRows } = loaded;
+  const { game, rules, moveRows, scoring } = loaded;
   const moves = mapMoves(moveRows);
   const turn = currentTurn(game, moveRows, rules.policy);
   const clocks = calculateClocks(game, turn, now);
   const board = replayMoves(game.board_size, moves);
-  const deadStones = deadRows.map(({ x, y }) => ({ x, y }));
+  const validatedScoring = scoring ? validateScoringSnapshot(loaded, board) : null;
+  const deadStones = validatedScoring?.deadStones ?? [];
   const preview = scoring
-    ? storedFinalScore(scoring)
-      ?? scoreAgreementPosition(rules.policy, board, deadStones, rules.komi)
+    ? validatedScoring?.storedComputation?.breakdown
+      ?? requireChineseAreaBreakdown(validatedScoring!.expectedComputation)
     : null;
   return {
     id: game.id,
@@ -697,13 +890,7 @@ async function resumeExpiredScoring(
 function stoppedBoard(loaded: LoadedGame, scoring: ScoringRow): Board {
   const moves = mapMoves(loaded.moveRows).slice(0, scoring.stopped_move_number);
   const board = replayMoves(loaded.game.board_size, moves);
-  if (boardHash(board) !== scoring.board_hash) {
-    throw new GameServiceError(
-      "The stored scoring position could not be verified.",
-      500,
-      "scoring_snapshot_mismatch",
-    );
-  }
+  assertScoringBoardMatches(loaded, scoring, board);
   return board;
 }
 
@@ -793,12 +980,9 @@ export async function submitMove(
 
     if (consecutivePasses >= 2) {
       if (rules.policy.scoringLifecycle === "immediate") {
-        const score = scoreImmediatePosition(rules.policy, currentBoard, rules.komi);
-        const winnerKey = score.winner === "black"
-          ? game.black_player_key
-          : score.winner === "white"
-            ? game.white_player_key
-            : null;
+        const computation = scoreImmediatePosition(rules.policy, currentBoard, rules.komi);
+        const score = requireChineseAreaBreakdown(computation);
+        const winnerKey = winnerKeyForScoredOutcome(game, computation.outcome);
         const updated = await client.query<GameRow>(
           `UPDATE games
               SET status = 'finished', phase = 'play', to_move = NULL,
@@ -1056,17 +1240,14 @@ export async function confirmScore(
 
     const board = stoppedBoard(nextLoaded, nextLoaded.scoring);
     const deadStones = nextLoaded.deadRows.map(({ x, y }) => ({ x, y }));
-    const score = scoreAgreementPosition(
+    const computation = scoreAgreementPosition(
       nextLoaded.rules.policy,
       board,
       deadStones,
       nextLoaded.rules.komi,
     );
-    const winnerKey = score.winner === "black"
-      ? loaded.game.black_player_key
-      : score.winner === "white"
-        ? loaded.game.white_player_key
-        : null;
+    const score = requireChineseAreaBreakdown(computation);
+    const winnerKey = winnerKeyForScoredOutcome(loaded.game, computation.outcome);
     const deadCounts = nextLoaded.deadRows.reduce(
       (counts, stone) => ({ ...counts, [stone.color]: counts[stone.color] + 1 }),
       { black: 0, white: 0 },

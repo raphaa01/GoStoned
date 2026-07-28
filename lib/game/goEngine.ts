@@ -1,9 +1,9 @@
 import type {
   Board,
   BoardSize,
+  ChineseAreaScore,
   MoveResult,
   Position,
-  Score,
   Stone,
   StoredMove,
 } from "./types";
@@ -205,7 +205,7 @@ export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
   return replayMovesInternal(size, moves, false).board;
 }
 
-export function scoreChinese(board: Board, komi: number): Score {
+export function scoreChinese(board: Board, komi: number): ChineseAreaScore {
   let blackStones = 0;
   let whiteStones = 0;
   let blackTerritory = 0;
