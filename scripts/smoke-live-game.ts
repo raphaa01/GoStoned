@@ -2,11 +2,22 @@ import assert from "node:assert/strict";
 import "dotenv/config";
 import { closePool, getPool, query } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
+import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
+const maximumSmokeRateLimitWaitMs = 30_000;
+const scoringDecisionWindowMs =
+  RATE_LIMIT_POLICIES.scoringDecisionBurst.windowMinutes * 60_000;
+
+assert.ok(
+  Number.isFinite(scoringDecisionWindowMs) &&
+    scoringDecisionWindowMs > 0 &&
+    scoringDecisionWindowMs <= maximumSmokeRateLimitWaitMs,
+  `Live-game smoke scoring window must be between 1ms and ${maximumSmokeRateLimitWaitMs}ms`,
+);
 
 const smokeHost = new URL(baseUrl).hostname;
 if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
@@ -438,6 +449,10 @@ async function run() {
     disputedStone: { x: 3, y: 2 },
   });
   assert.equal("resumeEvents" in latestOnly.game, false);
+
+  // Separate dispute coverage from the three final agreement/idempotency
+  // decisions that intentionally fill one actor's complete burst allowance.
+  await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
   await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
   await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
