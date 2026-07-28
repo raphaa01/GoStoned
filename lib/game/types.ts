@@ -41,8 +41,22 @@ export type GameState = {
   whitePlayerName: string;
   winnerKey: string | null;
   status: "active" | "finished";
+  phase: "play" | "scoring";
   result: string | null;
+  finishReason: "score" | "resignation" | "timeout" | "legacy_score" | null;
   komi: number;
+  ruleset: "chinese";
+  rulesProfile: "legacy-immediate-area" | "chinese-2002-gostone-v1";
+  scoringMethod: "area";
+  handicap: number;
+  consecutivePasses: number;
+  scoringRevision: number;
+  scoring: GameScoringState | null;
+  lastResume: {
+    claim: "dead" | "alive" | "deadline";
+    requestedBy: Stone | null;
+    disputedStone: Position | null;
+  } | null;
   version: number;
   startedAt: string;
   finishedAt: string | null;
@@ -52,6 +66,18 @@ export type GameState = {
   moveCount: number;
   board: Board;
   moves: StoredMove[];
+};
+
+export type GameScoringState = {
+  revision: number;
+  boardHash: string;
+  stoppedMoveNumber: number;
+  deadStones: Position[];
+  blackConfirmed: boolean;
+  whiteConfirmed: boolean;
+  preview: Score;
+  finalizedAt: string | null;
+  expiresAt: string;
 };
 
 export type PlayerClockState = {
@@ -74,6 +100,11 @@ export type GameClockState = {
 export type Score = {
   black: number;
   white: number;
+  blackStones: number;
+  whiteStones: number;
+  blackTerritory: number;
+  whiteTerritory: number;
+  neutralPoints: number;
   winner: Stone | null;
   margin: number;
   result: string;

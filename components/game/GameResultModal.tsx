@@ -32,23 +32,78 @@ export function GameResultModal({
   onPlayAgain,
   onViewBoard,
 }: GameResultModalProps) {
+  const dialog = useRef<HTMLElement>(null);
   const playAgainButton = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const onViewBoardRef = useRef(onViewBoard);
+
+  useEffect(() => {
+    onViewBoardRef.current = onViewBoard;
+  }, [onViewBoard]);
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
+    previousFocus.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     document.body.style.overflow = "hidden";
+    const backdrop = dialog.current?.parentElement;
+    const background = backdrop?.parentElement
+      ? Array.from(backdrop.parentElement.children).filter(
+          (element): element is HTMLElement => element instanceof HTMLElement && element !== backdrop,
+        )
+      : [];
+    const backgroundState = background.map((element) => ({
+      element,
+      inert: element.inert,
+      ariaHidden: element.getAttribute("aria-hidden"),
+    }));
+    for (const element of background) {
+      element.inert = true;
+      element.setAttribute("aria-hidden", "true");
+    }
     playAgainButton.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onViewBoard();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onViewBoardRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog.current) return;
+      const focusable = Array.from(
+        dialog.current.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialog.current.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
+      for (const { element, inert, ariaHidden } of backgroundState) {
+        element.inert = inert;
+        if (ariaHidden === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", ariaHidden);
+      }
+      if (previousFocus.current?.isConnected) previousFocus.current.focus();
     };
-  }, [onViewBoard, open]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -56,6 +111,14 @@ export function GameResultModal({
   const won = game.winnerKey === playerKey;
   const outcome = draw ? "Draw" : won ? "Victory" : "Defeat";
   const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
+  const deadCounts = (game.scoring?.deadStones ?? []).reduce(
+    (counts, { x, y }) => {
+      const color = game.board[y]?.[x];
+      if (color) counts[color] += 1;
+      return counts;
+    },
+    { black: 0, white: 0 },
+  );
 
   return (
     <div className="modal-backdrop modal-backdrop--result">
@@ -63,7 +126,9 @@ export function GameResultModal({
         aria-labelledby="game-result-title"
         aria-modal="true"
         className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
+        ref={dialog}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="result-modal-header">
           <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
@@ -99,6 +164,29 @@ export function GameResultModal({
           <span><small>Moves</small><strong>{game.moveCount}</strong></span>
           <span><small>Clock</small><strong>{getTimeControl(game.timeControl).name}</strong></span>
         </div>
+
+        {game.finishReason === "score" && game.scoring ? (
+          <section className="result-score-details" aria-label="Agreed scoring details">
+            <div>
+              <span><small>Black total</small><strong>{game.scoring.preview.black}</strong></span>
+              <span><small>White total</small><strong>{game.scoring.preview.white}</strong></span>
+            </div>
+            <div>
+              <span>
+                <small>Black stones · territory</small>
+                <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
+              </span>
+              <span>
+                <small>White stones · territory</small>
+                <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
+              </span>
+            </div>
+            <p>
+              Chinese 2002 · GoStone v1 · area · {game.komi} komi · neutral {game.scoring.preview.neutralPoints}, shared equally
+              {" · "}dead: {deadCounts.black} black, {deadCounts.white} white
+            </p>
+          </section>
+        ) : null}
 
         <button
           className="button button--primary result-primary"

@@ -1,8 +1,18 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { closePool, query } from "../lib/db";
+import { isLocalDatabase } from "../lib/env";
 
 const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
+const databaseUrl = process.env.DATABASE_URL;
+const smokeHost = new URL(baseUrl).hostname;
+
+if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
+  throw new Error("The clock smoke test only runs against an isolated local server.");
+}
+if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+  throw new Error("The clock smoke test requires an isolated local DATABASE_URL.");
+}
 
 async function readJson<T>(response: Response): Promise<T> {
   const data = (await response.json()) as T & { error?: string };

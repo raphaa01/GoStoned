@@ -126,20 +126,23 @@ export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
   return board;
 }
 
-export function scoreChinese(board: Board, komi = 6.5): Score {
-  let black = 0;
-  let white = komi;
+export function scoreChinese(board: Board, komi = 7.5): Score {
+  let blackStones = 0;
+  let whiteStones = 0;
+  let blackTerritory = 0;
+  let whiteTerritory = 0;
+  let neutralPoints = 0;
   const visited = new Set<string>();
 
   for (let y = 0; y < board.length; y += 1) {
     for (let x = 0; x < board[y].length; x += 1) {
       const stone = board[y][x];
       if (stone === "black") {
-        black += 1;
+        blackStones += 1;
         continue;
       }
       if (stone === "white") {
-        white += 1;
+        whiteStones += 1;
         continue;
       }
 
@@ -165,14 +168,30 @@ export function scoreChinese(board: Board, komi = 6.5): Score {
       }
 
       if (borders.size === 1) {
-        if (borders.has("black")) black += region.length;
-        else white += region.length;
+        if (borders.has("black")) blackTerritory += region.length;
+        else whiteTerritory += region.length;
+      } else {
+        neutralPoints += region.length;
       }
     }
   }
 
+  const sharedNeutral = neutralPoints / 2;
+  const black = blackStones + blackTerritory + sharedNeutral;
+  const white = whiteStones + whiteTerritory + sharedNeutral + komi;
   const margin = Math.abs(black - white);
   const winner: Stone | null = black === white ? null : black > white ? "black" : "white";
   const result = winner ? `${winner === "black" ? "B" : "W"}+${margin}` : "Draw";
-  return { black, white, winner, margin, result };
+  return {
+    black,
+    white,
+    blackStones,
+    whiteStones,
+    blackTerritory,
+    whiteTerritory,
+    neutralPoints,
+    winner,
+    margin,
+    result,
+  };
 }

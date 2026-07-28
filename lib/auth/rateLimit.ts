@@ -79,6 +79,30 @@ export const RATE_LIMIT_POLICIES = {
     windowMinutes: 1 / 6,
   },
   move: { scope: "game-move", limit: 30, ipLimit: 300, windowMinutes: 1 },
+  scoringEditBurst: {
+    scope: "game-scoring-edit-burst",
+    limit: 6,
+    ipLimit: 60,
+    windowMinutes: 1 / 6,
+  },
+  scoringEdit: {
+    scope: "game-scoring-edit",
+    limit: 30,
+    ipLimit: 300,
+    windowMinutes: 1,
+  },
+  scoringDecisionBurst: {
+    scope: "game-scoring-decision-burst",
+    limit: 3,
+    ipLimit: 30,
+    windowMinutes: 1 / 6,
+  },
+  scoringDecision: {
+    scope: "game-scoring-decision",
+    limit: 10,
+    ipLimit: 100,
+    windowMinutes: 1,
+  },
   chatSendBurst: {
     scope: "chat-send-burst",
     limit: 5,

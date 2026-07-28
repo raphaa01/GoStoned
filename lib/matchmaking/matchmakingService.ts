@@ -124,11 +124,16 @@ export async function joinMatchmaking(
     const gameResult = await client.query<{ id: string }>(
       `INSERT INTO games (
          board_size, black_player_key, white_player_key, time_control,
+         rules, rules_profile, scoring_method, komi, handicap, phase, to_move,
          main_time_seconds, byo_yomi_periods, byo_yomi_seconds,
          black_time_remaining_ms, white_time_remaining_ms,
          black_periods_remaining, white_periods_remaining, turn_started_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $6, $6, NOW())
+       VALUES (
+         $1, $2, $3, $4,
+         'chinese', 'chinese-2002-gostone-v1', 'area', 7.5, 0, 'play', 'black',
+         $5, $6, $7, $8, $8, $6, $6, NOW()
+       )
        RETURNING id`,
       [
         boardSize,

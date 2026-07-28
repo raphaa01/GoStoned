@@ -33,8 +33,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [showResult, setShowResult] = useState(false);
   const lastMessageId = useRef(0);
   const resultShownForGame = useRef<string | null>(null);
+  const latestGameVersion = useRef(-1);
+  const latestGameId = useRef<string | null>(null);
 
   const acceptGameState = useCallback((nextGame: GameState) => {
+    if (nextGame.id !== gameId) return;
+    if (latestGameId.current !== gameId) {
+      latestGameId.current = gameId;
+      latestGameVersion.current = -1;
+    }
+    if (nextGame.version < latestGameVersion.current) return;
+    latestGameVersion.current = nextGame.version;
     setGame({
       ...nextGame,
       clock: { ...nextGame.clock, clientReceivedAt: Date.now() },
@@ -47,7 +56,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setConfirmation(null);
       setShowResult(true);
     }
-  }, []);
+  }, [gameId]);
 
   const refreshGame = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey) return;
@@ -138,7 +147,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
       ? game.blackPlayerKey === playerKey ? "black" : "white"
       : null;
   const canMove =
-    Boolean(game && yourColor && game.status === "active" && game.turn === yourColor) && !busy;
+    Boolean(
+      game
+      && yourColor
+      && game.status === "active"
+      && game.phase === "play"
+      && game.turn === yourColor,
+    ) && !busy;
+  const canMarkDead = Boolean(
+    game && game.status === "active" && game.phase === "scoring" && game.scoring,
+  ) && !busy;
 
   async function makeMove(move: { x?: number; y?: number; isPass?: boolean }) {
     if (!game || !playerKey || busy) return;
@@ -173,6 +191,32 @@ export function GameRoom({ gameId }: { gameId: string }) {
       acceptGameState(data.game);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not resign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function scoringAction(
+    action: "dead-stones" | "confirm" | "resume",
+    body: Record<string, unknown>,
+  ) {
+    if (!game || !game.scoring || !playerKey || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}/scoring/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...body,
+          expectedRevision: game.scoring.revision,
+        }),
+      });
+      const data = await readApi<{ game: GameState }>(response);
+      acceptGameState(data.game);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Scoring action failed.");
+      await refreshGame().catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -255,17 +299,43 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <main className="focused-game-layout">
         <section className="focused-board-panel">
           <div className="focused-board-status">
-            <strong>{canMove ? "Your turn" : game.status === "finished" ? `Game over · ${game.result}` : "Opponent's turn"}</strong>
+            <strong>
+              {canMove
+                ? "Your turn"
+                : game.status === "finished"
+                  ? `Game over · ${game.result}`
+                  : game.phase === "scoring"
+                    ? "Confirm the final position"
+                    : "Opponent's turn"}
+            </strong>
             <span>{game.boardSize}×{game.boardSize} · Move {game.moveCount}</span>
           </div>
           <div className="focused-board-wrap">
             <GoBoard
               boardSize={game.boardSize}
               boardState={game.board}
-              disabled={!canMove}
-              onIntersectionClick={(x, y) => makeMove({ x, y })}
+              deadStones={game.scoring?.deadStones}
+              disabled={!canMove && !canMarkDead}
+              interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
+              onIntersectionClick={(x, y) => {
+                if (game.phase === "scoring" && game.scoring) {
+                  const dead = !game.scoring.deadStones.some(
+                    (stone) => stone.x === x && stone.y === y,
+                  );
+                  void scoringAction("dead-stones", { x, y, dead });
+                } else {
+                  void makeMove({ x, y });
+                }
+              }}
             />
           </div>
+          {game.phase === "scoring" || game.boardSize > 9 ? (
+            <p className="scoring-board-hint">
+              {game.phase === "scoring"
+                ? "Tap a stone to mark its whole group. On a small screen, swipe the enlarged board for precision."
+                : "On a small screen, swipe the enlarged board for precise stone placement."}
+            </p>
+          ) : null}
           {error ? <p className="play-error" role="alert">{error}</p> : null}
         </section>
 
@@ -275,7 +345,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
             game={game}
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true })}
+            onConfirmScore={() => scoringAction("confirm", {})}
             onResign={() => setConfirmation("resign")}
+            onResumePlay={(claim, disputedStone) => {
+              void scoringAction("resume", {
+                claim,
+                x: disputedStone.x,
+                y: disputedStone.y,
+              });
+            }}
             playerKey={playerKey}
           />
           <ChatPanel

@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
+import "dotenv/config";
+import { closePool, query } from "../lib/db";
+import { isLocalDatabase } from "../lib/env";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
+const databaseUrl = process.env.DATABASE_URL;
+
+const smokeHost = new URL(baseUrl).hostname;
+if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
+  throw new Error("The live-game smoke test only runs against an isolated local server.");
+}
+if (!databaseUrl || !isLocalDatabase(databaseUrl)) {
+  throw new Error("The live-game smoke test requires an isolated local DATABASE_URL.");
+}
 
 async function request<T>(path: string, init?: RequestInit, cookie?: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -95,12 +107,170 @@ async function run() {
   assert.equal(whiteMove.game.turn, "black");
 
   await post(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie);
-  const finished = await post<{
-    game: { status: string; result: string; moveCount: number };
+  const stopped = await post<{
+    game: {
+      status: string;
+      phase: string;
+      result: string | null;
+      moveCount: number;
+      scoring: { revision: number };
+      clock: { black: { mainTimeMs: number }; white: { mainTimeMs: number } };
+    };
   }>(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie);
+  assert.equal(stopped.game.status, "active");
+  assert.equal(stopped.game.phase, "scoring");
+  assert.equal(stopped.game.result, null);
+  assert.equal(stopped.game.moveCount, 4);
+
+  const firstScoringRevision = stopped.game.scoring.revision;
+  const outsider = await createGuest();
+  const outsiderConfirmation = await fetch(
+    `${baseUrl}/api/games/${gameId}/scoring/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: outsider.cookie },
+      body: JSON.stringify({
+        playerKey: black.playerKey,
+        expectedRevision: firstScoringRevision,
+      }),
+    },
+  );
+  assert.equal(outsiderConfirmation.status, 403);
+  for (const [path, body] of [
+    [`/api/games/${gameId}/scoring/dead-stones`, {
+      x: 3,
+      y: 2,
+      dead: true,
+      expectedRevision: firstScoringRevision,
+    }],
+    [`/api/games/${gameId}/scoring/resume`, {
+      x: 3,
+      y: 2,
+      claim: "dead",
+      expectedRevision: firstScoringRevision,
+    }],
+    [`/api/games/${gameId}/resign`, {}],
+  ] as const) {
+    const outsiderAction = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: outsider.cookie },
+      body: JSON.stringify(body),
+    });
+    assert.equal(outsiderAction.status, 403, `${path} must reject an outsider`);
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  const frozen = await request<{
+    game: { clock: { black: { mainTimeMs: number }; white: { mainTimeMs: number } } };
+  }>(`/api/games/${gameId}`, undefined, black.cookie);
+  assert.equal(frozen.game.clock.black.mainTimeMs, stopped.game.clock.black.mainTimeMs);
+  assert.equal(frozen.game.clock.white.mainTimeMs, stopped.game.clock.white.mainTimeMs);
+
+  const challengedProposal = await post<{
+    game: { scoring: { revision: number; deadStones: Array<{ x: number; y: number }> } };
+  }>(`/api/games/${gameId}/scoring/dead-stones`, {
+    x: 3,
+    y: 2,
+    dead: true,
+    expectedRevision: firstScoringRevision,
+  }, black.cookie);
+  assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+
+  const resumed = await post<{
+    game: { phase: string; turn: string; scoring: null };
+  }>(`/api/games/${gameId}/scoring/resume`, {
+    expectedRevision: challengedProposal.game.scoring.revision,
+    claim: "alive",
+    x: 3,
+    y: 2,
+  }, white.cookie);
+  assert.equal(resumed.game.phase, "play");
+  assert.equal(resumed.game.turn, "black");
+  assert.equal(resumed.game.scoring, null);
+
+  await post(`/api/games/${gameId}/moves`, { x: 4, y: 2 }, black.cookie);
+  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie);
+  const restopped = await post<{
+    game: { phase: string; scoring: { revision: number } };
+  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie);
+  assert.equal(restopped.game.phase, "scoring");
+  assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
+
+  const staleConfirmation = await fetch(`${baseUrl}/api/games/${gameId}/scoring/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: white.cookie },
+    body: JSON.stringify({ expectedRevision: challengedProposal.game.scoring.revision }),
+  });
+  assert.equal(staleConfirmation.status, 409);
+
+  const firstConfirmation = await post<{
+    game: { status: string; scoring: { revision: number; blackConfirmed: boolean } };
+  }>(`/api/games/${gameId}/scoring/confirm`, {
+    expectedRevision: restopped.game.scoring.revision,
+  }, black.cookie);
+  assert.equal(firstConfirmation.game.status, "active");
+  assert.equal(firstConfirmation.game.scoring.blackConfirmed, true);
+
+  const marked = await post<{
+    game: {
+      scoring: {
+        revision: number;
+        deadStones: Array<{ x: number; y: number }>;
+        blackConfirmed: boolean;
+      };
+    };
+  }>(`/api/games/${gameId}/scoring/dead-stones`, {
+    x: 3,
+    y: 2,
+    dead: true,
+    expectedRevision: firstConfirmation.game.scoring.revision,
+  }, white.cookie);
+  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.equal(marked.game.scoring.blackConfirmed, false);
+
+  const confirmations = await Promise.all([
+    post<{ game: { status: string; result: string | null; moveCount: number } }>(
+      `/api/games/${gameId}/scoring/confirm`,
+      { expectedRevision: marked.game.scoring.revision },
+      black.cookie,
+    ),
+    post<{ game: { status: string; result: string | null; moveCount: number } }>(
+      `/api/games/${gameId}/scoring/confirm`,
+      { expectedRevision: marked.game.scoring.revision },
+      white.cookie,
+    ),
+  ]);
+  assert.deepEqual(
+    confirmations.map(({ game }) => game.status).sort(),
+    ["active", "finished"],
+  );
+  const finished = confirmations.find(({ game }) => game.status === "finished")!;
   assert.equal(finished.game.status, "finished");
-  assert.equal(finished.game.moveCount, 4);
+  assert.equal(finished.game.moveCount, 7);
   assert.ok(finished.game.result);
+
+  const retry = await post<{ game: { status: string; result: string } }>(
+    `/api/games/${gameId}/scoring/confirm`,
+    { expectedRevision: marked.game.scoring.revision },
+    black.cookie,
+  );
+  assert.equal(retry.game.status, "finished");
+  assert.equal(retry.game.result, finished.game.result);
+
+  const ledger = await query<{ player_key: string; games: number; history_count: number }>(
+    `SELECT stats.player_key, stats.games,
+            COUNT(history.id)::int AS history_count
+       FROM player_stats stats
+       LEFT JOIN player_rating_history history
+         ON history.player_key = stats.player_key AND history.game_id = $1
+      WHERE stats.player_key = ANY($2::text[]) AND stats.board_size = 9
+      GROUP BY stats.player_key, stats.games
+      ORDER BY stats.player_key`,
+    [gameId, [black.playerKey, white.playerKey]],
+  );
+  assert.equal(ledger.rows.length, 2);
+  assert.equal(ledger.rows.every((row) => row.games === 1), true);
+  assert.equal(ledger.rows.every((row) => row.history_count === 1), true);
 
   console.log(`Live game ${gameId} completed successfully (${finished.game.result}).`);
 }
@@ -108,4 +278,4 @@ async function run() {
 run().catch((error) => {
   console.error(error);
   process.exitCode = 1;
-});
+}).finally(closePool);
