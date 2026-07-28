@@ -1,7 +1,26 @@
 import { ApiRequestError } from "./api";
+import type { GameState } from "@/lib/game/types";
 
 const HIDDEN_PAGE_DELAY_MS = 10_000;
 const NETWORK_ERROR_DELAY_MS = 5_000;
+const ACTIVE_CHAT_DELAY_MS = 800;
+const FINISHED_CHAT_DELAY_MS = 3_000;
+
+export function shouldPollGame(status: GameState["status"] | null): boolean {
+  return status !== "finished";
+}
+
+export function nextChatPollDelay(
+  status: GameState["status"] | null,
+  error: unknown = null,
+  pageHidden = false,
+): number {
+  return nextPollDelay(
+    status === "finished" ? FINISHED_CHAT_DELAY_MS : ACTIVE_CHAT_DELAY_MS,
+    error,
+    pageHidden,
+  );
+}
 
 export function createPollingRequestGuard() {
   let active = true;

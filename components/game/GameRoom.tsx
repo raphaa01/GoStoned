@@ -9,7 +9,12 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { readApi } from "@/lib/client/api";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
-import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
+import {
+  createPollingRequestGuard,
+  nextChatPollDelay,
+  nextPollDelay,
+  shouldPollGame,
+} from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
 import type { GameState, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -40,6 +45,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const resultShownForGame = useRef<string | null>(null);
   const latestGameVersion = useRef(-1);
   const latestGameId = useRef<string | null>(null);
+  const gameStatus = useRef<GameState["status"] | null>(null);
 
   const acceptGameState = useCallback((nextGame: GameState) => {
     if (nextGame.id !== gameId) return;
@@ -49,6 +55,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     if (nextGame.version < latestGameVersion.current) return;
     latestGameVersion.current = nextGame.version;
+    gameStatus.current = nextGame.status;
     setGame({
       ...nextGame,
       clock: { ...nextGame.clock, clientReceivedAt: Date.now() },
@@ -90,6 +97,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     if (!playerKey) return;
+    gameStatus.current = null;
     let cancelled = false;
     let gameLoaded = false;
     let gameTimer: number;
@@ -98,6 +106,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const chatGuard = createPollingRequestGuard();
 
     const pollGame = async () => {
+      if (!shouldPollGame(gameStatus.current)) return;
       let requestError: unknown = null;
       const signal = gameGuard.start();
       try {
@@ -110,7 +119,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
           setError(localizedApiError(dictionary, error, copy.loadFailed));
         }
       } finally {
-        if (!cancelled && gameGuard.isCurrent(signal)) {
+        if (
+          !cancelled
+          && gameGuard.isCurrent(signal)
+          && shouldPollGame(gameStatus.current)
+        ) {
           gameTimer = window.setTimeout(
             pollGame,
             nextPollDelay(900, requestError, document.hidden),
@@ -130,7 +143,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         if (!cancelled && chatGuard.isCurrent(signal)) {
           chatTimer = window.setTimeout(
             pollChat,
-            nextPollDelay(800, requestError, document.hidden),
+            nextChatPollDelay(gameStatus.current, requestError, document.hidden),
           );
         }
       }

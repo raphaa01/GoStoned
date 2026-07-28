@@ -1,13 +1,11 @@
 "use client";
 
-import { ArrowRight, Grid3X3, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { ArrowRight, BookOpen, Grid3X3, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { GermanLanguageHint } from "@/components/i18n/LanguageSwitcher";
 
 export function Hero({ suggestGerman = false }: { suggestGerman?: boolean }) {
-  const { user } = useAuth();
   const { dictionary, href } = useI18n();
   const copy = dictionary.home;
 
@@ -22,10 +20,11 @@ export function Hero({ suggestGerman = false }: { suggestGerman?: boolean }) {
           <Link className="button button--primary button--lg" href={href("/play")}>
             {copy.playOnline} <ArrowRight size={19} />
           </Link>
-          <Link className="button button--secondary button--lg" href={href(user ? "/profile" : "/register")}>
-            {user ? copy.viewProfile : <><UserRoundPlus size={19} /> {copy.createAccount}</>}
+          <Link className="button button--secondary button--lg" href={href("/learn")}>
+            <BookOpen size={19} /> {copy.learnEssentials}
           </Link>
         </div>
+        <Link className="hero-review-link" href={href("/review")}>{copy.reflectAfterGame} <ArrowRight size={15} /></Link>
         <div className="hero-trust">
           <span><ShieldCheck size={16} /> {copy.serverChecked}</span>
           <span><ShieldCheck size={16} /> {copy.savedGames}</span>

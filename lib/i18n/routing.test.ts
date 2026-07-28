@@ -64,6 +64,8 @@ test("preserves repeated query parameters and fragments across locale switches",
     "/play?size=19&tag=a&tag=b#matching",
   );
   assert.equal(localizeHref("/play?size=19#queue", "de"), "/de/play?size=19#queue");
+  assert.equal(localizeHref("/learn?topic=ko#glossary", "de"), "/de/learn?topic=ko#glossary");
+  assert.equal(localizeHref("/de/review#questions", "en"), "/review#questions");
 });
 
 test("rejects scheme-relative, encoded scheme-relative, and backslash paths", () => {
@@ -101,7 +103,12 @@ test("API error codes resolve through the active catalogue without exposing unkn
 
 test("localized root and page metadata include stable social images", () => {
   for (const [locale, expectedPath] of [["en", "/og/en"], ["de", "/og/de"]] as const) {
-    for (const metadata of [rootMetadata(locale), pageMetadata(locale, "play", "/play")]) {
+    for (const metadata of [
+      rootMetadata(locale),
+      pageMetadata(locale, "play", "/play"),
+      pageMetadata(locale, "learn", "/learn"),
+      pageMetadata(locale, "review", "/review"),
+    ]) {
       const openGraph = metadata.openGraph as { images?: Array<{ url?: string }> } | undefined;
       const twitter = metadata.twitter as { images?: string[] } | undefined;
       assert.match(openGraph?.images?.[0]?.url ?? "", new RegExp(`${expectedPath}$`));

@@ -77,7 +77,7 @@ export function PlayerClock({ clock, color, running }: PlayerClockProps) {
       <span>
         {visible.phase === "main"
           ? copy.mainTime
-          : `Byo-yomi · ${visible.periodsRemaining} ${
+          : `${copy.byoYomi} · ${visible.periodsRemaining} ${
               visible.periodsRemaining === 1 ? copy.period : copy.periods
             }`}
       </span>

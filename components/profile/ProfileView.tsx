@@ -200,7 +200,7 @@ export function ProfileView() {
         />
       </section>
 
-      <section className="profile-history">
+      <section className="profile-history" id="game-history">
         <div className="profile-history__heading">
           <div>
             <span className="section-kicker">{copy.history}</span>
@@ -211,7 +211,11 @@ export function ProfileView() {
         {selectedGames.length > 0 ? (
           <div className="profile-history__list">
             {selectedGames.slice(0, 12).map((game) => (
-              <article className="history-game" key={game.gameId}>
+              <Link
+                className="history-game"
+                href={href(`/game/${game.gameId}`)}
+                key={game.gameId}
+              >
                 <span className={`history-game__result history-game__result--${game.result}`}>
                   {game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}
                 </span>
@@ -222,7 +226,7 @@ export function ProfileView() {
                 <strong className={game.ratingChange && game.ratingChange > 0 ? "is-positive" : game.ratingChange && game.ratingChange < 0 ? "is-negative" : ""}>
                   {game.ratingChange === null ? copy.recorded : signedRating(game.ratingChange)}
                 </strong>
-              </article>
+              </Link>
             ))}
           </div>
         ) : (

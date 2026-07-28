@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiRequestError } from "./api";
-import { createPollingRequestGuard, nextPollDelay } from "./polling";
+import {
+  createPollingRequestGuard,
+  nextChatPollDelay,
+  nextPollDelay,
+  shouldPollGame,
+} from "./polling";
+
+test("finished games stop immutable game polling without freezing post-game chat", () => {
+  assert.equal(shouldPollGame(null), true);
+  assert.equal(shouldPollGame("active"), true);
+  assert.equal(shouldPollGame("finished"), false);
+  assert.equal(nextChatPollDelay("active"), 800);
+  assert.equal(nextChatPollDelay("finished"), 3_000);
+  assert.equal(nextChatPollDelay("finished", null, true), 10_000);
+});
 
 test("polling honors Retry-After and backs off transient failures", () => {
   assert.equal(
