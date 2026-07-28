@@ -21,13 +21,14 @@ test("game mutation clients bind and verify the displayed player", () => {
     section(room, "async function makeMove", "async function resign"),
     section(room, "async function resign", "async function scoringAction"),
     section(room, "async function scoringAction", "async function sendMessage"),
-    section(room, "async function sendMessage", "async function clearFinishedGame"),
     section(room, "async function clearFinishedGame", "async function leaveGameRoom"),
   ]) {
     assert.match(operation, /\[EXPECTED_PLAYER_HEADER\]: playerKey/);
     assert.match(operation, /assertResponseActor\([^,]+, playerKey\)/);
   }
   const chat = section(room, "async function sendMessage", "async function clearFinishedGame");
+  assert.match(chat, /\[EXPECTED_PLAYER_HEADER\]: playerKey/);
+  assert.match(chat, /parseSentGameMessage\(data, playerKey\)/);
   assert.match(chat, /requestError\.code === "identity_changed"[\s\S]+recoverChangedIdentity\(\)/);
   const recovery = section(room, "function recoverChangedIdentity", "function refreshChangedIdentity");
   assert.doesNotMatch(recovery, /refreshIdentity/);

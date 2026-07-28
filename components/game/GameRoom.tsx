@@ -28,6 +28,13 @@ import {
 } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
+import {
+  deriveGameOpponent,
+  parseGameChatSnapshot,
+  parsePlayerBlockState,
+  parseSentGameMessage,
+  type GameChatSnapshot,
+} from "@/lib/client/playerBlocking";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import {
   createPollingRequestGuard,
@@ -44,7 +51,8 @@ import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
 
-type Confirmation = "resign" | "leave" | null;
+type Confirmation = "resign" | "leave" | "block" | null;
+const BLOCKED_CHAT_RECHECK_MS = 15_000;
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const router = useRouter();
@@ -71,8 +79,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
     INITIAL_GAME_CONNECTION,
   );
   const [chatAvailable, setChatAvailable] = useState(false);
+  const [chatPolicyUnavailable, setChatPolicyUnavailable] = useState(false);
+  const [blockedByYou, setBlockedByYou] = useState<boolean | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockReconciling, setBlockReconciling] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [blockAnnouncement, setBlockAnnouncement] = useState("");
+  const [blockReadNonce, setBlockReadNonce] = useState(0);
   const lastMessageId = useRef(0);
   const chatTerminal = useRef(false);
+  const chatPolicyUnavailableRef = useRef(false);
+  const chatAccessGeneration = useRef(0);
   const resultShownForGame = useRef<string | null>(null);
   const latestGameVersion = useRef(-1);
   const lastFullGameResponseAt = useRef(0);
@@ -82,8 +99,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const identityKey = `${identityKind ?? "none"}:${playerKey ?? "none"}:${gameId}`;
   const identityAuthority = useRef(createIdentityRequestAuthority(identityKey));
   const immediateGameSync = useRef<((markReconnecting?: boolean) => void) | null>(null);
+  const immediateChatSync = useRef<(() => void) | null>(null);
+  const blockReconciliationPending = useRef(false);
+  const blockReadGeneration = useRef(0);
   const boardStatus = useRef<HTMLDivElement>(null);
   const recoveryAction = useRef<HTMLButtonElement>(null);
+  const blockActionRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (identityChanged) recoveryAction.current?.focus();
@@ -128,10 +149,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
     lastFullGameResponseAt.current = 0;
     lastMessageId.current = 0;
     chatTerminal.current = false;
+    chatPolicyUnavailableRef.current = false;
+    chatAccessGeneration.current += 1;
+    blockReconciliationPending.current = false;
+    blockReadGeneration.current += 1;
     resultShownForGame.current = null;
     setGame(null);
     setMessages([]);
     setChatAvailable(false);
+    setChatPolicyUnavailable(false);
+    setBlockedByYou(null);
+    setBlockBusy(false);
+    setBlockReconciling(false);
+    setBlockError(null);
+    setBlockAnnouncement("");
     setConfirmation(null);
     setShowResult(false);
     setGameAnnouncement("");
@@ -184,10 +215,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     const nextGame = gameStateFromPoll(acceptedGame.current, response, receivedAt);
     if (!nextGame) return false;
-    if (
-      nextGame.blackPlayerKey !== playerKey
-      && nextGame.whitePlayerKey !== playerKey
-    ) {
+    if (!deriveGameOpponent(nextGame, playerKey)) {
       identityAuthority.current.invalidate();
       transitionConnection({ kind: "unavailable" });
       clearGameBoundState();
@@ -241,23 +269,36 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const refreshChat = useCallback(async (
     signal: AbortSignal,
     requestIdentity: IdentityRequestToken,
-  ): Promise<GameMessage[] | null> => {
+    accessGeneration: number,
+  ): Promise<GameChatSnapshot | null> => {
     if (!playerKey) return null;
     const response = await fetch(
       `/api/games/${gameId}/chat?after=${lastMessageId.current}`,
-      { cache: "no-store", signal },
+      {
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+        signal,
+      },
     );
-    const data = await readApi<{ messages: GameMessage[] }>(response);
-    if (signal.aborted || !identityAuthority.current.isCurrent(requestIdentity)) return null;
-    return data.messages;
+    const data = await readApi<unknown>(response);
+    if (
+      signal.aborted
+      || !identityAuthority.current.isCurrent(requestIdentity)
+      || chatAccessGeneration.current !== accessGeneration
+    ) {
+      return null;
+    }
+    return parseGameChatSnapshot(data);
   }, [gameId, playerKey]);
 
   const applyChatMessages = useCallback((
     incoming: readonly GameMessage[],
     requestIdentity: IdentityRequestToken,
+    accessGeneration: number,
   ) => {
     if (
       !identityAuthority.current.isCurrent(requestIdentity)
+      || chatAccessGeneration.current !== accessGeneration
       || isTerminalConnection(connectionStateRef.current)
       || chatTerminal.current
     ) {
@@ -271,6 +312,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setMessages((current) => mergeGameMessages(current, incoming));
     }
     return true;
+  }, []);
+
+  const closeChatForPolicy = useCallback(() => {
+    chatAccessGeneration.current += 1;
+    chatPolicyUnavailableRef.current = true;
+    lastMessageId.current = 0;
+    setMessages([]);
+    setChatAvailable(false);
+    setChatPolicyUnavailable(true);
   }, []);
 
   useEffect(() => {
@@ -335,22 +385,40 @@ export function GameRoom({ gameId }: { gameId: string }) {
         return;
       }
       let requestError: unknown = null;
+      const accessGeneration = chatAccessGeneration.current;
       const guardSignal = chatGuard.start();
       const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
       try {
-        const incoming = await refreshChat(signal, requestIdentity);
+        const snapshot = await refreshChat(
+          signal,
+          requestIdentity,
+          accessGeneration,
+        );
         if (
-          incoming
+          snapshot
           && chatGuard.isCurrent(guardSignal)
-          && applyChatMessages(incoming, requestIdentity)
+          && chatAccessGeneration.current === accessGeneration
         ) {
-          setChatAvailable(true);
+          if (!snapshot.available) {
+            closeChatForPolicy();
+          } else if (
+            applyChatMessages(
+              snapshot.messages,
+              requestIdentity,
+              accessGeneration,
+            )
+          ) {
+            chatPolicyUnavailableRef.current = false;
+            setChatPolicyUnavailable(false);
+            setChatAvailable(true);
+          }
         }
       } catch (caughtError) {
         requestError = caughtError;
         if (
           chatGuard.isCurrent(guardSignal)
           && identityAuthority.current.isCurrent(requestIdentity)
+          && chatAccessGeneration.current === accessGeneration
         ) {
           setChatAvailable(false);
           if (
@@ -374,11 +442,27 @@ export function GameRoom({ gameId }: { gameId: string }) {
         ) {
           chatTimer = window.setTimeout(
             pollChat,
-            nextChatPollDelay(gameStatus.current, requestError, document.hidden),
+            chatPolicyUnavailableRef.current
+              ? BLOCKED_CHAT_RECHECK_MS
+              : nextChatPollDelay(gameStatus.current, requestError, document.hidden),
           );
         }
       }
     };
+
+    const requestImmediateChatSync = () => {
+      if (
+        !identityAuthority.current.isCurrent(requestIdentity)
+        || isTerminalConnection(connectionStateRef.current)
+      ) {
+        return;
+      }
+      chatTerminal.current = false;
+      if (chatTimer !== undefined) window.clearTimeout(chatTimer);
+      chatGuard.cancel();
+      void pollChat();
+    };
+    immediateChatSync.current = requestImmediateChatSync;
 
     const requestImmediateSync = (markReconnecting = true) => {
       if (
@@ -428,6 +512,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (immediateGameSync.current === requestImmediateSync) {
         immediateGameSync.current = null;
       }
+      if (immediateChatSync.current === requestImmediateChatSync) {
+        immediateChatSync.current = null;
+      }
       gameGuard.cancel();
       chatGuard.cancel();
       if (gameTimer !== undefined) window.clearTimeout(gameTimer);
@@ -439,6 +526,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [
     applyChatMessages,
     applyConnectionFailure,
+    closeChatForPolicy,
     copy.loadFailed,
     dictionary,
     identityKey,
@@ -446,6 +534,74 @@ export function GameRoom({ gameId }: { gameId: string }) {
     refreshChat,
     refreshGame,
     transitionConnection,
+  ]);
+
+  useEffect(() => {
+    if (!playerKey) return;
+    const requestIdentity = identityAuthority.current.capture();
+    const readGeneration = blockReadGeneration.current + 1;
+    blockReadGeneration.current = readGeneration;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/games/${gameId}/block`, {
+          cache: "no-store",
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(10_000),
+          ]),
+        });
+        const data = await readApi<unknown>(response);
+        if (
+          controller.signal.aborted
+          || !identityAuthority.current.isCurrent(requestIdentity)
+          || blockReadGeneration.current !== readGeneration
+        ) {
+          return;
+        }
+        const state = parsePlayerBlockState(data, playerKey);
+        const reconciledMutation = blockReconciliationPending.current;
+        blockReconciliationPending.current = false;
+        setBlockedByYou(state);
+        setBlockReconciling(false);
+        setBlockError(null);
+        if (reconciledMutation) {
+          setBlockAnnouncement(
+            state
+              ? copy.blockStateRefreshedBlocked
+              : copy.blockStateRefreshedUnblocked,
+          );
+        }
+      } catch (requestError) {
+        if (
+          controller.signal.aborted
+          || !identityAuthority.current.isCurrent(requestIdentity)
+          || blockReadGeneration.current !== readGeneration
+        ) {
+          return;
+        }
+        setBlockedByYou(null);
+        setBlockReconciling(false);
+        setBlockError(localizedApiError(
+          dictionary,
+          requestError,
+          copy.blockStateFailed,
+        ));
+      }
+    })();
+
+    return () => controller.abort();
+  }, [
+    blockReadNonce,
+    copy.blockStateFailed,
+    copy.blockStateRefreshedBlocked,
+    copy.blockStateRefreshedUnblocked,
+    dictionary,
+    gameId,
+    identityKey,
+    playerKey,
   ]);
 
   const yourColor: Stone | null =
@@ -456,6 +612,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ? "white"
           : null
       : null;
+  const opponent = game && playerKey
+    ? deriveGameOpponent(game, playerKey)
+    : null;
   const gameInteractionAllowed = connectionAllowsMutations(connectionState)
     && Boolean(yourColor);
   const canMove =
@@ -623,6 +782,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       return;
     }
     const requestIdentity = identityAuthority.current.capture();
+    const accessGeneration = chatAccessGeneration.current;
     try {
       const response = await fetch(`/api/games/${gameId}/chat`, {
         method: "POST",
@@ -632,7 +792,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         },
         body: JSON.stringify({ message }),
       });
-      const data = await readApi<{ actor: string; message: GameMessage }>(response);
+      const data = await readApi<unknown>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) {
         if (identityAuthority.current.capture().identityKey === requestIdentity.identityKey) {
           throw new ApiRequestError("Message response lost request authority.", {
@@ -642,8 +802,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }
         return;
       }
-      assertResponseActor(data.actor, playerKey);
-      applyChatMessages([data.message], requestIdentity);
+      if (chatAccessGeneration.current !== accessGeneration) return;
+      const sentMessage = parseSentGameMessage(data, playerKey);
+      applyChatMessages([sentMessage], requestIdentity, accessGeneration);
     } catch (requestError) {
       if (!identityAuthority.current.isCurrent(requestIdentity)) {
         if (identityAuthority.current.capture().identityKey === requestIdentity.identityKey) {
@@ -658,18 +819,113 @@ export function GameRoom({ gameId }: { gameId: string }) {
         recoverChangedIdentity();
         throw requestError;
       }
-      setChatAvailable(false);
       if (
         requestError instanceof ApiRequestError
         && [401, 403, 404].includes(requestError.status)
       ) {
+        setChatAvailable(false);
         chatTerminal.current = true;
         applyConnectionFailure(
           requestError,
           nextChatPollDelay(gameStatus.current, requestError, document.hidden),
         );
+        throw requestError;
       }
+      if (chatAccessGeneration.current !== accessGeneration) throw requestError;
+      if (
+        requestError instanceof ApiRequestError
+        && requestError.code === "chat_unavailable"
+      ) {
+        closeChatForPolicy();
+        throw requestError;
+      }
+      setChatAvailable(false);
       throw requestError;
+    }
+  }
+
+  async function updateOpponentBlock(blocked: boolean) {
+    if (
+      !playerKey
+      || !opponent
+      || blockBusy
+      || blockedByYou === null
+      || blockedByYou === blocked
+    ) {
+      return;
+    }
+    const requestIdentity = identityAuthority.current.capture();
+    const previousState = blockedByYou;
+    blockReadGeneration.current += 1;
+    setBlockBusy(true);
+    setBlockReconciling(false);
+    setBlockError(null);
+    try {
+      const response = await fetch(`/api/games/${gameId}/block`, {
+        method: blocked ? "POST" : "DELETE",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = await readApi<unknown>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      const authoritativeState = parsePlayerBlockState(data, playerKey);
+      if (authoritativeState !== blocked) {
+        throw new ApiRequestError("The block response did not confirm the requested state.", {
+          status: 502,
+          code: "invalid_response",
+        });
+      }
+      setBlockedByYou(authoritativeState);
+      setConfirmation(null);
+      if (authoritativeState) {
+        closeChatForPolicy();
+        setBlockAnnouncement(
+          copy.blockedSuccess.replace("{name}", opponent.playerName),
+        );
+      } else {
+        chatAccessGeneration.current += 1;
+        chatTerminal.current = false;
+        chatPolicyUnavailableRef.current = true;
+        lastMessageId.current = 0;
+        setMessages([]);
+        setChatAvailable(false);
+        setChatPolicyUnavailable(true);
+        setBlockAnnouncement(
+          copy.unblockedSuccess.replace("{name}", opponent.playerName),
+        );
+        immediateChatSync.current?.();
+      }
+    } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      if (
+        requestError instanceof ApiRequestError
+        && requestError.code === "identity_changed"
+      ) {
+        recoverChangedIdentity();
+        return;
+      }
+      const outcomeIsAuthoritative = requestError instanceof ApiRequestError
+        && requestError.status >= 400
+        && requestError.status < 500
+        && requestError.status !== 408;
+      if (outcomeIsAuthoritative) {
+        setBlockedByYou(previousState);
+        setBlockError(localizedApiError(
+          dictionary,
+          requestError,
+          blocked ? copy.blockFailed : copy.unblockFailed,
+        ));
+      } else {
+        blockReconciliationPending.current = true;
+        setConfirmation(null);
+        setBlockedByYou(null);
+        setBlockReconciling(true);
+        setBlockError(null);
+        setBlockAnnouncement(copy.blockOutcomeUncertain);
+        setBlockReadNonce((value) => value + 1);
+      }
+    } finally {
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBlockBusy(false);
     }
   }
 
@@ -857,6 +1113,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
         {connectionAnnouncement}
       </p>
+      <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {blockAnnouncement}
+      </p>
       <header className="game-topbar">
         <span className="game-brand">
           <span className="brand-mark"><span /><span /></span>
@@ -980,30 +1239,71 @@ export function GameRoom({ gameId }: { gameId: string }) {
             playerKey={playerKey}
           />
           <ChatPanel
+            blockActionRef={blockActionRef}
+            blockedByYou={opponent ? blockedByYou : null}
+            blockBusy={blockBusy}
+            blockError={confirmation === "block" ? null : blockError}
+            blockReconciling={blockReconciling}
+            chatPolicyUnavailable={chatPolicyUnavailable}
             disabled={
               !chatAvailable
               || !connectionAllowsChat(connectionState)
             }
             key={identityKey}
             messages={messages}
+            onBlock={() => {
+              if (!opponent || blockedByYou !== false) return;
+              setBlockError(null);
+              setConfirmation("block");
+            }}
+            onReloadBlock={() => {
+              setBlockedByYou(null);
+              setBlockReconciling(true);
+              setBlockError(null);
+              setBlockReadNonce((value) => value + 1);
+            }}
             onSend={sendMessage}
+            onUnblock={() => void updateOpponentBlock(false)}
+            opponentName={opponent?.playerName ?? copy.opponent}
             playerKey={playerKey}
           />
         </aside>
       </main>
       <ConfirmModal
-        busy={busy}
-        confirmLabel={confirmation === "resign" ? copy.resignGame : copy.leaveGame}
+        busy={confirmation === "block" ? blockBusy : busy}
+        confirmLabel={
+          confirmation === "block"
+            ? copy.confirmBlock
+            : confirmation === "resign" ? copy.resignGame : copy.leaveGame
+        }
         description={
-          confirmation === "resign"
+          confirmation === "block"
+            ? copy.blockDescription
+            : confirmation === "resign"
             ? copy.resignDescription
             : copy.leaveDescription
         }
-        error={error}
-        onCancel={() => setConfirmation(null)}
-        onConfirm={confirmation === "resign" ? resign : leaveGameRoom}
-        open={confirmation !== null && gameInteractionAllowed}
-        title={confirmation === "resign" ? copy.resignTitle : copy.leaveTitle}
+        error={confirmation === "block" ? blockError : error}
+        finalFocusRef={confirmation === "block" ? blockActionRef : undefined}
+        onCancel={() => {
+          setConfirmation(null);
+          if (confirmation === "block") setBlockError(null);
+        }}
+        onConfirm={
+          confirmation === "block"
+            ? () => void updateOpponentBlock(true)
+            : confirmation === "resign" ? resign : leaveGameRoom
+        }
+        open={
+          confirmation === "block"
+            ? Boolean(opponent && blockedByYou === false)
+            : confirmation !== null && gameInteractionAllowed
+        }
+        title={
+          confirmation === "block"
+            ? copy.blockTitle.replace("{name}", opponent?.playerName ?? copy.opponent)
+            : confirmation === "resign" ? copy.resignTitle : copy.leaveTitle
+        }
       />
       <GameResultModal
         finalFocusRef={boardStatus}

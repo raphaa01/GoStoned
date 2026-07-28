@@ -78,6 +78,24 @@ export const RATE_LIMIT_POLICIES = {
   },
   gameRead: { scope: "game-read", limit: 180, ipLimit: 1_800, windowMinutes: 1 },
   chatRead: { scope: "chat-read", limit: 210, ipLimit: 2_100, windowMinutes: 1 },
+  playerBlockRead: {
+    scope: "player-block-read",
+    limit: 30,
+    ipLimit: 300,
+    windowMinutes: 1,
+  },
+  playerBlockMutationBurst: {
+    scope: "player-block-mutation-burst",
+    limit: 2,
+    ipLimit: 20,
+    windowMinutes: 1 / 6,
+  },
+  playerBlockMutation: {
+    scope: "player-block-mutation",
+    limit: 10,
+    ipLimit: 100,
+    windowMinutes: 1,
+  },
   moveBurst: {
     scope: "game-move-burst",
     limit: 6,

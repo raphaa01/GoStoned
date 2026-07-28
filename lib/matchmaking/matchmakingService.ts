@@ -2,6 +2,10 @@ import { query, withTransaction } from "@/lib/db";
 import { DEFAULT_MATCH_RULES, resolveRulesConfiguration } from "@/lib/game/rulesPolicy";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
+import {
+  isPlayerPairBlocked,
+  lockPlayerPair,
+} from "@/lib/moderation/playerBlockService";
 
 export type MatchmakingStatus =
   | { status: "idle"; gameId: null; boardSize: null; timeControl: null }
@@ -23,6 +27,8 @@ type QueueRow = {
 type CancellationOptions = {
   staleOnly?: boolean;
 };
+
+const MAX_BLOCKED_CANDIDATE_RECHECKS = 8;
 
 export function isBoardSize(value: unknown): value is BoardSize {
   return value === 9 || value === 13 || value === 19;
@@ -155,28 +161,58 @@ export async function joinMatchmaking(
       [playerKey, boardSize, timeControlId, rules.rulesProfile],
     );
 
-    const opponentResult = await client.query<QueueRow>(
-      `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
-              q.status, q.game_id, q.created_at
-         FROM matchmaking_queue q
-        WHERE q.board_size = $1 AND q.time_control = $2
-          AND q.rules_profile = $3
-          AND q.status = 'waiting' AND q.player_key <> $4
-          AND NOT EXISTS (
-            SELECT 1
-              FROM games active_game
-             WHERE active_game.status = 'active'
-               AND (
-                 active_game.black_player_key = q.player_key
-                 OR active_game.white_player_key = q.player_key
-               )
-          )
-        ORDER BY q.created_at
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED`,
-      [boardSize, timeControlId, rules.rulesProfile, playerKey],
-    );
-    const opponent = opponentResult.rows[0];
+    let opponent: QueueRow | undefined;
+    for (
+      let attempt = 0;
+      attempt < MAX_BLOCKED_CANDIDATE_RECHECKS && !opponent;
+      attempt += 1
+    ) {
+      const opponentResult = await client.query<QueueRow>(
+        `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
+                q.status, q.game_id, q.created_at
+           FROM matchmaking_queue q
+          WHERE q.board_size = $1 AND q.time_control = $2
+            AND q.rules_profile = $3
+            AND q.status = 'waiting' AND q.player_key <> $4
+            AND NOT EXISTS (
+              SELECT 1
+                FROM games active_game
+               WHERE active_game.status = 'active'
+                 AND (
+                   active_game.black_player_key = q.player_key
+                   OR active_game.white_player_key = q.player_key
+                 )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM player_blocks
+               WHERE blocker_key = $4 AND blocked_key = q.player_key
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM player_blocks
+               WHERE blocker_key = q.player_key AND blocked_key = $4
+            )
+          ORDER BY q.created_at, q.player_key
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED`,
+        [boardSize, timeControlId, rules.rulesProfile, playerKey],
+      );
+      const candidate = opponentResult.rows[0];
+      if (!candidate) {
+        return {
+          status: "waiting",
+          gameId: null,
+          boardSize,
+          timeControl: timeControlId,
+        };
+      }
+
+      // The pair lock makes the final eligibility check linearizable with
+      // blocking and chat. The queue/pool locks are always acquired first;
+      // block and chat operations never acquire them, avoiding a lock cycle.
+      await lockPlayerPair(client, playerKey, candidate.player_key);
+      if (await isPlayerPairBlocked(client, playerKey, candidate.player_key)) continue;
+      opponent = candidate;
+    }
     if (!opponent) {
       return {
         status: "waiting",

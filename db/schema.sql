@@ -472,6 +472,18 @@ CREATE TABLE IF NOT EXISTS game_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS player_blocks (
+  blocker_key TEXT NOT NULL,
+  blocked_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT player_blocks_pkey PRIMARY KEY (blocker_key, blocked_key),
+  CONSTRAINT player_blocks_distinct_players_check CHECK (blocker_key <> blocked_key),
+  CONSTRAINT player_blocks_key_bounds_check CHECK (
+    blocker_key ~ '^(user|guest):[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    AND blocked_key ~ '^(user|guest):[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  )
+);
+
 -- Keep the bootstrap idempotent when an early local prototype already created tables.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
@@ -1077,6 +1089,11 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires
 CREATE INDEX IF NOT EXISTS idx_guest_sessions_expires_at ON guest_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at);
 CREATE INDEX IF NOT EXISTS idx_game_messages_game_id_id ON game_messages(game_id, id);
+CREATE INDEX IF NOT EXISTS idx_player_blocks_blocked_blocker
+  ON player_blocks(blocked_key, blocker_key);
+CREATE INDEX IF NOT EXISTS idx_player_blocks_guest_retention
+  ON player_blocks(created_at, blocker_key, blocked_key)
+  WHERE blocker_key LIKE 'guest:%' OR blocked_key LIKE 'guest:%';
 CREATE INDEX IF NOT EXISTS idx_game_dead_stones_game_id ON game_dead_stones(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_japanese_dead_stones_game_id
   ON game_japanese_dead_stones(game_id);
@@ -1325,6 +1342,7 @@ ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE guest_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_scoring_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_dead_stones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_scoring_resume_events ENABLE ROW LEVEL SECURITY;
@@ -1333,12 +1351,14 @@ ALTER TABLE game_japanese_dead_stones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_japanese_neutral_region_seeds ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON game_scoring_resume_events FROM PUBLIC;
+REVOKE ALL ON player_blocks FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
+      player_blocks,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
       game_japanese_scoring_state,
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM anon;
@@ -1346,6 +1366,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
+      player_blocks,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
       game_japanese_scoring_state,
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM authenticated;
