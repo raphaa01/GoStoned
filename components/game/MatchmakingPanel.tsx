@@ -1,6 +1,7 @@
 "use client";
 
 import { Radio, RefreshCw, Search, Users, X } from "lucide-react";
+import type { RefObject } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
@@ -17,6 +18,7 @@ type MatchmakingPanelProps = {
   onFind: () => void;
   onCancel: () => void;
   onRetry: () => void;
+  primaryActionRef?: RefObject<HTMLButtonElement | null>;
 };
 
 export function MatchmakingPanel({
@@ -30,6 +32,7 @@ export function MatchmakingPanel({
   onFind,
   onCancel,
   onRetry,
+  primaryActionRef,
 }: MatchmakingPanelProps) {
   const { dictionary } = useI18n();
   const copy = dictionary.play;
@@ -91,6 +94,7 @@ export function MatchmakingPanel({
           className="match-button"
           disabled={busy || (!ready && !error)}
           onClick={ready ? onFind : onRetry}
+          ref={primaryActionRef}
           size="lg"
         >
           {busy ? (

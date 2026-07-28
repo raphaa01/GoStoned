@@ -97,25 +97,41 @@ export function ProfileView() {
   const selectedGames = recentGames.filter((game) => game.boardSize === selectedBoardSize);
   const recentForm = selectedGames.slice(0, 10);
   const thirtyDayChange = selectedStat?.ratingChange30Days ?? 0;
+  const profileStatus = (
+    <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+      {loading || !loaded ? copy.loading : copy.loadComplete}
+    </p>
+  );
 
-  if (loading || !loaded) return <div className="profile-loading">{copy.loading}</div>;
+  if (loading || !loaded) {
+    return (
+      <>
+        {profileStatus}
+        <div aria-hidden="true" className="profile-loading">{copy.loading}</div>
+      </>
+    );
+  }
 
   if (!user) {
     return (
-      <section className="profile-guest">
-        <span className="profile-avatar"><UserRoundPlus size={34} /></span>
-        <h1>{copy.guestTitle}</h1>
-        <p>{copy.guestDescription}</p>
-        <div>
-          <Link className="button button--primary button--lg" href={href("/register")}>{copy.createAccount}</Link>
-          <Link className="button button--secondary button--lg" href={href("/login")}><LogIn size={18} /> {copy.login}</Link>
-        </div>
-      </section>
+      <>
+        {profileStatus}
+        <section className="profile-guest">
+          <span className="profile-avatar"><UserRoundPlus size={34} /></span>
+          <h1>{copy.guestTitle}</h1>
+          <p>{copy.guestDescription}</p>
+          <div>
+            <Link className="button button--primary button--lg" href={href("/register")}>{copy.createAccount}</Link>
+            <Link className="button button--secondary button--lg" href={href("/login")}><LogIn size={18} /> {copy.login}</Link>
+          </div>
+        </section>
+      </>
     );
   }
 
   return (
     <>
+      {profileStatus}
       <header className="profile-header">
         <span className="profile-avatar">{user.displayName.slice(0, 2).toUpperCase()}</span>
         <div>

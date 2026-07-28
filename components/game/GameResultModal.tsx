@@ -1,10 +1,11 @@
 "use client";
 
 import { Eye, Home, Minus, RotateCcw, Trophy, XCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type RefObject, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import type { Dictionary } from "@/lib/i18n/dictionary";
+import { ModalDialog } from "@/components/ui/ModalDialog";
 import type { GameState } from "@/lib/game/types";
+import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 
 type GameResultModalProps = {
@@ -14,17 +15,8 @@ type GameResultModalProps = {
   onHome: () => void;
   onPlayAgain: () => void;
   onViewBoard: () => void;
+  finalFocusRef?: RefObject<HTMLElement | null>;
 };
-
-function resultDescription(result: string | null, copy: Dictionary["game"]) {
-  if (!result) return copy.ended;
-  const [winner, detail] = result.split("+");
-  if (winner !== "B" && winner !== "W") return result;
-  const color = winner === "B" ? copy.black : copy.white;
-  if (detail === "R") return `${color} ${copy.winsResignation}`;
-  if (detail === "T") return `${color} ${copy.winsTime}`;
-  return `${color} ${copy.winsPoints} ${detail} ${copy.points}`;
-}
 
 export function GameResultModal({
   game,
@@ -33,82 +25,28 @@ export function GameResultModal({
   onHome,
   onPlayAgain,
   onViewBoard,
+  finalFocusRef,
 }: GameResultModalProps) {
   const { dictionary } = useI18n();
   const copy = dictionary.game;
   const rulesSummary = localizedRulesSummary(game, dictionary);
-  const dialog = useRef<HTMLElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
   const playAgainButton = useRef<HTMLButtonElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const onViewBoardRef = useRef(onViewBoard);
+  const exitingRef = useRef(false);
+  const [exiting, setExiting] = useState(false);
 
-  useEffect(() => {
-    onViewBoardRef.current = onViewBoard;
-  }, [onViewBoard]);
-
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    previousFocus.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    document.body.style.overflow = "hidden";
-    const backdrop = dialog.current?.parentElement;
-    const background = backdrop?.parentElement
-      ? Array.from(backdrop.parentElement.children).filter(
-          (element): element is HTMLElement => element instanceof HTMLElement && element !== backdrop,
-        )
-      : [];
-    const backgroundState = background.map((element) => ({
-      element,
-      inert: element.inert,
-      ariaHidden: element.getAttribute("aria-hidden"),
-    }));
-    for (const element of background) {
-      element.inert = true;
-      element.setAttribute("aria-hidden", "true");
+  async function exitResult(action: () => void | Promise<void>) {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    setExiting(true);
+    try {
+      await action();
+    } catch {
+      exitingRef.current = false;
+      setExiting(false);
     }
-    playAgainButton.current?.focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onViewBoardRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !dialog.current) return;
-      const focusable = Array.from(
-        dialog.current.querySelectorAll<HTMLElement>(
-          "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
-        ),
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialog.current.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !dialog.current.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-      for (const { element, inert, ariaHidden } of backgroundState) {
-        element.inert = inert;
-        if (ariaHidden === null) element.removeAttribute("aria-hidden");
-        else element.setAttribute("aria-hidden", ariaHidden);
-      }
-      if (previousFocus.current?.isConnected) previousFocus.current.focus();
-    };
-  }, [open]);
+  }
 
   if (!open) return null;
 
@@ -126,21 +64,22 @@ export function GameResultModal({
   );
 
   return (
-    <div className="modal-backdrop modal-backdrop--result">
-      <section
-        aria-labelledby="game-result-title"
-        aria-modal="true"
-        className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
-        ref={dialog}
-        role="dialog"
-        tabIndex={-1}
-      >
+    <ModalDialog
+      backdropClassName="modal-backdrop--result"
+      className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
+      descriptionId={descriptionId}
+      finalFocusRef={finalFocusRef}
+      initialFocusRef={playAgainButton}
+      onDismiss={exiting ? undefined : () => void exitResult(onViewBoard)}
+      open={open}
+      titleId={titleId}
+    >
         <div className="result-modal-header">
           <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
           <div>
             <span className="result-modal-kicker">{copy.complete}</span>
-            <h2 id="game-result-title">{outcome}</h2>
-            <p>{resultDescription(game.result, copy)}</p>
+            <h2 id={titleId}>{outcome}</h2>
+            <p id={descriptionId}>{localizedGameResult(game.result, copy)}</p>
           </div>
           <strong className="result-code">{game.result ?? copy.draw}</strong>
         </div>
@@ -195,18 +134,21 @@ export function GameResultModal({
 
         <button
           className="button button--primary result-primary"
-          onClick={onPlayAgain}
+          disabled={exiting}
+          onClick={() => void exitResult(onPlayAgain)}
           ref={playAgainButton}
           type="button"
         >
           <RotateCcw size={18} />
           {copy.findAnother}
         </button>
+        <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+          {exiting ? dictionary.common.pleaseWait : ""}
+        </span>
         <div className="result-secondary-actions">
-          <button onClick={onViewBoard} type="button"><Eye size={16} /> {copy.viewBoard}</button>
-          <button onClick={onHome} type="button"><Home size={16} /> {copy.home}</button>
+          <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button"><Eye size={16} /> {copy.viewBoard}</button>
+          <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button"><Home size={16} /> {copy.home}</button>
         </div>
-      </section>
-    </div>
+    </ModalDialog>
   );
 }

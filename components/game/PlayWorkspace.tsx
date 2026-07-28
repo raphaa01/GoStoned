@@ -2,7 +2,7 @@
 
 import { ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -45,6 +45,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const matchmakingAction = useRef<HTMLButtonElement>(null);
 
   const handleQueueState = useCallback((queue: QueueState, enterMatchedGame: boolean) => {
     if (queue.boardSize) setBoardSize(queue.boardSize);
@@ -206,7 +207,10 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             timeControl={activeGame.timeControl}
             busy={busy}
             error={error}
-            onLeave={() => setConfirmLeave(true)}
+            onLeave={() => {
+              setError(null);
+              setConfirmLeave(true);
+            }}
             onResume={() => router.push(href(`/game/${activeGame.gameId}`))}
           />
         ) : (
@@ -236,6 +240,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
               onCancel={cancelSearch}
               onFind={findMatch}
               onRetry={retryIdentity}
+              primaryActionRef={matchmakingAction}
               playerName={playerName}
               ready={Boolean(playerKey) && !loading}
               status={queueStatus}
@@ -248,6 +253,8 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
         busy={busy}
         confirmLabel={copy.leaveGame}
         description={copy.leaveDescription}
+        error={error}
+        finalFocusRef={matchmakingAction}
         onCancel={() => setConfirmLeave(false)}
         onConfirm={leaveActiveGame}
         open={confirmLeave}

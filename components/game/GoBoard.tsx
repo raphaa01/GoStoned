@@ -2,6 +2,14 @@
 
 import { useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import {
+  formatBoardLabel,
+  goColumnLabel,
+  goCoordinate,
+  isBoardNavigationKey,
+  joinBoardLabels,
+  moveBoardFocus,
+} from "@/lib/game/boardAccessibility";
 import type { Board, Position } from "@/lib/game/types";
 
 type GoBoardProps = {
@@ -11,6 +19,7 @@ type GoBoardProps = {
   disabled?: boolean;
   interactionMode?: "play" | "mark-dead";
   deadStones?: Position[];
+  lastMove?: Position | null;
 };
 
 function isStarPoint(size: number, x: number, y: number) {
@@ -30,6 +39,7 @@ export function GoBoard({
   disabled = false,
   interactionMode = "play",
   deadStones = [],
+  lastMove = null,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
   const copy = dictionary.game;
@@ -40,9 +50,10 @@ export function GoBoard({
     const firstStone = boardState.flat().findIndex(Boolean);
     return firstStone >= 0 ? firstStone : 0;
   });
-  const intersections = Array.from({ length: boardSize * boardSize });
   const gridLines = Array.from({ length: boardSize });
   const gridPosition = (value: number) => `${(value / (boardSize - 1)) * 100}%`;
+  const intersectionPosition = (value: number) =>
+    `calc(7% + ${(value / (boardSize - 1)) * 86}%)`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
   return (
     <div
@@ -60,6 +71,7 @@ export function GoBoard({
       <span className="sr-only" id={instructionsId}>
         {copy.boardInstructions}{" "}
         {interactionMode === "mark-dead" ? copy.markInstruction : copy.playInstruction}
+        {" "}{copy.coordinateInstructions}
       </span>
       <div className="go-board-grid" aria-hidden="true">
         {gridLines.map((_, index) => (
@@ -77,6 +89,26 @@ export function GoBoard({
           />
         ))}
       </div>
+      <div aria-hidden="true" className="board-coordinate-labels">
+        {gridLines.map((_, x) => (
+          <span
+            className="board-coordinate board-coordinate--column"
+            key={`column-${x}`}
+            style={{ left: intersectionPosition(x) }}
+          >
+            {goColumnLabel(boardSize, x)}
+          </span>
+        ))}
+        {gridLines.map((_, y) => (
+          <span
+            className="board-coordinate board-coordinate--row"
+            key={`row-label-${y}`}
+            style={{ top: intersectionPosition(y) }}
+          >
+            {boardSize - y}
+          </span>
+        ))}
+      </div>
       <div
         aria-colcount={boardSize}
         aria-describedby={instructionsId}
@@ -91,11 +123,12 @@ export function GoBoard({
               const index = y * boardSize + x;
               const stone = boardState[y]?.[x] ?? null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
-              const stoneColor = stone === "black" ? copy.black : copy.white;
+              const stoneLabel = stone === "black" ? copy.blackStone : copy.whiteStone;
+              const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
+              const coordinate = goCoordinate(boardSize, x, y);
+              const isLastMove = lastMove?.x === x && lastMove.y === y;
               const actionable =
                 !disabled && (interactionMode === "play" ? !stone : Boolean(stone));
-              const position = (value: number) =>
-                `calc(7% + ${(value / (boardSize - 1)) * 86}%)`;
               const moveFocus = (nextIndex: number) => {
                 setFocusIndex(nextIndex);
                 window.requestAnimationFrame(() => buttonRefs.current[nextIndex]?.focus());
@@ -106,12 +139,28 @@ export function GoBoard({
                   aria-disabled={!actionable}
                   aria-label={
                     interactionMode === "mark-dead" && stone
-                      ? `${markedDead ? copy.restore : copy.mark} ${stoneColor} ${copy.groupAt} ${x + 1}, ${copy.row} ${y + 1} ${markedDead ? copy.asAlive : copy.asDead}`
+                      ? joinBoardLabels(
+                          formatBoardLabel(markedDead ? copy.restoreGroupLabel : copy.markGroupLabel, {
+                            group: groupLabel,
+                            coordinate,
+                          }),
+                          markedDead && copy.deadStoneState,
+                          isLastMove && copy.lastMoveState,
+                        )
                       : interactionMode === "mark-dead"
-                      ? `${copy.emptyIntersection} ${x + 1}, ${copy.row} ${y + 1}`
+                      ? formatBoardLabel(copy.emptyIntersectionLabel, { coordinate })
                       : stone
-                      ? `${stoneColor} ${copy.stoneAt} ${x + 1}, ${copy.row} ${y + 1}`
-                      : `${copy.placeStone} ${x + 1}, ${copy.row} ${y + 1}`
+                      ? joinBoardLabels(
+                          formatBoardLabel(copy.stoneIntersectionLabel, {
+                            stone: stoneLabel,
+                            coordinate,
+                          }),
+                          isLastMove && copy.lastMoveState,
+                        )
+                      : formatBoardLabel(
+                          actionable ? copy.placeStoneLabel : copy.emptyIntersectionLabel,
+                          { coordinate },
+                        )
                   }
                   aria-selected={interactionMode === "mark-dead" && stone ? markedDead : undefined}
                   className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""}`}
@@ -121,21 +170,17 @@ export function GoBoard({
                   }}
                   onFocus={() => setFocusIndex(index)}
                   onKeyDown={(event) => {
-                    let nextIndex = index;
-                    if (event.key === "ArrowLeft") nextIndex = Math.max(0, index - 1);
-                    else if (event.key === "ArrowRight") {
-                      nextIndex = Math.min(intersections.length - 1, index + 1);
-                    } else if (event.key === "ArrowUp") {
-                      nextIndex = Math.max(0, index - boardSize);
-                    } else if (event.key === "ArrowDown") {
-                      nextIndex = Math.min(intersections.length - 1, index + boardSize);
-                    } else if (event.key === "Home") nextIndex = y * boardSize;
-                    else if (event.key === "End") nextIndex = y * boardSize + boardSize - 1;
-                    else if ((event.key === "Enter" || event.key === " ") && !actionable) {
+                    const nextIndex = moveBoardFocus(
+                      index,
+                      event.key,
+                      boardSize,
+                      event.ctrlKey || event.metaKey,
+                    );
+                    if (isBoardNavigationKey(event.key)) event.preventDefault();
+                    if ((event.key === "Enter" || event.key === " ") && !actionable) {
                       event.preventDefault();
                     }
                     if (nextIndex !== index) {
-                      event.preventDefault();
                       moveFocus(nextIndex);
                     }
                   }}
@@ -143,7 +188,7 @@ export function GoBoard({
                     buttonRefs.current[index] = node;
                   }}
                   role="gridcell"
-                  style={{ left: position(x), top: position(y) }}
+                  style={{ left: intersectionPosition(x), top: intersectionPosition(y) }}
                   tabIndex={focusIndex === index ? 0 : -1}
                   type="button"
                 >
@@ -153,6 +198,7 @@ export function GoBoard({
                       ×
                     </span>
                   ) : null}
+                  {isLastMove ? <span aria-hidden="true" className="last-move-mark" /> : null}
                 </button>
               );
             })}

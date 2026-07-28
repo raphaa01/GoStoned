@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageCircle, Send } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { GameMessage } from "@/lib/game/chatService";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -20,6 +20,7 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -42,9 +43,16 @@ export function ChatPanel({ messages, playerKey, disabled, onSend }: ChatPanelPr
   }
 
   return (
-    <section className="chat-panel">
-      <header><MessageCircle size={18} /><strong>{copy.chatTitle}</strong></header>
-      <div className="chat-list" ref={listRef} aria-live="polite">
+    <section aria-labelledby={titleId} className="chat-panel">
+      <header><MessageCircle size={18} /><h2 id={titleId}>{copy.chatTitle}</h2></header>
+      <div
+        aria-atomic="false"
+        aria-live="polite"
+        aria-relevant="additions"
+        className="chat-list"
+        ref={listRef}
+        role="log"
+      >
         {messages.length === 0 ? (
           <p className="chat-empty">{copy.chatEmpty}</p>
         ) : messages.map((message) => (

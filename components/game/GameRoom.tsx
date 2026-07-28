@@ -16,6 +16,7 @@ import {
   shouldPollGame,
 } from "@/lib/client/polling";
 import type { GameMessage } from "@/lib/game/chatService";
+import { describeGameChange } from "@/lib/game/gameAccessibility";
 import type { GameState, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
@@ -41,11 +42,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
+  const [gameAnnouncement, setGameAnnouncement] = useState("");
   const lastMessageId = useRef(0);
   const resultShownForGame = useRef<string | null>(null);
   const latestGameVersion = useRef(-1);
   const latestGameId = useRef<string | null>(null);
   const gameStatus = useRef<GameState["status"] | null>(null);
+  const acceptedGame = useRef<GameState | null>(null);
+  const boardStatus = useRef<HTMLDivElement>(null);
 
   const acceptGameState = useCallback((nextGame: GameState) => {
     if (nextGame.id !== gameId) return;
@@ -56,6 +60,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (nextGame.version < latestGameVersion.current) return;
     latestGameVersion.current = nextGame.version;
     gameStatus.current = nextGame.status;
+    const announcement = describeGameChange(acceptedGame.current, nextGame, copy);
+    acceptedGame.current = nextGame;
+    if (announcement) setGameAnnouncement(announcement);
     setGame({
       ...nextGame,
       clock: { ...nextGame.clock, clientReceivedAt: Date.now() },
@@ -68,7 +75,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setConfirmation(null);
       setShowResult(true);
     }
-  }, [gameId]);
+  }, [copy, gameId]);
 
   const refreshGame = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey) return;
@@ -256,6 +263,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (playerKey) {
       await fetch("/api/matchmaking", {
         method: "DELETE",
+        signal: AbortSignal.timeout(5_000),
       }).catch(() => undefined);
     }
     router.replace(href(destination));
@@ -264,6 +272,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   async function leaveGameRoom() {
     if (!game || !playerKey || busy) return;
     if (game.status === "active" && confirmation !== "leave") {
+      setError(null);
       setConfirmation("leave");
       return;
     }
@@ -301,6 +310,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   return (
     <div className="focused-game-shell">
+      <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {gameAnnouncement}
+      </p>
       <header className="game-topbar">
         <span className="game-brand">
           <span className="brand-mark"><span /><span /></span>
@@ -317,7 +329,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
       <main className="focused-game-layout">
         <section className="focused-board-panel">
-          <div className="focused-board-status">
+          <div className="focused-board-status" ref={boardStatus} tabIndex={-1}>
             <strong>
               {canMove
                 ? copy.yourTurn
@@ -336,6 +348,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
               deadStones={game.scoring?.deadStones}
               disabled={!canMove && !canMarkDead}
               interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
+              lastMove={(() => {
+                const move = game.moves.at(-1);
+                return move && !move.isPass && move.x !== null && move.y !== null
+                  ? { x: move.x, y: move.y }
+                  : null;
+              })()}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {
                   const dead = !game.scoring.deadStones.some(
@@ -365,7 +383,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true })}
             onConfirmScore={() => scoringAction("confirm", {})}
-            onResign={() => setConfirmation("resign")}
+            onResign={() => {
+              setError(null);
+              setConfirmation("resign");
+            }}
             onResumePlay={(claim, disputedStone) => {
               void scoringAction("resume", {
                 claim,
@@ -391,12 +412,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
             ? copy.resignDescription
             : copy.leaveDescription
         }
+        error={error}
         onCancel={() => setConfirmation(null)}
         onConfirm={confirmation === "resign" ? resign : leaveGameRoom}
         open={confirmation !== null}
         title={confirmation === "resign" ? copy.resignTitle : copy.leaveTitle}
       />
       <GameResultModal
+        finalFocusRef={boardStatus}
         game={game}
         onHome={() => clearFinishedGame("/")}
         onPlayAgain={() => clearFinishedGame("/play")}
