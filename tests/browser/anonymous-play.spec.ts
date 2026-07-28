@@ -63,6 +63,7 @@ type ApiHarness = {
 type ApiHarnessOptions = {
   guestUnavailable?: boolean;
   holdSession?: boolean;
+  realLocaleMutation?: boolean;
 };
 
 function blankBoard() {
@@ -384,6 +385,10 @@ async function installApiHarness(
       return;
     }
     if (method === "POST" && url.pathname === "/api/locale" && exactQuery(url, {})) {
+      if (options.realLocaleMutation) {
+        await route.continue();
+        return;
+      }
       recordJsonContentType(harness, request);
       const body = request.postDataJSON() as { locale?: unknown };
       if (body.locale !== "en" && body.locale !== "de") {
@@ -721,11 +726,28 @@ for (const locale of ["en", "de"] as const) {
 }
 
 test("language switch preserves the play route, query, and fragment", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "chromium-1024", "One desktop project covers route preservation.");
-  const harness = await installApiHarness(page);
+  test.skip(
+    !["chromium-320-touch", "chromium-1024"].includes(testInfo.project.name),
+    "One touch and one desktop project cover the real locale switch.",
+  );
+  const harness = await installApiHarness(page, { realLocaleMutation: true });
 
   await page.goto("/play?size=19&source=browser#queue");
-  await page.getByRole("button", { name: "German" }).click();
+  let languageButton = page.getByRole("button", { name: "German" });
+  if (testInfo.project.name === "chromium-320-touch") {
+    const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
+    await page.locator(".mobile-nav > .icon-button").click();
+    await expect(mobileNavigation).toBeVisible();
+    languageButton = mobileNavigation.getByRole("button", { name: "German" });
+  }
+  const localeResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST"
+      && new URL(response.url()).pathname === "/api/locale",
+  );
+  await languageButton.click();
+  const response = await localeResponse;
+  expect(response.status()).toBe(200);
+  expect(response.headers()["cache-control"]).toContain("no-store");
   await expect(page).toHaveURL(`${ORIGIN}/de/play?size=19&source=browser#queue`);
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.getByRole("button", { name: /19×19/ })).toHaveAttribute("aria-pressed", "true");
