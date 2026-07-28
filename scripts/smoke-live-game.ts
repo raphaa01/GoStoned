@@ -41,7 +41,7 @@ async function post<T>(
   path: string,
   body: object,
   cookie: string,
-  expectedPlayerKey?: string,
+  expectedPlayerKey: string,
 ): Promise<T> {
   return request<T>(path, {
     method: "POST",
@@ -102,18 +102,24 @@ async function run() {
 
   const impersonationAttempt = await fetch(`${baseUrl}/api/games/${gameId}/moves`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: white.cookie },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: white.cookie,
+      [EXPECTED_PLAYER_HEADER]: white.playerKey,
+    },
     body: JSON.stringify({ playerKey: black.playerKey, x: 1, y: 1 }),
   });
   assert.equal(impersonationAttempt.status, 409);
   const impersonationBody = (await impersonationAttempt.json()) as { code?: string };
   assert.equal(impersonationBody.code, "not_your_turn");
 
-  const blackMove = await post<{ game: { moveCount: number; turn: string } }>(
+  const blackMove = await post<{ actor: string; game: { moveCount: number; turn: string } }>(
     `/api/games/${gameId}/moves`,
     { x: 2, y: 2 },
     black.cookie,
+    black.playerKey,
   );
+  assert.equal(blackMove.actor, black.playerKey);
   assert.equal(blackMove.game.moveCount, 1);
   assert.equal(blackMove.game.turn, "white");
 
@@ -121,11 +127,12 @@ async function run() {
     `/api/games/${gameId}/moves`,
     { x: 3, y: 2 },
     white.cookie,
+    white.playerKey,
   );
   assert.equal(whiteMove.game.moveCount, 2);
   assert.equal(whiteMove.game.turn, "black");
 
-  await post(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie);
+  await post(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
   const stopped = await post<{
     game: {
       status: string;
@@ -135,7 +142,7 @@ async function run() {
       scoring: { revision: number };
       clock: { black: { mainTimeMs: number }; white: { mainTimeMs: number } };
     };
-  }>(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie);
+  }>(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
   assert.equal(stopped.game.status, "active");
   assert.equal(stopped.game.phase, "scoring");
   assert.equal(stopped.game.result, null);
@@ -147,7 +154,11 @@ async function run() {
     `${baseUrl}/api/games/${gameId}/scoring/confirm`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: outsider.cookie },
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: outsider.cookie,
+        [EXPECTED_PLAYER_HEADER]: outsider.playerKey,
+      },
       body: JSON.stringify({
         playerKey: black.playerKey,
         expectedRevision: firstScoringRevision,
@@ -196,7 +207,7 @@ async function run() {
     y: 2,
     dead: true,
     expectedRevision: firstScoringRevision,
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
 
   const resumed = await post<{
@@ -206,22 +217,26 @@ async function run() {
     claim: "alive",
     x: 3,
     y: 2,
-  }, white.cookie);
+  }, white.cookie, white.playerKey);
   assert.equal(resumed.game.phase, "play");
   assert.equal(resumed.game.turn, "black");
   assert.equal(resumed.game.scoring, null);
 
-  await post(`/api/games/${gameId}/moves`, { x: 4, y: 2 }, black.cookie);
-  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie);
+  await post(`/api/games/${gameId}/moves`, { x: 4, y: 2 }, black.cookie, black.playerKey);
+  await post(`/api/games/${gameId}/moves`, { isPass: true }, white.cookie, white.playerKey);
   const restopped = await post<{
     game: { phase: string; scoring: { revision: number } };
-  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie);
+  }>(`/api/games/${gameId}/moves`, { isPass: true }, black.cookie, black.playerKey);
   assert.equal(restopped.game.phase, "scoring");
   assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
 
   const staleConfirmation = await fetch(`${baseUrl}/api/games/${gameId}/scoring/confirm`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: white.cookie },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: white.cookie,
+      [EXPECTED_PLAYER_HEADER]: white.playerKey,
+    },
     body: JSON.stringify({ expectedRevision: challengedProposal.game.scoring.revision }),
   });
   assert.equal(staleConfirmation.status, 409);
@@ -230,7 +245,7 @@ async function run() {
     game: { status: string; scoring: { revision: number; blackConfirmed: boolean } };
   }>(`/api/games/${gameId}/scoring/confirm`, {
     expectedRevision: restopped.game.scoring.revision,
-  }, black.cookie);
+  }, black.cookie, black.playerKey);
   assert.equal(firstConfirmation.game.status, "active");
   assert.equal(firstConfirmation.game.scoring.blackConfirmed, true);
 
@@ -247,7 +262,7 @@ async function run() {
     y: 2,
     dead: true,
     expectedRevision: firstConfirmation.game.scoring.revision,
-  }, white.cookie);
+  }, white.cookie, white.playerKey);
   assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
@@ -256,11 +271,13 @@ async function run() {
       `/api/games/${gameId}/scoring/confirm`,
       { expectedRevision: marked.game.scoring.revision },
       black.cookie,
+      black.playerKey,
     ),
     post<{ game: { status: string; result: string | null; moveCount: number; rated: boolean } }>(
       `/api/games/${gameId}/scoring/confirm`,
       { expectedRevision: marked.game.scoring.revision },
       white.cookie,
+      white.playerKey,
     ),
   ]);
   assert.deepEqual(
@@ -277,6 +294,7 @@ async function run() {
     `/api/games/${gameId}/scoring/confirm`,
     { expectedRevision: marked.game.scoring.revision },
     black.cookie,
+    black.playerKey,
   );
   assert.equal(retry.game.status, "finished");
   assert.equal(retry.game.result, finished.game.result);

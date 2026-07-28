@@ -1,6 +1,7 @@
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { ApiRequestError, readApi } from "./api";
+import { assertResponseActor } from "./identityAuthority";
 
 export type LeaveGameResult =
   | { kind: "left" }
@@ -32,7 +33,10 @@ export async function leaveGameAndQueue(
     signal,
   });
 
-  if (!resignResponse.ok) {
+  if (resignResponse.ok) {
+    const resignation = await readApi<{ actor: string }>(resignResponse);
+    assertResponseActor(resignation.actor, expectedPlayerKey);
+  } else {
     try {
       await readApi(resignResponse);
     } catch (error) {
@@ -51,12 +55,7 @@ export async function leaveGameAndQueue(
       signal,
     }),
   );
-  if (cancellation.actor !== expectedPlayerKey) {
-    throw new ApiRequestError("The player session changed.", {
-      status: 409,
-      code: "identity_changed",
-    });
-  }
+  assertResponseActor(cancellation.actor, expectedPlayerKey);
   const queue = cancellation.matchmaking;
   if (
     queue.status === "matched"

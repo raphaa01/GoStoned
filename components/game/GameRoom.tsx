@@ -22,6 +22,7 @@ import {
   operationAffectsConnection,
 } from "@/lib/client/gameConnection";
 import {
+  assertResponseActor,
   createIdentityRequestAuthority,
   type IdentityRequestToken,
 } from "@/lib/client/identityAuthority";
@@ -63,6 +64,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
+  const [identityChanged, setIdentityChanged] = useState(false);
   const [gameAnnouncement, setGameAnnouncement] = useState("");
   const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
   const [connectionState, setConnectionState] = useState<GameConnectionState>(
@@ -81,6 +83,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const identityAuthority = useRef(createIdentityRequestAuthority(identityKey));
   const immediateGameSync = useRef<((markReconnecting?: boolean) => void) | null>(null);
   const boardStatus = useRef<HTMLDivElement>(null);
+  const recoveryAction = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (identityChanged) recoveryAction.current?.focus();
+  }, [identityChanged]);
 
   const connectionAnnouncementText = useCallback((state: GameConnectionState) => {
     if (state.kind === "live") return copy.live;
@@ -137,6 +144,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setConnectionState(INITIAL_GAME_CONNECTION);
     setConnectionAnnouncement("");
     setError(null);
+    setIdentityChanged(false);
     setBusy(false);
   }, [clearGameBoundState, identityKey]);
 
@@ -488,6 +496,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     identityAuthority.current.invalidate();
     clearGameBoundState();
     transitionConnection({ kind: "unavailable" });
+    setIdentityChanged(true);
     setError(localizedApiError(
       dictionary,
       new ApiRequestError("The player session changed.", {
@@ -496,6 +505,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }),
       copy.unavailable,
     ));
+  }
+
+  function refreshChangedIdentity() {
     void refreshIdentity()
       .catch(() => undefined)
       .finally(() => router.replace(href("/play")));
@@ -509,11 +521,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       const response = await fetch(`/api/games/${game.id}/moves`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
         body: JSON.stringify(move),
       });
-      const data = await readApi<{ game: GameState }>(response);
+      const data = await readApi<{ actor: string; game: GameState }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
       acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
       if (
@@ -539,8 +555,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
         method: "POST",
         headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
       });
-      const data = await readApi<{ game: GameState }>(response);
+      const data = await readApi<{ actor: string; game: GameState }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
       setConfirmation(null);
       acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
@@ -568,14 +585,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       const response = await fetch(`/api/games/${game.id}/scoring/${action}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
         body: JSON.stringify({
           ...body,
           expectedRevision: game.scoring.revision,
         }),
       });
-      const data = await readApi<{ game: GameState }>(response);
+      const data = await readApi<{ actor: string; game: GameState }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
       acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
     } catch (requestError) {
       if (
@@ -605,10 +626,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       const response = await fetch(`/api/games/${gameId}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
         body: JSON.stringify({ message }),
       });
-      const data = await readApi<{ message: GameMessage }>(response);
+      const data = await readApi<{ actor: string; message: GameMessage }>(response);
       if (!identityAuthority.current.isCurrent(requestIdentity)) {
         if (identityAuthority.current.capture().identityKey === requestIdentity.identityKey) {
           throw new ApiRequestError("Message response lost request authority.", {
@@ -618,6 +642,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }
         return;
       }
+      assertResponseActor(data.actor, playerKey);
       applyChatMessages([data.message], requestIdentity);
     } catch (requestError) {
       if (!identityAuthority.current.isCurrent(requestIdentity)) {
@@ -625,6 +650,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
           throw requestError;
         }
         return;
+      }
+      if (
+        requestError instanceof ApiRequestError
+        && requestError.code === "identity_changed"
+      ) {
+        recoverChangedIdentity();
+        throw requestError;
       }
       setChatAvailable(false);
       if (
@@ -649,11 +681,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const requestIdentity = identityAuthority.current.capture();
     if (playerKey) {
       try {
-        await readApi<Record<string, unknown>>(await fetch("/api/matchmaking", {
-          method: "DELETE",
-          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-          signal: AbortSignal.timeout(5_000),
-        }));
+        const cancellation = await readApi<{ actor: string }>(
+          await fetch("/api/matchmaking", {
+            method: "DELETE",
+            headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+            signal: AbortSignal.timeout(5_000),
+          }),
+        );
+        if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+        assertResponseActor(cancellation.actor, playerKey);
       } catch (requestError) {
         if (!identityAuthority.current.isCurrent(requestIdentity)) return;
         if (
@@ -783,7 +819,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     return (
       <main className="game-loading">
         <h1>{sessionExpired ? copy.sessionExpired : copy.unavailable}</h1>
-        <p>
+        <p role="alert">
           {identityError
             ?? (sessionExpired ? connectionDescription : null)
             ?? error
@@ -793,13 +829,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
           className="button button--primary"
           onClick={identityError
             ? retryIdentity
+            : identityChanged
+              ? refreshChangedIdentity
             : sessionExpired
               ? recoverExpiredSession
               : () => router.replace(href("/play"))}
+          ref={recoveryAction}
           type="button"
         >
           {identityError
             ? copy.retrySession
+            : identityChanged
+              ? dictionary.play.refreshSession
             : sessionExpired
               ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
               : copy.returnToPlay}
