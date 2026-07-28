@@ -274,6 +274,21 @@ test("player blocking has separate bounded read, burst, and sustained policies",
   });
 });
 
+test("player reporting has separate actor and address burst and hourly policies", () => {
+  assert.deepEqual(RATE_LIMIT_POLICIES.playerReportBurst, {
+    scope: "player-report-burst",
+    limit: 3,
+    ipLimit: 30,
+    windowMinutes: 1 / 6,
+  });
+  assert.deepEqual(RATE_LIMIT_POLICIES.playerReportSubmit, {
+    scope: "player-report-submit",
+    limit: 10,
+    ipLimit: 100,
+    windowMinutes: 60,
+  });
+});
+
 test("ephemeral guards keep their process-local store bounded", () => {
   globalThis.goStoneEphemeralRateLimits = new Map();
   for (let index = 0; index < 10_001; index += 1) {

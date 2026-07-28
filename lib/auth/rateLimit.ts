@@ -96,6 +96,18 @@ export const RATE_LIMIT_POLICIES = {
     ipLimit: 100,
     windowMinutes: 1,
   },
+  playerReportBurst: {
+    scope: "player-report-burst",
+    limit: 3,
+    ipLimit: 30,
+    windowMinutes: 1 / 6,
+  },
+  playerReportSubmit: {
+    scope: "player-report-submit",
+    limit: 10,
+    ipLimit: 100,
+    windowMinutes: 60,
+  },
   moveBurst: {
     scope: "game-move-burst",
     limit: 6,

@@ -61,12 +61,14 @@ export async function resolveGameOpponent(
   client: PoolClient,
   gameId: string,
   playerKey: string,
+  { lockGame = false }: { lockGame?: boolean } = {},
 ): Promise<string> {
   const result = await client.query<ParticipantRow>(
     `SELECT black_player_key, white_player_key
        FROM games
       WHERE id = $1
-        AND $2 IN (black_player_key, white_player_key)`,
+        AND $2 IN (black_player_key, white_player_key)
+      ${lockGame ? "FOR KEY SHARE" : ""}`,
     [gameId, playerKey],
   );
   const game = result.rows[0];

@@ -163,6 +163,8 @@ export const en = {
     invalid_chat_request: "Reload the game chat without unsupported options.",
     chat_unavailable: "Chat is unavailable for this game.",
     invalid_block_request: "Reload the game before changing this safety setting.",
+    invalid_report_request: "Reload the game before sending this report.",
+    invalid_report_category: "Choose a supported report category.",
     opponent_unavailable: "An opponent could not be verified for this game.",
   },
   timeControls: {

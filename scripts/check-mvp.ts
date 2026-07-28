@@ -22,6 +22,7 @@ const requiredTables = [
   "matchmaking_queue",
   "game_messages",
   "player_blocks",
+  "player_reports",
   "player_stats",
   "player_rating_history",
   "game_scoring_state",
@@ -100,6 +101,9 @@ const requiredIndexDefinitions = {
     "WHERE",
     "guest:%",
   ],
+  idx_player_reports_reported_created: [
+    "ON public.player_reports USING btree (reported_key, created_at DESC, game_id, reporter_key)",
+  ],
 } as const;
 
 const requiredConstraintSignatures = [
@@ -114,6 +118,11 @@ const requiredConstraintSignatures = [
   "player_blocks_pkey:player_blocks:p",
   "player_blocks_distinct_players_check:player_blocks:c",
   "player_blocks_key_bounds_check:player_blocks:c",
+  "player_reports_pkey:player_reports:p",
+  "player_reports_game_fk:player_reports:f",
+  "player_reports_distinct_players_check:player_reports:c",
+  "player_reports_key_bounds_check:player_reports:c",
+  "player_reports_category_check:player_reports:c",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -202,6 +211,33 @@ const requiredConstraintDefinitions = {
     includes: ["user|guest", "blocker_key", "blocked_key"],
     excludes: [],
   },
+  player_reports_pkey: {
+    includes: ["PRIMARY KEY (game_id, reporter_key)"],
+    excludes: [],
+  },
+  player_reports_game_fk: {
+    includes: ["FOREIGN KEY (game_id)", "REFERENCES games(id)", "ON DELETE RESTRICT"],
+    excludes: ["ON DELETE CASCADE"],
+  },
+  player_reports_distinct_players_check: {
+    includes: ["CHECK ((reporter_key <> reported_key))"],
+    excludes: [],
+  },
+  player_reports_key_bounds_check: {
+    includes: ["user|guest", "reporter_key", "reported_key"],
+    excludes: [],
+  },
+  player_reports_category_check: {
+    includes: [
+      "abuse_or_hate",
+      "threat_or_sexual_safety",
+      "fair_play",
+      "stalling_or_abandonment",
+      "spam_scam_or_identity",
+      "other",
+    ],
+    excludes: [],
+  },
 } as const;
 
 const requiredTriggerSignatures = [
@@ -233,6 +269,7 @@ const requiredTriggerDefinitions = {
 
 const requiredProtectedTables = [
   "player_blocks",
+  "player_reports",
   "game_scoring_resume_events",
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",

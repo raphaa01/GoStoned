@@ -165,6 +165,8 @@ export const de = {
     invalid_chat_request: "Lade den Partiechat ohne nicht unterstützte Optionen neu.",
     chat_unavailable: "Der Chat ist für diese Partie nicht verfügbar.",
     invalid_block_request: "Lade die Partie neu, bevor du diese Sicherheitseinstellung änderst.",
+    invalid_report_request: "Lade die Partie neu, bevor du diese Meldung sendest.",
+    invalid_report_category: "Wähle eine unterstützte Meldekategorie.",
     opponent_unavailable: "Für diese Partie konnte kein Gegner bestätigt werden.",
   },
   timeControls: {
