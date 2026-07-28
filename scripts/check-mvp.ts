@@ -271,6 +271,7 @@ const requiredTriggerDefinitions = {
 } as const;
 
 const requiredProtectedTables = [
+  "users",
   "user_sessions",
   "player_blocks",
   "player_reports",

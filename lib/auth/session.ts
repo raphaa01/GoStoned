@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { query, withTransaction } from "@/lib/db";
+import type { PoolClient } from "pg";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
 
@@ -37,32 +38,37 @@ const executeSessionLookup: SessionLookupExecutor = async (tokenHash) => {
   return result.rows[0] ?? null;
 };
 
-export async function createSession(userId: string): Promise<string> {
+export async function createSessionInTransaction(
+  client: PoolClient,
+  userId: string,
+): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
 
-  await withTransaction(async (client) => {
-    await client.query(
-      `INSERT INTO user_sessions (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
-      [userId, tokenHash],
-    );
-    await client.query(
-      `WITH expired_sessions AS MATERIALIZED (
-         SELECT user_session.id
-           FROM user_sessions AS user_session
-          WHERE user_session.expires_at <= NOW()
-          ORDER BY user_session.expires_at, user_session.id
-          LIMIT 200
-          FOR UPDATE OF user_session SKIP LOCKED
-       )
-       DELETE FROM user_sessions AS user_session
-       USING expired_sessions AS expired
-       WHERE user_session.id = expired.id`,
-    );
-  });
+  await client.query(
+    `INSERT INTO user_sessions (user_id, token_hash, expires_at)
+     VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+    [userId, tokenHash],
+  );
+  await client.query(
+    `WITH expired_sessions AS MATERIALIZED (
+       SELECT user_session.id
+         FROM user_sessions AS user_session
+        WHERE user_session.expires_at <= NOW()
+        ORDER BY user_session.expires_at, user_session.id
+        LIMIT 200
+        FOR UPDATE OF user_session SKIP LOCKED
+     )
+     DELETE FROM user_sessions AS user_session
+     USING expired_sessions AS expired
+     WHERE user_session.id = expired.id`,
+  );
 
   return token;
+}
+
+export function createSession(userId: string): Promise<string> {
+  return withTransaction((client) => createSessionInTransaction(client, userId));
 }
 
 export async function getSessionUser(
