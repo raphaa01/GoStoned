@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
 import "dotenv/config";
-import { closePool, query } from "../lib/db";
+import { closePool, getPool, query } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
+import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
+const maximumSmokeRateLimitWaitMs = 30_000;
+const scoringDecisionWindowMs =
+  RATE_LIMIT_POLICIES.scoringDecisionBurst.windowMinutes * 60_000;
+
+assert.ok(
+  Number.isFinite(scoringDecisionWindowMs) &&
+    scoringDecisionWindowMs > 0 &&
+    scoringDecisionWindowMs <= maximumSmokeRateLimitWaitMs,
+  `Live-game smoke scoring window must be between 1ms and ${maximumSmokeRateLimitWaitMs}ms`,
+);
 
 const smokeHost = new URL(baseUrl).hostname;
 if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
@@ -88,7 +100,8 @@ async function createGuest() {
 }
 
 async function run() {
-  console.log(`Testing live game flow at ${baseUrl}`);
+  await assertSmokeDatabaseIdentity(getPool());
+  console.log(`Testing live game flow at ${new URL(baseUrl).origin}`);
   const black = await createGuest();
   const white = await createGuest();
 
@@ -240,7 +253,6 @@ async function run() {
         [EXPECTED_PLAYER_HEADER]: outsider.playerKey,
       },
       body: JSON.stringify({
-        playerKey: black.playerKey,
         expectedRevision: firstScoringRevision,
       }),
     },
@@ -259,7 +271,6 @@ async function run() {
       claim: "dead",
       expectedRevision: firstScoringRevision,
     }],
-    [`/api/games/${gameId}/resign`, {}],
   ] as const) {
     const outsiderAction = await fetch(`${baseUrl}${path}`, {
       method: "POST",
@@ -272,6 +283,18 @@ async function run() {
     });
     assert.equal(outsiderAction.status, 403, `${path} must reject an outsider`);
   }
+  const outsiderResignation = await fetch(`${baseUrl}/api/games/${gameId}/resign`, {
+    method: "POST",
+    headers: {
+      Cookie: outsider.cookie,
+      [EXPECTED_PLAYER_HEADER]: outsider.playerKey,
+    },
+  });
+  assert.equal(
+    outsiderResignation.status,
+    403,
+    `/api/games/${gameId}/resign must reject an outsider`,
+  );
 
   await new Promise((resolve) => setTimeout(resolve, 75));
   const frozen = await request<{
@@ -437,6 +460,10 @@ async function run() {
   });
   assert.equal("resumeEvents" in latestOnly.game, false);
 
+  // Separate dispute coverage from the three final agreement/idempotency
+  // decisions that intentionally fill one actor's complete burst allowance.
+  await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
+
   await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
   await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
   const finalScoring = await postMove<{
@@ -518,7 +545,9 @@ async function run() {
   console.log(`Live game ${gameId} completed successfully (${finished.game.result}).`);
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-}).finally(closePool);
+run()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Live-game smoke failed.");
+    process.exitCode = 1;
+  })
+  .finally(closePool);

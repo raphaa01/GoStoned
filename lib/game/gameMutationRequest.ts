@@ -17,6 +17,54 @@ export function invalidGameMutationRequest(): GameServiceError {
   );
 }
 
+const MAX_EMPTY_BODY_CHUNKS = 8;
+export const EMPTY_GAME_MUTATION_BODY_TIMEOUT_MS = 1_000;
+
+function cancelBodyReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  void reader.cancel().catch(() => undefined);
+}
+
+export async function assertEmptyGameMutationBody(request: NextRequest): Promise<void> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && !/^0+$/.test(contentLength)) {
+    throw invalidGameMutationRequest();
+  }
+  if (request.body === null) return;
+
+  const reader = request.body.getReader();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let abortHandler: (() => void) | undefined;
+  let emptyChunks = 0;
+  try {
+    if (request.signal.aborted) throw invalidGameMutationRequest();
+    const interrupted = new Promise<never>((_, reject) => {
+      abortHandler = () => reject(invalidGameMutationRequest());
+      request.signal.addEventListener("abort", abortHandler, { once: true });
+      timeout = setTimeout(
+        () => reject(invalidGameMutationRequest()),
+        EMPTY_GAME_MUTATION_BODY_TIMEOUT_MS,
+      );
+    });
+    while (true) {
+      const chunk = await Promise.race([reader.read(), interrupted]);
+      if (chunk.done) return;
+      if (chunk.value.byteLength !== 0 || emptyChunks >= MAX_EMPTY_BODY_CHUNKS) {
+        throw invalidGameMutationRequest();
+      }
+      emptyChunks += 1;
+    }
+  } catch (error) {
+    cancelBodyReader(reader);
+    if (error instanceof GameServiceError) throw error;
+    throw invalidGameMutationRequest();
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    if (abortHandler !== undefined) {
+      request.signal.removeEventListener("abort", abortHandler);
+    }
+  }
+}
+
 export function assertGameMutationMetadata(
   request: NextRequest,
   gameId: string,
@@ -26,9 +74,6 @@ export function assertGameMutationMetadata(
   if (request.nextUrl.search !== "") throw invalidGameMutationRequest();
   if (!CANONICAL_GAME_ID.test(gameId)) {
     throw new GameServiceError("Game not found.", 404, "game_not_found");
-  }
-  if (bodyKind === "none" && request.body !== null) {
-    throw invalidGameMutationRequest();
   }
 }
 

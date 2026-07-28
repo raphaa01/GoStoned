@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import type { Pool } from "pg";
@@ -10,7 +11,9 @@ import { POST as resumePlay } from "@/app/api/games/[gameId]/scoring/resume/rout
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import {
+  assertEmptyGameMutationBody,
   assertGameMutationMetadata,
+  EMPTY_GAME_MUTATION_BODY_TIMEOUT_MS,
   gameMutationRouteError,
   MAX_GAME_MUTATION_BODY_BYTES,
   readGameMutationJson,
@@ -160,6 +163,24 @@ function mutationRequest(
 }
 
 const context = { params: Promise.resolve({ gameId }) };
+
+function invalidMutationError(error: unknown): boolean {
+  return error instanceof GameServiceError
+    && error.status === 400
+    && error.code === "invalid_game_mutation_request";
+}
+
+function streamedResignation(
+  body: ReadableStream<Uint8Array>,
+  options: { headers?: HeadersInit; signal?: AbortSignal } = {},
+): NextRequest {
+  return new NextRequest(`https://gostone.test/api/games/${gameId}/resign`, {
+    method: "POST",
+    body,
+    duplex: "half",
+    ...options,
+  });
+}
 
 test("game mutation metadata is rejected before identity or persistent rate-limit access", async (t) => {
   for (const mutation of mutations) {
@@ -466,6 +487,127 @@ test("bounded parser accepts every current client payload shape", async () => {
     method: "POST",
   });
   assert.doesNotThrow(() => assertGameMutationMetadata(resign, gameId, "none"));
+  await assert.doesNotReject(assertEmptyGameMutationBody(resign));
+
+  const networkNormalizedResign = streamedResignation(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.close();
+    },
+  }));
+  await assert.doesNotReject(
+    assertEmptyGameMutationBody(networkNormalizedResign),
+  );
+});
+
+test("bodyless mutation validation is byte-exact, abortable, and time bounded", async () => {
+  for (const contentLength of ["", "+0", "-0", "0e0", "1", "0, 0"]) {
+    const request = streamedResignation(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    }), { headers: { "Content-Length": contentLength } });
+    await assert.rejects(assertEmptyGameMutationBody(request), invalidMutationError);
+  }
+
+  const exactZero = streamedResignation(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.close();
+    },
+  }), { headers: { "Content-Length": "00" } });
+  await assert.doesNotReject(assertEmptyGameMutationBody(exactZero));
+
+  for (const headers of [undefined, { "Content-Length": "0" }]) {
+    const request = streamedResignation(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        return new Promise<void>(() => undefined);
+      },
+    }), { headers });
+    await assert.rejects(
+      Promise.race([
+        assertEmptyGameMutationBody(request),
+        new Promise((_, reject) => setTimeout(
+          () => reject(new Error("body cancellation blocked rejection")),
+          100,
+        )),
+      ]),
+      invalidMutationError,
+    );
+  }
+
+  const streamError = streamedResignation(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error("transport failed"));
+    },
+  }));
+  await assert.rejects(assertEmptyGameMutationBody(streamError), invalidMutationError);
+
+  for (const [chunkCount, accepted] of [[8, true], [9, false]] as const) {
+    const emptyChunks = streamedResignation(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+          controller.enqueue(new Uint8Array());
+        }
+        controller.close();
+      },
+    }));
+    if (accepted) {
+      await assert.doesNotReject(assertEmptyGameMutationBody(emptyChunks));
+    } else {
+      await assert.rejects(assertEmptyGameMutationBody(emptyChunks), invalidMutationError);
+    }
+  }
+
+  const abortController = new AbortController();
+  const aborted = streamedResignation(new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise<void>(() => undefined);
+    },
+  }), { signal: abortController.signal });
+  const abortedValidation = assertEmptyGameMutationBody(aborted);
+  abortController.abort();
+  await assert.rejects(
+    Promise.race([
+      abortedValidation,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error("request abort did not settle body validation")),
+        100,
+      )),
+    ]),
+    invalidMutationError,
+  );
+
+  const stalled = streamedResignation(new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise<void>(() => undefined);
+    },
+  }));
+  await assert.rejects(
+    Promise.race([
+      assertEmptyGameMutationBody(stalled),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error("body validation exceeded its deadline")),
+        EMPTY_GAME_MUTATION_BODY_TIMEOUT_MS + 250,
+      )),
+    ]),
+    invalidMutationError,
+  );
+});
+
+test("resignation meters the address before reading a network body", () => {
+  const route = readFileSync(
+    new URL("../../app/api/games/[gameId]/resign/route.ts", import.meta.url),
+    "utf8",
+  );
+  const metadata = route.indexOf("assertGameMutationMetadata(");
+  const addressBudget = route.indexOf("consumeEphemeralIpPolicyRateLimit(");
+  const bodyRead = route.indexOf("assertEmptyGameMutationBody(");
+  const identity = route.indexOf("resolvePlayerKey(");
+  assert.ok(metadata >= 0 && metadata < addressBudget);
+  assert.ok(addressBudget < bodyRead);
+  assert.ok(bodyRead < identity);
 });
 
 test("bounded parser rejects malformed, non-object, oversized, non-UTF-8, and excess input", async () => {

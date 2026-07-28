@@ -6,6 +6,7 @@ import type { PoolClient } from "pg";
 import { closePool, getPool } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
@@ -60,6 +61,7 @@ async function checkViolation(
 }
 
 async function run(): Promise<void> {
+  await assertSmokeDatabaseIdentity(getPool());
   const migration = await readFile(
     path.join(process.cwd(), "db/migrations/010_move_board_hash_guard.sql"),
     "utf8",
@@ -174,7 +176,7 @@ async function run(): Promise<void> {
 
 run()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : "Move-hash smoke failed.");
     process.exitCode = 1;
   })
   .finally(closePool);

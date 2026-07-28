@@ -1185,10 +1185,10 @@ async function resumeExpiredScoring(
             scoring_revision = scoring_revision + 1,
             last_resume_claim = 'deadline', last_resume_by = NULL,
             last_resume_x = NULL, last_resume_y = NULL,
-            turn_started_at = $3, updated_at = $3, version = version + 1
+            turn_started_at = $3, updated_at = $4, version = version + 1
       WHERE id = $1
       RETURNING *`,
-    [loaded.game.id, scoring.fallback_to_move, now],
+    [loaded.game.id, scoring.fallback_to_move, now, now],
   );
   return {
     ...withUpdatedGame(loaded, updated.rows[0]),
@@ -1521,7 +1521,7 @@ export async function submitMove(
           SET to_move = $2, consecutive_passes = $3,
               black_time_remaining_ms = $4, white_time_remaining_ms = $5,
               black_periods_remaining = $6, white_periods_remaining = $7,
-              turn_started_at = $8, updated_at = $8, version = version + 1
+              turn_started_at = $8, updated_at = $9, version = version + 1
         WHERE id = $1
         RETURNING *`,
       [
@@ -1532,6 +1532,7 @@ export async function submitMove(
         color === "white" ? playerClock.mainTimeMs : Number(game.white_time_remaining_ms),
         color === "black" ? playerClock.periodsRemaining : game.black_periods_remaining,
         color === "white" ? playerClock.periodsRemaining : game.white_periods_remaining,
+        now,
         now,
       ],
     );
@@ -1781,7 +1782,7 @@ export async function resumePlay(
               scoring_revision = scoring_revision + 1,
               last_resume_claim = $3, last_resume_by = $4,
               last_resume_x = $5, last_resume_y = $6,
-              turn_started_at = $7, updated_at = $7, version = version + 1
+              turn_started_at = $7, updated_at = $8, version = version + 1
         WHERE id = $1
         RETURNING *`,
       [
@@ -1791,6 +1792,7 @@ export async function resumePlay(
         requestedBy,
         disputedStone.x,
         disputedStone.y,
+        decisionAt,
         decisionAt,
       ],
     );
