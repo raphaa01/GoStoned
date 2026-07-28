@@ -89,6 +89,9 @@ const requiredResumeEventColumns = [
 ] as const;
 
 const requiredIndexDefinitions = {
+  idx_user_sessions_expires_at: [
+    "ON public.user_sessions USING btree (expires_at)",
+  ],
   idx_player_rating_history_board_player_time: [
     "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
     "INCLUDE (game_id, rating_before, rating_after, result)",
@@ -268,6 +271,7 @@ const requiredTriggerDefinitions = {
 } as const;
 
 const requiredProtectedTables = [
+  "user_sessions",
   "player_blocks",
   "player_reports",
   "game_scoring_resume_events",

@@ -341,6 +341,68 @@ test("login infrastructure failures return a no-store 500 without a session cook
   }
 });
 
+test("session issuance failure after authentication rolls back and sets no login cookie", async () => {
+  const passwordHash = await hashPassword("password123");
+  const transactionStatements: string[] = [];
+  let released = false;
+  const client = {
+    async query(sql: string) {
+      transactionStatements.push(sql);
+      if (sql.includes("WITH expired_sessions AS MATERIALIZED")) {
+        throw new Error("cleanup unavailable");
+      }
+      return { rows: [], rowCount: 0 };
+    },
+    release() {
+      released = true;
+    },
+  };
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("INSERT INTO auth_rate_limits")) return allowedRateLimitRow();
+      if (sql.includes("FROM users")) {
+        return {
+          rows: [{
+            id: "66666666-6666-4666-8666-666666666666",
+            username: "named_player",
+            display_name: "Named Player",
+            password_hash: passwordHash,
+          }],
+        };
+      }
+      if (sql.startsWith("DELETE FROM auth_rate_limits")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected pool statement: ${sql}`);
+    },
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const response = await withPool(pool, () => login(credentialRequest(
+      "/api/auth/login",
+      "203.0.113.94",
+    )));
+
+    assert.equal(response.status, 500);
+    assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal((await response.json()).code, "login_failed");
+    assert.equal(released, true);
+    assert.equal(
+      transactionStatements.some((sql) => sql.includes("INSERT INTO user_sessions")),
+      true,
+    );
+    assert.equal(transactionStatements.at(-1), "ROLLBACK");
+    assert.equal(transactionStatements.includes("COMMIT"), false);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("successful login clears the target and every shared-account attempt bucket", async () => {
   const username = "named_player";
   const address = "203.0.113.70";
@@ -358,7 +420,12 @@ test("successful login clears the target and every shared-account attempt bucket
       ) {
         return { rows: [], rowCount: 0 };
       }
-      if (sql.startsWith("DELETE FROM user_sessions")) return { rows: [], rowCount: 0 };
+      if (
+        sql.includes("WITH expired_sessions AS MATERIALIZED")
+        && sql.includes("DELETE FROM user_sessions AS user_session")
+      ) {
+        return { rows: [], rowCount: 0 };
+      }
       if (sql.includes("INSERT INTO user_sessions")) return { rows: [], rowCount: 1 };
       throw new Error(`Unexpected transaction statement: ${sql}`);
     },
