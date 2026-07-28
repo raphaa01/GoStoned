@@ -21,7 +21,12 @@ export function usePlayerIdentity() {
   useEffect(() => {
     if (authLoading || authError || user || guest || guestError) return;
     const controller = new AbortController();
-    fetch("/api/auth/guest", { method: "POST", signal: controller.signal })
+    fetch("/api/auth/guest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: controller.signal,
+    })
       .then((response) => readApi<{ identity: GuestIdentity }>(response))
       .then((body) => setGuest(body.identity))
       .catch((error: unknown) => {

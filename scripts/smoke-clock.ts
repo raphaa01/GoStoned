@@ -43,7 +43,11 @@ async function post<T>(
 }
 
 async function createGuest() {
-  const response = await fetch(`${baseUrl}/api/auth/guest`, { method: "POST" });
+  const response = await fetch(`${baseUrl}/api/auth/guest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
   const body = await readJson<{
     identity: { playerKey: string };
   }>(response);

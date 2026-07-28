@@ -45,7 +45,11 @@ async function api(
 }
 
 async function createGuest(): Promise<Guest> {
-  const response = await fetch(`${baseUrl}/api/auth/guest`, { method: "POST" });
+  const response = await fetch(`${baseUrl}/api/auth/guest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
   const body = await response.json() as {
     ok: boolean;
     identity: { playerKey: string };
