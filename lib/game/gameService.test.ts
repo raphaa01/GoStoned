@@ -239,6 +239,9 @@ async function withFakeDatabase(
         && sql.includes("UPDATE games")
         && sql.includes("SET to_move = $2")
       ) {
+        assert.match(sql, /turn_started_at = \$8, updated_at = \$9/);
+        assert.equal(values.length, 9);
+        assert.equal(values[7], values[8]);
         return {
           rows: [{
             ...rows.game,
@@ -356,6 +359,18 @@ test("move versions are bounded and stale intents fail before gameplay writes", 
       409,
     );
   });
+});
+
+test("move clock timestamps bind separate PostgreSQL parameter types", async () => {
+  const statements = await withFakeDatabase(
+    { game: gameRow(), scoring: null, allowMoveWrite: true },
+    () => submitMove(gameId, blackKey, { x: 0, y: 0, expectedVersion: 0 }),
+  );
+  const clockUpdate = statements.find(
+    (sql) => sql.includes("UPDATE games") && sql.includes("SET to_move = $2"),
+  );
+  assert.ok(clockUpdate);
+  assert.match(clockUpdate, /turn_started_at = \$8, updated_at = \$9/);
 });
 
 async function loadState(
@@ -824,6 +839,9 @@ test("move history trust boundary derives positions and rejects contradictory ev
           return { rows: [], rowCount: 1 };
         }
         if (sql.includes("SET phase = 'play', to_move = $2")) {
+          assert.match(sql, /turn_started_at = \$7, updated_at = \$8/);
+          assert.equal(values.length, 8);
+          assert.equal(values[6], values[7]);
           currentGame = {
             ...currentGame,
             phase: "play",
@@ -978,6 +996,9 @@ test("an expired scoring snapshot records deadline evidence before resuming play
         return { rows: [], rowCount: 1 };
       }
       if (sql.includes("last_resume_claim = 'deadline'")) {
+        assert.match(sql, /turn_started_at = \$3, updated_at = \$4/);
+        assert.equal(values.length, 4);
+        assert.equal(values[2], values[3]);
         return {
           rows: [{
             ...initialGame,
