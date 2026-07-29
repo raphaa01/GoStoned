@@ -1,5 +1,11 @@
 import type { NextRequest } from "next/server";
+import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
+
+export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 1_024;
+export const MAX_CREDENTIAL_REQUEST_BODY_CHUNKS = MAX_CREDENTIAL_REQUEST_BODY_BYTES;
+export const CREDENTIAL_REQUEST_BODY_IDLE_TIMEOUT_MS = 1_000;
+export const CREDENTIAL_REQUEST_BODY_TOTAL_TIMEOUT_MS = 2_000;
 
 function isLoopbackHostname(hostname: string): boolean {
   return hostname === "localhost"
@@ -77,15 +83,33 @@ export function assertAuthMutationRequest(
 
 export async function readCredentialRequest(request: NextRequest) {
   assertAuthMutationRequest(request, { requireJson: true });
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    throw new AuthError("The request body must be valid JSON.", 400, "invalid_request");
+  const body = await readBoundedJsonObject(request, {
+    maxBytes: MAX_CREDENTIAL_REQUEST_BODY_BYTES,
+    maxChunks: MAX_CREDENTIAL_REQUEST_BODY_CHUNKS,
+    idleTimeoutMs: CREDENTIAL_REQUEST_BODY_IDLE_TIMEOUT_MS,
+    totalTimeoutMs: CREDENTIAL_REQUEST_BODY_TOTAL_TIMEOUT_MS,
+    invalidJson: () => new AuthError(
+      "The request body must be valid JSON.",
+      400,
+      "invalid_request",
+    ),
+    invalidObject: () => new AuthError(
+      "The request body must be a JSON object.",
+      400,
+      "invalid_request",
+    ),
+  });
+  const fields = Object.keys(body);
+  if (
+    fields.length !== 2
+    || !Object.prototype.hasOwnProperty.call(body, "username")
+    || !Object.prototype.hasOwnProperty.call(body, "password")
+  ) {
+    throw new AuthError(
+      "The request body must contain only username and password.",
+      400,
+      "invalid_request",
+    );
   }
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new AuthError("The request body must be a JSON object.", 400, "invalid_request");
-  }
-  const input = body as { username?: unknown; password?: unknown };
-  return validateCredentials(input.username, input.password);
+  return validateCredentials(body.username, body.password);
 }

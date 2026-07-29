@@ -10,6 +10,7 @@ import { GET as readSession } from "@/app/api/auth/session/route";
 import { SESSION_COOKIE } from "./session";
 import { hashPassword } from "./password";
 import { createRateLimitKey, RATE_LIMIT_POLICIES } from "./rateLimit";
+import { MAX_CREDENTIAL_REQUEST_BODY_BYTES } from "./credentialRequest";
 
 type Statement = { sql: string; values: readonly unknown[] };
 
@@ -119,6 +120,43 @@ test("login and registration rate-limit the address before parsing malformed JSO
       code: "invalid_request",
     });
     assert.equal(statements.length, 1);
+  }
+});
+
+test("login and registration reject extra or oversized fields before account service work", async () => {
+  for (const [path, handler] of [
+    ["/api/auth/login", login],
+    ["/api/auth/register", register],
+  ] as const) {
+    for (const body of [
+      JSON.stringify({ username: "named_player", password: "password123", padding: "" }),
+      JSON.stringify({
+        username: "named_player",
+        password: "password123",
+        padding: "x".repeat(MAX_CREDENTIAL_REQUEST_BODY_BYTES),
+      }),
+    ]) {
+      const statements: Statement[] = [];
+      const pool = {
+        async query(sql: string, values: readonly unknown[]) {
+          statements.push({ sql, values });
+          assert.match(sql, /INSERT INTO auth_rate_limits/);
+          return allowedRateLimitRow();
+        },
+      } as unknown as Pool;
+
+      const response = await withPool(pool, () => handler(credentialRequest(
+        path,
+        path.endsWith("login") ? "203.0.113.63" : "203.0.113.64",
+        {},
+        body,
+      )));
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).code, "invalid_request");
+      assert.equal(statements.length, 1);
+      assert.equal(statements.some(({ sql }) => sql.includes("FROM users")), false);
+      assert.equal(statements.some(({ sql }) => sql === "BEGIN"), false);
+    }
   }
 });
 
