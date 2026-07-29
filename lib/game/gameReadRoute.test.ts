@@ -72,13 +72,22 @@ function sessionRow() {
 function heartbeatRow() {
   return {
     id: gameId,
+    board_size: 9,
     black_player_key: actor,
     white_player_key: "user:22222222-2222-4222-8222-222222222222",
+    black_player_name: "Route Player",
+    white_player_name: "Opponent",
     winner_key: null,
+    rated: true,
     status: "active",
     phase: "play",
     to_move: "black",
+    consecutive_passes: 0,
     scoring_revision: 0,
+    last_resume_claim: null,
+    last_resume_by: null,
+    last_resume_x: null,
+    last_resume_y: null,
     result: null,
     finish_reason: null,
     rules: "chinese",
@@ -86,6 +95,7 @@ function heartbeatRow() {
     scoring_method: "area",
     komi: "7.5",
     handicap: 0,
+    time_control: "rapid",
     main_time_seconds: 600,
     byo_yomi_periods: 5,
     byo_yomi_seconds: 30,
@@ -95,22 +105,38 @@ function heartbeatRow() {
     white_periods_remaining: 5,
     turn_started_at: new Date(),
     version: 7,
+    started_at: new Date(),
     finished_at: null,
   };
 }
 
 function heartbeatPool() {
   const statements: Statement[] = [];
+  const query = async (sql: string, values: readonly unknown[] = []) => {
+    statements.push({ sql, values });
+    if (sql.startsWith("BEGIN") || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+      return { rows: [], rowCount: 0 };
+    }
+    if (sql.includes("FROM games g")) return { rows: [heartbeatRow()], rowCount: 1 };
+    if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
+    if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
+    if (sql.includes("FROM game_scoring_state")) return { rows: [], rowCount: 0 };
+    throw new Error(`Unexpected game-read query: ${sql}`);
+  };
+  const client = { query, release() {} };
   const pool = {
     async query(sql: string, values: readonly unknown[] = []) {
       statements.push({ sql, values });
       if (sql.includes("FROM user_sessions s")) {
         return { rows: [sessionRow()], rowCount: 1 };
       }
-      if (sql.includes("FROM games g")) {
+      if (sql.includes("FROM games")) {
         return { rows: [heartbeatRow()], rowCount: 1 };
       }
       throw new Error(`Unexpected game-read query: ${sql}`);
+    },
+    async connect() {
+      return client;
     },
   } as unknown as Pool;
   return { pool, statements };
@@ -191,7 +217,7 @@ test("noncanonical game identifiers return a private 404 before query parsing or
   }
 });
 
-test("no query and one canonical version reach their distinct service boundaries", async () => {
+test("full reads lock while version polls first reach lightweight participant verification", async () => {
   for (const query of ["", "?knownVersion=7"] as const) {
     const sentinel = new Error(query === "" ? "full refresh sentinel" : "version poll sentinel");
     const statements: Statement[] = [];
@@ -202,13 +228,12 @@ test("no query and one canonical version reach their distinct service boundaries
         if (sql.includes("FROM user_sessions s")) {
           return { rows: [sessionRow()], rowCount: 1 };
         }
-        if (sql.includes("FROM games g") && query !== "") throw sentinel;
+        if (sql.includes("FROM games") && query !== "") throw sentinel;
         throw new Error(`Unexpected boundary query: ${sql}`);
       },
       async connect() {
         connectCalls += 1;
-        if (query === "") throw sentinel;
-        throw new Error("Version polling must not open a transaction before its header read.");
+        throw sentinel;
       },
     } as unknown as Pool;
     const originalConsoleError = console.error;
@@ -228,6 +253,11 @@ test("no query and one canonical version reach their distinct service boundaries
     );
     assert.equal(
       statements.filter(({ sql }) => sql.includes("FROM games g")).length,
+      0,
+      query,
+    );
+    assert.equal(
+      statements.filter(({ sql }) => sql.includes("FROM games") && !sql.includes("FROM games g")).length,
       query === "" ? 0 : 1,
       query,
     );
@@ -251,7 +281,17 @@ test("a matching actor receives the current version heartbeat without persistent
   assert.equal(body.version, 7);
   assert.equal(body.clock.mainTimeSeconds, 600);
   assert.equal(statements.filter(({ sql }) => sql.includes("FROM user_sessions s")).length, 1);
-  assert.equal(statements.filter(({ sql }) => sql.includes("FROM games g")).length, 1);
+  assert.equal(statements.filter(({ sql }) => sql.includes("FROM games")).length, 2);
+  assert.equal(statements.filter(({ sql }) => sql.includes("FROM moves")).length, 1);
+  assert.equal(
+    statements.filter(({ sql }) => sql.includes("FROM game_scoring_resume_events")).length,
+    1,
+  );
+  assert.equal(statements.some(({ sql }) => sql.includes("FOR UPDATE OF g")), false);
+  assert.equal(
+    statements.some(({ sql }) => sql === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"),
+    true,
+  );
   assert.equal(statements.some(({ sql }) => sql.includes("auth_rate_limits")), false);
 });
 

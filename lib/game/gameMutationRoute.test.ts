@@ -135,6 +135,7 @@ async function withPool<T>(pool: RequestBoundaryPool, action: () => Promise<T>):
 function mutationRequest(
   mutation: (typeof mutations)[number],
   options: {
+    authenticated?: boolean;
     body?: BodyInit | null;
     contentType?: string;
     origin?: string;
@@ -148,7 +149,9 @@ function mutationRequest(
     {
       method: "POST",
       headers: {
-        Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}`,
+        ...(options.authenticated === false
+          ? {}
+          : { Cookie: `${SESSION_COOKIE}=${"a".repeat(43)}` }),
         [EXPECTED_PLAYER_HEADER]: playerKey,
         "x-real-ip": "203.0.113.190",
         "sec-fetch-site": options.secFetchSite ?? "same-origin",
@@ -244,6 +247,27 @@ test("game mutation metadata is rejected before identity or persistent rate-limi
         assert.equal((await response.json()).code, invalid.code);
         assert.equal(pool.statements.length, 0);
       }
+    });
+  }
+});
+
+test("every game mutation requires a session before game or persistent actor access", async (t) => {
+  for (const mutation of mutations) {
+    await t.test(mutation.name, async () => {
+      const pool = new RequestBoundaryPool();
+      const response = await withPool(pool, () => mutation.handler(
+        mutationRequest(mutation, { authenticated: false }),
+        context,
+      ));
+      assert.equal(response.status, 401);
+      assert.equal((await response.json()).code, "session_expired");
+      assert.equal(pool.rateReservations, 0);
+      assert.equal(pool.serviceBoundaryAttempts, 0);
+      assert.equal(pool.statements.some((sql) => /\bFROM games\b/.test(sql)), false);
+      assert.equal(
+        pool.statements.some((sql) => /moves|game_scoring_resume_events|game_scoring_state/.test(sql)),
+        false,
+      );
     });
   }
 });

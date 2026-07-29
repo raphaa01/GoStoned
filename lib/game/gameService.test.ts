@@ -8,6 +8,7 @@ import {
   pollGameState,
   resignGame,
   resumePlay,
+  setDeadGroup,
   submitMove,
 } from "./gameService";
 import { applyMove, boardHash, createEmptyBoard } from "./goEngine";
@@ -78,7 +79,7 @@ function storedMove(
 
 function gameRow(overrides: Record<string, unknown> = {}) {
   const now = new Date("2099-01-01T00:00:00.000Z");
-  return {
+  const row = {
     id: gameId,
     board_size: 9,
     black_player_key: blackKey,
@@ -117,6 +118,10 @@ function gameRow(overrides: Record<string, unknown> = {}) {
     finished_at: null,
     ...overrides,
   };
+  if (overrides.phase === "scoring" && overrides.consecutive_passes === undefined) {
+    row.consecutive_passes = 2;
+  }
+  return row;
 }
 
 function scoringRow(overrides: Record<string, unknown> = {}) {
@@ -155,6 +160,49 @@ function scoringRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function resumeEventRow(overrides: Record<string, unknown> = {}) {
+  return {
+    scoring_revision: 1,
+    board_hash: emptyBoardHash,
+    stopped_move_number: 2,
+    rules: "chinese",
+    rules_profile: "chinese-2002-gostone-v1",
+    scoring_method: "area",
+    komi: "7.5",
+    handicap: 0,
+    fallback_to_move: "black",
+    scoring_expires_at: new Date("2099-01-01T00:10:00.000Z"),
+    resume_claim: "deadline",
+    requested_by_color: null,
+    disputed_x: null,
+    disputed_y: null,
+    resumed_to_move: "black",
+    resumed_at: new Date("2099-01-01T00:10:00.000Z"),
+    ...overrides,
+  };
+}
+
+function resumeEventFromInsert(values: unknown[]) {
+  return resumeEventRow({
+    scoring_revision: values[1],
+    board_hash: values[2],
+    stopped_move_number: values[3],
+    rules: values[4],
+    rules_profile: values[5],
+    scoring_method: values[6],
+    komi: values[7],
+    handicap: values[8],
+    fallback_to_move: values[9],
+    scoring_expires_at: values[10],
+    resume_claim: values[11],
+    requested_by_color: values[12],
+    disputed_x: values[13],
+    disputed_y: values[14],
+    resumed_to_move: values[15],
+    resumed_at: values[16],
+  });
+}
+
 const finalizedAt = new Date("2099-01-01T00:05:00.000Z");
 
 function finishedScoredGame(overrides: Record<string, unknown> = {}) {
@@ -162,6 +210,7 @@ function finishedScoredGame(overrides: Record<string, unknown> = {}) {
     status: "finished",
     phase: "scoring",
     to_move: null,
+    consecutive_passes: 2,
     scoring_revision: 1,
     winner_key: "guest:white",
     result: "W+7.5",
@@ -199,6 +248,7 @@ async function withFakeDatabase(
     scoring: Record<string, unknown> | null;
     deadRows?: Record<string, unknown>[];
     moveRows?: Record<string, unknown>[];
+    resumeRows?: Record<string, unknown>[];
     allowMoveWrite?: boolean;
   },
   action: () => Promise<unknown>,
@@ -207,13 +257,17 @@ async function withFakeDatabase(
   const client = {
     async query(sql: string, values: unknown[] = []) {
       statements.push(sql);
-      if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
+      if (sql.startsWith("BEGIN") || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
         return { rows: [], rowCount: 0 };
       }
-      if (sql.includes("FROM games g")) return { rows: [rows.game], rowCount: 1 };
+      if (sql.includes("FROM games")) return { rows: [rows.game], rowCount: 1 };
       if (sql.includes("FROM moves")) {
         const moveRows = rows.moveRows ?? (rows.scoring ? emptyBoardPassRows() : []);
         return { rows: moveRows, rowCount: moveRows.length };
+      }
+      if (sql.includes("FROM game_scoring_resume_events")) {
+        const resumeRows = rows.resumeRows ?? [];
+        return { rows: resumeRows, rowCount: resumeRows.length };
       }
       if (sql.includes("FROM game_scoring_state")) {
         return { rows: rows.scoring ? [rows.scoring] : [], rowCount: rows.scoring ? 1 : 0 };
@@ -281,6 +335,7 @@ async function assertRejectedWithoutWrites(
     scoring: Record<string, unknown> | null;
     deadRows?: Record<string, unknown>[];
     moveRows?: Record<string, unknown>[];
+    resumeRows?: Record<string, unknown>[];
     allowMoveWrite?: boolean;
   },
   expectedCode: string,
@@ -304,6 +359,7 @@ async function assertRejectedWithoutWrites(
   );
   assert.equal(statements.includes("ROLLBACK"), true);
   assert.equal(statements.includes("COMMIT"), false);
+  return statements;
 }
 
 test("move versions are bounded and stale intents fail before gameplay writes", async (t) => {
@@ -377,9 +433,10 @@ async function loadState(
   game: Record<string, unknown>,
   scoring: Record<string, unknown> | null,
   moveRows?: Record<string, unknown>[],
+  resumeRows?: Record<string, unknown>[],
 ): Promise<GameState> {
   let state: GameState | undefined;
-  const statements = await withFakeDatabase({ game, scoring, moveRows }, async () => {
+  const statements = await withFakeDatabase({ game, scoring, moveRows, resumeRows }, async () => {
     state = await getGameState(gameId, blackKey);
   });
   assert.ok(state);
@@ -388,8 +445,8 @@ async function loadState(
   return state;
 }
 
-test("version-aware polling skips replay only when wall-time transitions are safe", async (t) => {
-  await t.test("matching current-profile play returns a fresh clock without locks or moves", async () => {
+test("version-aware polling verifies provenance before returning a heartbeat", async (t) => {
+  await t.test("matching current-profile play returns a fresh clock after snapshot verification", async () => {
     let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
     const statements = await withFakeDatabase(
       { game: gameRow({ version: 7 }), scoring: null },
@@ -401,10 +458,14 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     assert.equal(result.gameId, gameId);
     assert.equal(result.version, 7);
     assert.equal(result.clock.black.phase, "main");
-    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
-    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE")), false);
-    assert.equal(statements.includes("BEGIN"), false);
-    assert.equal(statements.includes("COMMIT"), false);
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_resume_events")), true);
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), false);
+    assert.equal(
+      statements.includes("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"),
+      true,
+    );
+    assert.equal(statements.includes("COMMIT"), true);
     assert.equal(
       statements.some((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
       false,
@@ -423,11 +484,11 @@ test("version-aware polling skips replay only when wall-time transitions are saf
       assert.ok(result && !result.unchanged);
       assert.equal(result.game.version, 7);
       assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
-      assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), true);
+      assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), false);
     }
   });
 
-  await t.test("matching finished state still receives the fully verified outcome", async () => {
+  await t.test("matching finished state still returns the fully verified outcome", async () => {
     let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
     const statements = await withFakeDatabase(
       { game: finishedScoredGame({ version: 9 }), scoring: finalizedScoringRow() },
@@ -439,7 +500,7 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     assert.equal(result.game.status, "finished");
     assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
     assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), true);
-    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), true);
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), false);
   });
 
   await t.test("matching malformed active and finished headers cannot return heartbeats", async () => {
@@ -475,7 +536,7 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     );
   });
 
-  await t.test("matching unexpired scoring reads only its deadline header", async () => {
+  await t.test("matching unexpired scoring verifies moves, evidence, and the full snapshot", async () => {
     let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
     const statements = await withFakeDatabase(
       {
@@ -487,15 +548,16 @@ test("version-aware polling skips replay only when wall-time transitions are saf
       },
     );
     assert.ok(result?.unchanged);
-    assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
+    assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_resume_events")), true);
     assert.equal(
-      statements.some((sql) => sql.includes("FROM game_scoring_state scoring")),
+      statements.some((sql) => sql.includes("FROM game_scoring_state")),
       true,
     );
-    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE")), false);
+    assert.equal(statements.some((sql) => sql.includes("FOR UPDATE OF g")), false);
   });
 
-  await t.test("legacy play falls through because its turn is move-log authoritative", async () => {
+  await t.test("legacy play retains full refresh semantics without current-profile evidence", async () => {
     let result: Awaited<ReturnType<typeof pollGameState>> | undefined;
     const statements = await withFakeDatabase(
       {
@@ -508,6 +570,7 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     );
     assert.ok(result && !result.unchanged);
     assert.equal(statements.some((sql) => sql.includes("FROM moves")), true);
+    assert.equal(statements.some((sql) => sql.includes("game_scoring_resume_events")), false);
   });
 
   await t.test("an outsider is rejected before version or dependent state is exposed", async () => {
@@ -527,7 +590,7 @@ test("version-aware polling skips replay only when wall-time transitions are saf
     assert.equal(rejection.code, "not_participant");
     assert.equal(statements.some((sql) => sql.includes("FROM moves")), false);
     assert.equal(statements.some((sql) => sql.includes("game_scoring_state")), false);
-    assert.equal(statements.includes("BEGIN"), false);
+    assert.equal(statements.some((sql) => sql.startsWith("BEGIN")), false);
     assert.equal(statements.includes("ROLLBACK"), false);
   });
 
@@ -655,6 +718,27 @@ test("move history trust boundary derives positions and rejects contradictory ev
       "move_history_mismatch",
       () => submitMove(gameId, blackKey, { x: 2, y: 0, expectedVersion: 0 }),
     );
+  });
+
+  await t.test("malformed database move types fail closed", async () => {
+    const first = persistedMoveRows([storedMove(1, "black", 0, 0)])[0];
+    for (const mutation of [
+      { color: "blue" },
+      { is_pass: "false" },
+      { x: 0.5 },
+      { board_hash: 42 },
+      { created_at: "2099-01-01T00:01:00.000Z" },
+    ]) {
+      await assertRejectedWithoutWrites(
+        {
+          game: gameRow({ to_move: "white" }),
+          scoring: null,
+          moveRows: [{ ...first, ...mutation }],
+        },
+        "move_history_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    }
   });
 
   await t.test("current-profile history requires a stored hash", async () => {
@@ -815,6 +899,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
     let currentDeadRows: Record<string, unknown>[] = [{ x: 8, y: 8, color: "black" }];
     const statements: string[] = [];
     const resumeEvidenceWrites: unknown[][] = [];
+    const resumeRows: Record<string, unknown>[] = [];
     const client = {
       async query(sql: string, values: unknown[] = []) {
         statements.push(sql);
@@ -823,6 +908,9 @@ test("move history trust boundary derives positions and rejects contradictory ev
         }
         if (sql.includes("FROM games g")) return { rows: [currentGame], rowCount: 1 };
         if (sql.includes("FROM moves")) return { rows: moveRows, rowCount: moveRows.length };
+        if (sql.includes("FROM game_scoring_resume_events")) {
+          return { rows: resumeRows, rowCount: resumeRows.length };
+        }
         if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_scoring_state")) {
           return { rows: currentScoring ? [currentScoring] : [], rowCount: currentScoring ? 1 : 0 };
         }
@@ -831,6 +919,7 @@ test("move history trust boundary derives positions and rejects contradictory ev
         }
         if (sql.includes("INSERT INTO game_scoring_resume_events")) {
           resumeEvidenceWrites.push(values);
+          resumeRows.push(resumeEventFromInsert(values));
           return { rows: [], rowCount: 1 };
         }
         if (sql.startsWith("DELETE FROM game_scoring_state")) {
@@ -960,6 +1049,446 @@ test("move history trust boundary derives positions and rejects contradictory ev
   });
 });
 
+test("current-profile turn provenance requires exact immutable resume evidence", async (t) => {
+  const resumedMoves = persistedMoveRows([
+    storedMove(1, "black", 0, 0),
+    storedMove(2, "white", null, null, true),
+    storedMove(3, "black", null, null, true),
+    storedMove(4, "black", 1, 0),
+  ]);
+  const validEvent = resumeEventRow({
+    board_hash: resumedMoves[2].board_hash,
+    stopped_move_number: 3,
+    fallback_to_move: "white",
+    scoring_expires_at: new Date("2099-01-01T00:10:00.000Z"),
+    resume_claim: "dead",
+    requested_by_color: "black",
+    disputed_x: 0,
+    disputed_y: 0,
+    resumed_to_move: "black",
+    resumed_at: new Date("2099-01-01T00:04:00.000Z"),
+  });
+  const resumedGame = gameRow({
+    to_move: "white",
+    scoring_revision: 2,
+    last_resume_claim: "dead",
+    last_resume_by: "black",
+    last_resume_x: 0,
+    last_resume_y: 0,
+  });
+
+  await t.test("a claim-dependent resume can legitimately give the last passer another move", async () => {
+    const state = await loadState(resumedGame, null, resumedMoves, [validEvent]);
+    assert.equal(state.turn, "white");
+    assert.equal(state.moveCount, 4);
+    assert.equal(state.lastResume?.claim, "dead");
+  });
+
+  const malformedCases: ReadonlyArray<readonly [
+    string,
+    Record<string, unknown>,
+    Record<string, unknown>[],
+    Record<string, unknown>[],
+  ]> = [
+    [
+      "White moves first",
+      gameRow({ to_move: "black" }),
+      persistedMoveRows([storedMove(1, "white", 0, 0)]),
+      [],
+    ],
+    [
+      "one player moves twice without a resume",
+      gameRow({ to_move: "white" }),
+      persistedMoveRows([storedMove(1, "black", 0, 0), storedMove(2, "black", 1, 0)]),
+      [],
+    ],
+    [
+      "play continues after pass-pass without evidence",
+      gameRow({ to_move: "white" }),
+      persistedMoveRows([
+        storedMove(1, "black", null, null, true),
+        storedMove(2, "white", null, null, true),
+        storedMove(3, "black", 0, 0),
+      ]),
+      [],
+    ],
+    ["resume names the wrong next player", resumedGame, resumedMoves, [
+      { ...validEvent, resumed_to_move: "white" },
+    ]],
+    ["resume boundary is not the pass-pass stop", resumedGame, resumedMoves, [
+      { ...validEvent, stopped_move_number: 2 },
+    ]],
+    ["resume board hash differs", resumedGame, resumedMoves, [
+      { ...validEvent, board_hash: "tampered" },
+    ]],
+    ["resume fallback differs", resumedGame, resumedMoves, [
+      { ...validEvent, fallback_to_move: "black" },
+    ]],
+    ["resume rules tuple differs", resumedGame, resumedMoves, [
+      { ...validEvent, rules_profile: "legacy-immediate-area" },
+    ]],
+    ["resume revision has a coerced database type", resumedGame, resumedMoves, [
+      { ...validEvent, scoring_revision: "1" },
+    ]],
+    ["resume boundary has a coerced database type", resumedGame, resumedMoves, [
+      { ...validEvent, stopped_move_number: "3" },
+    ]],
+    ["resume handicap has a coerced database type", resumedGame, resumedMoves, [
+      { ...validEvent, handicap: "0" },
+    ]],
+    ["resume komi rejects coercible objects", resumedGame, resumedMoves, [
+      { ...validEvent, komi: { valueOf: () => 7.5 } },
+    ]],
+    ["resume integers reject hostile coercion", resumedGame, resumedMoves, [
+      { ...validEvent, scoring_revision: { valueOf: () => { throw new Error("coerced"); } } },
+    ]],
+    ["resume claim shape differs", resumedGame, resumedMoves, [
+      { ...validEvent, requested_by_color: null },
+    ]],
+    ["resume coordinate is outside the board", resumedGame, resumedMoves, [
+      { ...validEvent, disputed_x: 9 },
+    ]],
+    ["resume coordinate was empty at the scoring stop", resumedGame, resumedMoves, [
+      { ...validEvent, disputed_x: 1 },
+    ]],
+    ["persisted turn differs from replay", { ...resumedGame, to_move: "black" }, resumedMoves, [validEvent]],
+    ["latest resume summary differs", { ...resumedGame, last_resume_by: "white" }, resumedMoves, [validEvent]],
+    ["post-resume revision differs", { ...resumedGame, scoring_revision: 3 }, resumedMoves, [validEvent]],
+    ["an event points beyond available moves", resumedGame, resumedMoves, [
+      { ...validEvent, stopped_move_number: 8 },
+    ]],
+    ["duplicate stop boundaries are rejected", resumedGame, resumedMoves, [
+      validEvent,
+      {
+        ...validEvent,
+        scoring_revision: 3,
+        resumed_at: new Date("2099-01-01T00:05:00.000Z"),
+      },
+    ]],
+  ];
+
+  for (const [name, game, moveRows, resumeRows] of malformedCases) {
+    await t.test(name, async () => {
+      await assertRejectedWithoutWrites(
+        { game, scoring: null, moveRows, resumeRows },
+        "move_history_mismatch",
+        () => getGameState(gameId, blackKey),
+      );
+    });
+  }
+
+  await t.test("repeated scoring cycles accept revision gaps and preserve latest provenance", async () => {
+    const moves = persistedMoveRows([
+      storedMove(1, "black", null, null, true),
+      storedMove(2, "white", null, null, true),
+      storedMove(3, "black", 0, 0),
+      storedMove(4, "white", null, null, true),
+      storedMove(5, "black", null, null, true),
+      storedMove(6, "black", 1, 0),
+    ]);
+    const first = resumeEventRow({
+      board_hash: moves[1].board_hash,
+      scoring_expires_at: new Date("2099-01-01T00:02:30.000Z"),
+      resumed_at: new Date("2099-01-01T00:02:30.000Z"),
+    });
+    const second = resumeEventRow({
+      scoring_revision: 4,
+      board_hash: moves[4].board_hash,
+      stopped_move_number: 5,
+      fallback_to_move: "white",
+      resume_claim: "dead",
+      requested_by_color: "black",
+      disputed_x: 0,
+      disputed_y: 0,
+      resumed_to_move: "black",
+      resumed_at: new Date("2099-01-01T00:06:00.000Z"),
+    });
+    const state = await loadState(
+      gameRow({
+        to_move: "white",
+        scoring_revision: 5,
+        last_resume_claim: "dead",
+        last_resume_by: "black",
+        last_resume_x: 0,
+        last_resume_y: 0,
+      }),
+      null,
+      moves,
+      [first, second],
+    );
+    assert.equal(state.moveCount, 6);
+    assert.equal(state.turn, "white");
+    assert.equal(state.scoringRevision, 5);
+  });
+
+  await t.test("a later scoring phase accepts dead-stone revision gaps", async () => {
+    const moves = persistedMoveRows([
+      storedMove(1, "black", 0, 0),
+      storedMove(2, "white", null, null, true),
+      storedMove(3, "black", null, null, true),
+      storedMove(4, "black", 1, 0),
+      storedMove(5, "white", null, null, true),
+      storedMove(6, "black", null, null, true),
+    ]);
+    const event = { ...validEvent, board_hash: moves[2].board_hash };
+    const game = {
+      ...resumedGame,
+      phase: "scoring",
+      to_move: null,
+      consecutive_passes: 2,
+      scoring_revision: 5,
+    };
+    const state = await loadState(
+      game,
+      scoringRow({
+        revision: 5,
+        stopped_move_number: 6,
+        board_hash: moves[5].board_hash,
+        fallback_to_move: "white",
+      }),
+      moves,
+      [event],
+    );
+    assert.equal(state.phase, "scoring");
+    assert.equal(state.scoringRevision, 5);
+  });
+
+  await t.test("resignation may canonically finish an unresolved scoring phase", async () => {
+    const moves = persistedMoveRows([
+      storedMove(1, "black", 0, 0),
+      storedMove(2, "white", null, null, true),
+      storedMove(3, "black", null, null, true),
+      storedMove(4, "black", 1, 0),
+      storedMove(5, "white", null, null, true),
+      storedMove(6, "black", null, null, true),
+    ]);
+    const state = await loadState(
+      {
+        ...resumedGame,
+        status: "finished",
+        phase: "play",
+        to_move: null,
+        consecutive_passes: 2,
+        scoring_revision: 3,
+        result: "W+R",
+        winner_key: whiteKey,
+        finish_reason: "resignation",
+        finished_at: finalizedAt,
+      },
+      null,
+      moves,
+      [{ ...validEvent, board_hash: moves[2].board_hash }],
+    );
+    assert.equal(state.status, "finished");
+    assert.equal(state.finishReason, "resignation");
+  });
+
+  await t.test("timeout cannot silently discard an unresolved scoring phase", async () => {
+    const moves = persistedMoveRows([
+      storedMove(1, "black", 0, 0),
+      storedMove(2, "white", null, null, true),
+      storedMove(3, "black", null, null, true),
+      storedMove(4, "black", 1, 0),
+      storedMove(5, "white", null, null, true),
+      storedMove(6, "black", null, null, true),
+    ]);
+    await assertRejectedWithoutWrites(
+      {
+        game: {
+          ...resumedGame,
+          status: "finished",
+          phase: "play",
+          to_move: null,
+          consecutive_passes: 2,
+          scoring_revision: 3,
+          result: "W+T",
+          winner_key: whiteKey,
+          finish_reason: "timeout",
+          black_time_remaining_ms: 0,
+          black_periods_remaining: 0,
+          finished_at: finalizedAt,
+        },
+        scoring: null,
+        moveRows: moves,
+        resumeRows: [{ ...validEvent, board_hash: moves[2].board_hash }],
+      },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackKey),
+    );
+  });
+});
+
+test("malformed resume provenance blocks every state transition before writes", async (t) => {
+  const playMoves = persistedMoveRows([
+    storedMove(1, "black", null, null, true),
+    storedMove(2, "white", null, null, true),
+    storedMove(3, "white", 0, 0),
+  ]);
+  const corruptEvent = resumeEventRow({
+    resumed_to_move: "black",
+    resume_claim: "dead",
+    requested_by_color: "black",
+    disputed_x: 0,
+    disputed_y: 0,
+    resumed_at: new Date("2099-01-01T00:04:00.000Z"),
+  });
+  const playGame = gameRow({
+    to_move: "black",
+    scoring_revision: 2,
+    version: 7,
+    last_resume_claim: "dead",
+    last_resume_by: "black",
+    last_resume_x: 0,
+    last_resume_y: 0,
+  });
+  for (const [name, action] of [
+    ["read", () => getGameState(gameId, blackKey)],
+    ["matching-version poll", () => pollGameState(gameId, blackKey, 7)],
+    ["move", () => submitMove(gameId, blackKey, { x: 1, y: 0, expectedVersion: 7 })],
+    ["resignation", () => resignGame(gameId, blackKey)],
+  ] as const) {
+    await t.test(name, async () => {
+      await assertRejectedWithoutWrites(
+        { game: playGame, scoring: null, moveRows: playMoves, resumeRows: [corruptEvent] },
+        "move_history_mismatch",
+        action,
+      );
+    });
+  }
+
+  const scoringMoves = persistedMoveRows([
+    storedMove(1, "black", null, null, true),
+    storedMove(2, "white", null, null, true),
+    storedMove(3, "white", 0, 0),
+    storedMove(4, "black", null, null, true),
+    storedMove(5, "white", null, null, true),
+  ]);
+  const scoringGame = gameRow({
+    phase: "scoring",
+    to_move: null,
+    scoring_revision: 3,
+    version: 8,
+    last_resume_claim: "dead",
+    last_resume_by: "black",
+    last_resume_x: 0,
+    last_resume_y: 0,
+  });
+  const scoring = scoringRow({
+    revision: 3,
+    stopped_move_number: 5,
+    board_hash: scoringMoves[4].board_hash,
+    fallback_to_move: "black",
+  });
+  for (const [name, action] of [
+    ["matching-version scoring poll", () => pollGameState(gameId, blackKey, 8)],
+    ["dead-stone edit", () => setDeadGroup(gameId, blackKey, {
+      x: 0, y: 0, dead: true, expectedRevision: 3,
+    })],
+    ["score confirmation", () => confirmScore(gameId, blackKey, 3)],
+    ["resume request", () => resumePlay(gameId, blackKey, 3, "dead", { x: 0, y: 0 })],
+  ] as const) {
+    await t.test(name, async () => {
+      await assertRejectedWithoutWrites(
+        {
+          game: scoringGame,
+          scoring,
+          deadRows: [{ x: 0, y: 0, color: "white" }],
+          moveRows: scoringMoves,
+          resumeRows: [corruptEvent],
+        },
+        "move_history_mismatch",
+        action,
+      );
+    });
+  }
+
+  await t.test("expired registered play cannot reach timeout or rating writes", async () => {
+    const statements = await assertRejectedWithoutWrites(
+      {
+        game: {
+          ...playGame,
+          black_player_key: blackUserKey,
+          white_player_key: whiteUserKey,
+          main_time_seconds: 0,
+          black_time_remaining_ms: 0,
+          black_periods_remaining: 1,
+          byo_yomi_seconds: 1,
+          turn_started_at: new Date("2000-01-01T00:00:00.000Z"),
+        },
+        scoring: null,
+        moveRows: playMoves,
+        resumeRows: [corruptEvent],
+      },
+      "move_history_mismatch",
+      () => getGameState(gameId, blackUserKey),
+    );
+    assert.equal(
+      statements.some((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)
+        && /player_stats|player_rating_history/.test(sql)),
+      false,
+    );
+  });
+
+  await t.test("expired scoring cannot append deadline evidence or resume", async () => {
+    await assertRejectedWithoutWrites(
+      {
+        game: scoringGame,
+        scoring: {
+          ...scoring,
+          expires_at: new Date("2000-01-01T00:00:00.000Z"),
+        },
+        moveRows: scoringMoves,
+        resumeRows: [corruptEvent],
+      },
+      "move_history_mismatch",
+      () => pollGameState(gameId, blackKey, 8),
+    );
+  });
+
+  await t.test("registered finalization paths cannot reach rating state", async () => {
+    const registeredScoring = {
+      ...scoringGame,
+      black_player_key: blackUserKey,
+      white_player_key: whiteUserKey,
+    };
+    const confirmStatements = await assertRejectedWithoutWrites(
+      {
+        game: registeredScoring,
+        scoring: {
+          ...scoring,
+          white_confirmed_revision: 3,
+          white_confirmed_at: new Date("2099-01-01T00:06:00.000Z"),
+        },
+        moveRows: scoringMoves,
+        resumeRows: [corruptEvent],
+      },
+      "move_history_mismatch",
+      () => confirmScore(gameId, blackUserKey, 3),
+    );
+    const resignStatements = await assertRejectedWithoutWrites(
+      {
+        game: {
+          ...playGame,
+          black_player_key: blackUserKey,
+          white_player_key: whiteUserKey,
+        },
+        scoring: null,
+        moveRows: playMoves,
+        resumeRows: [corruptEvent],
+      },
+      "move_history_mismatch",
+      () => resignGame(gameId, blackUserKey),
+    );
+    for (const statements of [confirmStatements, resignStatements]) {
+      assert.equal(
+        statements.some((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)
+          && /player_stats|player_rating_history/.test(sql)),
+        false,
+      );
+    }
+  });
+});
+
 test("an expired scoring snapshot records deadline evidence before resuming play", async () => {
   const expiresAt = new Date(Date.now() - 60_000);
   const initialGame = gameRow({
@@ -983,6 +1512,7 @@ test("an expired scoring snapshot records deadline evidence before resuming play
       }
       if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
       if (sql.includes("FROM moves")) return { rows: emptyBoardPassRows(), rowCount: 2 };
+      if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
       if (sql.includes("FROM game_scoring_state")) {
         return { rows: currentScoring ? [currentScoring] : [], rowCount: currentScoring ? 1 : 0 };
       }
@@ -1094,6 +1624,7 @@ test("resume transactions roll back evidence and mutable state together", async 
           }
           if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
           if (sql.includes("FROM moves")) return { rows: emptyBoardPassRows(), rowCount: 2 };
+          if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
           if (sql.includes("FROM game_scoring_state")) {
             return { rows: [currentScoring], rowCount: 1 };
           }
@@ -1776,6 +2307,7 @@ test("second score confirmation rates two database-verified registered players",
   const initialScoring = scoringRow({
     board_hash: boardHash(stoppedBoard),
     stopped_move_number: moveRows.length,
+    fallback_to_move: "white",
     black_confirmed_revision: 1,
     black_confirmed_at: blackConfirmedAt,
   });
@@ -1789,6 +2321,7 @@ test("second score confirmation rates two database-verified registered players",
       }
       if (sql.includes("FROM games g")) return { rows: [initialGame], rowCount: 1 };
       if (sql.includes("FROM moves")) return { rows: moveRows, rowCount: moveRows.length };
+      if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
       if (sql.includes("FROM game_scoring_state")) return { rows: [initialScoring], rowCount: 1 };
       if (sql.includes("FROM game_dead_stones")) return { rows: deadRows, rowCount: deadRows.length };
       if (sql.includes("UPDATE game_scoring_state") && sql.includes("white_confirmed_revision")) {
@@ -1945,6 +2478,7 @@ test("rating finalization rolls back pre-existing and racing ledger conflicts", 
           }
           if (sql.includes("FROM games g")) return { rows: [activeGame], rowCount: 1 };
           if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
+          if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
           if (sql.includes("FROM game_scoring_state")) return { rows: [], rowCount: 0 };
           if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
             return { rows: [finishedGame], rowCount: 1 };
@@ -2027,6 +2561,7 @@ test("a controlled guest can resign to an account without creating rating writes
       if (sql.includes("FROM moves")) {
         return { rows: emptyBoardPassRows(), rowCount: 2 };
       }
+      if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
       if (sql.includes("FROM game_scoring_state")) return { rows: [scoringRow()], rowCount: 1 };
       if (sql.includes("FROM game_dead_stones")) return { rows: [], rowCount: 0 };
       if (sql.startsWith("DELETE FROM game_scoring_state")) return { rows: [], rowCount: 1 };

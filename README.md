@@ -187,14 +187,83 @@ strikten Lifecycle-Constraint, den die vorige Anwendung bei Abschluss einer
 Partie verletzen würde. Ein solcher Contract-Schritt darf erst in einer späteren
 Migration erfolgen, nachdem keine alte Instanz mehr Anfragen verarbeitet.
 
-Der sichere Rollout ist deshalb: Migration 008 anwenden, die neue Anwendung
-ausrollen, Health- und Zwei-Spieler-Smokes prüfen und erst danach in einer
-eigenen späteren Migration über strengere Lifecycle-Constraints entscheiden.
-Sobald die neue Anwendung eine Partie mit
-`chinese-2002-gostone-v1` erstellt hat, ist ein Rollback auf eine alte
-Anwendungsversion unsicher, weil diese die Wertungsphase nicht versteht. In
-diesem Fall neue Partien stoppen und vorwärts korrigieren, statt Wertungszustände
-zu löschen oder automatisch in laufende Partien umzuwandeln.
+Der sichere Rollout ist deshalb: Die alte Anwendung zunächst weiter bedienen
+lassen, die Migrationen 008 bis einschließlich 011 (vorzugsweise alle noch
+offenen Migrationen) vollständig anwenden und danach Tabelle, Trigger,
+Constraints sowie den weiterhin auf `legacy-immediate-area` gesetzten
+Datenbankstandard prüfen. Vor dem Anwendungswechsel muss die Zahl bereits
+existierender Partien mit `chinese-2002-gostone-v1` exakt null sein. Anschließend
+alte Writer vollständig auslaufen lassen oder den Traffic atomar umschalten;
+alte und neue Anwendungsinstanzen dürfen nach der Aktivierung keinerlei
+Spielmutationen parallel bearbeiten. Das umfasst neben Matchmaking und
+Partieerstellung insbesondere Züge, Pässe, Wertung, Wiederaufnahme, Aufgabe und
+Zeitüberschreitungen; die alte Anwendung könnte sonst eine aktuelle Profilpartie
+nach zwei Pässen sofort beenden. Erst dann darf die Anwendung mit strikter Rekonstruktion von
+Zugrecht und Wiederaufnahme-Ereignissen Traffic erhalten. Release-SHA,
+Umschaltzeitpunkt, Zeitpunkt der ersten aktuellen Profilpartie und Ergebnis der
+Nachkontrolle gehören ins Release-Protokoll.
+
+Die folgenden ausschließlich lesenden Abfragen bilden zusammen mit dem weiter
+unten beschriebenen Produktions-Preflight
+`vercel env run -e production -- npm run mvp:check` das minimale Gate vor dem
+Anwendungswechsel. Nur der Preflight prüft zusätzlich die vollständigen
+Tabellen-, Trigger-, Constraint-, RLS- und Grant-Verträge:
+
+```sql
+SELECT filename, applied_at
+  FROM schema_migrations
+ WHERE filename IN (
+   '008_chinese_scoring_agreement.sql',
+   '009_japanese_persistence_foundation.sql',
+   '010_move_board_hash_guard.sql',
+   '011_game_scoring_resume_evidence.sql'
+ )
+ ORDER BY filename;
+
+SELECT pg_get_expr(def.adbin, def.adrelid) AS rules_profile_default
+  FROM pg_attribute attr
+  JOIN pg_attrdef def
+    ON def.adrelid = attr.attrelid AND def.adnum = attr.attnum
+ WHERE attr.attrelid = 'public.games'::regclass
+   AND attr.attname = 'rules_profile';
+
+SELECT rules_profile, COUNT(*) FROM games GROUP BY rules_profile;
+
+-- Muss vor dem Umschalten null liefern.
+SELECT COUNT(*) AS current_profile_games
+  FROM games
+ WHERE rules_profile = 'chinese-2002-gostone-v1';
+```
+
+Nach dem Umschalten muss zusätzlich jede gespeicherte Zusammenfassung dem
+letzten unveränderlichen Ereignis entsprechen; die folgende Abfrage muss keine
+Zeile liefern:
+
+```sql
+WITH latest_event AS (
+  SELECT DISTINCT ON (game_id)
+         game_id, resume_claim, requested_by_color, disputed_x, disputed_y
+    FROM game_scoring_resume_events
+   ORDER BY game_id, scoring_revision DESC
+)
+SELECT game.id
+  FROM games AS game
+  LEFT JOIN latest_event AS event ON event.game_id = game.id
+ WHERE game.rules_profile = 'chinese-2002-gostone-v1'
+   AND ROW(game.last_resume_claim, game.last_resume_by,
+           game.last_resume_x, game.last_resume_y)
+       IS DISTINCT FROM
+       ROW(event.resume_claim, event.requested_by_color,
+           event.disputed_x, event.disputed_y);
+```
+
+Vor der ersten Partie mit `chinese-2002-gostone-v1` kann die Anwendung unter
+Beibehaltung der Migrationen zurückgerollt werden. Danach liegt der zulässige
+Rollback-Floor bei einer Anwendungsversion, die die gemeinsame Wertungsphase
+versteht und Migration-011-Ereignisse weiterhin unveränderlich anhängt. Eine
+ältere Version wäre unsicher. Dann neue Partien und Mutationen pausieren und
+vorwärts korrigieren; Evidenz niemals löschen, Profilwerte niemals nachträglich
+umetikettieren und fehlende Wiederaufnahme-Ereignisse niemals erfinden.
 
 Mutierende Aktionslimits werden dauerhaft und getrennt nach der serverseitig
 verifizierten Spieler-ID und der von Vercel gesetzten Client-Adresse geführt.

@@ -199,7 +199,7 @@ test("production preflight requires the complete resume evidence boundary", () =
   }
 });
 
-test("both resume paths append evidence before deleting mutable scoring state", () => {
+test("participant game service reads ordered evidence and appends before deleting scoring state", () => {
   const insertion = gameService.indexOf("INSERT INTO game_scoring_resume_events");
   const deadlineResume = gameService.indexOf("async function resumeExpiredScoring");
   const manualResume = gameService.indexOf("export async function resumePlay");
@@ -219,9 +219,18 @@ test("both resume paths append evidence before deleting mutable scoring state", 
     gameService.slice(manualResume).includes("game_japanese_scoring_state"),
     false,
   );
-  assert.equal(
-    gameService.match(/game_scoring_resume_events/g)?.length,
-    1,
-    "resume evidence must remain write-only in the participant game service",
-  );
+  assert.equal(gameService.match(/INSERT INTO game_scoring_resume_events/g)?.length, 1);
+  assert.equal(gameService.match(/FROM game_scoring_resume_events/g)?.length, 1);
+  const loadGame = gameService.indexOf("async function loadGame");
+  const participantCheck = gameService.indexOf("assertParticipant(game, playerKey)", loadGame);
+  const evidenceRead = gameService.indexOf("FROM game_scoring_resume_events", loadGame);
+  const replay = gameService.indexOf("replayStoredMoveRows(", evidenceRead);
+  const cacheAssertion = gameService.indexOf("assertCurrentProfileTurnCache", replay);
+  assert.ok(loadGame >= 0);
+  assert.ok(participantCheck > loadGame);
+  assert.ok(evidenceRead > participantCheck);
+  assert.ok(replay > evidenceRead);
+  assert.ok(cacheAssertion > replay);
+  assert.ok(gameService.slice(evidenceRead - 600, evidenceRead + 600).includes("ORDER BY scoring_revision"));
+  assert.ok(gameService.slice(evidenceRead - 600, evidenceRead + 600).includes("LIMIT $2"));
 });
