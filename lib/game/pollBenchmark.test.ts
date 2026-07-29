@@ -330,5 +330,7 @@ test("the runner installs classification before validation and retains graceful 
   assert.ok(source.includes("process.on(\"SIGINT\", handleSigint)"));
   assert.ok(source.includes("process.on(\"SIGTERM\", handleSigterm)"));
   assert.ok(source.includes("SET LOCAL statement_timeout"));
+  assert.ok(source.includes("WHERE rolname = current_user"));
+  assert.ok(!source.includes("pg_catalog.current_user"));
   assert.ok(source.includes("await cleanupOwnedFixtures(pool, ownedGameIds)"));
 });

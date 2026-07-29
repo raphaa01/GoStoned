@@ -124,7 +124,7 @@ async function assertRunnerPrivileges(pool: Pool): Promise<void> {
     `SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
             rolreplication, rolbypassrls
        FROM pg_catalog.pg_roles
-      WHERE rolname = pg_catalog.current_user`,
+      WHERE rolname = current_user`,
   );
   invariant(result.rows.length === 1, "The benchmark runner role is unavailable.");
   const role = result.rows[0];
