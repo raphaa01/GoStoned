@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { apiError, noStoreJson } from "@/lib/api/responses";
 import { AuthError } from "@/lib/auth/accountService";
 import { assertAuthMutationRequest } from "@/lib/auth/credentialRequest";
@@ -15,6 +16,11 @@ import { GameServiceError } from "@/lib/game/gameService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export const MAX_CHAT_REQUEST_BODY_BYTES = 4_096;
+export const MAX_CHAT_REQUEST_BODY_CHUNKS = MAX_CHAT_REQUEST_BODY_BYTES;
+export const CHAT_REQUEST_BODY_IDLE_TIMEOUT_MS = 1_000;
+export const CHAT_REQUEST_BODY_TOTAL_TIMEOUT_MS = 2_000;
 
 const CANONICAL_GAME_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -45,15 +51,13 @@ function parseAfterId(request: NextRequest): number {
 }
 
 async function readMessageBody(request: NextRequest): Promise<unknown> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    throw invalidChatRequest();
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw invalidChatRequest();
-  }
+  const body = await readBoundedJsonObject(request, {
+    maxBytes: MAX_CHAT_REQUEST_BODY_BYTES,
+    maxChunks: MAX_CHAT_REQUEST_BODY_CHUNKS,
+    idleTimeoutMs: CHAT_REQUEST_BODY_IDLE_TIMEOUT_MS,
+    totalTimeoutMs: CHAT_REQUEST_BODY_TOTAL_TIMEOUT_MS,
+    invalidJson: invalidChatRequest,
+  });
   const entries = Object.entries(body);
   if (entries.length !== 1 || entries[0][0] !== "message") throw invalidChatRequest();
   return entries[0][1];

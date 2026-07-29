@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { AuthError } from "./accountService";
-import { assertAuthMutationRequest, readCredentialRequest } from "./credentialRequest";
+import {
+  assertAuthMutationRequest,
+  MAX_CREDENTIAL_REQUEST_BODY_BYTES,
+  readCredentialRequest,
+} from "./credentialRequest";
 
 function credentialRequest(body: BodyInit, headers: Record<string, string> = {}) {
   return new NextRequest("https://gostone.test/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body,
+    ...(body instanceof ReadableStream ? { duplex: "half" as const } : {}),
   });
 }
 
@@ -30,6 +35,60 @@ test("credential requests retain normalized credential validation", async () => 
       JSON.stringify({ username: " Named_Player ", password: "password123" }),
     )),
     { username: "Named_Player", password: "password123" },
+  );
+});
+
+test("credential requests require the exact username and password object", async () => {
+  for (const body of [
+    { username: "Named_Player", password: "password123", padding: "" },
+    { username: "Named_Player" },
+    { password: "password123" },
+    {},
+  ]) {
+    await assert.rejects(
+      readCredentialRequest(credentialRequest(JSON.stringify(body))),
+      (error) => error instanceof AuthError
+        && error.status === 400
+        && error.code === "invalid_request",
+    );
+  }
+});
+
+test("credential requests reject declared oversize bodies before consuming them", async () => {
+  const stalled = new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise<void>(() => undefined);
+    },
+  });
+  const candidate = credentialRequest(stalled, {
+    "Content-Length": String(MAX_CREDENTIAL_REQUEST_BODY_BYTES + 1),
+  });
+  await assert.rejects(
+    readCredentialRequest(candidate),
+    (error) => error instanceof AuthError
+      && error.status === 400
+      && error.code === "invalid_request",
+  );
+  assert.equal(candidate.bodyUsed, false);
+});
+
+test("credential body bounds preserve maximum valid inputs and multibyte text", async () => {
+  const username = "u".repeat(20);
+  const escapedPassword = "\u0000".repeat(128);
+  const encoded = JSON.stringify({ username, password: escapedPassword });
+  assert.ok(Buffer.byteLength(encoded) <= MAX_CREDENTIAL_REQUEST_BODY_BYTES);
+  assert.deepEqual(
+    await readCredentialRequest(credentialRequest(encoded)),
+    { username, password: escapedPassword },
+  );
+
+  const multibytePassword = "界".repeat(64);
+  assert.deepEqual(
+    await readCredentialRequest(credentialRequest(JSON.stringify({
+      username: "multibyte_user",
+      password: multibytePassword,
+    }))),
+    { username: "multibyte_user", password: multibytePassword },
   );
 });
 

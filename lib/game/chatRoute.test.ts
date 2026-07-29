@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import type { Pool, PoolClient } from "pg";
 import {
   GET as readChat,
+  MAX_CHAT_REQUEST_BODY_BYTES,
   POST as sendChat,
 } from "@/app/api/games/[gameId]/chat/route";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
@@ -120,8 +121,15 @@ async function withPool<T>(pool: ChatRoutePool, action: () => Promise<T>) {
 
 function request(
   method: "GET" | "POST",
-  options: { url?: string; body?: string; origin?: string } = {},
+  options: {
+    url?: string;
+    body?: BodyInit;
+    contentLength?: string;
+    origin?: string;
+    signal?: AbortSignal;
+  } = {},
 ) {
+  const hasBody = options.body !== undefined;
   return new NextRequest(
     options.url ?? `https://gostone.test/api/games/${gameId}/chat${method === "GET" ? "?after=0" : ""}`,
     {
@@ -132,9 +140,14 @@ function request(
         "x-real-ip": "203.0.113.181",
         "sec-fetch-site": "same-origin",
         ...(options.origin ? { Origin: options.origin } : {}),
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        ...(options.contentLength === undefined
+          ? {}
+          : { "Content-Length": options.contentLength }),
       },
-      ...(options.body ? { body: options.body } : {}),
+      ...(hasBody ? { body: options.body } : {}),
+      ...(options.body instanceof ReadableStream ? { duplex: "half" as const } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     },
   );
 }
@@ -229,4 +242,70 @@ test("chat reads reject a stale displayed actor before rate or message access", 
     pool.statements.some((statement) => statement.startsWith("WITH participant AS")),
     false,
   );
+});
+
+test("chat rejects declared and streamed oversize bodies after identity budgets but before service", async () => {
+  const declaredPool = new ChatRoutePool();
+  const stalled = new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise<void>(() => undefined);
+    },
+  });
+  const declaredRequest = request("POST", {
+    body: stalled,
+    contentLength: String(MAX_CHAT_REQUEST_BODY_BYTES + 1),
+  });
+  const declaredResponse = await withPool(
+    declaredPool,
+    () => sendChat(declaredRequest, context),
+  );
+  assert.equal(declaredResponse.status, 400);
+  assert.equal((await declaredResponse.json()).code, "invalid_chat_request");
+  assert.equal(declaredRequest.bodyUsed, false);
+  assert.equal(declaredPool.insertCount, 0);
+  assert.equal(declaredPool.statements.some((statement) => statement === "BEGIN"), false);
+  assert.equal(
+    declaredPool.statements.filter((statement) => statement.includes("auth_rate_limits")).length,
+    4,
+  );
+
+  const streamedPool = new ChatRoutePool();
+  let cancelled = 0;
+  const oversized = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(MAX_CHAT_REQUEST_BODY_BYTES + 1));
+    },
+    cancel() {
+      cancelled += 1;
+      return new Promise<void>(() => undefined);
+    },
+  });
+  const streamedResponse = await Promise.race([
+    withPool(streamedPool, () => sendChat(request("POST", { body: oversized }), context)),
+    new Promise<never>((_, reject) => setTimeout(
+      () => reject(new Error("chat oversize rejection awaited cancellation")),
+      100,
+    )),
+  ]);
+  assert.equal(streamedResponse.status, 400);
+  assert.equal((await streamedResponse.json()).code, "invalid_chat_request");
+  assert.equal(cancelled, 1);
+  assert.equal(streamedPool.insertCount, 0);
+  assert.equal(streamedPool.statements.some((statement) => statement === "BEGIN"), false);
+});
+
+test("chat accepts a maximum-length multibyte message within its transport bound", async () => {
+  const pool = new ChatRoutePool();
+  const message = "界".repeat(500);
+  const encoded = JSON.stringify({ message });
+  assert.ok(Buffer.byteLength(encoded) <= MAX_CHAT_REQUEST_BODY_BYTES);
+
+  const response = await withPool(
+    pool,
+    () => sendChat(request("POST", { body: encoded }), context),
+  );
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.message.message, message);
+  assert.equal(pool.insertCount, 1);
 });
