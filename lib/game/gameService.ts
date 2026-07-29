@@ -18,6 +18,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
+  DEFAULT_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
@@ -1496,11 +1497,33 @@ async function resolveGameState(
   return serializeGame(loaded, now);
 }
 
+type VersionPollResult =
+  | GamePollHeartbeat
+  | { unchanged: false; game: GameState };
+
+type VerifiedPollState =
+  | Readonly<{ needsMutation: true }>
+  | Readonly<{ needsMutation: false; result: VersionPollResult }>;
+
+function serializeGameHeartbeat(
+  game: GameRow,
+  turn: Stone | null,
+  now: Date,
+): GamePollHeartbeat {
+  return {
+    unchanged: true,
+    gameId: game.id,
+    version: game.version,
+    clock: serializeGameClock(game, turn, now),
+  };
+}
+
 async function verifyPollState(
   client: PoolClient,
   gameId: string,
   playerKey: string,
-): Promise<Readonly<{ game: GameState; needsMutation: boolean }>> {
+  knownVersion: number,
+): Promise<VerifiedPollState> {
   const loaded = await loadGame(client, gameId, playerKey);
   const now = new Date();
   const scoringExpired = loaded.game.status === "active"
@@ -1509,9 +1532,22 @@ async function verifyPollState(
     && scoringDeadlineExpired(loaded.scoring.expires_at, now);
   const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
   const turnTimedOut = turn !== null && calculateClocks(loaded.game, turn, now)[turn].timedOut;
+  if (scoringExpired || turnTimedOut) {
+    return { needsMutation: true };
+  }
+  if (
+    loaded.game.version === knownVersion
+    && loaded.game.status === "active"
+    && loaded.rules.rulesProfile === DEFAULT_RULES_PROFILE
+  ) {
+    return {
+      needsMutation: false,
+      result: serializeGameHeartbeat(loaded.game, turn, now),
+    };
+  }
   return {
-    game: serializeGame(loaded, now),
-    needsMutation: scoringExpired || turnTimedOut,
+    needsMutation: false,
+    result: { unchanged: false, game: serializeGame(loaded, now) },
   };
 }
 
@@ -1537,24 +1573,11 @@ export async function pollGameState(
   }
   await assertPollParticipant(gameId, playerKey);
   const verified = await withReadOnlyTransaction((client) =>
-    verifyPollState(client, gameId, playerKey));
+    verifyPollState(client, gameId, playerKey, knownVersion));
   if (verified.needsMutation) {
     return { unchanged: false, game: await getGameState(gameId, playerKey) };
   }
-  const { game } = verified;
-  if (
-    game.version !== knownVersion
-    || game.status !== "active"
-    || game.rulesProfile === LEGACY_IMMEDIATE_AREA_PROFILE
-  ) {
-    return { unchanged: false, game };
-  }
-  return {
-    unchanged: true,
-    gameId: game.id,
-    version: game.version,
-    clock: game.clock,
-  };
+  return verified.result;
 }
 
 export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {

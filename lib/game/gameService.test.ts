@@ -77,6 +77,15 @@ function storedMove(
   return { moveNumber, color, x, y, isPass, createdAt: "" };
 }
 
+function observedSerializationDate(value: string, onSerialize: () => void): Date {
+  return new class extends Date {
+    override toISOString(): string {
+      onSerialize();
+      return super.toISOString();
+    }
+  }(value);
+}
+
 function gameRow(overrides: Record<string, unknown> = {}) {
   const now = new Date("2099-01-01T00:00:00.000Z");
   const row = {
@@ -470,6 +479,52 @@ test("version-aware polling verifies provenance before returning a heartbeat", a
       statements.some((sql) => /^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
       false,
     );
+  });
+
+  await t.test("only full responses serialize persisted move timestamps", async () => {
+    let timestampSerializations = 0;
+    const moves = persistedMoveRows([
+      storedMove(1, "black", null, null, true),
+    ]);
+    moves[0].created_at = observedSerializationDate(
+      "2099-01-01T00:01:00.000Z",
+      () => {
+        timestampSerializations += 1;
+      },
+    );
+    const game = gameRow({
+      version: 7,
+      to_move: "white",
+      consecutive_passes: 1,
+    });
+
+    let heartbeat: Awaited<ReturnType<typeof pollGameState>> | undefined;
+    const heartbeatStatements = await withFakeDatabase(
+      { game, scoring: null, moveRows: moves },
+      async () => {
+        heartbeat = await pollGameState(gameId, blackKey, 7);
+      },
+    );
+    assert.ok(heartbeat?.unchanged);
+    assert.equal(timestampSerializations, 0);
+    assert.equal(heartbeatStatements.some((sql) => sql.includes("FROM moves")), true);
+    assert.equal(
+      heartbeatStatements.some((sql) => sql.includes("game_scoring_resume_events")),
+      true,
+    );
+
+    for (const knownVersion of [6, 8]) {
+      let full: Awaited<ReturnType<typeof pollGameState>> | undefined;
+      await withFakeDatabase(
+        { game, scoring: null, moveRows: moves },
+        async () => {
+          full = await pollGameState(gameId, blackKey, knownVersion);
+        },
+      );
+      assert.ok(full && !full.unchanged);
+      assert.equal(full.game.moves.length, 1);
+      assert.equal(timestampSerializations, knownVersion === 6 ? 1 : 2);
+    }
   });
 
   await t.test("a stale or future version receives the fully verified state", async () => {
