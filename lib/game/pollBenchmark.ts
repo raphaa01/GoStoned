@@ -36,6 +36,23 @@ export const POLL_BENCHMARK_SCENARIOS = [
 
 export type PollBenchmarkScenario = typeof POLL_BENCHMARK_SCENARIOS[number];
 
+export const POLL_BENCHMARK_STAGES = [
+  "environment_authorization",
+  "runner_identity",
+  "fixture_generation",
+  "fixture_seeding",
+  "fixture_validation",
+  "stable_warmup",
+  "stable_measurement",
+  "timeout_warmup",
+  "timeout_measurement",
+  "scoring_expiry_warmup",
+  "scoring_expiry_measurement",
+  "report_serialization",
+] as const;
+
+export type PollBenchmarkStage = typeof POLL_BENCHMARK_STAGES[number];
+
 type QueryMetadata = Readonly<{
   statement: PollBenchmarkStatement;
   read: boolean;
@@ -97,6 +114,15 @@ export class PollBenchmarkInvariantError extends Error {
     super(message);
     this.name = "PollBenchmarkInvariantError";
   }
+}
+
+export function formatPollBenchmarkError(
+  error: unknown,
+  stage: PollBenchmarkStage,
+): string {
+  return error instanceof PollBenchmarkInvariantError
+    ? error.message
+    : `Verified game-poll benchmark failed safely during ${stage}.`;
 }
 
 export function resolvePollBenchmarkFailure(

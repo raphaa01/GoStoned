@@ -9,10 +9,12 @@ import {
   aggregateScenario,
   assertScenarioMeasurement,
   executeClassifiedPollQuery,
+  formatPollBenchmarkError,
   PollBenchmarkInvariantError,
   resolvePollBenchmarkFailure,
   serializeSafePollBenchmarkReport,
   type PollBenchmarkReport,
+  type PollBenchmarkStage,
   type PollMeasurement,
   type PollQueryRecord,
   type PollScenarioAggregate,
@@ -73,6 +75,7 @@ type PollResult = Awaited<ReturnType<typeof pollGameState>>;
 
 let activeQueries: PollQueryRecord[] | null = null;
 let terminationSignal: "SIGINT" | "SIGTERM" | null = null;
+let activeStage: PollBenchmarkStage = "environment_authorization";
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new PollBenchmarkInvariantError(message);
@@ -590,8 +593,10 @@ async function executeBenchmark(
   ownedGameIds: Set<string>,
   args: Arguments,
 ): Promise<PollBenchmarkReport> {
+  activeStage = "fixture_generation";
   const placements = buildPlacementMoves();
   const scoringMoves = buildScoringMoves(placements);
+  activeStage = "fixture_seeding";
   const play0 = await seedFixture(pool, ownedGameIds, { moves: [] });
   const play150 = await seedFixture(pool, ownedGameIds, { moves: placements.slice(0, 150) });
   const play300 = await seedFixture(pool, ownedGameIds, { moves: placements });
@@ -603,6 +608,7 @@ async function executeBenchmark(
   const facade = instrumentedPool(pool);
   globalThis.goStonedDbPool = facade;
 
+  activeStage = "fixture_validation";
   await validateStableFixture(play0, "heartbeat", 0, 0);
   await validateStableFixture(play0, "full", 1, 0);
   await validateStableFixture(play150, "heartbeat", 150, 150);
@@ -642,6 +648,7 @@ async function executeBenchmark(
       response: "heartbeat", responseMoves: null,
     } as const, knownVersion: 302 },
   ];
+  activeStage = "stable_warmup";
   for (const scenario of stableScenarios) {
     for (let warmup = 0; warmup < warmups; warmup += 1) {
       assertNotInterrupted();
@@ -653,6 +660,7 @@ async function executeBenchmark(
       assertResponse(result, scenario.definition, scenario.fixture, scenario.fixture.version);
     }
   }
+  activeStage = "stable_measurement";
   const scenarios: PollScenarioAggregate[] = [];
   for (const scenario of stableScenarios) {
     scenarios.push(await runStableScenario(
@@ -671,6 +679,7 @@ async function executeBenchmark(
     responseMoves: 150,
   };
   const timeoutMeasurements: PollMeasurement[] = [];
+  activeStage = "timeout_warmup";
   for (let warmup = 0; warmup < warmups; warmup += 1) {
     assertNotInterrupted();
     const timeout = await seedFixture(pool, ownedGameIds, {
@@ -680,6 +689,7 @@ async function executeBenchmark(
     const result = await pollGameState(timeout.gameId, timeout.playerKey, 150);
     assertResponse(result, timeoutDefinition, timeout, 151);
   }
+  activeStage = "timeout_measurement";
   for (let iteration = 0; iteration < iterations; iteration += 1) {
     const timeout = await seedFixture(pool, ownedGameIds, {
       moves: placements.slice(0, 150),
@@ -703,6 +713,7 @@ async function executeBenchmark(
       responseMoves: 302,
     };
     const expiryMeasurements: PollMeasurement[] = [];
+    activeStage = "scoring_expiry_warmup";
     for (let warmup = 0; warmup < warmups; warmup += 1) {
       assertNotInterrupted();
       const expired = await seedFixture(pool, ownedGameIds, {
@@ -713,6 +724,7 @@ async function executeBenchmark(
       const result = await pollGameState(expired.gameId, expired.playerKey, 302);
       assertResponse(result, expiryDefinition, expired, 303);
     }
+    activeStage = "scoring_expiry_measurement";
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       const expired = await seedFixture(pool, ownedGameIds, {
         moves: scoringMoves,
@@ -750,6 +762,7 @@ async function run(): Promise<PollBenchmarkReport> {
   let cleanupFailed = false;
   let closeFailed = false;
   try {
+    activeStage = "runner_identity";
     await assertRunnerPrivileges(pool);
     report = await executeBenchmark(pool, ownedGameIds, args);
   } catch (error) {
@@ -785,14 +798,11 @@ async function run(): Promise<PollBenchmarkReport> {
 
 run()
   .then((report) => {
+    activeStage = "report_serialization";
     console.log(serializeSafePollBenchmarkReport(report));
   })
   .catch((error: unknown) => {
-    console.error(
-      error instanceof PollBenchmarkInvariantError
-        ? error.message
-        : "Verified game-poll benchmark failed safely.",
-    );
+    console.error(formatPollBenchmarkError(error, activeStage));
     process.exitCode = terminationSignal === "SIGINT"
       ? 130
       : terminationSignal === "SIGTERM"

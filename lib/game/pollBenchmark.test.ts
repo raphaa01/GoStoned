@@ -6,7 +6,9 @@ import {
   aggregateScenario,
   classifyPollQuery,
   executeClassifiedPollQuery,
+  formatPollBenchmarkError,
   percentile,
+  PollBenchmarkInvariantError,
   POLL_BENCHMARK_CONTRACTS,
   POLL_BENCHMARK_SCENARIOS,
   POLL_BENCHMARK_SQL_CASES,
@@ -297,6 +299,23 @@ test("cleanup failures take fixed precedence over execution and close failures",
   assert.match(
     (resolvePollBenchmarkFailure(null, true, false, false) as Error).message,
     /execution failed safely/,
+  );
+});
+
+test("database failures reveal only an allow-listed benchmark stage", () => {
+  assert.equal(
+    formatPollBenchmarkError(
+      new Error("postgresql://runner:secret@127.0.0.1/db relation private_table"),
+      "fixture_seeding",
+    ),
+    "Verified game-poll benchmark failed safely during fixture_seeding.",
+  );
+  assert.equal(
+    formatPollBenchmarkError(
+      new PollBenchmarkInvariantError("The benchmark contract is invalid."),
+      "stable_measurement",
+    ),
+    "The benchmark contract is invalid.",
   );
 });
 
