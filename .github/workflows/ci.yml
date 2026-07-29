@@ -133,6 +133,9 @@ jobs:
           npm run test:move-hash-db
           npm run test:rate-limit
 
+      - name: Verify game-poll amplification boundaries
+        run: npm run benchmark:game-polls -- --ci --include-scoring-expiry
+
       - name: Build production application
         run: npm run build
 
@@ -170,8 +173,29 @@ jobs:
       - name: Reverify migration and concurrent-index state
         run: npm run test:migrations-db -- --verify-only
 
-      - name: Print PostgreSQL logs on failure
+      - name: Summarize PostgreSQL log severities on failure
         if: failure()
         env:
           POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
-        run: docker logs "$POSTGRES_CONTAINER_ID" 2>&1 || true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if severity_summary="$(
+            set -o pipefail
+            timeout 15s docker logs --tail 10000 "$POSTGRES_CONTAINER_ID" 2>&1 \
+              | awk '
+                  /(^|[[:space:]])PANIC:/ { panic += 1 }
+                  /(^|[[:space:]])FATAL:/ { fatal += 1 }
+                  /(^|[[:space:]])ERROR:/ { error += 1 }
+                  /(^|[[:space:]])WARNING:/ { warning += 1 }
+                  END {
+                    printf "Recent PostgreSQL log severity counts: PANIC=%d FATAL=%d ERROR=%d WARNING=%d", \
+                      panic, fatal, error, warning
+                  }
+                '
+          )"; then
+            printf '%s\n' "$severity_summary"
+          else
+            printf '%s\n' 'PostgreSQL log severity summary unavailable.'
+          fi
