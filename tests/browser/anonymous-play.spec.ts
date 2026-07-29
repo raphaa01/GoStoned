@@ -571,6 +571,7 @@ for (const locale of ["en", "de"] as const) {
       const firstPreview = page.getByRole("gridcell", { selected: true });
       await expect(firstPreview).toHaveCount(1);
       await expect(firstPreview).toBeFocused();
+      await expect(firstPreview).toHaveAttribute("tabindex", "0");
       expect(harness.moveBodies).toEqual([]);
 
       const showWholeBoard = page.getByRole("button", { name: localeCopy.showWholeBoard });
@@ -591,11 +592,13 @@ for (const locale of ["en", "de"] as const) {
       const preview = page.getByRole("gridcell", { selected: true });
       await expect(preview).toHaveCount(1);
       await expect(preview).toBeFocused();
+      await expect(preview).toHaveAttribute("tabindex", "0");
       expect(harness.moveBodies).toEqual([]);
       const differentPreview = grid.getByRole("gridcell").first();
       await differentPreview.tap();
       await expect(differentPreview).toHaveAttribute("aria-selected", "true");
       await expect(differentPreview).toBeFocused();
+      await expect(differentPreview).toHaveAttribute("tabindex", "0");
       expect(harness.moveBodies).toEqual([]);
       await differentPreview.tap();
     } else {

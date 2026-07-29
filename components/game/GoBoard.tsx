@@ -128,13 +128,12 @@ export function GoBoard({
       left: board.clientWidth * ratio(precisionPosition.x) - viewport.clientWidth / 2,
       top: board.clientHeight * ratio(precisionPosition.y) - viewport.clientHeight / 2,
     });
-    if (pointerTypeRef.current !== "touch") return;
     const previewIndex = precisionPosition.y * boardSize + precisionPosition.x;
-    const focusPreview = window.requestAnimationFrame(() => {
+    const focusPreview = window.setTimeout(() => {
       precisionToolbarRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
       buttonRefs.current[previewIndex]?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(focusPreview);
+    }, 0);
+    return () => window.clearTimeout(focusPreview);
   }, [boardSize, precisionPosition]);
 
   const cancelPrecision = useCallback(() => {

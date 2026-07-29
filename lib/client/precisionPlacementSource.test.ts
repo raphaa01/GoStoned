@@ -42,6 +42,8 @@ test("precision mode remains perceivable, cancellable, and keyboard compatible",
   assert.match(board, /copy\.precisionPreviewState/);
   assert.match(board, /copy\.showWholeBoard/);
   assert.match(board, /event\.key !== "Escape"/);
+  assert.match(board, /const focusPreview = window\.setTimeout\([\s\S]+buttonRefs\.current\[previewIndex\]\?\.focus\(\{ preventScroll: true \}\)[\s\S]+window\.clearTimeout\(focusPreview\)/);
+  assert.doesNotMatch(board, /if \(pointerTypeRef\.current !== "touch"\) return;/);
   assert.match(board, /buttonRefs\.current\[restoreIndex\]\?\.focus\(\)/);
   assert.match(board, /: isPrecisionPreview \|\| undefined\}/);
   assert.match(board, /event\.detail === 0 \? "keyboard"/);
