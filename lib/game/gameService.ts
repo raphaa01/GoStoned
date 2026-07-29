@@ -1,10 +1,10 @@
 import type { PoolClient, QueryResultRow } from "pg";
-import { query, withTransaction } from "@/lib/db";
+import { query, withReadOnlyTransaction, withTransaction } from "@/lib/db";
 import {
   applyMove,
   boardHash,
+  createEmptyBoard,
   getGroup,
-  replayMovesWithPrisoners,
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
@@ -97,6 +97,62 @@ type MoveRow = {
   created_at: Date;
 };
 
+type ResumeEventRow = {
+  scoring_revision: unknown;
+  board_hash: unknown;
+  stopped_move_number: unknown;
+  rules: unknown;
+  rules_profile: unknown;
+  scoring_method: unknown;
+  komi: unknown;
+  handicap: unknown;
+  fallback_to_move: unknown;
+  scoring_expires_at: unknown;
+  resume_claim: unknown;
+  requested_by_color: unknown;
+  disputed_x: unknown;
+  disputed_y: unknown;
+  resumed_to_move: unknown;
+  resumed_at: unknown;
+};
+
+type ResumeClaim = "dead" | "alive" | "deadline";
+
+type ValidatedResumeEvent = Readonly<{
+  scoringRevision: number;
+  boardHash: string;
+  stoppedMoveNumber: number;
+  fallbackToMove: Stone;
+  scoringExpiresAt: Date;
+  claim: ResumeClaim;
+  requestedBy: Stone | null;
+  disputedStone: Position | null;
+  resumedToMove: Stone;
+  resumedAt: Date;
+}>;
+
+type CurrentTurnProvenance =
+  | Readonly<{
+      phase: "play";
+      turn: Stone;
+      consecutivePasses: 0 | 1;
+      lastResume: ValidatedResumeEvent | null;
+    }>
+  | Readonly<{
+      phase: "scoring";
+      turn: null;
+      fallbackToMove: Stone;
+      consecutivePasses: 2;
+      stoppedMoveNumber: number;
+      lastResume: ValidatedResumeEvent | null;
+    }>;
+
+type StoredReplay = Readonly<{
+  board: Board;
+  positionHistory: readonly string[];
+  currentTurnProvenance: CurrentTurnProvenance | null;
+}>;
+
 type ScoringRow = {
   game_id: string;
   board_hash: string;
@@ -141,40 +197,6 @@ type LoadedGame = {
   positionHistory: readonly string[];
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
-};
-
-type PollGameRow = Pick<
-  GameRow,
-  | "id"
-  | "black_player_key"
-  | "white_player_key"
-  | "winner_key"
-  | "status"
-  | "phase"
-  | "to_move"
-  | "scoring_revision"
-  | "result"
-  | "finish_reason"
-  | "rules"
-  | "rules_profile"
-  | "scoring_method"
-  | "komi"
-  | "handicap"
-  | "main_time_seconds"
-  | "byo_yomi_periods"
-  | "byo_yomi_seconds"
-  | "black_time_remaining_ms"
-  | "white_time_remaining_ms"
-  | "black_periods_remaining"
-  | "white_periods_remaining"
-  | "turn_started_at"
-  | "version"
-  | "finished_at"
->;
-
-type PollScoringRow = {
-  revision: number;
-  expires_at: Date;
 };
 
 export class GameServiceError extends Error {
@@ -453,48 +475,286 @@ function moveHistoryMismatch(): never {
   );
 }
 
-function replayStoredMoveRows(
+function isStone(value: unknown): value is Stone {
+  return value === "black" || value === "white";
+}
+
+function isValidDate(value: unknown): value is Date {
+  return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+function parsePostgresNumeric(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function validateResumeEventRow(
+  row: ResumeEventRow,
+  rules: ResolvedRulesConfiguration,
   boardSize: BoardSize,
-  rows: MoveRow[],
-  policy: RulesPolicy,
-): Readonly<{ board: Board; positionHistory: readonly string[] }> {
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    if (
-      row.move_number !== index + 1
-      || (row.is_pass && (row.x !== null || row.y !== null))
-      || (!row.is_pass && (row.x === null || row.y === null))
-      || (policy.turnSource === "move-log"
-        && row.color !== (index % 2 === 0 ? "black" : "white"))
-    ) {
-      return moveHistoryMismatch();
-    }
-  }
-  let replay: ReturnType<typeof replayMovesWithPrisoners>;
-  try {
-    replay = replayMovesWithPrisoners(boardSize, mapMoves(rows));
-  } catch {
+  previous: ValidatedResumeEvent | null,
+): ValidatedResumeEvent {
+  const scoringRevision = row.scoring_revision;
+  const stoppedMoveNumber = row.stopped_move_number;
+  const komi = parsePostgresNumeric(row.komi);
+  const handicap = row.handicap;
+  const requestedBy = row.requested_by_color;
+  const resumedToMove = row.resumed_to_move;
+  const fallbackToMove = row.fallback_to_move;
+  const claim = row.resume_claim;
+  const x = row.disputed_x;
+  const y = row.disputed_y;
+  const scoringExpiresAt = row.scoring_expires_at;
+  const resumedAt = row.resumed_at;
+  const hasDisputedStone = Number.isInteger(x) && Number.isInteger(y)
+    && Number(x) >= 0 && Number(x) < boardSize
+    && Number(y) >= 0 && Number(y) < boardSize;
+
+  if (
+    typeof scoringRevision !== "number"
+    || !Number.isSafeInteger(scoringRevision)
+    || scoringRevision < 1
+    || typeof stoppedMoveNumber !== "number"
+    || !Number.isSafeInteger(stoppedMoveNumber)
+    || stoppedMoveNumber < 2
+    || typeof row.board_hash !== "string"
+    || row.rules !== rules.ruleset
+    || row.rules_profile !== rules.rulesProfile
+    || row.scoring_method !== rules.scoringMethod
+    || komi === null
+    || komi !== rules.komi
+    || typeof handicap !== "number"
+    || !Number.isSafeInteger(handicap)
+    || handicap !== rules.handicap
+    || !isStone(fallbackToMove)
+    || !isStone(resumedToMove)
+    || !isValidDate(scoringExpiresAt)
+    || !isValidDate(resumedAt)
+    || (claim !== "dead" && claim !== "alive" && claim !== "deadline")
+    || (previous !== null && (
+      scoringRevision < previous.scoringRevision + 2
+      || stoppedMoveNumber < previous.stoppedMoveNumber + 2
+    ))
+  ) {
     return moveHistoryMismatch();
   }
 
-  const priorHashes = new Set<string>([replay.positionHistory[0]]);
+  if (claim === "deadline") {
+    if (
+      requestedBy !== null
+      || x !== null
+      || y !== null
+      || resumedToMove !== fallbackToMove
+      || resumedAt.getTime() < scoringExpiresAt.getTime()
+    ) {
+      return moveHistoryMismatch();
+    }
+  } else if (
+    !isStone(requestedBy)
+    || !hasDisputedStone
+    || resumedAt.getTime() >= scoringExpiresAt.getTime()
+    || (claim === "dead" && resumedToMove !== requestedBy)
+    || (claim === "alive" && resumedToMove === requestedBy)
+  ) {
+    return moveHistoryMismatch();
+  }
+
+  return {
+    scoringRevision,
+    boardHash: row.board_hash,
+    stoppedMoveNumber,
+    fallbackToMove,
+    scoringExpiresAt,
+    claim,
+    requestedBy: isStone(requestedBy) ? requestedBy : null,
+    disputedStone: hasDisputedStone ? { x: Number(x), y: Number(y) } : null,
+    resumedToMove,
+    resumedAt,
+  };
+}
+
+function replayStoredMoveRows(
+  boardSize: BoardSize,
+  rows: MoveRow[],
+  rules: ResolvedRulesConfiguration,
+  resumeRows: ResumeEventRow[],
+): StoredReplay {
+  const { policy } = rules;
+  const events: ValidatedResumeEvent[] = [];
+  if (policy.turnSource === "move-log" && resumeRows.length !== 0) {
+    return moveHistoryMismatch();
+  }
+  for (const row of resumeRows) {
+    events.push(validateResumeEventRow(row, rules, boardSize, events.at(-1) ?? null));
+  }
+  const eventsByBoundary = new Map<number, ValidatedResumeEvent>();
+  for (const event of events) {
+    if (eventsByBoundary.has(event.stoppedMoveNumber)) return moveHistoryMismatch();
+    eventsByBoundary.set(event.stoppedMoveNumber, event);
+  }
+
+  let board = createEmptyBoard(boardSize);
+  const positionHistory: string[] = [boardHash(board)];
+  const priorHashes = new Set<string>(positionHistory);
+  let phase: "play" | "scoring" = "play";
+  let turn: Stone = "black";
+  let consecutivePasses: 0 | 1 | 2 = 0;
+  let lastResume: ValidatedResumeEvent | null = null;
+  let fallbackToMove: Stone = "black";
+  let stoppedMoveNumber = 0;
+  let consumedEvents = 0;
+
   for (let index = 0; index < rows.length; index += 1) {
-    const storedHash = rows[index].board_hash;
-    const replayedHash = replay.positionHistory[index + 1];
+    const row = rows[index];
+    if (
+      !Number.isSafeInteger(row.move_number)
+      || row.move_number !== index + 1
+      || !isStone(row.color)
+      || typeof row.is_pass !== "boolean"
+      || (row.board_hash !== null && typeof row.board_hash !== "string")
+      || !isValidDate(row.created_at)
+      || (row.is_pass && (row.x !== null || row.y !== null))
+      || (!row.is_pass && (
+        !Number.isInteger(row.x)
+        || !Number.isInteger(row.y)
+        || row.x! < 0
+        || row.x! >= boardSize
+        || row.y! < 0
+        || row.y! >= boardSize
+      ))
+      || (policy.turnSource === "move-log"
+        && row.color !== (index % 2 === 0 ? "black" : "white"))
+      || (policy.turnSource === "persisted"
+        && (phase !== "play" || row.color !== turn))
+    ) {
+      return moveHistoryMismatch();
+    }
+    if (!row.is_pass) {
+      const result = applyMove(board, row.color, row.x!, row.y!);
+      if (!result.ok) return moveHistoryMismatch();
+      board = result.board;
+    }
+    const replayedHash = boardHash(board);
+    const storedHash = row.board_hash;
     // Migration 002 added nullable hashes after live games already existed.
     // Migration 008 assigned those games the legacy profile. Reconstruct only
     // that known history; current-profile games must carry matching evidence.
     if (
       (storedHash === null && policy.profile !== LEGACY_IMMEDIATE_AREA_PROFILE)
       || (storedHash !== null && storedHash !== replayedHash)
-      || (!rows[index].is_pass
+      || (!row.is_pass
         && isRepeatedPositionForbidden(policy, replayedHash, priorHashes))
     ) {
       return moveHistoryMismatch();
     }
     priorHashes.add(replayedHash);
+    positionHistory.push(replayedHash);
+
+    if (policy.turnSource === "move-log") continue;
+    turn = opposite(row.color);
+    consecutivePasses = row.is_pass
+      ? consecutivePasses === 0 ? 1 : 2
+      : 0;
+    const event = eventsByBoundary.get(row.move_number);
+    if (consecutivePasses !== 2) {
+      if (event) return moveHistoryMismatch();
+      continue;
+    }
+
+    phase = "scoring";
+    fallbackToMove = turn;
+    stoppedMoveNumber = row.move_number;
+    if (!event) continue;
+    if (
+      event.boardHash !== replayedHash
+      || event.fallbackToMove !== fallbackToMove
+      || !rows[row.move_number - 2]?.is_pass
+      || !rows[row.move_number - 1]?.is_pass
+      || (event.disputedStone !== null
+        && board[event.disputedStone.y][event.disputedStone.x] === null)
+    ) {
+      return moveHistoryMismatch();
+    }
+    phase = "play";
+    turn = event.resumedToMove;
+    consecutivePasses = 0;
+    lastResume = event;
+    consumedEvents += 1;
   }
-  return { board: replay.board, positionHistory: replay.positionHistory };
+
+  if (policy.turnSource === "move-log") {
+    return { board, positionHistory: Object.freeze(positionHistory), currentTurnProvenance: null };
+  }
+  if (consumedEvents !== events.length) return moveHistoryMismatch();
+  const currentTurnProvenance: CurrentTurnProvenance = phase === "play"
+    ? { phase, turn, consecutivePasses: consecutivePasses as 0 | 1, lastResume }
+    : {
+        phase,
+        turn: null,
+        fallbackToMove,
+        consecutivePasses: 2,
+        stoppedMoveNumber,
+        lastResume,
+      };
+  return {
+    board,
+    positionHistory: Object.freeze(positionHistory),
+    currentTurnProvenance,
+  };
+}
+
+function assertCurrentProfileTurnCache(
+  game: GameRow,
+  scoring: ScoringRow | null,
+  replay: StoredReplay,
+): void {
+  const provenance = replay.currentTurnProvenance;
+  if (!provenance) return;
+  const latest = provenance.lastResume;
+  if (
+    game.last_resume_claim !== (latest?.claim ?? null)
+    || game.last_resume_by !== (latest?.requestedBy ?? null)
+    || game.last_resume_x !== (latest?.disputedStone?.x ?? null)
+    || game.last_resume_y !== (latest?.disputedStone?.y ?? null)
+  ) {
+    return moveHistoryMismatch();
+  }
+
+  const basePlayRevision = latest ? latest.scoringRevision + 1 : 0;
+  if (provenance.phase === "play") {
+    if (
+      game.phase !== "play"
+      || game.to_move !== (game.status === "active" ? provenance.turn : null)
+      || game.consecutive_passes !== provenance.consecutivePasses
+      || game.scoring_revision !== basePlayRevision
+      || scoring !== null
+    ) {
+      return moveHistoryMismatch();
+    }
+    return;
+  }
+
+  const scoringCacheMatches = game.phase === "scoring"
+    && game.to_move === null
+    && game.consecutive_passes === 2
+    && game.scoring_revision >= basePlayRevision + 1
+    && scoring !== null
+    && scoring.revision === game.scoring_revision
+    && scoring.stopped_move_number === provenance.stoppedMoveNumber
+    && scoring.board_hash === replay.positionHistory[provenance.stoppedMoveNumber]
+    && scoring.fallback_to_move === provenance.fallbackToMove;
+  const canonicalScoringResignation = game.status === "finished"
+    && game.finish_reason === "resignation"
+    && game.phase === "play"
+    && game.to_move === null
+    && game.consecutive_passes === 2
+    && game.scoring_revision >= basePlayRevision + 1
+    && scoring === null;
+  if (!scoringCacheMatches && !canonicalScoringResignation) {
+    return moveHistoryMismatch();
+  }
 }
 
 async function loadGame(
@@ -555,13 +815,29 @@ async function loadGame(
       ORDER BY move_number`,
     [gameId],
   );
-  const replay = replayStoredMoveRows(game.board_size, movesResult.rows, rules.policy);
+  const resumeRows = rules.policy.turnSource === "persisted"
+    ? (await execute<ResumeEventRow>(
+        `SELECT scoring_revision, board_hash, stopped_move_number,
+                rules, rules_profile, scoring_method, komi, handicap,
+                fallback_to_move, scoring_expires_at, resume_claim,
+                requested_by_color, disputed_x, disputed_y,
+                resumed_to_move, resumed_at
+           FROM game_scoring_resume_events
+          WHERE game_id = $1
+          ORDER BY scoring_revision
+          LIMIT $2`,
+        [gameId, Math.floor(movesResult.rows.length / 2) + 1],
+      )).rows
+    : [];
+  const replay = replayStoredMoveRows(game.board_size, movesResult.rows, rules, resumeRows);
 
   const scoringResult = await execute<ScoringRow>(
     `SELECT * FROM game_scoring_state WHERE game_id = $1${lock ? " FOR UPDATE" : ""}`,
     [gameId],
   );
   let scoring: ScoringRow | null = scoringResult.rows[0] ?? null;
+  const rawGame = game;
+  const rawScoring = scoring;
   let deadRows: DeadStoneRow[] = [];
   if (scoring) {
     storedScoringConfiguration(rules, scoring);
@@ -605,6 +881,7 @@ async function loadGame(
     validateScoringSnapshot(loaded, replay.board);
   }
   assertGameOutcome(loaded);
+  assertCurrentProfileTurnCache(rawGame, rawScoring, replay);
   return loaded;
 }
 
@@ -1219,32 +1496,35 @@ async function resolveGameState(
   return serializeGame(loaded, now);
 }
 
-async function pollHeader(gameId: string): Promise<PollGameRow> {
-  const result = await query<PollGameRow>(
-    `SELECT g.id, g.black_player_key, g.white_player_key, g.winner_key,
-            g.status, g.phase, g.to_move, g.scoring_revision, g.result,
-            g.finish_reason, g.rules,
-            g.rules_profile, g.scoring_method, g.komi, g.handicap,
-            g.main_time_seconds, g.byo_yomi_periods, g.byo_yomi_seconds,
-            g.black_time_remaining_ms, g.white_time_remaining_ms,
-            g.black_periods_remaining, g.white_periods_remaining,
-            g.turn_started_at, g.version, g.finished_at
-       FROM games g
-      WHERE g.id = $1`,
+async function verifyPollState(
+  client: PoolClient,
+  gameId: string,
+  playerKey: string,
+): Promise<Readonly<{ game: GameState; needsMutation: boolean }>> {
+  const loaded = await loadGame(client, gameId, playerKey);
+  const now = new Date();
+  const scoringExpired = loaded.game.status === "active"
+    && loaded.game.phase === "scoring"
+    && loaded.scoring !== null
+    && scoringDeadlineExpired(loaded.scoring.expires_at, now);
+  const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
+  const turnTimedOut = turn !== null && calculateClocks(loaded.game, turn, now)[turn].timedOut;
+  return {
+    game: serializeGame(loaded, now),
+    needsMutation: scoringExpired || turnTimedOut,
+  };
+}
+
+async function assertPollParticipant(gameId: string, playerKey: string): Promise<void> {
+  const result = await query<Pick<GameRow, "black_player_key" | "white_player_key">>(
+    `SELECT black_player_key, white_player_key
+       FROM games
+      WHERE id = $1`,
     [gameId],
   );
   const game = result.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
-  return game;
-}
-
-function heartbeat(game: PollGameRow, turn: Stone | null, now: Date): GamePollHeartbeat {
-  return {
-    unchanged: true,
-    gameId: game.id,
-    version: game.version,
-    clock: serializeGameClock(game, turn, now),
-  };
+  assertParticipant(game, playerKey);
 }
 
 export async function pollGameState(
@@ -1255,60 +1535,26 @@ export async function pollGameState(
   if (knownVersion === null) {
     return { unchanged: false, game: await getGameState(gameId, playerKey) };
   }
-
-  const game = await pollHeader(gameId);
-  assertParticipant(game, playerKey);
-  if (game.version !== knownVersion) {
+  await assertPollParticipant(gameId, playerKey);
+  const verified = await withReadOnlyTransaction((client) =>
+    verifyPollState(client, gameId, playerKey));
+  if (verified.needsMutation) {
     return { unchanged: false, game: await getGameState(gameId, playerKey) };
   }
-
-  const rules = storedRulesConfiguration(game);
-  const now = new Date();
-
+  const { game } = verified;
   if (
-    game.status === "active"
-    && game.phase === "play"
-    && game.finish_reason === null
-    && game.result === null
-    && game.winner_key === null
-    && game.finished_at === null
-    && rules.policy.turnSource !== "move-log"
-    && game.to_move !== null
+    game.version !== knownVersion
+    || game.status !== "active"
+    || game.rulesProfile === LEGACY_IMMEDIATE_AREA_PROFILE
   ) {
-    const clocks = calculateClocks(game, game.to_move, now);
-    if (!clocks[game.to_move].timedOut) return heartbeat(game, game.to_move, now);
+    return { unchanged: false, game };
   }
-
-  if (
-    game.status === "active"
-    && game.phase === "scoring"
-    && game.finish_reason === null
-    && game.result === null
-    && game.winner_key === null
-    && game.finished_at === null
-    && game.to_move === null
-    && rules.policy.scoringLifecycle === "agreement"
-  ) {
-    const scoring = await query<PollScoringRow>(
-      `SELECT scoring.revision, scoring.expires_at
-         FROM game_scoring_state scoring
-         JOIN games g ON g.id = scoring.game_id
-        WHERE scoring.game_id = $1
-          AND g.version = $2
-          AND ($3 = g.black_player_key OR $3 = g.white_player_key)`,
-      [gameId, knownVersion, playerKey],
-    );
-    const snapshot = scoring.rows[0];
-    if (
-      snapshot
-      && snapshot.revision === game.scoring_revision
-      && !scoringDeadlineExpired(snapshot.expires_at, now)
-    ) {
-      return heartbeat(game, null, now);
-    }
-  }
-
-  return { unchanged: false, game: await getGameState(gameId, playerKey) };
+  return {
+    unchanged: true,
+    gameId: game.id,
+    version: game.version,
+    clock: game.clock,
+  };
 }
 
 export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
