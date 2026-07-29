@@ -36,9 +36,16 @@ test("game mutation clients bind and verify the displayed player", () => {
     "useLayoutEffect(() => {",
   );
   assert.doesNotMatch(recovery, /refreshIdentity/);
-  assert.match(room, /if \(identityChanged\) recoveryAction\.current\?\.focus\(\)/);
+  assert.match(
+    room,
+    /if \(identityChanged \|\| connectionState\.kind === "session_expired"\) \{\s+recoveryAction\.current\?\.focus\(\);/,
+  );
   assert.match(room, /<p role="alert">/);
-  assert.match(room, /ref=\{recoveryAction\}/);
+  assert.equal(
+    room.match(/ref=\{recoveryAction\}/g)?.length,
+    2,
+    "both unloaded and already-loaded session recovery actions must own the focus ref",
+  );
   assert.equal(
     leave.match(/assertResponseActor\([^,]+, expectedPlayerKey\)/g)?.length,
     2,

@@ -110,8 +110,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const blockActionRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (identityChanged) recoveryAction.current?.focus();
-  }, [identityChanged]);
+    if (identityChanged || connectionState.kind === "session_expired") {
+      recoveryAction.current?.focus();
+    }
+  }, [connectionState.kind, identityChanged]);
 
   const connectionAnnouncementText = useCallback((state: GameConnectionState) => {
     if (state.kind === "live") return copy.live;
@@ -1192,7 +1194,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <span>{connectionDescription}</span>
             </p>
             {connectionState.kind === "session_expired" ? (
-              <button className="button button--primary" onClick={recoverExpiredSession} type="button">
+              <button
+                className="button button--primary"
+                onClick={recoverExpiredSession}
+                ref={recoveryAction}
+                type="button"
+              >
                 <LogIn size={17} />
                 {identityKind === "account" ? copy.signInAgain : copy.startNewSession}
               </button>
