@@ -118,6 +118,8 @@ test("authorized transition is opponent-first, revision-bound, and deletes scori
     "resume_snapshot.black_confirmed_revision IS NOT NULL\n      AND resume_snapshot.white_confirmed_revision IS NOT NULL",
     "CASE resume_snapshot.requested_by_color WHEN 'black' THEN 'white' ELSE 'black' END",
     "NEW.scoring_revision IS DISTINCT FROM OLD.scoring_revision + 1",
+    "OLD.status = 'active'",
+    "NEW.status = 'active'",
   ]) {
     assert.ok(transition.includes(required), `transition guard must contain ${required}`);
   }
@@ -178,12 +180,12 @@ test("authorization evidence is append-only, isolated, and deferred at commit", 
   assert.ok(mutation.includes("Japanese resume authorizations are append-only."));
 });
 
-test("migration remains dormant and production preflight verifies its boundary", () => {
+test("migration is activation-safe and production preflight verifies its boundary", () => {
   assert.ok(migration.includes("SET LOCAL lock_timeout = '5s'"));
   assert.doesNotMatch(migration, /^\s*(?:UPDATE|DELETE|DROP)\s/gim);
   assert.doesNotMatch(migration, /ALTER TABLE (?:games|matchmaking_queue)\b/i);
   assert.equal(gameService.includes(tableName), false);
-  assert.equal(rulesPolicy.includes("japanese-1989-gostone-v1"), false);
+  assert.equal(rulesPolicy.includes("JAPANESE_1989_RULES_PROFILE"), true);
 
   for (const required of [
     tableName,

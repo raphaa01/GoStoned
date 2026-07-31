@@ -1027,12 +1027,16 @@ AS $$
 DECLARE
   resume_snapshot RECORD;
 BEGIN
+  -- Only an active scoring-to-play transition is a resumption. Terminal
+  -- resignation remains a separate terminal-game transition.
   IF NOT (
     OLD.rules = 'japanese'
     AND OLD.rules_profile = 'japanese-1989-gostone-v1'
     AND OLD.scoring_method = 'territory'
     AND OLD.komi = 6.5
     AND OLD.handicap = 0
+    AND OLD.status = 'active'
+    AND NEW.status = 'active'
     AND OLD.phase = 'scoring'
     AND NEW.phase = 'play'
   ) THEN
