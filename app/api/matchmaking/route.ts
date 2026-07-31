@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
 import {
   consumeEphemeralIpPolicyRateLimit,
@@ -21,6 +22,11 @@ import {
   matchmakingMutationRouteError,
   readMatchmakingJoinRequest,
 } from "@/lib/matchmaking/matchmakingMutationRequest";
+import {
+  dispatchBotTurnIfNeeded,
+  isKataGoOnDemandConfigured,
+  safelyDispatch,
+} from "@/lib/katago/dispatch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,7 +37,12 @@ export async function GET(request: NextRequest) {
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     consumeEphemeralPolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingRead, playerKey);
-    const matchmaking = await getMatchmakingStatus(playerKey);
+    const matchmaking = await getMatchmakingStatus(playerKey, {
+      allowOnDemandBot: isKataGoOnDemandConfigured(),
+    });
+    if (matchmaking.status === "matched" && isKataGoOnDemandConfigured()) {
+      after(() => safelyDispatch(() => dispatchBotTurnIfNeeded(matchmaking.gameId)));
+    }
     return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
     return apiError(error);

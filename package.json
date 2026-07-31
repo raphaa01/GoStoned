@@ -30,6 +30,7 @@
     "db:prepare-ci-smoke": "tsx scripts/prepare-ci-postgres.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "worker:katago": "tsx workers/katago/index.ts",
+    "worker:katago:once": "tsx workers/katago/once.ts",
     "worker:japanese-deadlines": "tsx scripts/run-japanese-deadline-resolver.ts"
   },
   "dependencies": {

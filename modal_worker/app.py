@@ -1,8 +1,7 @@
-"""Production Modal server for GoStone's existing KataGo worker.
+"""Scale-to-zero KataGo jobs for GoStone.
 
-The image and Node process are shared with local Docker. Modal only supplies
-compute and the production database secret, so the website remains independent
-from the worker host.
+The lightweight authenticated endpoint only dispatches work. KataGo compute
+starts for a specific durable PostgreSQL job and scales back to zero afterward.
 """
 
 from __future__ import annotations
@@ -14,8 +13,6 @@ import modal
 from .settings import APP_NAME, DATABASE_SECRET_NAME
 
 
-PORT = 8080
-
 app = modal.App(APP_NAME)
 
 worker_image = modal.Image.from_dockerfile(
@@ -24,47 +21,93 @@ worker_image = modal.Image.from_dockerfile(
     add_python="3.12",
 )
 
+dispatcher_image = modal.Image.debian_slim(python_version="3.12").pip_install(
+    "fastapi==0.116.1",
+)
 
-@app.server(
+worker_environment = {
+    "DATABASE_SSL": "require",
+    "DATABASE_POOL_MAX": "1",
+    "KATAGO_MAX_VISITS": "160",
+    "KATAGO_BOT_MAX_VISITS": "160",
+    "KATAGO_PUZZLE_MAX_VISITS": "80",
+}
+
+
+def run_job(kind: str, target_id: str | None) -> None:
+    command = ["npm", "run", "worker:katago:once", "--", kind]
+    if target_id:
+        command.append(target_id)
+    subprocess.run(command, cwd="/app", check=True, timeout=1_150)
+
+
+@app.function(
     image=worker_image,
     secrets=[modal.Secret.from_name(DATABASE_SECRET_NAME)],
-    env={
-        "DATABASE_SSL": "require",
-        "DATABASE_POOL_MAX": "2",
-        "KATAGO_MAX_VISITS": "160",
-        "KATAGO_BOT_MAX_VISITS": "160",
-        "KATAGO_BOT_POLL_INTERVAL_MS": "500",
-        "KATAGO_PUZZLE_MAX_VISITS": "80",
-        "KATAGO_PUZZLE_POLL_INTERVAL_MS": "2000",
-        "KATAGO_POLL_INTERVAL_MS": "2000",
-        "PORT": str(PORT),
-    },
+    env=worker_environment,
+    cpu=2.0,
+    memory=4096,
+    min_containers=0,
+    max_containers=2,
+    scaledown_window=10,
+    timeout=60,
+    routing_region="eu-west",
+)
+def process_bot(target_id: str | None = None) -> None:
+    run_job("bot", target_id)
+
+
+@app.function(
+    image=worker_image,
+    secrets=[modal.Secret.from_name(DATABASE_SECRET_NAME)],
+    env=worker_environment,
     cpu=4.0,
     memory=8192,
-    min_containers=1,
-    startup_timeout=300,
-    port=PORT,
-    unauthenticated=False,
+    min_containers=0,
+    max_containers=1,
+    scaledown_window=10,
+    timeout=1_200,
     routing_region="eu-west",
-    exit_grace_period=30,
 )
-class KataGoWorker:
-    """One warm worker; PostgreSQL leases remain the source of truth."""
+def process_analysis(target_id: str | None = None) -> None:
+    run_job("analysis", target_id)
 
-    @modal.enter()
-    def start(self) -> None:
-        self.process = subprocess.Popen(
-            ["npm", "run", "worker:katago"],
-            cwd="/app",
-        )
 
-    @modal.exit()
-    def stop(self) -> None:
-        if self.process.poll() is not None:
-            return
-        self.process.terminate()
-        try:
-            self.process.wait(timeout=25)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=5)
+@app.function(
+    image=worker_image,
+    secrets=[modal.Secret.from_name(DATABASE_SECRET_NAME)],
+    env=worker_environment,
+    cpu=4.0,
+    memory=8192,
+    min_containers=0,
+    max_containers=1,
+    scaledown_window=10,
+    timeout=300,
+    routing_region="eu-west",
+)
+def process_puzzle(target_id: str | None = None) -> None:
+    run_job("puzzle", target_id)
+
+
+@app.function(
+    image=dispatcher_image,
+    min_containers=0,
+    max_containers=2,
+    scaledown_window=2,
+    timeout=30,
+    routing_region="eu-west",
+)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def dispatch(payload: dict[str, str | None]) -> dict[str, str]:
+    kind = payload.get("kind")
+    target_id = payload.get("targetId")
+    processors = {
+        "bot": process_bot,
+        "analysis": process_analysis,
+        "puzzle": process_puzzle,
+    }
+    if kind not in processors:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Unsupported KataGo job kind.")
+    call = processors[kind].spawn(target_id)
+    return {"ok": "true", "callId": call.object_id}

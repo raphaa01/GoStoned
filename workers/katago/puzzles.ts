@@ -552,7 +552,7 @@ async function ensurePuzzleInventory(): Promise<void> {
   });
 }
 
-async function claimPuzzleJob(): Promise<PuzzleJob | null> {
+async function claimPuzzleJob(jobId?: string): Promise<PuzzleJob | null> {
   const result = await query<PuzzleJob>(
     `UPDATE puzzle_generation_jobs
         SET status = 'running', attempts = attempts + 1, worker_id = $1,
@@ -561,6 +561,7 @@ async function claimPuzzleJob(): Promise<PuzzleJob | null> {
       WHERE id = (
         SELECT id FROM puzzle_generation_jobs
          WHERE attempts < 3
+           AND ($2::uuid IS NULL OR id = $2::uuid)
            AND (status = 'queued' OR (status = 'running' AND lease_expires_at < NOW()))
          ORDER BY CASE kind WHEN 'daily' THEN 0 ELSE 1 END,
                   collection_order NULLS FIRST, category NULLS FIRST, created_at, id
@@ -569,7 +570,7 @@ async function claimPuzzleJob(): Promise<PuzzleJob | null> {
       )
       RETURNING id, kind, target_date, board_size, category,
                 rank_kyu, collection_order, attempts`,
-    [puzzleWorkerId],
+    [puzzleWorkerId, jobId ?? null],
   );
   return result.rows[0] ?? null;
 }
@@ -782,4 +783,22 @@ export async function runPuzzleLoop(
       state.activeJobId = null;
     }
   }
+}
+
+export async function runPuzzleOnce(
+  engine: KataGoEngine,
+  options: { engineVersion: string; modelName: string; jobId?: string },
+): Promise<string | null> {
+  const visits = Math.max(8, Number(process.env.KATAGO_PUZZLE_MAX_VISITS) || 8);
+  await ensurePuzzleInventory();
+  const job = await claimPuzzleJob(options.jobId);
+  if (!job) return null;
+  try {
+    await generatePuzzle(engine, job, visits, options.engineVersion, options.modelName);
+    console.log(`Puzzle ${job.id} generated.`);
+  } catch (error) {
+    await failPuzzleJob(job, error);
+    throw error;
+  }
+  return job.id;
 }
