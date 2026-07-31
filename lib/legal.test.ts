@@ -119,19 +119,18 @@ test("a GbR is not configured without both partners and its representation", () 
   });
 });
 
-test("Vercel previews show realistic provisional data without becoming configured", () => {
+test("Vercel previews show only confirmed data without becoming configured", () => {
   withLegalEnvironment({ VERCEL_ENV: "preview" }, () => {
     const notice = getLegalNotice();
 
     assert.equal(notice.configured, false);
     assert.equal(notice.preview, true);
-    assert.equal(notice.name, "GoStone GbR");
-    assert.deepEqual(notice.partners, [
-      "Felix Neuber",
-      "Vollständiger Name des zweiten Gesellschafters",
-    ]);
-    assert.equal(notice.street, "Straße und Hausnummer");
-    assert.equal(notice.city, "PLZ Petersberg");
+    assert.equal(notice.name, "GoStone");
+    assert.deepEqual(notice.partners, ["Felix Neuber"]);
+    assert.equal(notice.entityDetails, null);
+    assert.equal(notice.representedBy, null);
+    assert.equal(notice.street, "");
+    assert.equal(notice.city, "");
     assert.equal(notice.email, "f.neu.dev@gmail.com");
   });
 });

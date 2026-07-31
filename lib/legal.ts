@@ -61,19 +61,18 @@ export function getLegalNotice(): LegalNotice {
 
   return {
     operatorType,
-    name: name ?? (preview ? "GoStone GbR" : "[Vollständiger Name des Betreibers]"),
-    entityDetails: entityDetails
-      ?? (preview ? "Nicht im Gesellschaftsregister eingetragene Gesellschaft bürgerlichen Rechts" : null),
+    name: name ?? (preview ? "GoStone" : ""),
+    entityDetails,
     partners: configuredPartners.length > 0
       ? configuredPartners
       : preview
-        ? ["Felix Neuber", "Vollständiger Name des zweiten Gesellschafters"]
+        ? ["Felix Neuber"]
         : [],
-    representedBy: representedBy ?? (preview ? "Beide Gesellschafter gemeinschaftlich" : null),
-    street: street ?? (preview ? "Straße und Hausnummer" : "[Straße und Hausnummer]"),
-    city: city ?? (preview ? "PLZ Petersberg" : "[PLZ und Ort]"),
-    country: readOptional("LEGAL_COUNTRY") ?? (preview ? "Deutschland" : null),
-    email: email ?? (preview ? "f.neu.dev@gmail.com" : "[E-Mail-Adresse]"),
+    representedBy,
+    street: street ?? "",
+    city: city ?? "",
+    country: readOptional("LEGAL_COUNTRY"),
+    email: email ?? (preview ? "f.neu.dev@gmail.com" : ""),
     phone: readOptional("LEGAL_PHONE"),
     registerName: readOptional("LEGAL_REGISTER_NAME"),
     registerNumber: readOptional("LEGAL_REGISTER_NUMBER"),
@@ -85,7 +84,7 @@ export function getLegalNotice(): LegalNotice {
       : null,
     dsaEmail: readOptional("LEGAL_DSA_EMAIL")
       ?? email
-      ?? (preview ? "f.neu.dev@gmail.com" : "[E-Mail-Adresse]"),
+      ?? (preview ? "f.neu.dev@gmail.com" : ""),
     configured,
     preview,
   };
