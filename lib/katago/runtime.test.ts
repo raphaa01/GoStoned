@@ -24,6 +24,7 @@ test("runtime binds provider, model identity, and bounded visits", () => {
     modelVersion: "model-test",
     configVersion: "config-test",
   });
+  assert.equal(runtime.providerKind, "deterministic");
   assert.equal(runtime.maxVisits, 64);
   assert.equal(Object.isFrozen(runtime), true);
   assert.equal(

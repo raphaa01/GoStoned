@@ -9,7 +9,10 @@ const migration = readFileSync(
   "utf8",
 );
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
-const gameService = readFileSync(join(process.cwd(), "lib/game/gameService.ts"), "utf8");
+const japaneseGameService = readFileSync(
+  join(process.cwd(), "lib/game/japaneseGameService.ts"),
+  "utf8",
+);
 
 function functionDefinition(sql: string, name: string): string {
   const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}()`);
@@ -42,8 +45,8 @@ test("schema embeds migration 024 and widens only supported rules identities", (
   }
   assert.ok(migration.includes("SET LOCAL lock_timeout = '5s'"));
   assert.ok(migration.includes("DROP CONSTRAINT IF EXISTS games_rules_check"));
-  assert.equal(gameService.includes("game_japanese_scoring_proposals"), false);
-  assert.equal(gameService.includes("game_japanese_scoring_terminal_events"), false);
+  assert.ok(japaneseGameService.includes("game_japanese_scoring_proposals"));
+  assert.ok(japaneseGameService.includes("game_japanese_scoring_terminal_events"));
 });
 
 test("state stores an application deadline, monotonic participation, and bounded diagnostics", () => {
@@ -59,9 +62,14 @@ test("state stores an application deadline, monotonic participation, and bounded
     "suggestion_config_version",
     "suggestion_confidence_policy_version",
     "suggestion_latency_ms",
+    "suggestion_error_class",
   ]) {
     assert.ok(migration.includes(`ADD COLUMN IF NOT EXISTS ${column}`));
   }
+  assert.ok(migration.includes("^sha256:[0-9a-f]{64}$"));
+  assert.ok(migration.includes("suggestion_status IN ('unavailable', 'invalid')"));
+  assert.ok(migration.includes("suggestion_request_identity IS NULL"));
+  assert.ok(migration.includes("suggestion_error_class IN ("));
   assert.ok(migration.includes("ALTER COLUMN expires_at SET NOT NULL"));
   assert.ok(migration.includes("expires_at >= started_at + INTERVAL '30 seconds'"));
   assert.ok(migration.includes("expires_at <= started_at + INTERVAL '1 hour'"));
@@ -136,17 +144,65 @@ test("terminal evidence preserves validated scoring or an explicit no-result rea
     "suggestion_config_version",
     "suggestion_confidence_policy_version",
     "suggestion_latency_ms",
+    "suggestion_error_class",
+    "adjudication_proposal_hash",
+    "adjudication_dead_stones",
+    "adjudication_neutral_region_seeds",
+    "adjudication_request_identity",
+    "adjudication_provider_kind",
+    "adjudication_engine_version",
+    "adjudication_model_version",
+    "adjudication_config_version",
+    "adjudication_confidence_policy_version",
+    "adjudication_latency_ms",
+    "adjudication_error_class",
   ]) {
     assert.ok(table.includes(field), `validated terminal evidence must retain ${field}`);
   }
   assert.ok(table.includes("black_total = black_territory + black_prisoners_final"));
   assert.ok(table.includes("white_total = white_territory + white_prisoners_final + komi"));
+  assert.ok(table.includes("adjudication_request_identity IS DISTINCT FROM suggestion_request_identity"));
   assert.equal(table.includes("provider_payload"), false);
+  assert.equal(table.includes("result"), false);
   const terminalValidator = functionDefinition(
     migration,
     "validate_japanese_scoring_terminal_insert",
   );
   assert.ok(terminalValidator.includes("NEW.suggestion_status := scoring_row.suggestion_status"));
+  assert.ok(terminalValidator.includes("NEW.suggestion_error_class := scoring_row.suggestion_error_class"));
+  assert.ok(terminalValidator.includes("Validated score counts must match deadline adjudication evidence."));
+});
+
+test("deadline terminal insert uses the exact evidence columns and no game result column", () => {
+  const match = japaneseGameService.match(
+    /INSERT INTO game_japanese_scoring_terminal_events\s*\(([\s\S]*?)\)\s*VALUES/,
+  );
+  assert.ok(match, "terminal insert must exist");
+  const columns = match[1].split(",").map((column) => column.trim()).filter(Boolean);
+  assert.deepEqual(columns, [
+    "game_id", "scoring_revision", "stopped_move_number", "stopped_board_hash",
+    "proposal_hash", "outcome_kind", "winner_color", "abandoned_by_color",
+    "rules", "rules_profile", "scoring_method", "komi", "handicap",
+    "captured_white_by_black_at_stop", "captured_black_by_white_at_stop",
+    "adjudication_proposal_hash", "adjudication_dead_stones",
+    "adjudication_neutral_region_seeds", "adjudication_request_identity",
+    "adjudication_provider_kind", "adjudication_engine_version",
+    "adjudication_model_version", "adjudication_config_version",
+    "adjudication_confidence_policy_version", "adjudication_latency_ms",
+    "adjudication_error_class", "living_black_stones", "living_white_stones",
+    "black_territory", "white_territory", "dame_points",
+    "territory_excluded_by_agreement", "dead_black_stones", "dead_white_stones",
+    "black_prisoners_final", "white_prisoners_final", "black_total", "white_total",
+    "margin",
+  ]);
+  assert.equal(columns.includes("result"), false);
+  assert.ok(japaneseGameService.includes("canonicalizeKataGoScoringRequest(request)"));
+  assert.ok(japaneseGameService.includes("proposal.requestIdentity !== diagnostics?.requestIdentity"));
+  assert.ok(japaneseGameService.includes("loaded.authority.normalPlay.prisoners, adjudicationDeadRows"));
+  assert.equal(
+    japaneseGameService.includes("const deadBlack = loaded.deadRows.filter"),
+    false,
+  );
 });
 
 test("terminal and proposal guards are game-first, append-only, and transaction-complete", () => {
@@ -167,6 +223,16 @@ test("terminal and proposal guards are game-first, append-only, and transaction-
   assert.ok(stateGuard.includes("Japanese participation evidence is monotonic."));
   assert.ok(stateGuard.includes("Proposal edits require the next game scoring revision"));
   assert.ok(stateGuard.includes("initial_suggestion_change"));
+  assert.ok(stateGuard.includes("statement_timestamp() >= OLD.expires_at"));
+  assert.ok(stateGuard.includes("Pending Japanese scoring does not accept player mutation."));
+  const resumeWindow = functionDefinition(
+    migration,
+    "guard_japanese_resume_authorization_window",
+  );
+  assert.ok(resumeWindow.includes("statement_timestamp() >= scoring_row.expires_at"));
+  assert.ok(resumeWindow.includes("scoring_row.suggestion_status = 'pending'"));
+  assert.ok(japaneseGameService.includes("allowExpired: true"));
+  assert.ok(japaneseGameService.includes("allowPending: true"));
 
   for (const sql of [schema, migration]) {
     assert.ok(sql.includes("DEFERRABLE INITIALLY DEFERRED"));

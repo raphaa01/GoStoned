@@ -37,8 +37,11 @@ import type {
   TimeControlId,
 } from "./types";
 import {
+  canonicalizeKataGoScoringRequest,
   configuredKataGoScoringRuntime,
   KataGoScoringError,
+  type KataGoErrorCode,
+  type KataGoProviderKind,
   type KataGoScoringProposal,
   type KataGoScoringRuntime,
 } from "@/lib/katago";
@@ -130,6 +133,7 @@ type JapaneseScoringRow = {
   suggestion_config_version: string | null;
   suggestion_confidence_policy_version: string | null;
   suggestion_latency_ms: number | null;
+  suggestion_error_class: KataGoErrorCode | null;
   black_confirmed_revision: number | null;
   white_confirmed_revision: number | null;
   black_confirmed_proposal_hash: string | null;
@@ -453,8 +457,8 @@ function validateJapaneseLifecycle(loaded: LoadedJapaneseGame): void {
   const preview = toJapaneseTerritoryPreview(score);
   const scoredBoard = loaded.authority.normalPlay.board.map((row) => [...row]);
   for (const { x, y } of loaded.deadRows) scoredBoard[y][x] = null;
-  const deadBlack = loaded.deadRows.filter(({ color }) => color === "black").length;
-  const deadWhite = loaded.deadRows.length - deadBlack;
+  const finalDeadBlack = loaded.deadRows.filter(({ color }) => color === "black").length;
+  const finalDeadWhite = loaded.deadRows.length - finalDeadBlack;
   const expectedWinnerKey = preview.winner === "black" ? game.black_player_key
     : preview.winner === "white" ? game.white_player_key : null;
   if (
@@ -468,8 +472,8 @@ function validateJapaneseLifecycle(loaded: LoadedJapaneseGame): void {
     || scoring.white_territory !== score.whiteTerritory
     || scoring.dame_points !== score.damePoints
     || scoring.territory_excluded_by_agreement !== score.territoryExcludedByAgreement
-    || scoring.dead_black_stones !== deadBlack
-    || scoring.dead_white_stones !== deadWhite
+    || scoring.dead_black_stones !== finalDeadBlack
+    || scoring.dead_white_stones !== finalDeadWhite
     || scoring.black_prisoners_final !== score.blackPrisonersFinal
     || scoring.white_prisoners_final !== score.whitePrisonersFinal
     || scoring.outcome_kind !== score.outcome.kind
@@ -630,6 +634,33 @@ function assertScoring(
     );
   }
   return loaded.scoring;
+}
+
+type KataGoRequestDiagnostics = Readonly<{
+  requestIdentity: string;
+  providerKind: KataGoProviderKind;
+  engineVersion: string;
+  modelVersion: string;
+  configVersion: string;
+  confidencePolicyVersion: string;
+}>;
+
+function kataGoRequestDiagnostics(
+  requestIdentity: string,
+  runtime: KataGoScoringRuntime,
+): KataGoRequestDiagnostics {
+  return {
+    requestIdentity,
+    providerKind: runtime.providerKind,
+    engineVersion: runtime.engine.engineVersion,
+    modelVersion: runtime.engine.modelVersion,
+    configVersion: runtime.engine.configVersion,
+    confidencePolicyVersion: runtime.confidencePolicyVersion,
+  };
+}
+
+function kataGoErrorClass(error: unknown): KataGoErrorCode {
+  return error instanceof KataGoScoringError ? error.code : "provider_unavailable";
 }
 
 function analysisBoundary(loaded: LoadedJapaneseGame): AnalysisBoundary {
@@ -936,7 +967,8 @@ async function recordSuggestionFailure(
   playerKey: string,
   boundary: AnalysisBoundary,
   status: "unavailable" | "invalid",
-  requestIdentity: string | null,
+  diagnostics: KataGoRequestDiagnostics | null,
+  errorClass: KataGoErrorCode,
   latencyMs: number,
 ): Promise<GameState> {
   return withTransaction(async (client) => {
@@ -949,9 +981,18 @@ async function recordSuggestionFailure(
     const state = await client.query<JapaneseScoringRow>(
       `UPDATE game_japanese_scoring_state
           SET suggestion_status = $2, suggestion_request_identity = $3,
-              suggestion_latency_ms = $4, updated_at = NOW()
+              suggestion_provider_kind = $4, suggestion_engine_version = $5,
+              suggestion_model_version = $6, suggestion_config_version = $7,
+              suggestion_confidence_policy_version = $8,
+              suggestion_latency_ms = $9, suggestion_error_class = $10,
+              updated_at = NOW()
         WHERE game_id = $1 RETURNING *`,
-      [gameId, status, requestIdentity, latencyMs],
+      [
+        gameId, status, diagnostics?.requestIdentity ?? null,
+        diagnostics?.providerKind ?? null, diagnostics?.engineVersion ?? null,
+        diagnostics?.modelVersion ?? null, diagnostics?.configVersion ?? null,
+        diagnostics?.confidencePolicyVersion ?? null, latencyMs, errorClass,
+      ],
     );
     const game = await client.query<JapaneseGameRow>(
       "UPDATE games SET version = version + 1, updated_at = NOW() WHERE id = $1 RETURNING *",
@@ -972,11 +1013,13 @@ async function analyzeInitialSuggestion(
 ): Promise<GameState> {
   const started = Date.now();
   let runtime: KataGoScoringRuntime;
-  let requestIdentity: string | null = null;
+  let diagnostics: KataGoRequestDiagnostics | null = null;
   try {
     runtime = configuredKataGoScoringRuntime();
-    const proposal = await runtime.client.analyze(kataGoRequest(boundary, runtime, "initial-suggestion"));
-    requestIdentity = proposal.requestIdentity;
+    const request = kataGoRequest(boundary, runtime, "initial-suggestion");
+    const canonicalRequest = canonicalizeKataGoScoringRequest(request);
+    diagnostics = kataGoRequestDiagnostics(canonicalRequest.requestIdentity, runtime);
+    const proposal = await runtime.client.analyze(request);
     return withTransaction(async (client) => {
       const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
       if (
@@ -997,9 +1040,18 @@ async function analyzeInitialSuggestion(
         const state = await client.query<JapaneseScoringRow>(
           `UPDATE game_japanese_scoring_state
               SET suggestion_status = 'invalid', suggestion_request_identity = $2,
-                  suggestion_latency_ms = $3, updated_at = NOW()
+                  suggestion_provider_kind = $3, suggestion_engine_version = $4,
+                  suggestion_model_version = $5, suggestion_config_version = $6,
+                  suggestion_confidence_policy_version = $7,
+                  suggestion_latency_ms = $8, suggestion_error_class = 'invalid_response',
+                  updated_at = NOW()
             WHERE game_id = $1 RETURNING *`,
-          [gameId, proposal.requestIdentity, Date.now() - started],
+          [
+            gameId, proposal.requestIdentity, proposal.providerKind,
+            proposal.engine.engineVersion, proposal.engine.modelVersion,
+            proposal.engine.configVersion, proposal.confidencePolicyVersion,
+            Date.now() - started,
+          ],
         );
         return serializeJapaneseGame({ ...loaded, scoring: state.rows[0] });
       }
@@ -1009,7 +1061,8 @@ async function analyzeInitialSuggestion(
       && (error.code === "invalid_response" || error.code === "stale_response" || error.code === "model_mismatch")
       ? "invalid" : "unavailable";
     return recordSuggestionFailure(
-      gameId, playerKey, boundary, status, requestIdentity, Date.now() - started,
+      gameId, playerKey, boundary, status, diagnostics,
+      kataGoErrorClass(error), Date.now() - started,
     );
   }
 }
@@ -1379,6 +1432,13 @@ function proposalAdjudicationSafe(proposal: KataGoScoringProposal): boolean {
   );
 }
 
+type DeadlineAdjudicationEvidence = Readonly<{
+  diagnostics: KataGoRequestDiagnostics | null;
+  latencyMs: number;
+  errorClass: KataGoErrorCode | null;
+  proposal?: KataGoScoringProposal;
+}>;
+
 async function finishJapaneseDeadline(
   client: PoolClient,
   loaded: LoadedJapaneseGame,
@@ -1386,40 +1446,75 @@ async function finishJapaneseDeadline(
     outcomeKind: "katago_validated" | "katago_low_confidence" | "katago_unavailable" | "no_participation" | "abandonment";
     winner: Stone | null;
     abandonedBy: Stone | null;
-    proposal?: KataGoScoringProposal;
+    adjudication?: DeadlineAdjudicationEvidence;
     score?: JapaneseTerritoryScore;
   }>,
 ): Promise<GameState> {
   const scoring = loaded.scoring!;
   const now = new Date();
   const score = input.score;
-  const deadBlack = loaded.deadRows.filter(({ color }) => color === "black").length;
-  const deadWhite = loaded.deadRows.length - deadBlack;
+  const adjudicationProposal = input.adjudication?.proposal;
+  const adjudicationDeadRows: JapaneseDeadRow[] = adjudicationProposal
+    ? sortPositions([...adjudicationProposal.deadStones]).map(({ x, y }) => {
+      const color = loaded.authority.normalPlay.board[y]?.[x];
+      if (!color) throw corruption("deadline adjudication contains an empty dead point");
+      return { x, y, color };
+    })
+    : [];
+  const adjudicationProposalHash = adjudicationProposal
+    ? proposalHash(
+      loaded, scoring.revision, scoring.stopped_move_number, scoring.board_hash,
+      loaded.authority.normalPlay.prisoners, adjudicationDeadRows,
+      [...adjudicationProposal.neutralRegionSeeds],
+    )
+    : null;
+  const deadBlack = adjudicationDeadRows.filter(({ color }) => color === "black").length;
+  const deadWhite = adjudicationDeadRows.length - deadBlack;
+  const diagnostics = input.adjudication?.diagnostics;
   await client.query(
     `INSERT INTO game_japanese_scoring_terminal_events
        (game_id,scoring_revision,stopped_move_number,stopped_board_hash,
-        proposal_hash,suggestion_request_identity,outcome_kind,winner_color,
-        abandoned_by_color,rules,rules_profile,scoring_method,komi,handicap,
+        proposal_hash,outcome_kind,winner_color,abandoned_by_color,
+        rules,rules_profile,scoring_method,komi,handicap,
         captured_white_by_black_at_stop,captured_black_by_white_at_stop,
+        adjudication_proposal_hash,adjudication_dead_stones,
+        adjudication_neutral_region_seeds,adjudication_request_identity,
+        adjudication_provider_kind,adjudication_engine_version,
+        adjudication_model_version,adjudication_config_version,
+        adjudication_confidence_policy_version,adjudication_latency_ms,
+        adjudication_error_class,
         living_black_stones,living_white_stones,black_territory,white_territory,
         dame_points,territory_excluded_by_agreement,dead_black_stones,
         dead_white_stones,black_prisoners_final,white_prisoners_final,
-        black_total,white_total,result,margin)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'japanese',$10,'territory',6.5,0,
-             $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
+        black_total,white_total,margin)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'japanese',$9,'territory',6.5,0,
+             $10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,
+             $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)`,
     [
       loaded.game.id, scoring.revision, scoring.stopped_move_number, scoring.board_hash,
-      scoring.proposal_hash, input.proposal?.requestIdentity ?? scoring.suggestion_request_identity,
-      input.outcomeKind, input.winner, input.abandonedBy, JAPANESE_1989_RULES_PROFILE,
+      scoring.proposal_hash, input.outcomeKind, input.winner, input.abandonedBy,
+      JAPANESE_1989_RULES_PROFILE,
       scoring.captured_white_by_black_at_stop,
       scoring.captured_black_by_white_at_stop,
+      adjudicationProposalHash,
+      adjudicationProposal ? JSON.stringify(adjudicationDeadRows) : null,
+      adjudicationProposal
+        ? JSON.stringify(sortPositions([...adjudicationProposal.neutralRegionSeeds]))
+        : null,
+      diagnostics?.requestIdentity ?? null,
+      diagnostics?.providerKind ?? null,
+      diagnostics?.engineVersion ?? null,
+      diagnostics?.modelVersion ?? null,
+      diagnostics?.configVersion ?? null,
+      diagnostics?.confidencePolicyVersion ?? null,
+      input.adjudication?.latencyMs ?? null,
+      input.adjudication?.errorClass ?? null,
       score?.livingBlackStones ?? null, score?.livingWhiteStones ?? null,
       score?.blackTerritory ?? null, score?.whiteTerritory ?? null,
       score?.damePoints ?? null, score?.territoryExcludedByAgreement ?? null,
       score ? deadBlack : null, score ? deadWhite : null,
       score?.blackPrisonersFinal ?? null, score?.whitePrisonersFinal ?? null,
       score?.blackTotal ?? null, score?.whiteTotal ?? null,
-      score ? toJapaneseTerritoryPreview(score).result : null,
       score?.outcome.kind === "points" ? score.outcome.margin : score ? 0 : null,
     ],
   );
@@ -1480,13 +1575,16 @@ export async function resolveJapaneseScoringDeadline(
     return { complete: false as const, boundary: analysisBoundary(loaded) };
   });
   if (decision.complete) return decision.game;
+  const started = Date.now();
   let proposal: KataGoScoringProposal;
+  let diagnostics: KataGoRequestDiagnostics | null = null;
   try {
     const runtime = configuredKataGoScoringRuntime();
-    proposal = await runtime.client.analyze(kataGoRequest(
-      decision.boundary, runtime, "deadline-adjudication",
-    ));
-  } catch {
+    const request = kataGoRequest(decision.boundary, runtime, "deadline-adjudication");
+    const canonicalRequest = canonicalizeKataGoScoringRequest(request);
+    diagnostics = kataGoRequestDiagnostics(canonicalRequest.requestIdentity, runtime);
+    proposal = await runtime.client.analyze(request);
+  } catch (error) {
     return withTransaction(async (client) => {
       const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
       assertScoring(loaded, expectedRevision, {
@@ -1495,6 +1593,11 @@ export async function resolveJapaneseScoringDeadline(
       });
       return finishJapaneseDeadline(client, loaded, {
         outcomeKind: "katago_unavailable", winner: null, abandonedBy: null,
+        adjudication: {
+          diagnostics,
+          latencyMs: Date.now() - started,
+          errorClass: kataGoErrorClass(error),
+        },
       });
     });
   }
@@ -1505,12 +1608,28 @@ export async function resolveJapaneseScoringDeadline(
       allowPending: true,
     });
     if (
-      proposal.stoppedBoardHash !== loaded.scoring!.board_hash
+      proposal.requestIdentity !== diagnostics?.requestIdentity
+      || proposal.stoppedBoardHash !== loaded.scoring!.board_hash
       || proposal.scoringRevision !== loaded.scoring!.revision
-      || !proposalAdjudicationSafe(proposal)
     ) {
       return finishJapaneseDeadline(client, loaded, {
-        outcomeKind: "katago_low_confidence", winner: null, abandonedBy: null, proposal,
+        outcomeKind: "katago_unavailable", winner: null, abandonedBy: null,
+        adjudication: {
+          diagnostics,
+          latencyMs: Date.now() - started,
+          errorClass: "stale_response",
+        },
+      });
+    }
+    if (!proposalAdjudicationSafe(proposal)) {
+      return finishJapaneseDeadline(client, loaded, {
+        outcomeKind: "katago_low_confidence", winner: null, abandonedBy: null,
+        adjudication: {
+          diagnostics,
+          latencyMs: Date.now() - started,
+          errorClass: null,
+          proposal,
+        },
       });
     }
     let score: JapaneseTerritoryScore;
@@ -1524,14 +1643,25 @@ export async function resolveJapaneseScoringDeadline(
       });
     } catch {
       return finishJapaneseDeadline(client, loaded, {
-        outcomeKind: "katago_low_confidence", winner: null, abandonedBy: null, proposal,
+        outcomeKind: "katago_low_confidence", winner: null, abandonedBy: null,
+        adjudication: {
+          diagnostics,
+          latencyMs: Date.now() - started,
+          errorClass: null,
+          proposal,
+        },
       });
     }
     return finishJapaneseDeadline(client, loaded, {
       outcomeKind: "katago_validated",
       winner: score.outcome.kind === "points" ? score.outcome.winner : null,
       abandonedBy: null,
-      proposal,
+      adjudication: {
+        diagnostics,
+        latencyMs: Date.now() - started,
+        errorClass: null,
+        proposal,
+      },
       score,
     });
   });

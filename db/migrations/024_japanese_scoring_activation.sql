@@ -48,7 +48,8 @@ ALTER TABLE game_japanese_scoring_state
   ADD COLUMN IF NOT EXISTS suggestion_model_version TEXT,
   ADD COLUMN IF NOT EXISTS suggestion_config_version TEXT,
   ADD COLUMN IF NOT EXISTS suggestion_confidence_policy_version TEXT,
-  ADD COLUMN IF NOT EXISTS suggestion_latency_ms INT;
+  ADD COLUMN IF NOT EXISTS suggestion_latency_ms INT,
+  ADD COLUMN IF NOT EXISTS suggestion_error_class TEXT;
 
 DO $$
 BEGIN
@@ -77,7 +78,7 @@ ALTER TABLE game_japanese_scoring_state
     (black_participated_at IS NULL OR black_participated_at BETWEEN started_at AND expires_at)
     AND (white_participated_at IS NULL OR white_participated_at BETWEEN started_at AND expires_at)
   ),
-  ADD CONSTRAINT game_japanese_scoring_suggestion_check CHECK (
+  ADD CONSTRAINT game_japanese_scoring_suggestion_check CHECK (COALESCE((
     suggestion_status IN ('pending', 'ready', 'unavailable', 'invalid', 'low_confidence')
     AND (
       (
@@ -89,20 +90,52 @@ ALTER TABLE game_japanese_scoring_state
         AND suggestion_config_version IS NULL
         AND suggestion_confidence_policy_version IS NULL
         AND suggestion_latency_ms IS NULL
+        AND suggestion_error_class IS NULL
       )
       OR
       (
-        suggestion_status <> 'pending'
-        AND suggestion_request_identity ~ '^[0-9a-f]{64}$'
+        suggestion_status IN ('ready', 'low_confidence')
+        AND suggestion_request_identity ~ '^sha256:[0-9a-f]{64}$'
         AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
         AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
         AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
         AND LENGTH(suggestion_config_version) BETWEEN 1 AND 120
         AND LENGTH(suggestion_confidence_policy_version) BETWEEN 1 AND 120
         AND suggestion_latency_ms BETWEEN 0 AND 3600000
+        AND suggestion_error_class IS NULL
+      )
+      OR
+      (
+        suggestion_status IN ('unavailable', 'invalid')
+        AND suggestion_latency_ms BETWEEN 0 AND 3600000
+        AND suggestion_error_class IN (
+          'invalid_request', 'provider_not_configured', 'request_aborted',
+          'request_timeout', 'provider_unavailable', 'provider_http_error',
+          'response_too_large', 'invalid_response_json', 'invalid_response',
+          'stale_response', 'model_mismatch', 'circuit_open', 'retries_exhausted'
+        )
+        AND (
+          (
+            suggestion_request_identity IS NULL
+            AND suggestion_provider_kind IS NULL
+            AND suggestion_engine_version IS NULL
+            AND suggestion_model_version IS NULL
+            AND suggestion_config_version IS NULL
+            AND suggestion_confidence_policy_version IS NULL
+          )
+          OR
+          (
+            suggestion_request_identity ~ '^sha256:[0-9a-f]{64}$'
+            AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
+            AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
+            AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
+            AND LENGTH(suggestion_config_version) BETWEEN 1 AND 120
+            AND LENGTH(suggestion_confidence_policy_version) BETWEEN 1 AND 120
+          )
+        )
       )
     )
-  );
+  ), FALSE));
 
 CREATE TABLE IF NOT EXISTS game_japanese_scoring_proposals (
   game_id UUID NOT NULL,
@@ -139,12 +172,12 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_proposals (
     FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)
     REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)
     ON DELETE CASCADE,
-  CHECK (
+  CHECK (COALESCE((
     (
       source = 'katago_initial'
       AND actor_color IS NULL
       AND parent_scoring_revision IS NULL
-      AND suggestion_request_identity ~ '^[0-9a-f]{64}$'
+      AND suggestion_request_identity ~ '^sha256:[0-9a-f]{64}$'
       AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
       AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
       AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
@@ -178,7 +211,7 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_proposals (
       AND suggestion_confidence_policy_version IS NULL
       AND suggestion_latency_ms IS NULL
     )
-  )
+  ), FALSE)
 );
 
 CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
@@ -206,6 +239,26 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
   suggestion_config_version TEXT,
   suggestion_confidence_policy_version TEXT,
   suggestion_latency_ms INT,
+  suggestion_error_class TEXT,
+  adjudication_proposal_hash TEXT CHECK (
+    adjudication_proposal_hash IS NULL
+    OR adjudication_proposal_hash ~ '^[0-9a-f]{64}$'
+  ),
+  adjudication_dead_stones JSONB CHECK (
+    adjudication_dead_stones IS NULL OR jsonb_typeof(adjudication_dead_stones) = 'array'
+  ),
+  adjudication_neutral_region_seeds JSONB CHECK (
+    adjudication_neutral_region_seeds IS NULL
+    OR jsonb_typeof(adjudication_neutral_region_seeds) = 'array'
+  ),
+  adjudication_request_identity TEXT,
+  adjudication_provider_kind TEXT,
+  adjudication_engine_version TEXT,
+  adjudication_model_version TEXT,
+  adjudication_config_version TEXT,
+  adjudication_confidence_policy_version TEXT,
+  adjudication_latency_ms INT,
+  adjudication_error_class TEXT,
   captured_white_by_black_at_stop INT NOT NULL
     CHECK (captured_white_by_black_at_stop >= 0),
   captured_black_by_white_at_stop INT NOT NULL
@@ -230,23 +283,58 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
     FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)
     REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)
     ON DELETE CASCADE,
-  CHECK (
+  CHECK (COALESCE((
     (outcome_kind = 'abandonment' AND winner_color IS NOT NULL
       AND abandoned_by_color IS NOT NULL AND winner_color <> abandoned_by_color)
     OR (outcome_kind <> 'abandonment' AND abandoned_by_color IS NULL
         AND (outcome_kind = 'katago_validated' OR winner_color IS NULL))
-  ),
-  CHECK (
+  ), FALSE)),
+  CHECK (COALESCE((
     (
       outcome_kind LIKE 'katago_%'
-      AND suggestion_request_identity ~ '^[0-9a-f]{64}$'
       AND suggestion_status IN ('ready', 'unavailable', 'invalid', 'low_confidence')
-      AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
-      AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
-      AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
-      AND LENGTH(suggestion_config_version) BETWEEN 1 AND 120
-      AND LENGTH(suggestion_confidence_policy_version) BETWEEN 1 AND 120
       AND suggestion_latency_ms BETWEEN 0 AND 3600000
+      AND (
+        (
+          suggestion_status IN ('ready', 'low_confidence')
+          AND suggestion_request_identity ~ '^sha256:[0-9a-f]{64}$'
+          AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
+          AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
+          AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
+          AND LENGTH(suggestion_config_version) BETWEEN 1 AND 120
+          AND LENGTH(suggestion_confidence_policy_version) BETWEEN 1 AND 120
+          AND suggestion_error_class IS NULL
+        )
+        OR
+        (
+          suggestion_status IN ('unavailable', 'invalid')
+          AND suggestion_error_class IN (
+            'invalid_request', 'provider_not_configured', 'request_aborted',
+            'request_timeout', 'provider_unavailable', 'provider_http_error',
+            'response_too_large', 'invalid_response_json', 'invalid_response',
+            'stale_response', 'model_mismatch', 'circuit_open', 'retries_exhausted'
+          )
+          AND (
+            (
+              suggestion_request_identity IS NULL
+              AND suggestion_provider_kind IS NULL
+              AND suggestion_engine_version IS NULL
+              AND suggestion_model_version IS NULL
+              AND suggestion_config_version IS NULL
+              AND suggestion_confidence_policy_version IS NULL
+            )
+            OR
+            (
+              suggestion_request_identity ~ '^sha256:[0-9a-f]{64}$'
+              AND suggestion_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
+              AND LENGTH(suggestion_engine_version) BETWEEN 1 AND 120
+              AND LENGTH(suggestion_model_version) BETWEEN 1 AND 120
+              AND LENGTH(suggestion_config_version) BETWEEN 1 AND 120
+              AND LENGTH(suggestion_confidence_policy_version) BETWEEN 1 AND 120
+            )
+          )
+        )
+      )
     )
     OR
     (
@@ -255,12 +343,79 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
       AND suggestion_provider_kind IS NULL AND suggestion_engine_version IS NULL
       AND suggestion_model_version IS NULL AND suggestion_config_version IS NULL
       AND suggestion_confidence_policy_version IS NULL AND suggestion_latency_ms IS NULL
+      AND suggestion_error_class IS NULL
     )
-  ),
-  CHECK (
+  ), FALSE)),
+  CHECK (COALESCE((
+    (
+      outcome_kind IN ('katago_validated', 'katago_low_confidence')
+      AND adjudication_proposal_hash ~ '^[0-9a-f]{64}$'
+      AND jsonb_typeof(adjudication_dead_stones) = 'array'
+      AND jsonb_typeof(adjudication_neutral_region_seeds) = 'array'
+      AND adjudication_request_identity ~ '^sha256:[0-9a-f]{64}$'
+      AND adjudication_request_identity IS DISTINCT FROM suggestion_request_identity
+      AND adjudication_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
+      AND LENGTH(adjudication_engine_version) BETWEEN 1 AND 120
+      AND LENGTH(adjudication_model_version) BETWEEN 1 AND 120
+      AND LENGTH(adjudication_config_version) BETWEEN 1 AND 120
+      AND LENGTH(adjudication_confidence_policy_version) BETWEEN 1 AND 120
+      AND adjudication_latency_ms BETWEEN 0 AND 3600000
+      AND adjudication_error_class IS NULL
+    )
+    OR
+    (
+      outcome_kind = 'katago_unavailable'
+      AND adjudication_proposal_hash IS NULL
+      AND adjudication_dead_stones IS NULL
+      AND adjudication_neutral_region_seeds IS NULL
+      AND adjudication_latency_ms BETWEEN 0 AND 3600000
+      AND adjudication_error_class IN (
+        'invalid_request', 'provider_not_configured', 'request_aborted',
+        'request_timeout', 'provider_unavailable', 'provider_http_error',
+        'response_too_large', 'invalid_response_json', 'invalid_response',
+        'stale_response', 'model_mismatch', 'circuit_open', 'retries_exhausted'
+      )
+      AND (
+        (
+          adjudication_request_identity IS NULL
+          AND adjudication_provider_kind IS NULL
+          AND adjudication_engine_version IS NULL
+          AND adjudication_model_version IS NULL
+          AND adjudication_config_version IS NULL
+          AND adjudication_confidence_policy_version IS NULL
+        )
+        OR
+        (
+          adjudication_request_identity ~ '^sha256:[0-9a-f]{64}$'
+          AND adjudication_request_identity IS DISTINCT FROM suggestion_request_identity
+          AND adjudication_provider_kind IN ('hosted-http', 'local-http', 'deterministic')
+          AND LENGTH(adjudication_engine_version) BETWEEN 1 AND 120
+          AND LENGTH(adjudication_model_version) BETWEEN 1 AND 120
+          AND LENGTH(adjudication_config_version) BETWEEN 1 AND 120
+          AND LENGTH(adjudication_confidence_policy_version) BETWEEN 1 AND 120
+        )
+      )
+    )
+    OR
+    (
+      outcome_kind NOT LIKE 'katago_%'
+      AND adjudication_proposal_hash IS NULL
+      AND adjudication_dead_stones IS NULL
+      AND adjudication_neutral_region_seeds IS NULL
+      AND adjudication_request_identity IS NULL
+      AND adjudication_provider_kind IS NULL
+      AND adjudication_engine_version IS NULL
+      AND adjudication_model_version IS NULL
+      AND adjudication_config_version IS NULL
+      AND adjudication_confidence_policy_version IS NULL
+      AND adjudication_latency_ms IS NULL
+      AND adjudication_error_class IS NULL
+    )
+  ), FALSE)),
+  CHECK (COALESCE((
     (
       outcome_kind = 'katago_validated'
-      AND suggestion_request_identity ~ '^[0-9a-f]{64}$'
+      AND adjudication_request_identity ~ '^sha256:[0-9a-f]{64}$'
       AND living_black_stones >= 0 AND living_white_stones >= 0
       AND black_territory >= 0 AND white_territory >= 0 AND dame_points >= 0
       AND territory_excluded_by_agreement >= 0
@@ -288,7 +443,7 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
       AND black_prisoners_final IS NULL AND white_prisoners_final IS NULL
       AND black_total IS NULL AND white_total IS NULL AND margin IS NULL
     )
-  )
+  ), FALSE))
 );
 
 CREATE OR REPLACE FUNCTION public.guard_japanese_append_only_evidence()
@@ -320,7 +475,7 @@ BEGIN
     OR scoring_row.scoring_method IS DISTINCT FROM NEW.scoring_method
     OR scoring_row.komi IS DISTINCT FROM NEW.komi
     OR scoring_row.handicap IS DISTINCT FROM NEW.handicap
-    OR scoring_row.finalized_at IS NOT NULL OR statement_timestamp() > scoring_row.expires_at
+    OR scoring_row.finalized_at IS NOT NULL OR statement_timestamp() >= scoring_row.expires_at
   THEN RAISE EXCEPTION 'Proposal history must match live Japanese scoring.' USING ERRCODE = '23514';
   END IF;
   SELECT MAX(scoring_revision) INTO previous_revision
@@ -361,7 +516,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.validate_japanese_scoring_terminal_insert()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-DECLARE game_row RECORD; scoring_row RECORD;
+DECLARE game_row RECORD; scoring_row RECORD; evidence_count INT; distinct_count INT;
 BEGIN
   SELECT * INTO game_row FROM public.games WHERE id = NEW.game_id FOR UPDATE;
   SELECT * INTO scoring_row FROM public.game_japanese_scoring_state
@@ -390,6 +545,7 @@ BEGIN
     NEW.suggestion_config_version := scoring_row.suggestion_config_version;
     NEW.suggestion_confidence_policy_version := scoring_row.suggestion_confidence_policy_version;
     NEW.suggestion_latency_ms := scoring_row.suggestion_latency_ms;
+    NEW.suggestion_error_class := scoring_row.suggestion_error_class;
   ELSE
     NEW.suggestion_request_identity := NULL;
     NEW.suggestion_status := NULL;
@@ -399,23 +555,65 @@ BEGIN
     NEW.suggestion_config_version := NULL;
     NEW.suggestion_confidence_policy_version := NULL;
     NEW.suggestion_latency_ms := NULL;
+    NEW.suggestion_error_class := NULL;
   END IF;
   IF (NEW.outcome_kind = 'no_participation' AND (scoring_row.black_participated_at IS NOT NULL OR scoring_row.white_participated_at IS NOT NULL))
     OR (NEW.outcome_kind = 'abandonment' AND ((scoring_row.black_participated_at IS NULL) = (scoring_row.white_participated_at IS NULL)))
     OR (NEW.outcome_kind LIKE 'katago_%' AND (scoring_row.black_participated_at IS NULL OR scoring_row.white_participated_at IS NULL))
-    OR (NEW.outcome_kind = 'katago_validated' AND scoring_row.suggestion_status <> 'ready')
-    OR (NEW.outcome_kind = 'katago_low_confidence' AND scoring_row.suggestion_status <> 'low_confidence')
-    OR (NEW.outcome_kind = 'katago_unavailable' AND scoring_row.suggestion_status NOT IN ('unavailable', 'invalid'))
-    OR (NEW.outcome_kind LIKE 'katago_%' AND NEW.suggestion_request_identity IS DISTINCT FROM scoring_row.suggestion_request_identity)
-    OR (NEW.outcome_kind IN ('katago_validated', 'katago_low_confidence') AND NOT EXISTS (
+    OR (NEW.outcome_kind LIKE 'katago_%' AND scoring_row.suggestion_status = 'pending')
+    OR (NEW.outcome_kind LIKE 'katago_%' AND NOT EXISTS (
       SELECT 1 FROM public.game_japanese_scoring_proposals AS proposal
        WHERE proposal.game_id = NEW.game_id
          AND proposal.scoring_revision = NEW.scoring_revision
          AND proposal.proposal_hash = NEW.proposal_hash
+         AND proposal.stopped_move_number = NEW.stopped_move_number
+         AND proposal.stopped_board_hash = NEW.stopped_board_hash
     ))
     OR (NEW.outcome_kind NOT LIKE 'katago_%' AND NEW.suggestion_request_identity IS NOT NULL)
     OR (NEW.outcome_kind = 'abandonment' AND NEW.abandoned_by_color IS DISTINCT FROM CASE WHEN scoring_row.black_participated_at IS NULL THEN 'black' ELSE 'white' END)
   THEN RAISE EXCEPTION 'Terminal outcome contradicts participation or suggestion evidence.' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.outcome_kind IN ('katago_validated', 'katago_low_confidence') THEN
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(NEW.adjudication_dead_stones) AS evidence(point)
+       WHERE jsonb_typeof(evidence.point) <> 'object'
+          OR NOT (evidence.point ?& ARRAY['x', 'y', 'color'])
+          OR jsonb_object_length(evidence.point) <> 3
+    ) OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(NEW.adjudication_neutral_region_seeds) AS evidence(point)
+       WHERE jsonb_typeof(evidence.point) <> 'object'
+          OR NOT (evidence.point ?& ARRAY['x', 'y'])
+          OR jsonb_object_length(evidence.point) <> 2
+    ) THEN
+      RAISE EXCEPTION 'Deadline adjudication coordinates require exact bounded evidence objects.' USING ERRCODE = '23514';
+    END IF;
+    SELECT COUNT(*), COUNT(DISTINCT (point.x, point.y)) INTO evidence_count, distinct_count
+      FROM jsonb_to_recordset(NEW.adjudication_dead_stones) AS point(x INT, y INT, color TEXT)
+     WHERE point.x BETWEEN 0 AND game_row.board_size - 1
+       AND point.y BETWEEN 0 AND game_row.board_size - 1
+       AND point.color IN ('black', 'white');
+    IF evidence_count <> jsonb_array_length(NEW.adjudication_dead_stones)
+      OR distinct_count <> evidence_count
+    THEN RAISE EXCEPTION 'Deadline adjudication dead stones must be unique occupied-board coordinates.' USING ERRCODE = '23514';
+    END IF;
+    SELECT COUNT(*), COUNT(DISTINCT (point.x, point.y)) INTO evidence_count, distinct_count
+      FROM jsonb_to_recordset(NEW.adjudication_neutral_region_seeds) AS point(x INT, y INT)
+     WHERE point.x BETWEEN 0 AND game_row.board_size - 1
+       AND point.y BETWEEN 0 AND game_row.board_size - 1;
+    IF evidence_count <> jsonb_array_length(NEW.adjudication_neutral_region_seeds)
+      OR distinct_count <> evidence_count
+    THEN RAISE EXCEPTION 'Deadline adjudication neutral seeds must be unique bounded coordinates.' USING ERRCODE = '23514';
+    END IF;
+    IF NEW.outcome_kind = 'katago_validated' AND (
+      NEW.dead_black_stones IS DISTINCT FROM (
+        SELECT COUNT(*) FROM jsonb_to_recordset(NEW.adjudication_dead_stones) AS point(color TEXT)
+         WHERE point.color = 'black'
+      ) OR NEW.dead_white_stones IS DISTINCT FROM (
+        SELECT COUNT(*) FROM jsonb_to_recordset(NEW.adjudication_dead_stones) AS point(color TEXT)
+         WHERE point.color = 'white'
+      )
+    ) THEN RAISE EXCEPTION 'Validated score counts must match deadline adjudication evidence.' USING ERRCODE = '23514';
+    END IF;
   END IF;
   NEW.created_at := statement_timestamp();
   RETURN NEW;
@@ -444,11 +642,27 @@ BEGIN
 END
 $$;
 
+CREATE OR REPLACE FUNCTION public.guard_japanese_resume_authorization_window()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE scoring_row RECORD;
+BEGIN
+  PERFORM 1 FROM public.games WHERE id = NEW.game_id FOR UPDATE;
+  SELECT scoring.expires_at, scoring.suggestion_status INTO scoring_row
+    FROM public.game_japanese_scoring_state AS scoring
+   WHERE scoring.game_id = NEW.game_id FOR UPDATE;
+  IF NOT FOUND OR statement_timestamp() >= scoring_row.expires_at
+    OR scoring_row.suggestion_status = 'pending'
+  THEN RAISE EXCEPTION 'Japanese scoring may resume only after suggestion resolution and before its deadline.' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
 -- Supersede the deletion path from migration 023 so a deadline event may
 -- close even a once-confirmed scoring row without weakening agreement writes.
 CREATE OR REPLACE FUNCTION public.guard_japanese_scoring_state_mutation()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-DECLARE proposal_inputs_changed BOOLEAN; initial_suggestion_change BOOLEAN; authorized_close BOOLEAN;
+DECLARE proposal_inputs_changed BOOLEAN; initial_suggestion_change BOOLEAN; initial_suggestion_failure BOOLEAN; authorized_close BOOLEAN;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     SELECT EXISTS (
@@ -506,6 +720,28 @@ BEGIN
     OR NEW.captured_white_by_black_at_stop IS DISTINCT FROM OLD.captured_white_by_black_at_stop
     OR NEW.captured_black_by_white_at_stop IS DISTINCT FROM OLD.captured_black_by_white_at_stop
   THEN RAISE EXCEPTION 'Japanese scoring phase identity is immutable.' USING ERRCODE = '23514'; END IF;
+  IF statement_timestamp() >= OLD.expires_at
+  THEN RAISE EXCEPTION 'Expired Japanese scoring state may be closed only by deadline resolution.' USING ERRCODE = '23514'; END IF;
+  initial_suggestion_change := OLD.suggestion_status = 'pending'
+    AND NEW.suggestion_status IN ('ready', 'low_confidence')
+    AND NEW.revision = OLD.revision
+    AND NEW.proposal_hash IS DISTINCT FROM OLD.proposal_hash
+    AND OLD.black_confirmed_revision IS NULL AND OLD.white_confirmed_revision IS NULL
+    AND NEW.black_confirmed_revision IS NULL AND NEW.white_confirmed_revision IS NULL
+    AND NEW.black_participated_at IS NOT DISTINCT FROM OLD.black_participated_at
+    AND NEW.white_participated_at IS NOT DISTINCT FROM OLD.white_participated_at
+    AND EXISTS (SELECT 1 FROM public.games AS game WHERE game.id = OLD.game_id AND game.scoring_revision = NEW.revision);
+  initial_suggestion_failure := OLD.suggestion_status = 'pending'
+    AND NEW.suggestion_status IN ('unavailable', 'invalid')
+    AND NEW.revision = OLD.revision
+    AND NEW.proposal_hash IS NOT DISTINCT FROM OLD.proposal_hash
+    AND OLD.black_confirmed_revision IS NULL AND OLD.white_confirmed_revision IS NULL
+    AND NEW.black_confirmed_revision IS NULL AND NEW.white_confirmed_revision IS NULL
+    AND NEW.black_participated_at IS NOT DISTINCT FROM OLD.black_participated_at
+    AND NEW.white_participated_at IS NOT DISTINCT FROM OLD.white_participated_at;
+  IF OLD.suggestion_status = 'pending'
+    AND NOT initial_suggestion_change AND NOT initial_suggestion_failure
+  THEN RAISE EXCEPTION 'Pending Japanese scoring does not accept player mutation.' USING ERRCODE = '23514'; END IF;
   IF (OLD.black_participated_at IS NOT NULL AND NEW.black_participated_at IS DISTINCT FROM OLD.black_participated_at)
     OR (OLD.white_participated_at IS NOT NULL AND NEW.white_participated_at IS DISTINCT FROM OLD.white_participated_at)
   THEN RAISE EXCEPTION 'Japanese participation evidence is monotonic.' USING ERRCODE = '23514'; END IF;
@@ -517,17 +753,11 @@ BEGIN
     OR NEW.suggestion_model_version IS DISTINCT FROM OLD.suggestion_model_version
     OR NEW.suggestion_config_version IS DISTINCT FROM OLD.suggestion_config_version
     OR NEW.suggestion_confidence_policy_version IS DISTINCT FROM OLD.suggestion_confidence_policy_version
-    OR NEW.suggestion_latency_ms IS DISTINCT FROM OLD.suggestion_latency_ms)
+    OR NEW.suggestion_latency_ms IS DISTINCT FROM OLD.suggestion_latency_ms
+    OR NEW.suggestion_error_class IS DISTINCT FROM OLD.suggestion_error_class)
   THEN RAISE EXCEPTION 'Japanese suggestion diagnostics are immutable.' USING ERRCODE = '23514'; END IF;
   proposal_inputs_changed := NEW.revision IS DISTINCT FROM OLD.revision
     OR NEW.proposal_hash IS DISTINCT FROM OLD.proposal_hash;
-  initial_suggestion_change := OLD.suggestion_status = 'pending'
-    AND NEW.suggestion_status IN ('ready', 'low_confidence')
-    AND NEW.revision = OLD.revision
-    AND NEW.proposal_hash IS DISTINCT FROM OLD.proposal_hash
-    AND OLD.black_confirmed_revision IS NULL AND OLD.white_confirmed_revision IS NULL
-    AND NEW.black_confirmed_revision IS NULL AND NEW.white_confirmed_revision IS NULL
-    AND EXISTS (SELECT 1 FROM public.games AS game WHERE game.id = OLD.game_id AND game.scoring_revision = NEW.revision);
   IF proposal_inputs_changed AND NOT initial_suggestion_change AND (
     NEW.revision IS DISTINCT FROM OLD.revision + 1 OR NEW.proposal_hash IS NOT DISTINCT FROM OLD.proposal_hash
     OR OLD.black_confirmed_revision IS NOT NULL OR OLD.white_confirmed_revision IS NOT NULL
@@ -565,6 +795,7 @@ REVOKE ALL ON FUNCTION public.guard_japanese_append_only_evidence() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_japanese_scoring_proposal_insert() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_japanese_scoring_terminal_insert() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_japanese_scoring_terminal_commit() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.guard_japanese_resume_authorization_window() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_japanese_scoring_state_proposal_commit() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.guard_japanese_scoring_state_mutation() FROM PUBLIC;
 
@@ -577,6 +808,10 @@ DROP TRIGGER IF EXISTS game_japanese_scoring_terminal_insert_guard ON game_japan
 DROP TRIGGER IF EXISTS game_japanese_scoring_terminal_commit_guard ON game_japanese_scoring_terminal_events;
 DROP TRIGGER IF EXISTS game_japanese_scoring_terminal_immutable_guard ON game_japanese_scoring_terminal_events;
 DROP TRIGGER IF EXISTS game_japanese_scoring_terminal_truncate_guard ON game_japanese_scoring_terminal_events;
+DROP TRIGGER IF EXISTS game_japanese_resume_authorization_window_guard ON game_japanese_resume_authorizations;
+CREATE TRIGGER game_japanese_resume_authorization_window_guard
+  BEFORE INSERT ON game_japanese_resume_authorizations FOR EACH ROW
+  EXECUTE FUNCTION public.guard_japanese_resume_authorization_window();
 CREATE TRIGGER game_japanese_scoring_state_mutation_guard
   BEFORE UPDATE OR DELETE ON game_japanese_scoring_state FOR EACH ROW
   EXECUTE FUNCTION public.guard_japanese_scoring_state_mutation();
@@ -617,6 +852,7 @@ BEGIN
       public.validate_japanese_scoring_proposal_insert(),
       public.validate_japanese_scoring_terminal_insert(),
       public.validate_japanese_scoring_terminal_commit(),
+      public.guard_japanese_resume_authorization_window(),
       public.validate_japanese_scoring_state_proposal_commit(),
       public.guard_japanese_scoring_state_mutation() FROM anon;
   END IF;
@@ -626,6 +862,7 @@ BEGIN
       public.validate_japanese_scoring_proposal_insert(),
       public.validate_japanese_scoring_terminal_insert(),
       public.validate_japanese_scoring_terminal_commit(),
+      public.guard_japanese_resume_authorization_window(),
       public.validate_japanese_scoring_state_proposal_commit(),
       public.guard_japanese_scoring_state_mutation() FROM authenticated;
   END IF;

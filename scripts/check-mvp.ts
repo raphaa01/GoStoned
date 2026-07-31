@@ -88,6 +88,7 @@ const requiredJapaneseScoringColumns = [
   "suggestion_config_version",
   "suggestion_confidence_policy_version",
   "suggestion_latency_ms",
+  "suggestion_error_class",
 ] as const;
 
 const requiredJapaneseProposalColumns = [
@@ -107,6 +108,12 @@ const requiredJapaneseTerminalColumns = [
   "suggestion_request_identity", "suggestion_status", "suggestion_provider_kind",
   "suggestion_engine_version", "suggestion_model_version", "suggestion_config_version",
   "suggestion_confidence_policy_version", "suggestion_latency_ms",
+  "suggestion_error_class", "adjudication_proposal_hash",
+  "adjudication_dead_stones", "adjudication_neutral_region_seeds",
+  "adjudication_request_identity", "adjudication_provider_kind",
+  "adjudication_engine_version", "adjudication_model_version",
+  "adjudication_config_version", "adjudication_confidence_policy_version",
+  "adjudication_latency_ms", "adjudication_error_class",
   "captured_white_by_black_at_stop",
   "captured_black_by_white_at_stop", "living_black_stones", "living_white_stones",
   "black_territory", "white_territory", "dame_points",
@@ -550,6 +557,7 @@ const requiredTriggerSignatures = [
   "game_scoring_resume_events_truncate_guard:game_scoring_resume_events:public:guard_game_scoring_resume_event_mutation:34",
   "game_japanese_scoring_state_mutation_guard:game_japanese_scoring_state:public:guard_japanese_scoring_state_mutation:27",
   "game_japanese_resume_authorizations_insert_guard:game_japanese_resume_authorizations:public:validate_game_japanese_resume_authorization_insert:7",
+  "game_japanese_resume_authorization_window_guard:game_japanese_resume_authorizations:public:guard_japanese_resume_authorization_window:7",
   "game_japanese_resume_authorizations_commit_guard:game_japanese_resume_authorizations:public:validate_game_japanese_resume_authorization_commit:5",
   "game_japanese_resume_authorizations_immutable_guard:game_japanese_resume_authorizations:public:guard_game_japanese_resume_authorization_mutation:27",
   "game_japanese_resume_authorizations_truncate_guard:game_japanese_resume_authorizations:public:guard_game_japanese_resume_authorization_mutation:34",
@@ -580,6 +588,8 @@ const requiredTriggerDefinitions = {
   game_scoring_resume_events_truncate_guard:
     "BEFORE TRUNCATE ON public.game_scoring_resume_events",
   game_japanese_resume_authorizations_insert_guard:
+    "BEFORE INSERT ON public.game_japanese_resume_authorizations",
+  game_japanese_resume_authorization_window_guard:
     "BEFORE INSERT ON public.game_japanese_resume_authorizations",
   game_japanese_resume_authorizations_commit_guard:
     "AFTER INSERT ON public.game_japanese_resume_authorizations DEFERRABLE INITIALLY DEFERRED",
@@ -628,6 +638,7 @@ const requiredGuardFunctions = [
   "public.guard_game_japanese_resume_authorization_mutation()",
   "public.validate_game_japanese_resume_authorization_insert()",
   "public.validate_game_japanese_resume_authorization_commit()",
+  "public.guard_japanese_resume_authorization_window()",
   "public.guard_game_japanese_resume_transition()",
   "public.guard_japanese_append_only_evidence()",
   "public.validate_japanese_scoring_proposal_insert()",
@@ -674,6 +685,11 @@ const requiredGuardFunctionDefinitions = {
     "CASE NEW.requested_by_color WHEN 'black' THEN 'white' ELSE 'black' END",
     "lifecycle.has_japanese_scoring_state",
   ],
+  "public.guard_japanese_resume_authorization_window()": [
+    "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
+    "statement_timestamp() >= scoring_row.expires_at",
+    "scoring_row.suggestion_status = 'pending'",
+  ],
   "public.guard_game_japanese_resume_transition()": [
     "JOIN public.game_japanese_resume_authorizations AS resume_authorization",
     "resume_snapshot.black_confirmed_revision IS NOT NULL",
@@ -687,6 +703,8 @@ const requiredGuardFunctionDefinitions = {
     "Confirmed Japanese scoring state is immutable.",
     "game.finish_reason IN ('resignation', 'timeout')",
     "game_japanese_scoring_terminal_events",
+    "Expired Japanese scoring state may be closed only by deadline resolution.",
+    "Pending Japanese scoring does not accept player mutation.",
   ],
   "public.guard_japanese_append_only_evidence()": [
     "Japanese scoring history is append-only.",
@@ -703,6 +721,7 @@ const requiredGuardFunctionDefinitions = {
     "statement_timestamp() < scoring_row.expires_at",
     "Terminal outcome contradicts participation or suggestion evidence.",
     "NEW.suggestion_status := scoring_row.suggestion_status",
+    "Validated score counts must match deadline adjudication evidence.",
   ],
   "public.validate_japanese_scoring_terminal_commit()": [
     "game_row.status <> 'finished'",

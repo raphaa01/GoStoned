@@ -6,6 +6,7 @@ import {
   KATAGO_CONFIDENCE_POLICY_VERSION,
   KATAGO_SCORING_CONTRACT_VERSION,
   type KataGoEngineIdentity,
+  type KataGoProviderKind,
   type KataGoScoringProvider,
 } from "./contracts";
 import { DeterministicKataGoScoringProvider } from "./deterministicProvider";
@@ -19,6 +20,7 @@ export const DEFAULT_KATAGO_SCORING_VISITS = 32;
 
 export type KataGoScoringRuntime = Readonly<{
   client: KataGoScoringClient;
+  providerKind: KataGoProviderKind;
   engine: KataGoEngineIdentity;
   maxVisits: number;
   contractVersion: typeof KATAGO_SCORING_CONTRACT_VERSION;
@@ -79,6 +81,7 @@ export function createKataGoScoringRuntime(
   });
   return Object.freeze({
     client: new KataGoScoringClient({ provider, ...options.clientOptions }),
+    providerKind: provider.kind,
     engine,
     maxVisits: visits(environment.KATAGO_MAX_VISITS),
     contractVersion: KATAGO_SCORING_CONTRACT_VERSION,
