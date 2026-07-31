@@ -141,6 +141,7 @@ export const es = {
     "puzzlesChapterAction": "Resolver un problema"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "Ya has iniciado sesión",
     "continueAs": "Continuar como",
     "findGame": "Encontrar un juego",
@@ -162,6 +163,7 @@ export const es = {
     "haveAccount": "¿Ya tienes una cuenta?",
     "newToGoStone": "¿Nuevo en GoStone?",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "No se pudo leer la solicitud. Por favor, inténtelo de nuevo.",
       "request_rejected": "Esta solicitud de autenticación fue bloqueada. Por favor, inténtelo de nuevo.",
       "invalid_username": "El nombre de usuario debe contener entre 3 y 20 letras, números o guiones bajos.",
@@ -264,6 +266,7 @@ export const es = {
     "handicap": "Ventaja"
   },
   "play": {
+    ...en.play,
     "kicker": "Partida en vivo",
     "title": "Elige tu tablero.",
     "description": "Entras en una sala de juego sin distracciones tan pronto como otro jugador se une. Cada movimiento y mensaje se guarda en el servidor.",
@@ -565,6 +568,7 @@ export const es = {
     "botOpponent": "Oponente automatizado"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "No se pudieron cargar tus estadísticas.",
     "loading": "Cargando perfil…",
     "loadComplete": "Carga del perfil completada.",
@@ -609,6 +613,7 @@ export const es = {
     "to": "aha"
   },
   "leaderboard": {
+    "globalScope": "Clasificación global",
     "kicker": "Calificaciones de cuentas",
     "title": "Tabla de clasificación",
     "description": "Solo se incluyen las calificaciones de la cuenta completamente respaldadas por juegos calificados completados. Los juegos contra un oponente de KataGo con calificación equivalente cuentan como juegos calificados.",

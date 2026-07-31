@@ -5,18 +5,10 @@ import {
   RATE_LIMIT_POLICIES,
   RateLimitError,
 } from "@/lib/auth/rateLimit";
-import type { BoardSize } from "@/lib/game/types";
 import { getLeaderboard } from "@/lib/stats/statsService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function parseBoardSize(request: NextRequest): BoardSize | null {
-  if (request.nextUrl.search === "?boardSize=9") return 9;
-  if (request.nextUrl.search === "?boardSize=13") return 13;
-  if (request.nextUrl.search === "?boardSize=19") return 19;
-  return null;
-}
 
 function publicLeaderboardJson(body: unknown) {
   const response = NextResponse.json(body);
@@ -28,12 +20,11 @@ function publicLeaderboardJson(body: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const boardSize = parseBoardSize(request);
-  if (boardSize === null) {
+  if (request.nextUrl.search !== "") {
     return noStoreJson(
       {
         ok: false,
-        error: "Stats requests require exactly one supported board size.",
+        error: "Global leaderboard requests do not accept filters.",
         code: "invalid_stats_request",
       },
       { status: 400 },
@@ -42,10 +33,9 @@ export async function GET(request: NextRequest) {
 
   try {
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.publicStats);
-    const snapshot = await getLeaderboard(boardSize);
+    const snapshot = await getLeaderboard();
     return publicLeaderboardJson({
       ok: true,
-      boardSize,
       leaderboard: snapshot.entries,
       observedAt: snapshot.observedAt.toISOString(),
     });

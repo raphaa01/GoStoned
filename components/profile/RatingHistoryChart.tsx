@@ -46,7 +46,7 @@ export function RatingHistoryChart({
     ...history.map((entry) => ({
       rating: entry.ratingAfter,
       recordedAt: entry.recordedAt,
-      label: entry.result === "win" ? copy.win : entry.result === "loss" ? copy.loss : copy.draw,
+      label: entry.result === "win" ? copy.win : entry.result === "loss" ? copy.loss : entry.result === "draw" ? copy.draw : copy.noResult,
     })),
   ];
   const ratings = points.map((point) => point.rating);

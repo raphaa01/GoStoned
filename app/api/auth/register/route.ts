@@ -3,7 +3,7 @@ import { apiError, noStoreJson } from "@/lib/api/responses";
 import { AuthError, registerAccount } from "@/lib/auth/accountService";
 import {
   assertAuthMutationRequest,
-  readCredentialRequest,
+  readRegistrationRequest,
 } from "@/lib/auth/credentialRequest";
 import {
   consumeIpPolicyRateLimit,
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   try {
     assertAuthMutationRequest(request, { requireJson: true });
     await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.registerAddress);
-    const credentials = await readCredentialRequest(request);
+    const credentials = await readRegistrationRequest(request);
     await consumeRateLimit(
       request,
       RATE_LIMIT_POLICIES.registerTarget.scope,
@@ -31,7 +31,11 @@ export async function POST(request: NextRequest) {
       RATE_LIMIT_POLICIES.registerTarget.limit,
       RATE_LIMIT_POLICIES.registerTarget.windowMinutes,
     );
-    const { user, token } = await registerAccount(credentials.username, credentials.password);
+    const { user, token } = await registerAccount(
+      credentials.username,
+      credentials.password,
+      credentials.startingStrength,
+    );
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,

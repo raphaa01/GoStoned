@@ -57,6 +57,12 @@ type GameRow = {
   white_player_name: string;
   black_player_is_bot: boolean;
   white_player_is_bot: boolean;
+  black_rating: string | number | null;
+  black_rating_deviation: string | number | null;
+  white_rating: string | number | null;
+  white_rating_deviation: string | number | null;
+  viewer_rating_change: string | number | null;
+  rating_display_preference: "rank-primary" | "rating-primary" | "both" | null;
   winner_key: string | null;
   rated: boolean;
   status: "active" | "finished";
@@ -791,23 +797,34 @@ async function loadGame(
             ) AS white_player_name,
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+            CASE WHEN g.black_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating ELSE black_rating.rating END AS black_rating,
+            CASE WHEN g.black_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating_deviation
+              ELSE black_rating.rating_deviation END AS black_rating_deviation,
+            CASE WHEN g.white_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating ELSE white_rating.rating END AS white_rating,
+            CASE WHEN g.white_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating_deviation
+              ELSE white_rating.rating_deviation END AS white_rating_deviation,
+            (viewer_event.rating_after - viewer_event.rating_before) AS viewer_rating_change,
+            viewer_preference.display_preference AS rating_display_preference,
             CASE
               WHEN g.status = 'finished' THEN (
-                SELECT COUNT(DISTINCT evidence.player_key) = 2
-                  FROM (
-                    SELECT history.player_key FROM player_rating_history history
-                     WHERE history.game_id = g.id
-                    UNION ALL
-                    SELECT event.player_key FROM game_glicko2_rating_events event
-                     WHERE event.game_id = g.id
-                  ) AS evidence
-                 WHERE evidence.player_key IN (g.black_player_key, g.white_player_key)
+                SELECT COALESCE(
+                  (COUNT(*) = 2 AND BOOL_AND(event.opponent_kind = 'registered_human'))
+                  OR (COUNT(*) = 1 AND BOOL_AND(event.opponent_kind = 'calibrated_bot')),
+                  FALSE
+                ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
               )
               ELSE g.black_player_key <> g.white_player_key
                 AND (
                   (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                   OR (
                     game_bot.game_id IS NOT NULL
+                    AND game_bot.rating_mode = 'calibrated-v1'
+                    AND EXISTS (SELECT 1 FROM game_calibrated_bot_bindings binding
+                                 WHERE binding.game_id = g.id)
                     AND (
                       (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
                       OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
@@ -821,8 +838,15 @@ async function loadGame(
        LEFT JOIN users white_user
          ON g.white_player_key = 'user:' || white_user.id::text
        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
+       LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
+       LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
+       LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
+       LEFT JOIN game_glicko2_rating_events viewer_event
+         ON viewer_event.game_id = g.id AND viewer_event.player_key = $2
+       LEFT JOIN player_rating_preferences viewer_preference
+         ON viewer_preference.player_key = $2
       WHERE g.id = $1${lock ? " FOR UPDATE OF g" : ""}`,
-    [gameId],
+    [gameId, playerKey],
   );
   let game = gameResult.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
@@ -1208,6 +1232,12 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerName: game.white_player_name,
     blackPlayerIsBot: game.black_player_is_bot,
     whitePlayerIsBot: game.white_player_is_bot,
+    blackRating: game.black_rating === null ? null : Number(game.black_rating),
+    blackRatingDeviation: game.black_rating_deviation === null ? null : Number(game.black_rating_deviation),
+    whiteRating: game.white_rating === null ? null : Number(game.white_rating),
+    whiteRatingDeviation: game.white_rating_deviation === null ? null : Number(game.white_rating_deviation),
+    viewerRatingChange: game.viewer_rating_change === null ? null : Number(game.viewer_rating_change),
+    ratingDisplayPreference: game.rating_display_preference ?? "both",
     winnerKey: game.winner_key,
     rated: game.rated,
     status: game.status,

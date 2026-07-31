@@ -3,23 +3,29 @@
 import { Medal, Trophy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { readApi } from "@/lib/client/api";
-import type { BoardSize } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
+import { presentRating } from "@/lib/rating/rankPolicy";
+import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 import {
   parsePublicLeaderboardSnapshot,
   type LeaderboardEntry,
 } from "@/lib/stats/leaderboardContract";
 
 export function LeaderboardView() {
+  const { user } = useAuth();
   const { dictionary, locale } = useI18n();
   const copy = dictionary.leaderboard;
-  const [boardSize, setBoardSize] = useState<BoardSize>(19);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [observedAt, setObservedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState(0);
+  const [viewerPreference, setViewerPreference] = useState<{
+    displayPreference: RatingDisplayPreference;
+    playerKey: string;
+  } | null>(null);
   const resultStatusRef = useRef<HTMLParagraphElement>(null);
   const focusRetryStatus = useRef(false);
 
@@ -29,12 +35,12 @@ export function LeaderboardView() {
 
     void (async () => {
       try {
-        const response = await fetch(`/api/stats?boardSize=${boardSize}`, {
+        const response = await fetch("/api/stats", {
           signal: controller.signal,
         });
         const body = await readApi<unknown>(response);
         if (!active) return;
-        const snapshot = parsePublicLeaderboardSnapshot(body, boardSize);
+        const snapshot = parsePublicLeaderboardSnapshot(body);
         setEntries(snapshot.leaderboard);
         setObservedAt(snapshot.observedAt);
         setError(null);
@@ -52,7 +58,20 @@ export function LeaderboardView() {
       active = false;
       controller.abort();
     };
-  }, [boardSize, copy.loadFailed, dictionary, requestKey]);
+  }, [copy.loadFailed, dictionary, requestKey]);
+
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    void fetch("/api/profile/preferences", { signal: controller.signal })
+      .then((response) => readApi<{ preferences: { displayPreference: RatingDisplayPreference } }>(response))
+      .then((body) => setViewerPreference({
+        displayPreference: body.preferences.displayPreference,
+        playerKey: user.playerKey,
+      }))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [user]);
 
   useEffect(() => {
     if (!focusRetryStatus.current) return;
@@ -62,7 +81,7 @@ export function LeaderboardView() {
 
   const snapshotSummary = observedAt
     ? copy.snapshotSummary
-      .replace("{size}", String(boardSize))
+      .replace("{size}", copy.globalScope)
       .replace("{count}", String(entries.length))
       .replace(
         "{time}",
@@ -72,15 +91,10 @@ export function LeaderboardView() {
         }).format(new Date(observedAt)),
       )
     : null;
-  const tableLabel = copy.tableScrollLabel.replace("{size}", String(boardSize));
-  const selectBoardSize = (size: BoardSize) => {
-    if (size === boardSize) return;
-    setLoading(true);
-    setError(null);
-    setEntries([]);
-    setObservedAt(null);
-    setBoardSize(size);
-  };
+  const tableLabel = copy.tableScrollLabel.replace("{size}", copy.globalScope);
+  const displayPreference = viewerPreference && viewerPreference.playerKey === user?.playerKey
+    ? viewerPreference.displayPreference
+    : "both";
   const retry = () => {
     focusRetryStatus.current = true;
     setLoading(true);
@@ -98,23 +112,10 @@ export function LeaderboardView() {
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>
         </div>
-        <div className="leaderboard-filter" aria-label={copy.boardSize} role="group">
-          {([9, 13, 19] as const).map((size) => (
-            <button
-              className={boardSize === size ? "is-selected" : ""}
-              aria-pressed={boardSize === size}
-              key={size}
-              onClick={() => selectBoardSize(size)}
-              type="button"
-            >
-              {size}×{size}
-            </button>
-          ))}
-        </div>
       </header>
 
       <section className="leaderboard-card">
-        <div className="leaderboard-title"><Trophy aria-hidden="true" size={20} /><strong>{boardSize}×{boardSize} {copy.players}</strong></div>
+        <div className="leaderboard-title"><Trophy aria-hidden="true" size={20} /><strong>{copy.globalScope} · {copy.players}</strong></div>
         <p className="leaderboard-method">{copy.ratingMethod}</p>
         {loading ? (
           <p
@@ -146,7 +147,7 @@ export function LeaderboardView() {
               >
                 <table>
                   <caption className="sr-only">
-                    {boardSize}×{boardSize} {copy.players}. {copy.resultCount.replace("{count}", String(entries.length))}
+                    {copy.globalScope} · {copy.players}. {copy.resultCount.replace("{count}", String(entries.length))}
                   </caption>
                   <thead>
                     <tr>
@@ -171,7 +172,14 @@ export function LeaderboardView() {
                         <th scope="row">{entry.playerName}</th>
                         <td>{entry.games}</td>
                         <td>{entry.wins}</td>
-                        <td><strong>{entry.rating}</strong></td>
+                        <td>
+                          <strong>{presentRating(
+                            entry.rating,
+                            displayPreference,
+                            locale === "de" ? "de" : "en",
+                          ).primaryLabel}</strong>
+                          <small className="leaderboard-rating-detail">±{Math.round(entry.ratingDeviation)}</small>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

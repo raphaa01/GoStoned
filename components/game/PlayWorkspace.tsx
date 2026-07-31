@@ -58,6 +58,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
   const [timeControl, setTimeControl] = useState<TimeControlId>("rapid");
   const [queueStatus, setQueueStatus] = useState<"idle" | "waiting">("idle");
+  const [queueDetails, setQueueDetails] = useState<MatchmakingQueueState | null>(null);
   const [activeGame, setActiveGame] = useState<{
     gameId: string;
     boardSize: BoardSize;
@@ -94,6 +95,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     queueKnown.current = false;
     enterMatchedOnSync.current = false;
     setQueueStatus("idle");
+    setQueueDetails(null);
     setActiveGame(null);
     setConfirmLeave(false);
   }, []);
@@ -173,6 +175,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     }
     assertResponseActor(data.actor, playerKey);
     handleQueueState(data.matchmaking, enterMatchedGame);
+    setQueueDetails(data.matchmaking);
     queueKnown.current = true;
     enterMatchedOnSync.current = data.matchmaking.status === "waiting";
     transitionConnection(matchmakingConnectionAfterSuccess(Date.now()));
@@ -585,6 +588,8 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
                   : copy.retryQueue}
               status={queueStatus}
               timeControl={timeControl}
+              queueDetails={queueDetails}
+              identityKind={identityKind}
             />
           </>
         )}

@@ -1,4 +1,5 @@
 import type { Ruleset, RulesProfile, ScoringMethod } from "./rulesPolicy";
+import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 
 export type BoardSize = 9 | 13 | 19;
 export type TimeControlId = "blitz" | "rapid" | "classic";
@@ -43,6 +44,12 @@ export type GameState = {
   whitePlayerName: string;
   blackPlayerIsBot?: boolean;
   whitePlayerIsBot?: boolean;
+  blackRating?: number | null;
+  blackRatingDeviation?: number | null;
+  whiteRating?: number | null;
+  whiteRatingDeviation?: number | null;
+  viewerRatingChange?: number | null;
+  ratingDisplayPreference?: RatingDisplayPreference;
   winnerKey: string | null;
   rated: boolean;
   status: "active" | "finished";

@@ -2452,7 +2452,7 @@ test("second score confirmation rates two database-verified registered players",
         return { rows: [], rowCount: 0 };
       }
       if (sql.includes("AS player_key") && sql.includes("FROM users")) {
-        assert.deepEqual(values, [blackUserKey, whiteUserKey, gameId]);
+        assert.deepEqual(values, [blackUserKey, whiteUserKey]);
         return {
           rows: [
             { user_id: blackUserKey.slice(5), player_key: blackUserKey },
@@ -2697,7 +2697,7 @@ test("a controlled guest can resign to an account without creating rating writes
   const statsWrite = statements.findIndex((sql) => sql.includes("UPDATE player_glicko2_ratings"));
   assert.ok(scoringDelete >= 0);
   assert.ok(gameFinish > scoringDelete);
-  assert.deepEqual(eligibilityChecks, [[blackUserKey, whiteKey, gameId]]);
+  assert.deepEqual(eligibilityChecks, [[blackUserKey, whiteKey]]);
   assert.equal(ratingWrite, -1);
   assert.equal(statsWrite, -1);
   assert.equal(statements.at(-1), "COMMIT");

@@ -14,6 +14,7 @@ type StoredEvent = {
   player_key: string;
   outcome_kind: "win" | "loss" | "draw" | "no_result";
   algorithm_version: string;
+  opponent_kind: "registered_human" | "calibrated_bot";
   values: unknown[];
 };
 
@@ -28,6 +29,7 @@ class FakeRatingDatabase {
   finishReason = "resignation";
   result = "B+R";
   winnerKey: string | null = blackKey;
+  calibratedBot = false;
   private lockTail = Promise.resolve();
 
   async run() {
@@ -58,6 +60,7 @@ class FakeRatingDatabase {
               player_key: event.player_key,
               outcome_kind: event.outcome_kind,
               algorithm_version: event.algorithm_version,
+              opponent_kind: event.opponent_kind,
             })),
             rowCount: this.events.length,
           };
@@ -68,11 +71,29 @@ class FakeRatingDatabase {
             .map((player_key) => ({ user_id: player_key.slice(5), player_key }));
           return { rows, rowCount: rows.length };
         }
+        if (sql.includes("FROM game_calibrated_bot_bindings binding")) {
+          return this.calibratedBot ? { rows: [{
+            human_player_key: blackKey,
+            bot_player_key: whiteKey,
+            bot_color: "white",
+            profile_id: "bot:katago:v1",
+            profile_contract_version: "calibrated-bot-profile-v1",
+            profile_fingerprint: `sha256:${"a".repeat(64)}`,
+            binding_version: "bot-opponent-binding-v1",
+            configuration_key: "b".repeat(64),
+            credit_mode: "fixed-versioned-profile",
+            opponent_rating: 1200,
+            opponent_rating_deviation: 60,
+            execution_complete: true,
+          }], rowCount: 1 } : { rows: [], rowCount: 0 };
+        }
         if (sql.includes("INSERT INTO player_glicko2_ratings")) {
           return { rows: [], rowCount: 0 };
         }
         if (sql.includes("FROM player_glicko2_ratings") && sql.includes("FOR UPDATE")) {
+          const requestedKey = sql.includes("WHERE player_key=$1") ? String(values[0]) : null;
           const rows = [...this.states.entries()]
+            .filter(([key]) => requestedKey === null || key === requestedKey)
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([player_key, state]) => ({
               player_key,
@@ -89,10 +110,12 @@ class FakeRatingDatabase {
           return { rows: [{ rating_period_at: nextPeriod }], rowCount: 1 };
         }
         if (sql.includes("INSERT INTO game_glicko2_rating_events")) {
+          const botEvent = sql.includes("'calibrated_bot'");
           this.events.push({
             player_key: String(values[1]),
-            outcome_kind: values[4] as StoredEvent["outcome_kind"],
-            algorithm_version: String(values[21]),
+            outcome_kind: values[botEvent ? 10 : 4] as StoredEvent["outcome_kind"],
+            algorithm_version: String(values[botEvent ? 28 : 21]),
+            opponent_kind: botEvent ? "calibrated_bot" : "registered_human",
             values: [...values],
           });
           return { rows: [], rowCount: 1 };
@@ -165,12 +188,26 @@ test("guest games remain unrated and cannot create global state or evidence", as
   assert.equal(database.updateCount, 0);
 });
 
+test("an exact calibrated binding updates only the registered human state", async () => {
+  const database = new FakeRatingDatabase();
+  database.registeredKeys.delete(whiteKey);
+  database.states.delete(whiteKey);
+  database.calibratedBot = true;
+
+  assert.deepEqual(await database.run(), { rated: true, kind: "rated" });
+  assert.equal(database.events.length, 1);
+  assert.equal(database.events[0].opponent_kind, "calibrated_bot");
+  assert.equal(database.updateCount, 1);
+  assert.ok((database.states.get(blackKey)?.rating ?? 0) > 1200);
+});
+
 test("partial pre-existing evidence fails closed", async () => {
   const database = new FakeRatingDatabase();
   database.events.push({
     player_key: blackKey,
     outcome_kind: "win",
     algorithm_version: "glicko2-v1-tau-0.5",
+    opponent_kind: "registered_human",
     values: [],
   });
 

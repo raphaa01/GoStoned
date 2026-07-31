@@ -141,6 +141,7 @@ export const fr = {
     "puzzlesChapterAction": "Résoudre un problème"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "Vous êtes déjà connecté",
     "continueAs": "Continuer en tant que",
     "findGame": "Trouver une partie",
@@ -162,6 +163,7 @@ export const fr = {
     "haveAccount": "Vous avez déjà un compte ?",
     "newToGoStone": "Nouveau sur GoStone ?",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "La requête n'a pas pu être lue. Veuillez réessayer.",
       "request_rejected": "Cette demande d'authentification a été bloquée. Veuillez réessayer.",
       "invalid_username": "Le nom d'utilisateur doit contenir 3 à 20 lettres, chiffres ou underscores.",
@@ -264,6 +266,7 @@ export const fr = {
     "handicap": "Handicap"
   },
   "play": {
+    ...en.play,
     "kicker": "Appariement en direct",
     "title": "Choisissez votre plateau.",
     "description": "Vous entrez dans une salle de jeu sans distraction dès qu'un autre joueur rejoint. Chaque coup et message est enregistré sur le serveur.",
@@ -565,6 +568,7 @@ export const fr = {
     "botOpponent": "Adversaire automatisé"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "Impossible de charger vos statistiques.",
     "loading": "Chargement du profil…",
     "loadComplete": "Chargement du profil terminé.",
@@ -609,6 +613,7 @@ export const fr = {
     "to": "à"
   },
   "leaderboard": {
+    "globalScope": "Classement global",
     "kicker": "Cotes de compte",
     "title": "Classement",
     "description": "Seules les évaluations de compte entièrement soutenues par des parties classées terminées sont incluses. Les parties contre un adversaire KataGo de même classement sont considérées comme des parties classées.",

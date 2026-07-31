@@ -8,8 +8,10 @@ const migration = readFileSync(migrationPath, "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
 
-test("bootstrap schema ends with the exact numbered global-rating migration", () => {
-  assert.equal(schema.slice(-migration.length), migration);
+test("bootstrap schema contains the exact numbered global-rating migration", () => {
+  const offset = schema.indexOf(migration);
+  assert.ok(offset >= 0);
+  assert.equal(schema.slice(offset, offset + migration.length), migration);
 });
 
 test("legacy multi-board state selects one deterministic latest row without rewriting history", () => {
