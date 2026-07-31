@@ -36,6 +36,10 @@ type ExportMoveRow = QueryResultRow & {
 };
 
 type JapaneseTerminalRow = QueryResultRow & { outcome_kind: string };
+type JapaneseRepetitionRow = QueryResultRow & {
+  move_number: number;
+  claimant_count: number;
+};
 
 function corrupt(message: string): never {
   throw new GameServiceError(
@@ -74,6 +78,7 @@ function noResultReason(outcomeKind: string | undefined): Extract<SgfTerminalRes
 function terminalResult(
   game: ExportGameRow,
   japaneseTerminal: JapaneseTerminalRow | undefined,
+  repetition: JapaneseRepetitionRow | undefined,
 ): SgfTerminalResult {
   switch (game.finish_reason) {
     case "score":
@@ -89,6 +94,9 @@ function terminalResult(
       return { kind: "forfeit", winner: winner(game) };
     case "japanese_no_result":
       return { kind: "no-result", reason: noResultReason(japaneseTerminal?.outcome_kind) };
+    case "japanese_repetition":
+      if (repetition?.claimant_count !== 2) return corrupt("repetition evidence");
+      return { kind: "no-result", reason: "cyclic-repetition" };
     default:
       return corrupt("finish reason");
   }
@@ -135,6 +143,12 @@ async function loadSgfInput(
     `SELECT outcome_kind FROM game_japanese_scoring_terminal_events WHERE game_id=$1`,
     [gameId],
   );
+  const repetitionRows = await client.query<JapaneseRepetitionRow>(
+    `SELECT move_number,COUNT(DISTINCT claimant_color)::int AS claimant_count
+       FROM game_japanese_repetition_claims WHERE game_id=$1
+      GROUP BY move_number ORDER BY move_number DESC LIMIT 1`,
+    [gameId],
+  );
   const moves: SgfExportMove[] = movesResult.rows.map((move) => ({
     moveNumber: move.move_number,
     color: move.color,
@@ -142,6 +156,10 @@ async function loadSgfInput(
     y: move.y,
     isPass: move.is_pass,
   }));
+  if (
+    game.finish_reason === "japanese_repetition"
+    && repetitionRows.rows[0]?.move_number !== moves.at(-1)?.moveNumber
+  ) return corrupt("repetition move evidence");
   return {
     gameId: game.id,
     boardSize: boardSize(game.board_size),
@@ -153,7 +171,7 @@ async function loadSgfInput(
       handicap: game.handicap,
     },
     moves,
-    result: terminalResult(game, terminalResultRows.rows[0]),
+    result: terminalResult(game, terminalResultRows.rows[0], repetitionRows.rows[0]),
     players: { blackName: game.black_player_name, whiteName: game.white_player_name },
   };
 }

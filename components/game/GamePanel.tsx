@@ -5,6 +5,7 @@ import {
   CircleDot,
   Flag,
   Play,
+  Repeat2,
   RotateCcw,
   SkipForward,
   Undo2,
@@ -37,6 +38,7 @@ type GamePanelProps = {
   clockObservedAt: number | null;
   interactionDisabled: boolean;
   onPass: () => void;
+  onClaimRepetition?: () => void;
   onResign: () => void;
   onConfirmScore: () => void;
   onResetScoring: () => void;
@@ -54,6 +56,7 @@ export function GamePanel({
   clockObservedAt,
   interactionDisabled,
   onPass,
+  onClaimRepetition,
   onResign,
   onConfirmScore,
   onResetScoring,
@@ -376,14 +379,37 @@ export function GamePanel({
           </div>
         </div>
       ) : game.status === "active" ? (
-        <div className="game-actions">
-          <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
-            <SkipForward size={18} /> {copy.pass}
-          </button>
-          <button disabled={controlsDisabled} onClick={onResign} type="button">
-            <Flag size={18} /> {copy.resign}
-          </button>
-        </div>
+        <>
+          {game.repetition?.eligible ? (
+            <div className="repetition-claim" role="note">
+              <strong>{copy.repetitionDetected}</strong>
+              <span>{copy.repetitionExplanation}</span>
+              <span>
+                {copy.repetitionClaims}: {game.repetition.blackClaimed ? copy.black : "—"}
+                {" · "}{game.repetition.whiteClaimed ? copy.white : "—"}
+              </span>
+            </div>
+          ) : null}
+          <div className="game-actions">
+            <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
+              <SkipForward size={18} /> {copy.pass}
+            </button>
+            {game.repetition?.eligible ? (
+              <button
+                disabled={controlsDisabled || (yourColor === "black"
+                  ? game.repetition.blackClaimed
+                  : game.repetition.whiteClaimed)}
+                onClick={onClaimRepetition}
+                type="button"
+              >
+                <Repeat2 size={18} /> {copy.claimNoResult}
+              </button>
+            ) : null}
+            <button disabled={controlsDisabled} onClick={onResign} type="button">
+              <Flag size={18} /> {copy.resign}
+            </button>
+          </div>
+        </>
       ) : (
         <>
           {game.finishReason === "score" && scoring?.finalizedAt ? (

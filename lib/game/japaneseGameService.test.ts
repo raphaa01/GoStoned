@@ -210,6 +210,7 @@ async function withProtocol<T>(store: Store, action: () => Promise<T>): Promise<
       }
       if (sql.includes("FROM games g")) return result([store.game]);
       if (sql.includes("FROM moves")) return result(store.moves);
+      if (sql.includes("FROM game_japanese_repetition_claims")) return result();
       if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_japanese_resume_authorizations")) return result(store.resumes);
       if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_japanese_scoring_state")) return result(store.scoring ? [store.scoring] : []);
       if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_japanese_dead_stones")) return result(store.dead);

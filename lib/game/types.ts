@@ -53,6 +53,7 @@ export type GameState = {
     | "japanese_adjudication"
     | "japanese_abandonment"
     | "japanese_no_result"
+    | "japanese_repetition"
     | "resignation"
     | "timeout"
     | "legacy_score"
@@ -69,6 +70,12 @@ export type GameState = {
     claim: "dead" | "alive" | "deadline" | "resume";
     requestedBy: Stone | null;
     disputedStone: Position | null;
+  } | null;
+  repetition?: {
+    eligible: boolean;
+    repeatedFromMoveNumber: number | null;
+    blackClaimed: boolean;
+    whiteClaimed: boolean;
   } | null;
   version: number;
   startedAt: string;

@@ -27,7 +27,7 @@ presented as part of the 1989 text.
 | Article 9.3: either player may resume; the opponent moves first | `japanesePhaseAuthority.ts` and append-only resume evidence | `japanesePhaseAuthority.test.ts`, Japanese resume persistence smoke |
 | Article 10: dead stones become prisoners and territory decides the result | `scoreJapaneseTerritory` | `japaneseScoring.test.ts` prisoner, komi, jigo, and result cases |
 | Article 11: resignation | terminal game service | game route/service and browser tests |
-| Article 12: cyclic repetition may become no-result | Japanese replay and terminal no-result authority | Japanese ko/service tests |
+| Article 12: cyclic repetition becomes no-result only after both players agree the same whole-board position repeated | simple-ko replay plus exact two-party repetition claims | `japaneseKo.test.ts`, `japaneseRepetition.test.ts`, repetition persistence/service tests |
 
 The Nihon Ki-in's Article 3 commentary explicitly permits smaller boards by
 agreement for beginners. GoStone supports 9x9, 13x13, and 19x19 under the same
@@ -59,6 +59,24 @@ https://www.nihonkiin.or.jp/match/kiyaku/kiyaku08.htm
 - After the final decision deadline, a fresh, position-bound, validated KataGo
   result may adjudicate. An unavailable, stale, malformed, or low-confidence
   result produces no-result and no rating change, with diagnostic evidence.
+- A non-pass move that recreates an earlier whole-board position exposes a
+  repetition claim to both players. The game ends no-result only when both
+  claims bind the same current move and board hash; passing never creates this
+  claim boundary.
+
+## Deadline resolver operation
+
+Run `npm run worker:japanese-deadlines` beside the web process so scoring
+deadlines resolve even if both browsers disconnect. The worker discovers at
+most `JAPANESE_DEADLINE_RESOLVER_BATCH` expired rows per pass (default 20),
+waits `JAPANESE_DEADLINE_RESOLVER_INTERVAL_MS` milliseconds between passes
+(default 1000), and enters the same game-first transactional resolver used by
+the participant route. `--once` performs one bounded scheduler-friendly pass.
+
+The worker must be enabled during deployment rollout; this repository change
+does not alter hosting or production process configuration. Stopping the worker
+is safe and leaves expired phases pending for a later pass. It never runs from
+game polling and stores no secret configuration.
 
 ## Compatibility and rollback
 

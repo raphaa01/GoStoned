@@ -34,6 +34,7 @@ const requiredTables = [
   "game_japanese_scoring_state",
   "game_japanese_scoring_proposals",
   "game_japanese_scoring_terminal_events",
+  "game_japanese_repetition_claims",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
@@ -235,6 +236,11 @@ const requiredConstraintSignatures = [
   "games_scoring_method_check:games:c",
   "games_rules_check:games:c",
   "games_finish_reason_check:games:c",
+  "game_japanese_repetition_claims_pkey:game_japanese_repetition_claims:p",
+  "game_japanese_repetition_claims_game_fk:game_japanese_repetition_claims:f",
+  "game_japanese_repetition_claims_move_fk:game_japanese_repetition_claims:f",
+  "game_japanese_repetition_claims_prior_move_fk:game_japanese_repetition_claims:f",
+  "game_japanese_repetition_claims_game_rules_fk:game_japanese_repetition_claims:f",
   "game_scoring_state_game_rules_fk:game_scoring_state:f",
   "game_japanese_scoring_game_rules_fk:game_japanese_scoring_state:f",
   "game_japanese_resume_authorizations_pkey:game_japanese_resume_authorizations:p",
@@ -320,7 +326,7 @@ const requiredConstraintDefinitions = {
     excludes: [],
   },
   games_finish_reason_check: {
-    includes: ["score", "resignation", "timeout", "japanese_adjudication", "japanese_no_result", "japanese_abandonment"],
+    includes: ["score", "resignation", "timeout", "japanese_adjudication", "japanese_no_result", "japanese_abandonment", "japanese_repetition"],
     excludes: [],
   },
   game_scoring_state_game_rules_fk: {
@@ -337,6 +343,26 @@ const requiredConstraintDefinitions = {
       "REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)",
       "ON DELETE CASCADE",
     ],
+    excludes: [],
+  },
+  game_japanese_repetition_claims_pkey: {
+    includes: ["PRIMARY KEY (game_id, move_number, claimant_color)"],
+    excludes: [],
+  },
+  game_japanese_repetition_claims_game_fk: {
+    includes: ["FOREIGN KEY (game_id)", "REFERENCES games(id)", "ON DELETE RESTRICT"],
+    excludes: [],
+  },
+  game_japanese_repetition_claims_move_fk: {
+    includes: ["FOREIGN KEY (game_id, move_number)", "REFERENCES moves(game_id, move_number)", "ON DELETE RESTRICT"],
+    excludes: [],
+  },
+  game_japanese_repetition_claims_prior_move_fk: {
+    includes: ["FOREIGN KEY (game_id, repeated_from_move_number)", "REFERENCES moves(game_id, move_number)", "ON DELETE RESTRICT"],
+    excludes: [],
+  },
+  game_japanese_repetition_claims_game_rules_fk: {
+    includes: ["FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)", "REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)", "ON DELETE RESTRICT"],
     excludes: [],
   },
   game_japanese_resume_authorizations_pkey: {
@@ -572,6 +598,11 @@ const requiredTriggerSignatures = [
   "game_japanese_scoring_terminal_truncate_guard:game_japanese_scoring_terminal_events:public:guard_japanese_append_only_evidence:34",
   "game_japanese_dead_stones_mutation_guard:game_japanese_dead_stones:public:guard_japanese_scoring_evidence_mutation:31",
   "game_japanese_neutral_seeds_mutation_guard:game_japanese_neutral_region_seeds:public:guard_japanese_scoring_evidence_mutation:31",
+  "game_japanese_repetition_claim_insert_guard:game_japanese_repetition_claims:public:validate_japanese_repetition_claim_insert:7",
+  "game_japanese_repetition_claim_commit_guard:game_japanese_repetition_claims:public:validate_japanese_repetition_claim_commit:5",
+  "game_japanese_repetition_claim_immutable_guard:game_japanese_repetition_claims:public:guard_japanese_repetition_claim_mutation:27",
+  "game_japanese_repetition_claim_truncate_guard:game_japanese_repetition_claims:public:guard_japanese_repetition_claim_mutation:34",
+  "game_japanese_repetition_finish_guard:games:public:guard_japanese_repetition_finish:19",
 ] as const;
 
 const requiredTriggerDefinitions = {
@@ -607,6 +638,16 @@ const requiredTriggerDefinitions = {
     "BEFORE INSERT ON public.game_japanese_scoring_terminal_events",
   game_japanese_scoring_terminal_commit_guard:
     "AFTER INSERT ON public.game_japanese_scoring_terminal_events DEFERRABLE INITIALLY DEFERRED",
+  game_japanese_repetition_claim_insert_guard:
+    "BEFORE INSERT ON public.game_japanese_repetition_claims",
+  game_japanese_repetition_claim_commit_guard:
+    "AFTER INSERT ON public.game_japanese_repetition_claims DEFERRABLE INITIALLY DEFERRED",
+  game_japanese_repetition_claim_immutable_guard:
+    "BEFORE DELETE OR UPDATE ON public.game_japanese_repetition_claims",
+  game_japanese_repetition_claim_truncate_guard:
+    "BEFORE TRUNCATE ON public.game_japanese_repetition_claims",
+  game_japanese_repetition_finish_guard:
+    "UPDATE OF status, phase, to_move, finish_reason, result, winner_key",
 } as const;
 
 const requiredProtectedTables = [
@@ -627,6 +668,7 @@ const requiredProtectedTables = [
   "puzzles",
   "puzzle_generation_jobs",
   "puzzle_attempts",
+  "game_japanese_repetition_claims",
 ] as const;
 
 const requiredGuardFunctions = [
@@ -647,6 +689,10 @@ const requiredGuardFunctions = [
   "public.validate_japanese_scoring_state_proposal_commit()",
   "public.guard_japanese_scoring_state_mutation()",
   "public.guard_japanese_scoring_evidence_mutation()",
+  "public.validate_japanese_repetition_claim_insert()",
+  "public.validate_japanese_repetition_claim_commit()",
+  "public.guard_japanese_repetition_finish()",
+  "public.guard_japanese_repetition_claim_mutation()",
 ] as const;
 
 const requiredGuardFunctionDefinitions = {
@@ -732,6 +778,23 @@ const requiredGuardFunctionDefinitions = {
   "public.validate_japanese_scoring_state_proposal_commit()": [
     "game_japanese_scoring_proposals",
     "Current Japanese proposal requires append-only history.",
+  ],
+  "public.validate_japanese_repetition_claim_insert()": [
+    "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
+    "ORDER BY move.move_number DESC LIMIT 1",
+    "prior.board_hash = NEW.board_hash",
+  ],
+  "public.validate_japanese_repetition_claim_commit()": [
+    "COUNT(*)::INT",
+    "game_row.finish_reason <> 'japanese_repetition'",
+    "matching_claims <> 2",
+  ],
+  "public.guard_japanese_repetition_finish()": [
+    "NEW.finish_reason IS DISTINCT FROM 'japanese_repetition'",
+    "matching_claims <> 2",
+  ],
+  "public.guard_japanese_repetition_claim_mutation()": [
+    "Japanese repetition claims are append-only.",
   ],
 } as const;
 

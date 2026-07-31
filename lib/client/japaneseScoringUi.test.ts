@@ -140,6 +140,25 @@ test("renders the beginner Japanese territory workflow and its revision controls
   assert.doesNotMatch(html, /Provisional Chinese area score/);
 });
 
+test("discloses a repeated whole-board position and requires the player's explicit claim", () => {
+  const game = japaneseScoringGame();
+  const html = panel({
+    ...game,
+    phase: "play",
+    scoring: null,
+    turn: "black",
+    repetition: {
+      eligible: true,
+      repeatedFromMoveNumber: 4,
+      blackClaimed: false,
+      whiteClaimed: true,
+    },
+  });
+  assert.match(html, /Repeated whole-board position/);
+  assert.match(html, /Claim no result/);
+  assert.match(html, /both players must claim/);
+});
+
 test("keeps the established Chinese dispute controls and area-score copy", () => {
   const japanese = japaneseScoringGame();
   const chinese: GameState = {

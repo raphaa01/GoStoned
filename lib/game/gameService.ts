@@ -10,6 +10,7 @@ import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
 import { GameServiceError } from "./gameServiceError";
 import {
+  claimJapaneseWholeBoardRepetition,
   confirmJapaneseScore,
   getJapaneseGameState,
   pollJapaneseGameState,
@@ -2239,6 +2240,7 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
 }
 
 export {
+  claimJapaneseWholeBoardRepetition,
   resetJapaneseScoringSuggestion,
   resolveJapaneseScoringDeadline,
   undoJapaneseScoringChange,

@@ -10,6 +10,7 @@ import {
   type JapanesePhaseAuthorityResult,
 } from "./japanesePhaseAuthority";
 import { applyJapaneseSimpleKoMove } from "./japaneseKo";
+import { currentJapaneseWholeBoardRepetition } from "./japaneseRepetition";
 import {
   JAPANESE_1989_CONTRACT_ID,
   JAPANESE_1989_RULES_PROFILE,
@@ -176,6 +177,14 @@ type JapaneseProposalRow = {
   created_at: Date;
 };
 
+type JapaneseRepetitionClaimRow = {
+  move_number: number;
+  claimant_color: Stone;
+  repeated_from_move_number: number;
+  board_hash: string;
+  claimed_at: Date;
+};
+
 type LoadedJapaneseGame = {
   game: JapaneseGameRow;
   moves: JapaneseMoveRow[];
@@ -185,6 +194,7 @@ type LoadedJapaneseGame = {
   deadRows: JapaneseDeadRow[];
   neutralRows: JapaneseNeutralRow[];
   currentProposal: JapaneseProposalRow | null;
+  repetitionClaims: JapaneseRepetitionClaimRow[];
 };
 
 type AnalysisBoundary = Readonly<{
@@ -353,6 +363,19 @@ async function loadJapaneseGame(
     [gameId],
   )).rows;
   const authority = replay(game, moves, resumes);
+  const repetitionEvidence = currentJapaneseWholeBoardRepetition(moves.map((move) => ({
+    moveNumber: move.move_number,
+    color: move.color,
+    isPass: move.is_pass,
+    boardHash: move.board_hash,
+  })));
+  const repetitionClaims = !repetitionEvidence ? [] : (await execute<JapaneseRepetitionClaimRow>(
+    `SELECT move_number, claimant_color, repeated_from_move_number, board_hash, claimed_at
+       FROM game_japanese_repetition_claims
+      WHERE game_id = $1 AND move_number = $2
+      ORDER BY claimant_color`,
+    [gameId, repetitionEvidence.moveNumber],
+  )).rows;
   const scoring = (await execute<JapaneseScoringRow>(
     `SELECT * FROM game_japanese_scoring_state
       WHERE game_id = $1${lock ? " FOR UPDATE" : ""}`,
@@ -403,7 +426,10 @@ async function loadJapaneseGame(
       || game.consecutive_passes !== authority.state.consecutivePasses
     ) throw corruption("phase cache mismatch");
   }
-  const loaded = { game, moves, resumes, authority, scoring, deadRows, neutralRows, currentProposal };
+  const loaded = {
+    game, moves, resumes, authority, scoring, deadRows, neutralRows,
+    currentProposal, repetitionClaims,
+  };
   validateJapaneseLifecycle(loaded);
   return loaded;
 }
@@ -520,10 +546,16 @@ function gameClock(loaded: LoadedJapaneseGame, now: Date): GameState["clock"] {
 }
 
 function serializeJapaneseGame(loaded: LoadedJapaneseGame, now = new Date()): GameState {
-  const { game, scoring, resumes } = loaded;
+  const { game, moves, scoring, resumes } = loaded;
   const score = scoreCurrent(loaded);
   const latestResume = resumes.at(-1);
   const resumptionsRemaining = japaneseScoringResumptionsRemaining(resumes.length);
+  const repetitionEvidence = currentJapaneseWholeBoardRepetition(moves.map((move) => ({
+    moveNumber: move.move_number,
+    color: move.color,
+    isPass: move.is_pass,
+    boardHash: move.board_hash,
+  })));
   return {
     id: game.id,
     boardSize: game.board_size,
@@ -582,6 +614,12 @@ function serializeJapaneseGame(loaded: LoadedJapaneseGame, now = new Date()): Ga
       claim: "resume",
       requestedBy: latestResume.requested_by_color,
       disputedStone: null,
+    } : null,
+    repetition: repetitionEvidence ? {
+      eligible: game.status === "active" && game.phase === "play",
+      repeatedFromMoveNumber: repetitionEvidence.repeatedFromMoveNumber,
+      blackClaimed: loaded.repetitionClaims.some((claim) => claim.claimant_color === "black"),
+      whiteClaimed: loaded.repetitionClaims.some((claim) => claim.claimant_color === "white"),
     } : null,
     version: game.version,
     startedAt: game.started_at.toISOString(),
@@ -1664,6 +1702,78 @@ export async function resolveJapaneseScoringDeadline(
       },
       score,
     });
+  });
+}
+
+export async function claimJapaneseWholeBoardRepetition(
+  gameId: string,
+  playerKey: string,
+  expectedVersion: number,
+): Promise<GameState> {
+  return withTransaction(async (client) => {
+    const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
+    assertExpectedVersion(loaded.game, expectedVersion);
+    if (loaded.game.status !== "active" || loaded.game.phase !== "play") {
+      throw new GameServiceError(
+        "A whole-board repetition may be claimed only during play.",
+        409,
+        "repetition_claim_unavailable",
+      );
+    }
+    const evidence = currentJapaneseWholeBoardRepetition(loaded.moves.map((move) => ({
+      moveNumber: move.move_number,
+      color: move.color,
+      isPass: move.is_pass,
+      boardHash: move.board_hash,
+    })));
+    if (!evidence) {
+      throw new GameServiceError(
+        "The current whole-board position has not repeated after a move.",
+        409,
+        "repetition_not_present",
+      );
+    }
+    const color = playerColor(loaded.game, playerKey);
+    if (loaded.repetitionClaims.some((claim) => claim.claimant_color === color)) {
+      return serializeJapaneseGame(loaded);
+    }
+    const now = new Date();
+    await client.query(
+      `INSERT INTO game_japanese_repetition_claims
+         (game_id,move_number,claimant_color,repeated_from_move_number,board_hash,
+          rules,rules_profile,scoring_method,komi,handicap,claimed_at)
+       VALUES ($1,$2,$3,$4,$5,'japanese',$6,'territory',6.5,0,$7)`,
+      [
+        gameId, evidence.moveNumber, color, evidence.repeatedFromMoveNumber,
+        evidence.boardHash, JAPANESE_1989_RULES_PROFILE, now,
+      ],
+    );
+    const claims = [...loaded.repetitionClaims, {
+      move_number: evidence.moveNumber,
+      claimant_color: color,
+      repeated_from_move_number: evidence.repeatedFromMoveNumber,
+      board_hash: evidence.boardHash,
+      claimed_at: now,
+    }];
+    const agreed = claims.some((claim) => claim.claimant_color === "black")
+      && claims.some((claim) => claim.claimant_color === "white");
+    const updated = await client.query<JapaneseGameRow>(agreed
+      ? `UPDATE games SET status='finished',phase='play',to_move=NULL,
+            finish_reason='japanese_repetition',result='Void',winner_key=NULL,
+            finished_at=$2,updated_at=$2,version=version+1
+          WHERE id=$1 RETURNING *`
+      : "UPDATE games SET updated_at=$2,version=version+1 WHERE id=$1 RETURNING *",
+    [gameId, now]);
+    return serializeJapaneseGame({
+      ...loaded,
+      repetitionClaims: claims,
+      game: {
+        ...updated.rows[0],
+        black_player_name: loaded.game.black_player_name,
+        white_player_name: loaded.game.white_player_name,
+        rated: false,
+      },
+    }, now);
   });
 }
 

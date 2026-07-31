@@ -33,6 +33,7 @@ function installPool(
   t: test.TestContext,
   game: Record<string, unknown> | undefined,
   outcomeKind = "abandonment",
+  options: { moves?: Record<string, unknown>[]; repetition?: Record<string, unknown>[] } = {},
 ) {
   const previous = globalThis.goStonedDbPool;
   const statements: string[] = [];
@@ -40,9 +41,12 @@ function installPool(
     async query(sql: string) {
       statements.push(sql);
       if (/SELECT g\.id,g\.board_size/.test(sql)) return { rows: game ? [game] : [] };
-      if (/FROM moves/.test(sql)) return { rows: [] };
+      if (/FROM moves/.test(sql)) return { rows: options.moves ?? [] };
       if (/FROM game_japanese_scoring_terminal_events/.test(sql)) {
         return { rows: [{ outcome_kind: outcomeKind }] };
+      }
+      if (/FROM game_japanese_repetition_claims/.test(sql)) {
+        return { rows: options.repetition ?? [] };
       }
       return { rows: [] };
     },
@@ -73,6 +77,26 @@ test("keeps Japanese no-result distinct from a draw", async (t) => {
   assert.match(sgf, /RE\[Void\]/);
   assert.match(sgf, /GSNR\[adjudication-low-confidence\]/);
   assert.doesNotMatch(sgf, /RE\[0\]/);
+});
+
+test("exports mutually claimed whole-board repetition as a cyclic no-result", async (t) => {
+  installPool(t, gameRow({
+    winner_key: null,
+    result: "Void",
+    finish_reason: "japanese_repetition",
+  }), "abandonment", {
+    moves: Array.from({ length: 7 }, (_, index) => ({
+      move_number: index + 1,
+      color: index % 2 === 0 ? "black" : "white",
+      x: index,
+      y: 0,
+      is_pass: false,
+    })),
+    repetition: [{ move_number: 7, claimant_count: 2 }],
+  });
+  const sgf = await exportPersistedGameToSgf(gameId, blackKey);
+  assert.match(sgf, /RE\[Void\]/);
+  assert.match(sgf, /GSNR\[cyclic-repetition\]/);
 });
 
 test("rejects outsiders and unfinished games before exporting", async (t) => {
