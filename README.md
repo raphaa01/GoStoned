@@ -394,8 +394,9 @@ mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL
 Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
 
 Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
-ein Spieler zehn Sekunden lang keinen echten Gegner findet und ein gesunder
-Worker-Heartbeat vorliegt, erstellt PostgreSQL atomar eine Bot-Partie. Für
+ein Spieler zehn Sekunden lang keinen echten Gegner findet und entweder ein
+lokaler Worker gesund ist oder der geschützte Modal-Aufruf konfiguriert wurde,
+erstellt PostgreSQL atomar eine Bot-Partie. Für
 registrierte Konten ist sie gewertet; Gäste bleiben ohne dauerhaftes Rating.
 Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt einen
 normalen Anzeigenamen. Während der laufenden Partie bleibt der Computergegner
@@ -424,6 +425,26 @@ Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
    startet nur den KataGo-Container mit derselben `DATABASE_URL`;
 3. mehrere Worker: identische Container teilen sich die Warteschlange sicher
    über `FOR UPDATE SKIP LOCKED`.
+
+### Modal: nur bei Bedarf, kein bezahlter Leerlauf
+
+Die Produktionsintegration verwendet keine dauerhaft laufende Modal-Instanz.
+Vercel sendet nach einer Bot-, Analyse- oder Puzzle-Anfrage einen authentifizierten
+Auftrag an eine kleine Dispatcher-Funktion. Diese startet genau einen begrenzten
+KataGo-Datenbankauftrag. Alle Funktionen haben `min_containers=0`, feste
+Parallelitätsgrenzen und fahren nach kurzer Leerlaufzeit wieder auf null herunter.
+Ohne Anfrage entstehen daher keine Container-Rechenkosten.
+
+In Vercel müssen ausschließlich serverseitig gesetzt werden:
+
+- `KATAGO_DISPATCH_URL` – URL der Modal-Funktion `dispatch`;
+- `MODAL_PROXY_TOKEN_ID` – Proxy-Token-ID;
+- `MODAL_PROXY_TOKEN_SECRET` – zugehöriges Proxy-Token-Secret.
+
+Die Werte dürfen nie als `NEXT_PUBLIC_*` oder im Repository gespeichert werden.
+Das Workspace-Budget wird zusätzlich in Modal unter **Usage & Billing** als harte
+monatliche Obergrenze gesetzt. `python scripts/check_modal_bootstrap.py` prüft
+kostenfrei, dass kein warmer Mindestcontainer versehentlich wieder aktiviert wird.
 
 ### Lokal ausprobieren
 

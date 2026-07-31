@@ -61,6 +61,7 @@ function mapQueue(row?: QueueRow): MatchmakingStatus {
 async function matchWaitingPlayerWithBot(
   playerKey: string,
   expected: Pick<QueueRow, "board_size" | "time_control" | "rules_profile">,
+  allowOnDemandBot: boolean,
 ): Promise<MatchmakingStatus> {
   const timeControl = getTimeControl(expected.time_control);
   const rules = resolveRulesConfiguration({
@@ -103,13 +104,13 @@ async function matchWaitingPlayerWithBot(
 
     const eligibility = await client.query<{ due: boolean; worker_available: boolean }>(
       `SELECT $1::timestamptz <= NOW() - make_interval(secs => $2::int) AS due,
-              EXISTS (
+              ($3::boolean OR EXISTS (
                 SELECT 1 FROM katago_workers
                  WHERE ready
                    AND 'bot' = ANY(capabilities)
                    AND last_seen_at >= NOW() - INTERVAL '15 seconds'
-              ) AS worker_available`,
-      [current.created_at, BOT_FALLBACK_SECONDS],
+              )) AS worker_available`,
+      [current.created_at, BOT_FALLBACK_SECONDS, allowOnDemandBot],
     );
     if (!eligibility.rows[0]?.due || !eligibility.rows[0].worker_available) {
       return mapQueue(current);
@@ -208,23 +209,26 @@ async function matchWaitingPlayerWithBot(
   });
 }
 
-export async function getMatchmakingStatus(playerKey: string): Promise<MatchmakingStatus> {
+export async function getMatchmakingStatus(
+  playerKey: string,
+  options: { allowOnDemandBot?: boolean } = {},
+): Promise<MatchmakingStatus> {
   const result = await query<QueueRow>(
     `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
             q.status, q.game_id, q.created_at,
             g.status AS game_status,
             q.updated_at < NOW() - INTERVAL '5 minutes' AS is_stale,
             q.created_at <= NOW() - INTERVAL '10 seconds' AS bot_fallback_due,
-            EXISTS (
+            ($2::boolean OR EXISTS (
               SELECT 1 FROM katago_workers
                WHERE ready
                  AND 'bot' = ANY(capabilities)
                  AND last_seen_at >= NOW() - INTERVAL '15 seconds'
-            ) AS bot_worker_available
+            )) AS bot_worker_available
        FROM matchmaking_queue q
        LEFT JOIN games g ON g.id = q.game_id
       WHERE q.player_key = $1`,
-    [playerKey],
+    [playerKey, options.allowOnDemandBot === true],
   );
   const row = result.rows[0];
   if (row?.status === "matched" && row.game_status !== "active") {
@@ -234,7 +238,7 @@ export async function getMatchmakingStatus(playerKey: string): Promise<Matchmaki
     return cancelMatchmaking(playerKey, { staleOnly: true });
   }
   if (row?.status === "waiting" && row.bot_fallback_due && row.bot_worker_available) {
-    return matchWaitingPlayerWithBot(playerKey, row);
+    return matchWaitingPlayerWithBot(playerKey, row, options.allowOnDemandBot === true);
   }
   return mapQueue(row);
 }
