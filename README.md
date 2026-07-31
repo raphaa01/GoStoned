@@ -361,6 +361,68 @@ URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 
 `main` bleibt stabil. Jede Aufgabe bekommt einen eigenen Branch, zum Beispiel `codex/chat`. Vor Änderungen zuerst den aktuellen Stand von `main` holen. Danach nur den eigenen Branch pushen und einen Pull Request öffnen. Die verbindlichen automatischen Regeln stehen in `AGENTS.md`.
 
+## KataGo-Partieanalyse (lokal und extern)
+
+Die Partieanalyse ist absichtlich als separater Worker gebaut. Next.js legt nur
+einen unveränderlichen Auftrag in `game_analysis_jobs` ab. Der Worker beansprucht
+Aufträge atomar, spricht über KataGos offizielle zeilenbasierte JSON-Analysis-API
+mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL.
+Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
+
+Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
+
+1. lokal: PostgreSQL, Website und KataGo-Worker laufen auf demselben Laptop;
+2. Vercel + externer Worker: Vercel nutzt Supabase und ein externer Linux-Server
+   startet nur den KataGo-Container mit derselben `DATABASE_URL`;
+3. mehrere Worker: identische Container teilen sich die Warteschlange sicher
+   über `FOR UPDATE SKIP LOCKED`.
+
+### Lokal ausprobieren
+
+Der erste Build lädt KataGo 1.17.0 und das offizielle CPU-Modell
+`b10c384h6nbttflrs`. Er kann einige Minuten dauern; Docker cached danach Binary,
+Modell und npm-Abhängigkeiten.
+
+```powershell
+docker compose up -d postgres
+npm run db:migrate
+docker compose up -d --build katago
+npm run dev
+```
+
+Danach anmelden, eine Partie beenden, `Review` öffnen, die Partie auswählen und
+`Mit KataGo analysieren` drücken. Der Workerstatus ist unter
+`http://localhost:8080/health` sichtbar. Die lokale CPU-Voreinstellung nutzt 20
+Besuche pro Stellung, damit ein Review auf einem Laptop testbar bleibt. Mehr
+Besuche erhöhen Qualität und Laufzeit; für einen externen stärkeren Server sind
+beispielsweise 200 bis 500 Besuche sinnvoll.
+
+### Worker später auf einem externen Server
+
+Auf dem Server werden Docker, dieser Repository-Stand und eine sichere
+Supabase-Verbindungszeichenfolge benötigt. Die Website bleibt auf Vercel.
+
+```bash
+export KATAGO_DATABASE_URL='postgresql://...supabase-session-url...'
+export KATAGO_DATABASE_SSL=require
+export KATAGO_DATABASE_POOL_MAX=2
+export KATAGO_MAX_VISITS=500
+docker compose up -d --build katago
+```
+
+Für einen GPU-Server kann ein CUDA-KataGo-Binary samt passender `analysis.cfg`
+in einem abgeleiteten Image verwendet werden. Datenbank- und API-Vertrag bleiben
+identisch. `DATABASE_URL` darf niemals in Image oder Repository gelangen. Der
+Health-Endpunkt sollte extern nur hinter Firewall oder VPN erreichbar sein.
+
+### Parallel zum Design weiterarbeiten
+
+Die KataGo-Entwicklung liegt im Branch `codex/katago-analysis`. Wenn sich `main`
+durch Designarbeit weiterentwickelt, wird zuerst der neue Stand geholt und dann
+dieser Branch darauf rebased. Engine-Kernlogik liegt in `lib/analysis/` und
+`workers/katago/`, der Container in `docker/katago/` und die UI in
+`components/review/`. So bleiben Konflikte klein und klar.
+
 ## Mobile Strategie
 
 Die Website ist bereits responsive und API-basiert. Eine spätere PWA, Capacitor-App oder React-Native/Expo-App kann dieselben APIs verwenden. Persistente Spiellogik bleibt dabei weiterhin auf dem Server.

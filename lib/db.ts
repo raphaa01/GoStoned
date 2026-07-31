@@ -5,7 +5,7 @@ import {
   type QueryResult,
   type QueryResultRow,
 } from "pg";
-import { getDatabaseUrl, isLocalDatabase } from "./env";
+import { getDatabaseUrl, shouldUseDatabaseSsl } from "./env";
 
 declare global {
   // Reuse the pool during Next.js hot reloads in development.
@@ -23,7 +23,7 @@ function createPool(): Pool {
     allowExitOnIdle: process.env.NODE_ENV !== "production",
   };
 
-  if (!isLocalDatabase(connectionString)) {
+  if (shouldUseDatabaseSsl(connectionString)) {
     config.ssl = { rejectUnauthorized: false };
   }
 

@@ -44,6 +44,16 @@ export function isLocalDatabase(databaseUrl: string): boolean {
     || effectiveHost.startsWith("/");
 }
 
+export function shouldUseDatabaseSsl(
+  databaseUrl: string,
+  configuredSsl = process.env.DATABASE_SSL,
+): boolean {
+  const override = configuredSsl?.trim().toLowerCase();
+  if (override === "require") return true;
+  if (override === "disable") return false;
+  return !isLocalDatabase(databaseUrl);
+}
+
 export function isUnambiguousLocalDatabase(databaseUrl: string): boolean {
   const url = parsePostgresUrl(databaseUrl);
   if (!url) return false;

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLocalDatabase, isUnambiguousLocalDatabase } from "./env";
+import {
+  isLocalDatabase,
+  isUnambiguousLocalDatabase,
+  shouldUseDatabaseSsl,
+} from "./env";
 
 test("classifies the effective node-postgres connection target", () => {
   for (const databaseUrl of [
@@ -35,6 +39,16 @@ test("rejects non-PostgreSQL, malformed, and non-loopback URLs", () => {
   ]) {
     assert.equal(isLocalDatabase(databaseUrl), false, databaseUrl);
   }
+});
+
+test("uses explicit SSL overrides for Docker and hosted PostgreSQL", () => {
+  const dockerUrl = "postgresql://gostone:test@postgres:5432/gostone";
+  const hostedUrl = "postgresql://gostone:test@db.example.com:5432/gostone";
+
+  assert.equal(shouldUseDatabaseSsl(dockerUrl, "disable"), false);
+  assert.equal(shouldUseDatabaseSsl(dockerUrl, "require"), true);
+  assert.equal(shouldUseDatabaseSsl(hostedUrl, undefined), true);
+  assert.equal(shouldUseDatabaseSsl("postgresql://gostone:test@localhost:5432/gostone", undefined), false);
 });
 
 test("accepts only unambiguous TCP loopback URLs for destructive tests", () => {

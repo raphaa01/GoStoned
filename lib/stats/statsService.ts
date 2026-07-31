@@ -39,6 +39,7 @@ export type RecentGame = {
   ratingChange: number | null;
   rated: boolean;
   finishedAt: string;
+  moveCount: number;
 };
 
 type ProfileStatRow = {
@@ -73,6 +74,7 @@ type RecentGameRow = {
   rating_change: number | null;
   rated: boolean;
   finished_at: Date;
+  move_count: number;
 };
 
 type LeaderboardSnapshotRow = {
@@ -308,6 +310,7 @@ export async function getPlayerProfileStats(playerKey: string) {
                  g.white_player_key
                )
           ) AS rated,
+          (SELECT COUNT(*)::int FROM moves recent_move WHERE recent_move.game_id = g.id) AS move_count,
           g.finished_at
         FROM (
           SELECT games.*,
@@ -363,6 +366,7 @@ export async function getPlayerProfileStats(playerKey: string) {
     ratingChange: row.rating_change,
     rated: row.rated,
     finishedAt: row.finished_at.toISOString(),
+    moveCount: row.move_count,
   }));
 
   return { stats, history, recentGames };
