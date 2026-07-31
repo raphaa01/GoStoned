@@ -32,6 +32,8 @@ const requiredTables = [
   "game_scoring_resume_events",
   "game_japanese_resume_authorizations",
   "game_japanese_scoring_state",
+  "game_japanese_scoring_proposals",
+  "game_japanese_scoring_terminal_events",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
@@ -75,6 +77,42 @@ const requiredJapaneseScoringColumns = [
   "black_confirmed_proposal_hash",
   "white_confirmed_proposal_hash",
   "scored_proposal_hash",
+  "expires_at",
+  "black_participated_at",
+  "white_participated_at",
+  "suggestion_status",
+  "suggestion_request_identity",
+  "suggestion_provider_kind",
+  "suggestion_engine_version",
+  "suggestion_model_version",
+  "suggestion_config_version",
+  "suggestion_confidence_policy_version",
+  "suggestion_latency_ms",
+] as const;
+
+const requiredJapaneseProposalColumns = [
+  "game_id", "scoring_revision", "proposal_hash", "source", "actor_color",
+  "parent_scoring_revision", "dead_stones", "neutral_region_seeds",
+  "stopped_move_number", "stopped_board_hash", "rules", "rules_profile",
+  "scoring_method", "komi", "handicap", "suggestion_request_identity",
+  "suggestion_provider_kind", "suggestion_engine_version", "suggestion_model_version",
+  "suggestion_config_version", "suggestion_confidence_policy_version",
+  "suggestion_latency_ms", "created_at",
+] as const;
+
+const requiredJapaneseTerminalColumns = [
+  "game_id", "scoring_revision", "proposal_hash", "stopped_move_number",
+  "stopped_board_hash", "rules", "rules_profile", "scoring_method", "komi",
+  "handicap", "outcome_kind", "winner_color", "abandoned_by_color",
+  "suggestion_request_identity", "suggestion_status", "suggestion_provider_kind",
+  "suggestion_engine_version", "suggestion_model_version", "suggestion_config_version",
+  "suggestion_confidence_policy_version", "suggestion_latency_ms",
+  "captured_white_by_black_at_stop",
+  "captured_black_by_white_at_stop", "living_black_stones", "living_white_stones",
+  "black_territory", "white_territory", "dame_points",
+  "territory_excluded_by_agreement", "dead_black_stones", "dead_white_stones",
+  "black_prisoners_final", "white_prisoners_final", "black_total", "white_total",
+  "margin", "created_at",
 ] as const;
 
 const requiredResumeEventColumns = [
@@ -186,6 +224,10 @@ const requiredIndexDefinitions = {
 const requiredConstraintSignatures = [
   "games_rules_identity_unique:games:u",
   "games_supported_rules_tuple_check:games:c",
+  "games_rules_profile_check:games:c",
+  "games_scoring_method_check:games:c",
+  "games_rules_check:games:c",
+  "games_finish_reason_check:games:c",
   "game_scoring_state_game_rules_fk:game_scoring_state:f",
   "game_japanese_scoring_game_rules_fk:game_japanese_scoring_state:f",
   "game_japanese_resume_authorizations_pkey:game_japanese_resume_authorizations:p",
@@ -202,6 +244,16 @@ const requiredConstraintSignatures = [
   "game_japanese_resume_authorizations_komi_check:game_japanese_resume_authorizations:c",
   "game_japanese_resume_authorizations_handicap_check:game_japanese_resume_authorizations:c",
   "game_japanese_resume_authorizations_game_rules_fk:game_japanese_resume_authorizations:f",
+  "game_japanese_scoring_deadline_check:game_japanese_scoring_state:c",
+  "game_japanese_scoring_participation_check:game_japanese_scoring_state:c",
+  "game_japanese_scoring_suggestion_check:game_japanese_scoring_state:c",
+  "game_japanese_scoring_proposals_pkey:game_japanese_scoring_proposals:p",
+  "game_japanese_scoring_proposals_game_fk:game_japanese_scoring_proposals:f",
+  "game_japanese_scoring_proposals_parent_fk:game_japanese_scoring_proposals:f",
+  "game_japanese_scoring_proposals_game_rules_fk:game_japanese_scoring_proposals:f",
+  "game_japanese_scoring_terminal_events_pkey:game_japanese_scoring_terminal_events:p",
+  "game_japanese_scoring_terminal_events_game_fk:game_japanese_scoring_terminal_events:f",
+  "game_japanese_scoring_terminal_events_game_rules_fk:game_japanese_scoring_terminal_events:f",
   "game_scoring_resume_events_pkey:game_scoring_resume_events:p",
   "game_scoring_resume_events_claim_shape_check:game_scoring_resume_events:c",
   "game_scoring_resume_events_game_rules_fk:game_scoring_resume_events:f",
@@ -246,6 +298,22 @@ const requiredConstraintDefinitions = {
       "6.5",
       "7.5",
     ],
+    excludes: [],
+  },
+  games_rules_profile_check: {
+    includes: ["legacy-immediate-area", "chinese-2002-gostone-v1", "japanese-1989-gostone-v1"],
+    excludes: [],
+  },
+  games_scoring_method_check: {
+    includes: ["area", "territory"],
+    excludes: [],
+  },
+  games_rules_check: {
+    includes: ["chinese", "japanese"],
+    excludes: [],
+  },
+  games_finish_reason_check: {
+    includes: ["score", "resignation", "timeout", "japanese_adjudication", "japanese_no_result", "japanese_abandonment"],
     excludes: [],
   },
   game_scoring_state_game_rules_fk: {
@@ -324,6 +392,46 @@ const requiredConstraintDefinitions = {
     ],
     excludes: [],
   },
+  game_japanese_scoring_deadline_check: {
+    includes: ["expires_at", "00:00:30", "01:00:00"],
+    excludes: [],
+  },
+  game_japanese_scoring_participation_check: {
+    includes: ["black_participated_at", "white_participated_at", "expires_at"],
+    excludes: [],
+  },
+  game_japanese_scoring_suggestion_check: {
+    includes: ["pending", "ready", "unavailable", "invalid", "low_confidence"],
+    excludes: [],
+  },
+  game_japanese_scoring_proposals_pkey: {
+    includes: ["PRIMARY KEY (game_id, scoring_revision)"],
+    excludes: [],
+  },
+  game_japanese_scoring_proposals_game_fk: {
+    includes: ["FOREIGN KEY (game_id)", "REFERENCES games(id)", "ON DELETE CASCADE"],
+    excludes: [],
+  },
+  game_japanese_scoring_proposals_parent_fk: {
+    includes: ["FOREIGN KEY (game_id, parent_scoring_revision)", "REFERENCES game_japanese_scoring_proposals(game_id, scoring_revision)"],
+    excludes: [],
+  },
+  game_japanese_scoring_proposals_game_rules_fk: {
+    includes: ["FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)", "REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)", "ON DELETE CASCADE"],
+    excludes: [],
+  },
+  game_japanese_scoring_terminal_events_pkey: {
+    includes: ["PRIMARY KEY (game_id)"],
+    excludes: [],
+  },
+  game_japanese_scoring_terminal_events_game_fk: {
+    includes: ["FOREIGN KEY (game_id)", "REFERENCES games(id)", "ON DELETE CASCADE"],
+    excludes: [],
+  },
+  game_japanese_scoring_terminal_events_game_rules_fk: {
+    includes: ["FOREIGN KEY (game_id, rules, rules_profile, scoring_method, komi, handicap)", "REFERENCES games(id, rules, rules_profile, scoring_method, komi, handicap)", "ON DELETE CASCADE"],
+    excludes: [],
+  },
   game_scoring_resume_events_pkey: {
     includes: ["PRIMARY KEY (game_id, scoring_revision)"],
     excludes: [],
@@ -350,8 +458,8 @@ const requiredConstraintDefinitions = {
     excludes: [],
   },
   matchmaking_queue_rules_profile_compatibility_check: {
-    includes: ["legacy-immediate-area", "chinese-2002-gostone-v1"],
-    excludes: ["japanese-1989-gostone-v1"],
+    includes: ["legacy-immediate-area", "chinese-2002-gostone-v1", "japanese-1989-gostone-v1"],
+    excludes: [],
   },
   player_blocks_pkey: {
     includes: ["PRIMARY KEY (blocker_key, blocked_key)"],
@@ -446,6 +554,14 @@ const requiredTriggerSignatures = [
   "game_japanese_resume_authorizations_immutable_guard:game_japanese_resume_authorizations:public:guard_game_japanese_resume_authorization_mutation:27",
   "game_japanese_resume_authorizations_truncate_guard:game_japanese_resume_authorizations:public:guard_game_japanese_resume_authorization_mutation:34",
   "game_japanese_resume_transition_guard:games:public:guard_game_japanese_resume_transition:19",
+  "game_japanese_scoring_state_proposal_commit_guard:game_japanese_scoring_state:public:validate_japanese_scoring_state_proposal_commit:21",
+  "game_japanese_scoring_proposals_insert_guard:game_japanese_scoring_proposals:public:validate_japanese_scoring_proposal_insert:7",
+  "game_japanese_scoring_proposals_immutable_guard:game_japanese_scoring_proposals:public:guard_japanese_append_only_evidence:27",
+  "game_japanese_scoring_proposals_truncate_guard:game_japanese_scoring_proposals:public:guard_japanese_append_only_evidence:34",
+  "game_japanese_scoring_terminal_insert_guard:game_japanese_scoring_terminal_events:public:validate_japanese_scoring_terminal_insert:7",
+  "game_japanese_scoring_terminal_commit_guard:game_japanese_scoring_terminal_events:public:validate_japanese_scoring_terminal_commit:5",
+  "game_japanese_scoring_terminal_immutable_guard:game_japanese_scoring_terminal_events:public:guard_japanese_append_only_evidence:27",
+  "game_japanese_scoring_terminal_truncate_guard:game_japanese_scoring_terminal_events:public:guard_japanese_append_only_evidence:34",
   "game_japanese_dead_stones_mutation_guard:game_japanese_dead_stones:public:guard_japanese_scoring_evidence_mutation:31",
   "game_japanese_neutral_seeds_mutation_guard:game_japanese_neutral_region_seeds:public:guard_japanese_scoring_evidence_mutation:31",
 ] as const;
@@ -473,6 +589,14 @@ const requiredTriggerDefinitions = {
     "BEFORE TRUNCATE ON public.game_japanese_resume_authorizations",
   game_japanese_resume_transition_guard:
     "UPDATE OF status, phase, to_move, consecutive_passes, scoring_revision",
+  game_japanese_scoring_state_proposal_commit_guard:
+    "AFTER INSERT OR UPDATE ON public.game_japanese_scoring_state DEFERRABLE INITIALLY DEFERRED",
+  game_japanese_scoring_proposals_insert_guard:
+    "BEFORE INSERT ON public.game_japanese_scoring_proposals",
+  game_japanese_scoring_terminal_insert_guard:
+    "BEFORE INSERT ON public.game_japanese_scoring_terminal_events",
+  game_japanese_scoring_terminal_commit_guard:
+    "AFTER INSERT ON public.game_japanese_scoring_terminal_events DEFERRABLE INITIALLY DEFERRED",
 } as const;
 
 const requiredProtectedTables = [
@@ -482,6 +606,8 @@ const requiredProtectedTables = [
   "player_reports",
   "game_scoring_resume_events",
   "game_japanese_resume_authorizations",
+  "game_japanese_scoring_proposals",
+  "game_japanese_scoring_terminal_events",
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
@@ -503,6 +629,11 @@ const requiredGuardFunctions = [
   "public.validate_game_japanese_resume_authorization_insert()",
   "public.validate_game_japanese_resume_authorization_commit()",
   "public.guard_game_japanese_resume_transition()",
+  "public.guard_japanese_append_only_evidence()",
+  "public.validate_japanese_scoring_proposal_insert()",
+  "public.validate_japanese_scoring_terminal_insert()",
+  "public.validate_japanese_scoring_terminal_commit()",
+  "public.validate_japanese_scoring_state_proposal_commit()",
   "public.guard_japanese_scoring_state_mutation()",
   "public.guard_japanese_scoring_evidence_mutation()",
 ] as const;
@@ -554,6 +685,34 @@ const requiredGuardFunctionDefinitions = {
     "game.phase = 'play'",
     "game.scoring_revision = resume_authorization.scoring_revision + 1",
     "Confirmed Japanese scoring state is immutable.",
+    "game.finish_reason IN ('resignation', 'timeout')",
+    "game_japanese_scoring_terminal_events",
+  ],
+  "public.guard_japanese_append_only_evidence()": [
+    "Japanese scoring history is append-only.",
+    "PERFORM 1 FROM public.games WHERE id = OLD.game_id",
+  ],
+  "public.validate_japanese_scoring_proposal_insert()": [
+    "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
+    "FROM public.game_japanese_scoring_state",
+    "Initial proposal must preserve validated suggestion diagnostics.",
+    "Proposal edits require earlier same-phase provenance.",
+  ],
+  "public.validate_japanese_scoring_terminal_insert()": [
+    "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
+    "statement_timestamp() < scoring_row.expires_at",
+    "Terminal outcome contradicts participation or suggestion evidence.",
+    "NEW.suggestion_status := scoring_row.suggestion_status",
+  ],
+  "public.validate_japanese_scoring_terminal_commit()": [
+    "game_row.status <> 'finished'",
+    "japanese_adjudication",
+    "japanese_no_result",
+    "japanese_abandonment",
+  ],
+  "public.validate_japanese_scoring_state_proposal_commit()": [
+    "game_japanese_scoring_proposals",
+    "Current Japanese proposal requires append-only history.",
   ],
 } as const;
 
@@ -591,6 +750,8 @@ async function checkMvp() {
     japanese_scoring_columns: string[];
     resume_event_columns: string[];
     japanese_resume_authorization_columns: string[];
+    japanese_proposal_columns: string[];
+    japanese_terminal_columns: string[];
     constraint_signatures: string[];
     rollout_constraint_signatures: string[];
     constraint_definitions: Record<string, string>;
@@ -663,6 +824,20 @@ async function checkMvp() {
                  AND column_name = ANY($16::text[])
                ORDER BY column_name
             ) AS japanese_resume_authorization_columns,
+            ARRAY(
+              SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'game_japanese_scoring_proposals'
+                 AND column_name = ANY($17::text[])
+               ORDER BY column_name
+            ) AS japanese_proposal_columns,
+            ARRAY(
+              SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'game_japanese_scoring_terminal_events'
+                 AND column_name = ANY($18::text[])
+               ORDER BY column_name
+            ) AS japanese_terminal_columns,
             ARRAY(
               SELECT constraint_row.conname || ':' || relation.relname || ':'
                      || constraint_row.contype::text
@@ -855,6 +1030,8 @@ async function checkMvp() {
       Object.keys(requiredGuardFunctionDefinitions),
       Object.keys(requiredIndexDefinitions),
       requiredJapaneseResumeAuthorizationColumns,
+      requiredJapaneseProposalColumns,
+      requiredJapaneseTerminalColumns,
     ],
   );
 
@@ -924,6 +1101,22 @@ async function checkMvp() {
   if (absentJapaneseResumeAuthorizationColumns.length > 0) {
     throw new Error(
       `Database Japanese resume authorization migration is incomplete. Missing columns: ${absentJapaneseResumeAuthorizationColumns.join(", ")}`,
+    );
+  }
+  const absentJapaneseProposalColumns = requiredJapaneseProposalColumns.filter(
+    (column) => !row.japanese_proposal_columns.includes(column),
+  );
+  if (absentJapaneseProposalColumns.length > 0) {
+    throw new Error(
+      `Database Japanese proposal history is incomplete. Missing columns: ${absentJapaneseProposalColumns.join(", ")}`,
+    );
+  }
+  const absentJapaneseTerminalColumns = requiredJapaneseTerminalColumns.filter(
+    (column) => !row.japanese_terminal_columns.includes(column),
+  );
+  if (absentJapaneseTerminalColumns.length > 0) {
+    throw new Error(
+      `Database Japanese terminal evidence is incomplete. Missing columns: ${absentJapaneseTerminalColumns.join(", ")}`,
     );
   }
   const absentConstraints = requiredConstraintSignatures.filter(

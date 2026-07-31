@@ -17,6 +17,11 @@ test("fresh and upgraded databases share one role-and-database statement timeout
     schema.replaceAll("\r\n", "\n").includes(migration.replaceAll("\r\n", "\n")),
     "Canonical schema must include migration 016 exactly.",
   );
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").indexOf(migration.replaceAll("\r\n", "\n"))
+      < schema.indexOf("-- Migration 024 parity:"),
+    "Later schema parity blocks must preserve the migration 016 timeout contract.",
+  );
   assert.match(migration, /current_user <> session_user/);
   assert.match(
     migration,
