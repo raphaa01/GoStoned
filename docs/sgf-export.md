@@ -25,8 +25,9 @@ from display text.
 
 The result input is discriminated rather than a free-form result string.
 Scores become `B+<margin>` or `W+<margin>`, resignation becomes `B+R` or
-`W+R`, timeout becomes `B+T` or `W+T`, draw becomes `0`, and no-result becomes
-`Void`. No-result is not collapsed into a draw.
+`W+R`, timeout becomes `B+T` or `W+T`, scoring abandonment becomes `B+F` or
+`W+F`, draw becomes `0`, and no-result becomes `Void`. No-result is not
+collapsed into a draw.
 
 ## Language-neutral machine metadata
 
@@ -59,9 +60,7 @@ non-dense moves, an invalid initial player, malformed passes, and non-canonical
 result objects. Later move colors are preserved as stored: verified scoring
 resumption can legitimately make one color appear in consecutive SGF nodes.
 
-The current `GameState.finishReason` covers score, resignation, timeout, and
-legacy score, but does not encode Japanese no-result as a distinct terminal
-kind. Callers must build `SgfExportInput` from persisted game and terminal
-evidence; they must not synthesize no-result from a null winner or localized
-copy. Route, database, and UI integration are intentionally outside this
-domain boundary.
+The participant-only `GET /api/games/:gameId/sgf` route builds its input from
+one repeatable-read snapshot of persisted game, move, and Japanese terminal
+evidence. It exports finished games only and must not synthesize no-result from
+a null winner or localized copy.
