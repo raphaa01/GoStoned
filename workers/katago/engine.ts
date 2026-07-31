@@ -172,6 +172,13 @@ export class KataGoEngine {
         ...(input.initialPlayer === undefined ? {} : {
           initialPlayer: input.initialPlayer === "black" ? "B" : "W",
         }),
+        ...(input.allowMoves === undefined ? {} : {
+          allowMoves: input.allowMoves.map((restriction) => ({
+            player: restriction.player === "black" ? "B" : "W",
+            moves: restriction.moves,
+            untilDepth: restriction.untilDepth,
+          })),
+        }),
         moves: input.moves.map((move) => [move.color === "black" ? "B" : "W", move.move]),
         rules: input.rules,
         komi: input.komi,

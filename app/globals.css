@@ -1647,7 +1647,6 @@ a {
   gap: 7px;
 }
 
-.game-panel-player .bot-badge,
 .result-player-list .bot-badge {
   background: rgba(129, 182, 76, 0.14);
   border: 1px solid rgba(129, 182, 76, 0.28);

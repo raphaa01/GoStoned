@@ -21,6 +21,7 @@ import {
   type PuzzlePly,
   type PuzzleVariation,
 } from "@/lib/puzzles/types";
+import { curatedPuzzle } from "@/lib/puzzles/curatedCatalog";
 import type { KataGoEngine } from "./engine";
 
 type PuzzleJob = {
@@ -56,6 +57,8 @@ type PuzzlePosition = {
   board: Board;
   sourceGameId: string | null;
   sourceMoveNumber: number;
+  sourceCandidates?: string[];
+  localMoves?: string[];
 };
 
 export type PuzzleLoopState = { activeJobId: string | null };
@@ -139,72 +142,13 @@ async function sourceFromGame(job: PuzzleJob): Promise<PuzzlePosition | null> {
   };
 }
 
-type SeedStone = { color: Stone; x: number; y: number };
-
-const CATEGORY_SEEDS: Record<PuzzleCategory, readonly SeedStone[]> = {
-  life_and_death: [
-    { color: "white", x: 0, y: 0 }, { color: "white", x: 1, y: 0 },
-    { color: "white", x: 2, y: 0 }, { color: "white", x: 0, y: 1 },
-    { color: "white", x: 2, y: 1 }, { color: "black", x: 3, y: 0 },
-    { color: "black", x: 3, y: 1 }, { color: "black", x: 0, y: 2 },
-    { color: "black", x: 1, y: 2 }, { color: "black", x: 2, y: 2 },
-    { color: "black", x: 3, y: 2 },
-  ],
-  tesuji: [
-    { color: "black", x: 0, y: 1 }, { color: "black", x: 1, y: 0 },
-    { color: "black", x: 3, y: 1 }, { color: "black", x: 2, y: 3 },
-    { color: "black", x: 4, y: 2 }, { color: "white", x: 1, y: 1 },
-    { color: "white", x: 2, y: 1 }, { color: "white", x: 1, y: 2 },
-    { color: "white", x: 3, y: 2 },
-  ],
-  capturing_race: [
-    { color: "black", x: 1, y: 1 }, { color: "black", x: 1, y: 2 },
-    { color: "white", x: 0, y: 1 }, { color: "white", x: 0, y: 2 },
-    { color: "white", x: 1, y: 0 }, { color: "white", x: 1, y: 3 },
-    { color: "white", x: 3, y: 1 }, { color: "white", x: 3, y: 2 },
-    { color: "black", x: 4, y: 1 }, { color: "black", x: 4, y: 2 },
-    { color: "black", x: 3, y: 0 }, { color: "black", x: 3, y: 3 },
-  ],
-  endgame: [
-    { color: "black", x: 2, y: 0 }, { color: "black", x: 2, y: 1 },
-    { color: "black", x: 2, y: 2 }, { color: "black", x: 2, y: 3 },
-    { color: "black", x: 2, y: 4 }, { color: "black", x: 2, y: 5 },
-    { color: "black", x: 2, y: 6 }, { color: "white", x: 4, y: 0 },
-    { color: "white", x: 4, y: 1 }, { color: "white", x: 4, y: 2 },
-    { color: "white", x: 4, y: 3 }, { color: "white", x: 4, y: 4 },
-    { color: "white", x: 4, y: 5 }, { color: "white", x: 4, y: 6 },
-  ],
-};
-
-function transformedPoint(x: number, y: number, variant: number, size: BoardSize) {
-  let nextX = variant >= 4 ? size - 1 - x : x;
-  let nextY = y;
-  for (let turn = 0; turn < variant % 4; turn += 1) {
-    [nextX, nextY] = [size - 1 - nextY, nextX];
-  }
-  return { x: nextX, y: nextY };
-}
-
 function categoryPosition(job: PuzzleJob): PuzzlePosition {
   if (!job.category || !job.collection_order) {
     throw new Error("Categorized puzzle job is incomplete.");
   }
-  const board = createEmptyBoard(job.board_size);
-  const variant = (job.collection_order - 1) % 8;
-  const stones = CATEGORY_SEEDS[job.category];
-  for (const stone of stones) {
-    const point = transformedPoint(stone.x, stone.y, variant, job.board_size);
-    board[point.y][point.x] = stone.color;
-  }
-  if (job.collection_order >= 9) {
-    const extras: SeedStone[] = job.collection_order === 9
-      ? [{ color: "black", x: 6, y: 6 }, { color: "white", x: 7, y: 7 }]
-      : [{ color: "black", x: 6, y: 7 }, { color: "white", x: 7, y: 6 }];
-    for (const stone of extras) {
-      const point = transformedPoint(stone.x, stone.y, variant, job.board_size);
-      if (board[point.y][point.x] === null) board[point.y][point.x] = stone.color;
-    }
-  }
+  if (job.board_size !== 13) throw new Error("Curated puzzles require a 13x13 board.");
+  const curated = curatedPuzzle(job.category, job.collection_order);
+  const board = curated.board;
   const visited = new Set<string>();
   for (let y = 0; y < job.board_size; y += 1) {
     for (let x = 0; x < job.board_size; x += 1) {
@@ -212,7 +156,7 @@ function categoryPosition(job: PuzzleJob): PuzzlePosition {
       const group = getGroup(board, { x, y });
       for (const point of group) visited.add(`${point.x}:${point.y}`);
       if (countLiberties(board, group) === 0) {
-        throw new Error("Puzzle seed contains a group without liberties.");
+        throw new Error("Curated puzzle contains a group without liberties.");
       }
     }
   }
@@ -230,7 +174,7 @@ function categoryPosition(job: PuzzleJob): PuzzlePosition {
   return {
     input: {
       contractVersion: ANALYSIS_ENGINE_CONTRACT_VERSION,
-      gameId: `puzzle-category:${job.category}:${job.collection_order}`,
+      gameId: `puzzle-category:${curated.sourceId}`,
       gameVersion: 0,
       boardSize: job.board_size,
       komi: 7.5,
@@ -242,6 +186,10 @@ function categoryPosition(job: PuzzleJob): PuzzlePosition {
     board,
     sourceGameId: null,
     sourceMoveNumber: 0,
+    sourceCandidates: curated.candidateMoves.map((point) => toGtpCoordinate(13, { ...point, isPass: false })),
+    localMoves: curated.localRegion
+      .filter((point) => board[point.y][point.x] === null)
+      .map((point) => toGtpCoordinate(13, { ...point, isPass: false })),
   };
 }
 
@@ -318,6 +266,12 @@ function explanation(
   const regionEn = { corner: "corner", side: "side", center: "center", pass: "board" }[region];
   const regionDe = { corner: "Ecke", side: "Seite", center: "Mitte", pass: "Brett" }[region];
   const points = gap.toFixed(1);
+  if (gap < 0.05) {
+    return {
+      en: `KataGo prefers ${best.move} in the ${regionEn}. The point difference is close, but this move preserves the strongest local continuation and the most reliable shape.`,
+      de: `KataGo bevorzugt ${best.move} in der ${regionDe}. Der Punktunterschied ist knapp, aber dieser Zug bewahrt die stärkste lokale Fortsetzung und die verlässlichste Form.`,
+    };
+  }
   return {
     en: `KataGo prefers ${best.move} in the ${regionEn}. It keeps about ${points} more points than the closest analyzed alternative while preserving the strongest continuation.`,
     de: `KataGo bevorzugt ${best.move} in der ${regionDe}. Der Zug bewahrt ungefähr ${points} Punkte mehr als die nächstbeste untersuchte Alternative und hält die stärkste Fortsetzung offen.`,
@@ -394,15 +348,19 @@ function buildVariation(
   board: Board,
   toPlay: Stone,
   candidates: readonly KataGoMoveInfo[],
+  mainLineOverride?: PuzzlePly[],
+  acceptedMoves: readonly string[] = [],
 ): PuzzleVariation | null {
   if (!job.category) return null;
   const best = candidates[0];
   if (!best) return null;
-  const mainLine = lineFromCandidate(board, toPlay, best, job.board_size, 5);
+  const mainLine = mainLineOverride ?? lineFromCandidate(board, toPlay, best, job.board_size, 5);
   if (mainLine.length < 3) {
     throw new Error("KataGo did not return a long enough training variation.");
   }
-  const refutations = candidates.slice(1, 7).flatMap((candidate) => {
+  const accepted = new Set(acceptedMoves.map((move) => move.toLowerCase()));
+  const refutations = candidates.slice(0, 8).flatMap((candidate) => {
+    if (accepted.has(candidate.move.toLowerCase())) return [];
     const line = lineFromCandidate(board, toPlay, candidate, job.board_size, 2);
     const userMove = line[0];
     if (!userMove) return [];
@@ -431,6 +389,7 @@ async function completePuzzle(
   visits: number,
   engineVersion: string,
   modelName: string,
+  variationOverride?: PuzzleVariation | null,
 ): Promise<void> {
   const coordinate = fromGtpCoordinate(job.board_size, best.move);
   if (coordinate.x === undefined || coordinate.y === undefined) {
@@ -438,7 +397,9 @@ async function completePuzzle(
   }
   const second = candidates[1];
   const gap = second ? Math.max(0, best.scoreLead - second.scoreLead) : 0;
-  const variation = buildVariation(job, position.board, toPlay, candidates);
+  const variation = variationOverride === undefined
+    ? buildVariation(job, position.board, toPlay, candidates)
+    : variationOverride;
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO puzzles (
        kind, daily_date, board_size, to_play, position_moves, board,
@@ -531,7 +492,7 @@ async function ensurePuzzleInventory(): Promise<void> {
       `INSERT INTO puzzle_generation_jobs (
          kind, board_size, category, rank_kyu, collection_order
        )
-       SELECT 'practice', 9, catalog.category, catalog.rank_kyu, catalog.collection_order
+       SELECT 'practice', 13, catalog.category, catalog.rank_kyu, catalog.collection_order
          FROM UNNEST($1::text[], $2::int[], $3::int[])
            AS catalog(category, rank_kyu, collection_order)
        ON CONFLICT (category, collection_order)
@@ -577,6 +538,115 @@ async function failPuzzleJob(job: PuzzleJob, error: unknown): Promise<void> {
   console.error(`Puzzle generation ${job.id} failed:`, message);
 }
 
+function sortedStoneCandidates(result: Awaited<ReturnType<KataGoEngine["analyzeCurrent"]>>) {
+  return [...result.moveInfos]
+    .filter((candidate) => candidate.move.toLowerCase() !== "pass")
+    .sort((left, right) => left.order - right.order || right.visits - left.visits);
+}
+
+async function analyzeCuratedPuzzle(
+  engine: KataGoEngine,
+  job: PuzzleJob,
+  position: PuzzlePosition,
+  visits: number,
+): Promise<{ best: KataGoMoveInfo; candidates: KataGoMoveInfo[]; variation: PuzzleVariation }> {
+  const solutions = position.sourceCandidates;
+  const localMoves = position.localMoves;
+  if (!job.category || !solutions?.length || !localMoves?.length) {
+    throw new Error("Curated puzzle metadata is incomplete.");
+  }
+  const localAnalysis = await engine.analyzeCurrent(
+    `puzzle:${job.id}:local`,
+    {
+      ...position.input,
+      allowMoves: [
+        { player: "black", moves: localMoves, untilDepth: 3 },
+        { player: "white", moves: localMoves, untilDepth: 3 },
+      ],
+    },
+    visits,
+    { priority: -10 },
+  );
+  const localCandidates = sortedStoneCandidates(localAnalysis);
+  const accepted = new Set(solutions.map((move) => move.toLowerCase()));
+  let best = localCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
+  let mainLine = best
+    ? lineFromCandidate(position.board, "black", best, job.board_size, 3)
+    : [];
+
+  if (!best || mainLine.length < 3) {
+    const forced = await engine.analyzeCurrent(
+      `puzzle:${job.id}:forced`,
+      {
+        ...position.input,
+        allowMoves: [
+          { player: "black", moves: solutions, untilDepth: 1 },
+          { player: "white", moves: localMoves, untilDepth: 2 },
+        ],
+      },
+      visits,
+      { priority: -10 },
+    );
+    const forcedCandidates = sortedStoneCandidates(forced);
+    best = forcedCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
+    if (!best) throw new Error("KataGo did not select a source-marked candidate move.");
+    mainLine = lineFromCandidate(position.board, "black", best, job.board_size, 2);
+  }
+
+  let lineBoard = position.board;
+  for (const ply of mainLine) {
+    const applied = applyMove(lineBoard, ply.color, ply.x, ply.y);
+    if (!applied.ok) throw new Error(`Curated main line is illegal (${applied.error}).`);
+    lineBoard = applied.board;
+  }
+  while (mainLine.length < 3) {
+    const color: Stone = mainLine.length % 2 === 0 ? "black" : "white";
+    const available = localMoves.filter((move) => {
+      const point = fromGtpCoordinate(job.board_size, move);
+      return point.x !== undefined
+        && point.y !== undefined
+        && applyMove(lineBoard, color, point.x, point.y).ok;
+    });
+    if (!available.length) throw new Error("Curated puzzle has no local continuation.");
+    const continued = await engine.analyzeCurrent(
+      `puzzle:${job.id}:continuation:${mainLine.length}`,
+      {
+        ...position.input,
+        moves: [
+          ...position.input.moves,
+          ...mainLine.map((ply) => ({ color: ply.color, move: ply.move })),
+        ],
+        allowMoves: [{ player: color, moves: available, untilDepth: 1 }],
+      },
+      visits,
+      { priority: -10 },
+    );
+    const next = sortedStoneCandidates(continued)[0];
+    if (!next) throw new Error("KataGo returned no local continuation.");
+    const added = lineFromCandidate(lineBoard, color, next, job.board_size, 1)[0];
+    if (!added) throw new Error("KataGo returned an illegal local continuation.");
+    mainLine.push(added);
+    const applied = applyMove(lineBoard, added.color, added.x, added.y);
+    if (!applied.ok) throw new Error(`Curated continuation is illegal (${applied.error}).`);
+    lineBoard = applied.board;
+  }
+
+  if (!best) throw new Error("Curated puzzle has no validated solution candidate.");
+  const candidates = [best, ...localCandidates.filter(
+    (candidate) => candidate.move.toLowerCase() !== best!.move.toLowerCase(),
+  )];
+  const variation = buildVariation(
+    job,
+    position.board,
+    "black",
+    candidates,
+    mainLine.slice(0, 3),
+    [best.move],
+  );
+  if (!variation) throw new Error("Curated variation could not be created.");
+  return { best, candidates, variation };
+}
+
 async function generatePuzzle(
   engine: KataGoEngine,
   job: PuzzleJob,
@@ -587,15 +657,35 @@ async function generatePuzzle(
   const position = job.category
     ? syntheticPosition(job)
     : await sourceFromGame(job) ?? syntheticPosition(job);
+  if (job.category) {
+    const curated = await analyzeCuratedPuzzle(engine, job, position, visits);
+    const point = fromGtpCoordinate(job.board_size, curated.best.move);
+    if (point.x === undefined || point.y === undefined) {
+      throw new Error("Curated puzzle answer is not a board move.");
+    }
+    const legal = applyMove(position.board, "black", point.x, point.y);
+    if (!legal.ok) throw new Error(`Curated puzzle answer is not legal (${legal.error}).`);
+    await withTransaction((client) => completePuzzle(
+      client,
+      job,
+      position,
+      "black",
+      curated.best,
+      curated.candidates,
+      visits,
+      engineVersion,
+      modelName,
+      curated.variation,
+    ));
+    return;
+  }
   const analyzed = await engine.analyzeCurrent(
     `puzzle:${job.id}`,
     position.input,
     visits,
     { priority: -10 },
   );
-  const candidates = [...analyzed.moveInfos]
-    .filter((candidate) => candidate.move.toLowerCase() !== "pass")
-    .sort((left, right) => left.order - right.order || right.visits - left.visits);
+  const candidates = sortedStoneCandidates(analyzed);
   const best = candidates[0];
   if (!best) throw new Error("KataGo returned no stone move for the puzzle.");
   const toPlay: Stone = analyzed.rootInfo.currentPlayer === "B" ? "black" : "white";

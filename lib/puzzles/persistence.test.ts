@@ -5,6 +5,7 @@ import test from "node:test";
 const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../db/migrations/019_katago_puzzles.sql", import.meta.url), "utf8");
 const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_variation_training.sql", import.meta.url), "utf8");
+const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curated_puzzle_board_guard.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 
@@ -28,7 +29,7 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(variationMigration, /idx_puzzles_category_order/);
   assert.match(variationMigration, /variation_progress JSONB NOT NULL/);
   assert.ok(
-    schema.replaceAll("\r\n", "\n").endsWith(variationMigration.replaceAll("\r\n", "\n")),
-    "Canonical schema must end with migration 020.",
+    schema.replaceAll("\r\n", "\n").endsWith(boardGuardMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must end with migration 022.",
   );
 });
