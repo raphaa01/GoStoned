@@ -21,8 +21,7 @@ export function resolveRatingParticipants(
   ) return null;
 
   const accounts = candidateRows.filter(({ participant_type: type }) => type === "account").length;
-  const bots = candidateRows.filter(({ participant_type: type }) => type === "bot").length;
-  if (!((accounts === 2 && bots === 0) || (accounts === 1 && bots === 1))) return null;
+  if (accounts !== 2) return null;
 
   return participantKeys.map((playerKey) => candidates.get(playerKey)!);
 }

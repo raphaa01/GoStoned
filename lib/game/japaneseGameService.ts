@@ -46,6 +46,7 @@ import {
   type KataGoScoringProposal,
   type KataGoScoringRuntime,
 } from "@/lib/katago";
+import { finalizeGameRatings } from "@/lib/rating/ratingFinalizer";
 
 type JapaneseGameRow = {
   id: string;
@@ -333,8 +334,15 @@ async function loadJapaneseGame(
               'Guest ' || UPPER(RIGHT(g.black_player_key, 6))) AS black_player_name,
             COALESCE(NULLIF(BTRIM(white_user.display_name), ''), white_user.username,
               'Guest ' || UPPER(RIGHT(g.white_player_key, 6))) AS white_player_name,
-            CASE WHEN g.status = 'finished' THEN EXISTS (
-              SELECT 1 FROM player_rating_history history WHERE history.game_id = g.id
+            CASE WHEN g.status = 'finished' THEN (
+              SELECT COUNT(DISTINCT rating_evidence.player_key) = 2 FROM (
+                SELECT history.player_key FROM player_rating_history history
+                 WHERE history.game_id = g.id
+                UNION ALL
+                SELECT event.player_key FROM game_glicko2_rating_events event
+                 WHERE event.game_id = g.id
+              ) AS rating_evidence
+              WHERE rating_evidence.player_key IN (g.black_player_key, g.white_player_key)
             ) ELSE black_user.id IS NOT NULL AND white_user.id IS NOT NULL END AS rated
        FROM games g
        LEFT JOIN users black_user ON g.black_player_key = 'user:' || black_user.id::text
@@ -1162,7 +1170,8 @@ export async function submitJapaneseMove(
           WHERE id=$1 RETURNING *`,
         [gameId, `${winner === "black" ? "B" : "W"}+T`, winnerKey, now],
       );
-      return { game: serializeJapaneseGame({ ...loaded, game: { ...updated.rows[0], black_player_name: game.black_player_name, white_player_name: game.white_player_name, rated: game.rated } }, now), boundary: null };
+      const { rated } = await finalizeGameRatings(client, gameId);
+      return { game: serializeJapaneseGame({ ...loaded, game: { ...updated.rows[0], black_player_name: game.black_player_name, white_player_name: game.white_player_name, rated } }, now), boundary: null };
     }
     const isPass = move.isPass === true;
     let nextBoard = loaded.authority.normalPlay.board.map((row) => [...row]);
@@ -1416,10 +1425,11 @@ export async function confirmJapaneseScore(
         WHERE id=$1 RETURNING *`,
       [gameId, preview.result, winnerKey, now],
     );
+    const { rated } = await finalizeGameRatings(client, gameId);
     next = {
       ...next,
       scoring: finalState.rows[0],
-      game: { ...finished.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+      game: { ...finished.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
     };
     return serializeJapaneseGame(next, now);
   });
@@ -1571,6 +1581,7 @@ async function finishJapaneseDeadline(
         version=version+1 WHERE id=$1 RETURNING *`,
     [loaded.game.id, reason, result, winnerKey, now],
   );
+  const { rated } = await finalizeGameRatings(client, loaded.game.id);
   await client.query("DELETE FROM game_japanese_scoring_state WHERE game_id=$1", [loaded.game.id]);
   return serializeJapaneseGame({
     ...loaded,
@@ -1578,7 +1589,7 @@ async function finishJapaneseDeadline(
     deadRows: [],
     neutralRows: [],
     currentProposal: null,
-    game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+    game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
   }, now);
 }
 
@@ -1764,6 +1775,9 @@ export async function claimJapaneseWholeBoardRepetition(
           WHERE id=$1 RETURNING *`
       : "UPDATE games SET updated_at=$2,version=version+1 WHERE id=$1 RETURNING *",
     [gameId, now]);
+    const rated = agreed
+      ? (await finalizeGameRatings(client, gameId)).rated
+      : false;
     return serializeJapaneseGame({
       ...loaded,
       repetitionClaims: claims,
@@ -1771,7 +1785,7 @@ export async function claimJapaneseWholeBoardRepetition(
         ...updated.rows[0],
         black_player_name: loaded.game.black_player_name,
         white_player_name: loaded.game.white_player_name,
-        rated: false,
+        rated,
       },
     }, now);
   });
@@ -1794,13 +1808,14 @@ export async function resignJapaneseGame(gameId: string, playerKey: string): Pro
     if (loaded.scoring) {
       await client.query("DELETE FROM game_japanese_scoring_state WHERE game_id=$1", [gameId]);
     }
+    const { rated } = await finalizeGameRatings(client, gameId);
     return serializeJapaneseGame({
       ...loaded,
       scoring: null,
       deadRows: [],
       neutralRows: [],
       currentProposal: null,
-      game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+      game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
     }, now);
   });
 }

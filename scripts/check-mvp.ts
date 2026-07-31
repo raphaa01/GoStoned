@@ -27,6 +27,8 @@ const requiredTables = [
   "player_reports",
   "player_stats",
   "player_rating_history",
+  "player_glicko2_ratings",
+  "game_glicko2_rating_events",
   "game_scoring_state",
   "game_dead_stones",
   "game_scoring_resume_events",
@@ -123,6 +125,25 @@ const requiredJapaneseTerminalColumns = [
   "margin", "created_at",
 ] as const;
 
+const requiredGlobalRatingColumns = [
+  "player_key", "user_id", "rating", "rating_deviation", "volatility",
+  "rated_game_count", "is_provisional", "algorithm_version",
+  "last_rating_period_at", "created_at", "updated_at",
+] as const;
+
+const requiredGameRatingEventColumns = [
+  "game_id", "player_key", "opponent_key", "opponent_kind",
+  "opponent_profile_version", "player_color", "outcome_kind", "score",
+  "finish_reason", "game_result", "game_finished_at", "opponent_rating",
+  "opponent_rating_deviation", "rating_before", "rating_after",
+  "rating_deviation_before", "rating_deviation_after", "volatility_before",
+  "volatility_after", "rated_game_count_before", "rated_game_count_after",
+  "last_rating_period_at_before", "last_rating_period_at_after",
+  "algorithm_version", "rating_period_at", "processed_at",
+] as const;
+
+const requiredLegacyRatingColumns = ["rating_algorithm_version"] as const;
+
 const requiredResumeEventColumns = [
   "game_id",
   "scoring_revision",
@@ -169,6 +190,9 @@ const requiredIndexDefinitions = {
   idx_player_rating_history_board_player_time: [
     "ON public.player_rating_history USING btree (board_size, player_key, recorded_at, id)",
     "INCLUDE (game_id, rating_before, rating_after, result)",
+  ],
+  idx_game_glicko2_events_player_period: [
+    "ON public.game_glicko2_rating_events USING btree (player_key, rating_period_at DESC, game_id)",
   ],
   idx_player_blocks_blocked_blocker: [
     "ON public.player_blocks USING btree (blocked_key, blocker_key)",
@@ -282,6 +306,16 @@ const requiredConstraintSignatures = [
   "puzzles_category_shape_check:puzzles:c",
   "puzzle_generation_jobs_category_shape_check:puzzle_generation_jobs:c",
   "puzzle_attempts_variation_progress_check:puzzle_attempts:c",
+  "player_rating_history_algorithm_check:player_rating_history:c",
+  "player_glicko2_ratings_pkey:player_glicko2_ratings:p",
+  "player_glicko2_ratings_user_id_key:player_glicko2_ratings:u",
+  "player_glicko2_ratings_user_fk:player_glicko2_ratings:f",
+  "player_glicko2_ratings_algorithm_check:player_glicko2_ratings:c",
+  "game_glicko2_rating_events_pkey:game_glicko2_rating_events:p",
+  "game_glicko2_rating_events_game_fk:game_glicko2_rating_events:f",
+  "game_glicko2_rating_events_player_fk:game_glicko2_rating_events:f",
+  "game_glicko2_rating_events_outcome_check:game_glicko2_rating_events:c",
+  "game_glicko2_rating_events_algorithm_check:game_glicko2_rating_events:c",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -570,6 +604,32 @@ const requiredConstraintDefinitions = {
       "variation_revision >= 0",
       "variation_revision <= 1000",
     ],
+  player_rating_history_algorithm_check: {
+    includes: ["fixed-elo-legacy-v1"],
+    excludes: [],
+  },
+  player_glicko2_ratings_user_fk: {
+    includes: ["FOREIGN KEY (user_id)", "REFERENCES users(id)", "ON DELETE CASCADE"],
+    excludes: [],
+  },
+  player_glicko2_ratings_algorithm_check: {
+    includes: ["glicko2-v1-tau-0.5"],
+    excludes: [],
+  },
+  game_glicko2_rating_events_game_fk: {
+    includes: ["FOREIGN KEY (game_id)", "REFERENCES games(id)", "ON DELETE RESTRICT"],
+    excludes: ["ON DELETE CASCADE"],
+  },
+  game_glicko2_rating_events_player_fk: {
+    includes: ["FOREIGN KEY (player_key)", "REFERENCES player_glicko2_ratings(player_key)", "ON DELETE RESTRICT"],
+    excludes: ["ON DELETE CASCADE"],
+  },
+  game_glicko2_rating_events_outcome_check: {
+    includes: ["no_result", "rated_game_count_after = rated_game_count_before", "rated_game_count_after = (rated_game_count_before + 1)"],
+    excludes: [],
+  },
+  game_glicko2_rating_events_algorithm_check: {
+    includes: ["glicko2-v1-tau-0.5"],
     excludes: [],
   },
 } as const;
@@ -603,6 +663,10 @@ const requiredTriggerSignatures = [
   "game_japanese_repetition_claim_immutable_guard:game_japanese_repetition_claims:public:guard_japanese_repetition_claim_mutation:27",
   "game_japanese_repetition_claim_truncate_guard:game_japanese_repetition_claims:public:guard_japanese_repetition_claim_mutation:34",
   "game_japanese_repetition_finish_guard:games:public:guard_japanese_repetition_finish:19",
+  "game_glicko2_rating_events_insert_guard:game_glicko2_rating_events:public:validate_glicko2_rating_event_insert:7",
+  "game_glicko2_rating_events_commit_guard:game_glicko2_rating_events:public:validate_glicko2_rating_event_commit:5",
+  "game_glicko2_rating_events_immutable_guard:game_glicko2_rating_events:public:guard_glicko2_rating_event_mutation:27",
+  "game_glicko2_rating_events_truncate_guard:game_glicko2_rating_events:public:guard_glicko2_rating_event_mutation:34",
 ] as const;
 
 const requiredTriggerDefinitions = {
@@ -648,6 +712,14 @@ const requiredTriggerDefinitions = {
     "BEFORE TRUNCATE ON public.game_japanese_repetition_claims",
   game_japanese_repetition_finish_guard:
     "UPDATE OF status, phase, to_move, finish_reason, result, winner_key",
+  game_glicko2_rating_events_insert_guard:
+    "BEFORE INSERT ON public.game_glicko2_rating_events",
+  game_glicko2_rating_events_commit_guard:
+    "AFTER INSERT ON public.game_glicko2_rating_events DEFERRABLE INITIALLY DEFERRED",
+  game_glicko2_rating_events_immutable_guard:
+    "BEFORE DELETE OR UPDATE ON public.game_glicko2_rating_events",
+  game_glicko2_rating_events_truncate_guard:
+    "BEFORE TRUNCATE ON public.game_glicko2_rating_events",
 } as const;
 
 const requiredProtectedTables = [
@@ -669,6 +741,8 @@ const requiredProtectedTables = [
   "puzzle_generation_jobs",
   "puzzle_attempts",
   "game_japanese_repetition_claims",
+  "player_glicko2_ratings",
+  "game_glicko2_rating_events",
 ] as const;
 
 const requiredGuardFunctions = [
@@ -693,6 +767,9 @@ const requiredGuardFunctions = [
   "public.validate_japanese_repetition_claim_commit()",
   "public.guard_japanese_repetition_finish()",
   "public.guard_japanese_repetition_claim_mutation()",
+  "public.guard_glicko2_rating_event_mutation()",
+  "public.validate_glicko2_rating_event_insert()",
+  "public.validate_glicko2_rating_event_commit()",
 ] as const;
 
 const requiredGuardFunctionDefinitions = {
@@ -795,6 +872,22 @@ const requiredGuardFunctionDefinitions = {
   ],
   "public.guard_japanese_repetition_claim_mutation()": [
     "Japanese repetition claims are append-only.",
+  "public.guard_glicko2_rating_event_mutation()": [
+    "Glicko-2 game rating evidence is append-only.",
+    "TG_OP = 'DELETE'",
+  ],
+  "public.validate_glicko2_rating_event_insert()": [
+    "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
+    "registered-human terminal game",
+    "Japanese rating evidence requires exact terminal scoring evidence.",
+    "game_japanese_repetition_claims",
+    "COUNT(DISTINCT claim.claimant_color) = 2",
+    "locked global states",
+  ],
+  "public.validate_glicko2_rating_event_commit()": [
+    "event_count <> 2",
+    "complete paired state transition",
+    "player_state.rating IS DISTINCT FROM NEW.rating_after",
   ],
 } as const;
 
@@ -834,6 +927,9 @@ async function checkMvp() {
     japanese_resume_authorization_columns: string[];
     japanese_proposal_columns: string[];
     japanese_terminal_columns: string[];
+    global_rating_columns: string[];
+    game_rating_event_columns: string[];
+    legacy_rating_columns: string[];
     constraint_signatures: string[];
     rollout_constraint_signatures: string[];
     constraint_definitions: Record<string, string>;
@@ -920,6 +1016,27 @@ async function checkMvp() {
                  AND column_name = ANY($18::text[])
                ORDER BY column_name
             ) AS japanese_terminal_columns,
+            ARRAY(
+              SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'player_glicko2_ratings'
+                 AND column_name = ANY($19::text[])
+               ORDER BY column_name
+            ) AS global_rating_columns,
+            ARRAY(
+              SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'game_glicko2_rating_events'
+                 AND column_name = ANY($20::text[])
+               ORDER BY column_name
+            ) AS game_rating_event_columns,
+            ARRAY(
+              SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'player_rating_history'
+                 AND column_name = ANY($21::text[])
+               ORDER BY column_name
+            ) AS legacy_rating_columns,
             ARRAY(
               SELECT constraint_row.conname || ':' || relation.relname || ':'
                      || constraint_row.contype::text
@@ -1114,6 +1231,9 @@ async function checkMvp() {
       requiredJapaneseResumeAuthorizationColumns,
       requiredJapaneseProposalColumns,
       requiredJapaneseTerminalColumns,
+      requiredGlobalRatingColumns,
+      requiredGameRatingEventColumns,
+      requiredLegacyRatingColumns,
     ],
   );
 
@@ -1199,6 +1319,30 @@ async function checkMvp() {
   if (absentJapaneseTerminalColumns.length > 0) {
     throw new Error(
       `Database Japanese terminal evidence is incomplete. Missing columns: ${absentJapaneseTerminalColumns.join(", ")}`,
+    );
+  }
+  const absentGlobalRatingColumns = requiredGlobalRatingColumns.filter(
+    (column) => !row.global_rating_columns.includes(column),
+  );
+  if (absentGlobalRatingColumns.length > 0) {
+    throw new Error(
+      `Database global rating migration is incomplete. Missing columns: ${absentGlobalRatingColumns.join(", ")}`,
+    );
+  }
+  const absentGameRatingEventColumns = requiredGameRatingEventColumns.filter(
+    (column) => !row.game_rating_event_columns.includes(column),
+  );
+  if (absentGameRatingEventColumns.length > 0) {
+    throw new Error(
+      `Database game rating evidence migration is incomplete. Missing columns: ${absentGameRatingEventColumns.join(", ")}`,
+    );
+  }
+  const absentLegacyRatingColumns = requiredLegacyRatingColumns.filter(
+    (column) => !row.legacy_rating_columns.includes(column),
+  );
+  if (absentLegacyRatingColumns.length > 0) {
+    throw new Error(
+      `Database legacy rating label migration is incomplete. Missing columns: ${absentLegacyRatingColumns.join(", ")}`,
     );
   }
   const absentConstraints = requiredConstraintSignatures.filter(

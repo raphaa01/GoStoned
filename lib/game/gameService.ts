@@ -48,9 +48,8 @@ import {
   type ScoredOutcome,
 } from "./scoreContract";
 import {
-  resolveRatingParticipants,
-  type RatingParticipantRow,
-} from "./ratingPolicy";
+  finalizeGameRatings,
+} from "@/lib/rating/ratingFinalizer";
 import type {
   Board,
   BoardSize,
@@ -801,10 +800,15 @@ async function loadGame(
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
             CASE
               WHEN g.status = 'finished' THEN (
-                SELECT COUNT(DISTINCT history.player_key) = 2
-                  FROM player_rating_history history
-                 WHERE history.game_id = g.id
-                   AND history.player_key IN (g.black_player_key, g.white_player_key)
+                SELECT COUNT(DISTINCT evidence.player_key) = 2
+                  FROM (
+                    SELECT history.player_key FROM player_rating_history history
+                     WHERE history.game_id = g.id
+                    UNION ALL
+                    SELECT event.player_key FROM game_glicko2_rating_events event
+                     WHERE event.game_id = g.id
+                  ) AS evidence
+                 WHERE evidence.player_key IN (g.black_player_key, g.white_player_key)
               )
               ELSE g.black_player_key <> g.white_player_key
                 AND (
@@ -1268,116 +1272,6 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
   };
 }
 
-async function recordFinishedStats(
-  client: PoolClient,
-  game: GameRow,
-  winnerKey: string | null,
-) {
-  const existingHistory = await client.query<{ player_key: string }>(
-    `SELECT player_key
-       FROM player_rating_history
-      WHERE game_id = $1
-      FOR UPDATE`,
-    [game.id],
-  );
-  if (existingHistory.rowCount !== 0) {
-    throw new GameServiceError(
-      "The rating history already contains evidence before this game finalization.",
-      500,
-      "rating_history_conflict",
-    );
-  }
-
-  const candidates = await client.query<RatingParticipantRow>(
-    `SELECT 'user:' || id::text AS player_key,
-            1200::int AS initial_rating,
-            'account'::text AS participant_type
-       FROM users
-      WHERE 'user:' || id::text IN ($1::text, $2::text)
-      UNION ALL
-     SELECT bot_player_key AS player_key,
-            target_rating AS initial_rating,
-            'bot'::text AS participant_type
-       FROM game_bots
-      WHERE game_id = $3
-        AND bot_player_key IN ($1::text, $2::text)`,
-    [game.black_player_key, game.white_player_key, game.id],
-  );
-  const ratedParticipants = resolveRatingParticipants(
-    [game.black_player_key, game.white_player_key],
-    candidates.rows,
-  );
-  if (!ratedParticipants) return false;
-  const initialRatings = new Map(
-    ratedParticipants.map(({ player_key, initial_rating }) => [player_key, initial_rating]),
-  );
-
-  for (const playerKey of [game.black_player_key, game.white_player_key].sort()) {
-    const won = winnerKey === playerKey;
-    const draw = winnerKey === null;
-    const ratingDelta = draw ? 0 : won ? 16 : -16;
-    await client.query(
-      `INSERT INTO player_stats (player_key, board_size, rating, highest_rating)
-       VALUES ($1, $2, $3, $3)
-       ON CONFLICT (player_key, board_size) DO NOTHING`,
-      [playerKey, game.board_size, initialRatings.get(playerKey)],
-    );
-    const current = await client.query<{ rating: number }>(
-      `SELECT rating
-         FROM player_stats
-        WHERE player_key = $1 AND board_size = $2
-        FOR UPDATE`,
-      [playerKey, game.board_size],
-    );
-    const ratingBefore = current.rows[0].rating;
-    const ratingAfter = Math.max(100, ratingBefore + ratingDelta);
-    const ledger = await client.query<{ id: string }>(
-      `INSERT INTO player_rating_history
-         (player_key, game_id, board_size, rating_before, rating_after,
-          rating_change, result, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()))
-       ON CONFLICT (player_key, game_id) DO NOTHING
-       RETURNING id`,
-      [
-        playerKey,
-        game.id,
-        game.board_size,
-        ratingBefore,
-        ratingAfter,
-        ratingAfter - ratingBefore,
-        draw ? "draw" : won ? "win" : "loss",
-        game.finished_at,
-      ],
-    );
-    if (ledger.rowCount !== 1) {
-      throw new GameServiceError(
-        "The rating history could not be recorded exactly once.",
-        500,
-        "rating_history_conflict",
-      );
-    }
-    await client.query(
-      `UPDATE player_stats
-          SET games = games + 1,
-              wins = wins + $3,
-              losses = losses + $4,
-              draws = draws + $5,
-              rating = $6,
-              highest_rating = GREATEST(highest_rating, $6),
-              updated_at = NOW()
-        WHERE player_key = $1 AND board_size = $2`,
-      [
-        playerKey,
-        game.board_size,
-        won ? 1 : 0,
-        !won && !draw ? 1 : 0,
-        draw ? 1 : 0,
-        ratingAfter,
-      ],
-    );
-  }
-  return true;
-}
 
 async function finishOnTime(
   client: PoolClient,
@@ -1402,7 +1296,7 @@ async function finishOnTime(
     [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
   );
   const nextLoaded = withUpdatedGame(loaded, updated.rows[0]);
-  const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+  const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
   return serializeGame({
     ...nextLoaded,
     game: { ...nextLoaded.game, rated },
@@ -1737,7 +1631,7 @@ async function submitChineseMove(
           ],
         );
         const legacyLoaded = withUpdatedGame(loaded, updated.rows[0]);
-        const rated = await recordFinishedStats(client, legacyLoaded.game, winnerKey);
+        const { rated } = await finalizeGameRatings(client, legacyLoaded.game.id);
         return serializeGame({
           ...legacyLoaded,
           game: { ...legacyLoaded.game, rated },
@@ -2027,7 +1921,7 @@ async function confirmChineseScore(
       ...withUpdatedGame(nextLoaded, finished.rows[0]),
       scoring: finalScoring.rows[0],
     };
-    const rated = await recordFinishedStats(client, finalLoaded.game, winnerKey);
+    const { rated } = await finalizeGameRatings(client, finalLoaded.game.id);
     return serializeGame({
       ...finalLoaded,
       game: { ...finalLoaded.game, rated },
@@ -2151,7 +2045,7 @@ async function resignChineseGame(gameId: string, playerKey: string): Promise<Gam
       scoring: null,
       deadRows: [],
     };
-    const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+    const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
     return serializeGame({
       ...nextLoaded,
       game: { ...nextLoaded.game, rated },
