@@ -110,7 +110,7 @@ test("the player-facing action remains release-gated until triage exists", async
     source("docs/player-reporting.md"),
     source("lib/moderation/playerReportGate.ts"),
     sourceTree("app/(en)"),
-    sourceTree("app/(de)"),
+    sourceTree("app/[locale]"),
     sourceTree("components"),
   ]);
   assert.match(runbook, /must not be presented to players until/i);

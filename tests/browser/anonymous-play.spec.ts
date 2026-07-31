@@ -21,7 +21,6 @@ const copy = {
     disputeResumed: "Play resumed to resolve a marked-group dispute on the board.",
     findOpponent: "Find an opponent",
     findAnother: "Find another game",
-    languageChoice: "German",
     learn: "Learn",
     live: "Live",
     markBlackC17: "Mark the black group at C17 as dead.",
@@ -58,7 +57,6 @@ const copy = {
     disputeResumed: "Das Spiel wurde fortgesetzt, um eine markierte Gruppe auf dem Brett zu klären.",
     findOpponent: "Gegner finden",
     findAnother: "Weitere Partie finden",
-    languageChoice: "Englisch",
     learn: "Lernen",
     live: "Live",
     markBlackC17: "Markiere die schwarze Gruppe bei C17 als tot.",
@@ -1668,18 +1666,19 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   const harness = await installApiHarness(page, { realLocaleMutation: true });
 
   await page.goto("/play?size=19&source=browser#queue");
-  let languageButton = page.getByRole("button", { name: "German" });
+  let languageMenu = page.getByRole("button", { name: "Choose language: English" });
   if (testInfo.project.name === "chromium-320-touch") {
     const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
     await page.locator(".mobile-nav > .icon-button").click();
     await expect(mobileNavigation).toBeVisible();
-    languageButton = mobileNavigation.getByRole("button", { name: "German" });
+    languageMenu = mobileNavigation.getByRole("button", { name: "Choose language: English" });
   }
+  await languageMenu.click();
   const localeResponse = page.waitForResponse((response) =>
     response.request().method() === "POST"
       && new URL(response.url()).pathname === "/api/locale",
   );
-  await languageButton.click();
+  await page.getByRole("menuitemradio", { name: "Deutsch" }).click();
   const response = await localeResponse;
   expect(response.status()).toBe(200);
   expect(response.headers()["cache-control"]).toContain("no-store");

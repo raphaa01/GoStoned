@@ -20,10 +20,6 @@ export const en = {
   },
   language: {
     switcherLabel: "Choose language",
-    english: "English",
-    german: "German",
-    hint: "Prefer German? GoStone is also available in German.",
-    useGerman: "Use German",
     switchFailed: "The language preference could not be saved. Please try again.",
   },
   nav: {

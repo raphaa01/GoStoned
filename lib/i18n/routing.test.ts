@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { POST as setLocale } from "@/app/api/locale/route";
+import { proxy } from "@/proxy";
 import { createRateLimitKey, RATE_LIMIT_POLICIES } from "@/lib/auth/rateLimit";
 import { de } from "./catalogs/de";
 import { en } from "./catalogs/en";
-import { isLocale, preferredLocale } from "./config";
-import { localizedApiError } from "./dictionary";
+import { LOCALES, isLocale, preferredLocale } from "./config";
+import { getDictionary, localizedApiError } from "./dictionary";
 import { localizedRulesSummary } from "./gameTerms";
 import { pageMetadata, rootMetadata } from "./metadata";
 import { localizedNotFoundResponse } from "./notFoundResponse";
@@ -22,26 +23,34 @@ import {
 test("recognizes only supported locale values", () => {
   assert.equal(isLocale("en"), true);
   assert.equal(isLocale("de"), true);
-  assert.equal(isLocale("fr"), false);
+  assert.equal(isLocale("fr"), true);
+  assert.equal(isLocale("es"), true);
+  assert.equal(isLocale("zh"), true);
+  assert.equal(isLocale("ja"), true);
+  assert.equal(isLocale("ko"), true);
+  assert.equal(isLocale("it"), false);
   assert.equal(isLocale("../de"), false);
 });
 
 test("uses Accept-Language quality values only as an initial locale hint", () => {
   assert.equal(preferredLocale("de-DE,de;q=0.9,en;q=0.8"), "de");
   assert.equal(preferredLocale("de;q=0.5,en;q=0.9"), "en");
-  assert.equal(preferredLocale("fr;q=1,de;q=0"), "en");
+  assert.equal(preferredLocale("fr-FR;q=1,de;q=0"), "fr");
+  assert.equal(preferredLocale("ko-KR,ja;q=0.8"), "ko");
   assert.equal(preferredLocale("de;q=broken,en;q=0.7"), "en");
   assert.equal(preferredLocale(null), "en");
 });
 
-test("adds and removes only the exact German route prefix", () => {
+test("adds and removes only exact supported locale route prefixes", () => {
   assert.equal(stripLocalePrefix("/de"), "/");
   assert.equal(stripLocalePrefix("/de/play"), "/play");
   assert.equal(stripLocalePrefix("/debug"), "/debug");
   assert.equal(stripLocalePrefix("/deevil"), "/deevil");
+  assert.equal(stripLocalePrefix("/fr/learn"), "/learn");
   assert.equal(localizePathname("/", "de"), "/de");
   assert.equal(localizePathname("/play", "de"), "/de/play");
   assert.equal(localizePathname("/de/game/abc", "en"), "/game/abc");
+  assert.equal(localizePathname("/de/game/abc", "ja"), "/ja/game/abc");
   assert.equal(localizePathname("/api/health", "de"), "/api/health");
 });
 
@@ -67,6 +76,7 @@ test("preserves repeated query parameters and fragments across locale switches",
   assert.equal(localizeHref("/play?size=19#queue", "de"), "/de/play?size=19#queue");
   assert.equal(localizeHref("/learn?topic=ko#glossary", "de"), "/de/learn?topic=ko#glossary");
   assert.equal(localizeHref("/de/review#questions", "en"), "/review#questions");
+  assert.equal(localizeHref("/fr/review#questions", "ko"), "/ko/review#questions");
 });
 
 test("rejects scheme-relative, encoded scheme-relative, and backslash paths", () => {
@@ -84,14 +94,33 @@ test("active navigation compares exact route segment boundaries", () => {
   assert.equal(isRouteActive("/player", "/play"), false);
 });
 
-test("English and German catalogues retain the same key shape", () => {
+test("all locale catalogues retain the same key shape", () => {
   function keys(value: unknown, prefix = ""): string[] {
     if (!value || typeof value !== "object") return [prefix];
     return Object.entries(value)
       .flatMap(([key, child]) => keys(child, prefix ? `${prefix}.${key}` : key))
       .sort();
   }
-  assert.deepEqual(keys(de), keys(en));
+  for (const { code } of LOCALES) {
+    assert.deepEqual(keys(getDictionary(code)), keys(en), code);
+  }
+});
+
+test("browser language detection redirects localized entry routes unless a saved choice exists", () => {
+  const detected = proxy(new NextRequest("https://gostone.test/play?size=19", {
+    headers: { "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8" },
+  }));
+  assert.equal(detected.status, 307);
+  assert.equal(detected.headers.get("location"), "https://gostone.test/fr/play?size=19");
+
+  const saved = proxy(new NextRequest("https://gostone.test/play", {
+    headers: {
+      "Accept-Language": "ja-JP",
+      Cookie: "gostone_locale=en",
+    },
+  }));
+  assert.equal(saved.headers.get("location"), null);
+  assert.equal(saved.headers.get("x-middleware-next"), "1");
 });
 
 test("English and German distinguish rated account games and disclose leaderboard eligibility", () => {
@@ -128,7 +157,8 @@ test("API error codes resolve through the active catalogue without exposing unkn
 });
 
 test("localized root and page metadata include stable social images", () => {
-  for (const [locale, expectedPath] of [["en", "/og/en"], ["de", "/og/de"]] as const) {
+  for (const { code: locale } of LOCALES) {
+    const expectedPath = `/og/${locale}`;
     for (const metadata of [
       rootMetadata(locale),
       pageMetadata(locale, "play", "/play"),

@@ -22,10 +22,6 @@ export const de = {
   },
   language: {
     switcherLabel: "Sprache wählen",
-    english: "Englisch",
-    german: "Deutsch",
-    hint: "GoStone ist auch auf Deutsch verfügbar.",
-    useGerman: "Deutsch verwenden",
     switchFailed: "Die Spracheinstellung konnte nicht gespeichert werden. Bitte versuche es erneut.",
   },
   nav: {

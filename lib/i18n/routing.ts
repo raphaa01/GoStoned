@@ -1,4 +1,4 @@
-import type { Locale } from "./config";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "./config";
 
 const NON_LOCALIZED_PREFIXES = ["/api", "/_next"];
 
@@ -26,8 +26,10 @@ export function isSafeInternalPath(pathname: string): boolean {
 }
 
 export function stripLocalePrefix(pathname: string): string {
-  if (pathname === "/de" || pathname === "/de/") return "/";
-  return pathname.startsWith("/de/") ? pathname.slice(3) : pathname;
+  const [firstSegment = ""] = pathname.slice(1).split("/");
+  if (!isLocale(firstSegment)) return pathname;
+  const unprefixed = pathname.slice(firstSegment.length + 1);
+  return unprefixed === "" || unprefixed === "/" ? "/" : unprefixed;
 }
 
 export function localizePathname(pathname: string, locale: Locale): string {
@@ -38,8 +40,8 @@ export function localizePathname(pathname: string, locale: Locale): string {
     return pathname;
   }
   const unprefixed = stripLocalePrefix(pathname);
-  if (locale === "en") return unprefixed;
-  return unprefixed === "/" ? "/de" : `/de${unprefixed}`;
+  if (locale === DEFAULT_LOCALE) return unprefixed;
+  return unprefixed === "/" ? `/${locale}` : `/${locale}${unprefixed}`;
 }
 
 export function localizeHref(href: string, locale: Locale): string {

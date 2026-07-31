@@ -1,4 +1,5 @@
 import type { Board, BoardSize, Stone } from "@/lib/game/types";
+import type { LocalizedText } from "@/lib/i18n/config";
 
 export type PuzzleKind = "daily" | "practice";
 export type PuzzleDifficulty = "beginner" | "intermediate" | "advanced";
@@ -25,16 +26,16 @@ export type PuzzleVariation = {
   refutations: Array<{
     userMove: PuzzlePly;
     reply: PuzzlePly | null;
-    explanation: { en: string; de: string };
+    explanation: LocalizedText;
   }>;
-  fallbackExplanation: { en: string; de: string };
+  fallbackExplanation: LocalizedText;
 };
 
 export type PuzzleSolution = {
   move: string;
   x: number;
   y: number;
-  explanation: { en: string; de: string };
+  explanation: LocalizedText;
   line: PuzzlePly[];
 };
 
@@ -75,6 +76,6 @@ export type PuzzleAttemptResult = {
   variationProgress: PuzzlePly[];
   variationRevision: number;
   displayLine: PuzzlePly[];
-  feedback: { en: string; de: string } | null;
+  feedback: LocalizedText | null;
   solution: PuzzleSolution | null;
 };

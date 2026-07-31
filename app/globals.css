@@ -208,71 +208,11 @@ a {
   gap: 8px;
 }
 
-.language-switcher {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  display: grid;
-  gap: 3px;
-  grid-template-columns: 1fr 1fr;
-  padding: 3px;
-}
-
-.language-switcher button {
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  color: var(--muted-2);
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
-  min-height: 32px;
-}
-
-.language-switcher button[aria-pressed="true"] {
-  background: var(--panel);
-  color: var(--text);
-}
-
-.language-switcher button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
 .language-switch-error {
   color: #ffb4a9;
   font-size: 10px;
   grid-column: 1 / -1;
   line-height: 1.4;
-}
-
-.language-hint {
-  align-items: center;
-  background: rgba(129, 182, 76, 0.1);
-  border: 1px solid rgba(129, 182, 76, 0.3);
-  border-radius: 7px;
-  color: #d9e8c9;
-  display: flex;
-  font-size: 11px;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 18px;
-  padding: 9px 11px;
-  flex-wrap: wrap;
-}
-
-.language-hint .language-switch-error {
-  flex-basis: 100%;
-}
-
-.language-hint button {
-  background: transparent;
-  border: 0;
-  color: #b9df93;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 800;
-  white-space: nowrap;
 }
 
 .sidebar-legal {
@@ -3381,17 +3321,6 @@ a {
     top: 60px;
   }
 
-  .mobile-menu .language-switcher {
-    margin: 4px 0;
-  }
-
-  .mobile-menu .language-switcher button {
-    justify-content: center;
-    min-height: 38px;
-    padding: 7px;
-    width: auto;
-  }
-
 .mobile-menu a,
 .mobile-menu button {
     align-items: center;
@@ -3821,7 +3750,7 @@ a {
     padding-top: 7px;
   }
 
-  .game-topbar .language-switcher {
+  .game-topbar .language-menu {
     grid-column: 2;
     grid-row: 1;
   }

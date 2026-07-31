@@ -4,8 +4,8 @@ import { getDictionary } from "@/lib/i18n/dictionary";
 import { getLegalNotice } from "@/lib/legal";
 
 export function LegalNotice({ locale }: { locale: Locale }) {
-  const legal = getLegalNotice();
   const copy = getDictionary(locale).legal;
+  const legal = getLegalNotice();
 
   return (
     <AppShell>

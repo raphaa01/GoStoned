@@ -11,6 +11,7 @@ import { deterministicUnit } from "@/lib/bot/identity";
 import { query, withTransaction } from "@/lib/db";
 import { applyMove, countLiberties, createEmptyBoard, getGroup, replayMoves } from "@/lib/game/goEngine";
 import type { Board, BoardSize, Stone, StoredMove } from "@/lib/game/types";
+import type { LocalizedText } from "@/lib/i18n/config";
 import {
   PUZZLE_CATEGORIES,
   PUZZLE_KYU_LADDER,
@@ -265,17 +266,32 @@ function explanation(
   const region = coordinateRegion(best.move, boardSize);
   const regionEn = { corner: "corner", side: "side", center: "center", pass: "board" }[region];
   const regionDe = { corner: "Ecke", side: "Seite", center: "Mitte", pass: "Brett" }[region];
+  const regionFr = { corner: "coin", side: "bord", center: "centre", pass: "plateau" }[region];
+  const regionEs = { corner: "esquina", side: "lateral", center: "centro", pass: "tablero" }[region];
+  const regionZh = { corner: "角部", side: "边上", center: "中央", pass: "棋盘" }[region];
+  const regionJa = { corner: "隅", side: "辺", center: "中央", pass: "盤上" }[region];
+  const regionKo = { corner: "귀", side: "변", center: "중앙", pass: "바둑판" }[region];
   const points = gap.toFixed(1);
   if (gap < 0.05) {
     return {
       en: `KataGo prefers ${best.move} in the ${regionEn}. The point difference is close, but this move preserves the strongest local continuation and the most reliable shape.`,
       de: `KataGo bevorzugt ${best.move} in der ${regionDe}. Der Punktunterschied ist knapp, aber dieser Zug bewahrt die stärkste lokale Fortsetzung und die verlässlichste Form.`,
-    };
+      fr: `KataGo préfère ${best.move} dans le ${regionFr}. L'écart de points est faible, mais ce coup préserve la suite locale la plus forte et la forme la plus fiable.`,
+      es: `KataGo prefiere ${best.move} en la ${regionEs}. La diferencia de puntos es pequeña, pero esta jugada conserva la continuación local más fuerte y la forma más fiable.`,
+      zh: `KataGo 更倾向于${regionZh}的 ${best.move}。目数差距很小，但这手棋保留了最强的局部后续和最稳健的棋形。`,
+      ja: `KataGoは${regionJa}の ${best.move} を推奨します。目数差はわずかですが、この手は最も強い局所の進行と安定した形を保ちます。`,
+      ko: `KataGo는 ${regionKo}의 ${best.move}를 선호합니다. 점수 차이는 작지만 이 수가 가장 강한 국지 진행과 안정적인 모양을 유지합니다.`,
+    } satisfies LocalizedText;
   }
   return {
     en: `KataGo prefers ${best.move} in the ${regionEn}. It keeps about ${points} more points than the closest analyzed alternative while preserving the strongest continuation.`,
     de: `KataGo bevorzugt ${best.move} in der ${regionDe}. Der Zug bewahrt ungefähr ${points} Punkte mehr als die nächstbeste untersuchte Alternative und hält die stärkste Fortsetzung offen.`,
-  };
+    fr: `KataGo préfère ${best.move} dans le ${regionFr}. Ce coup conserve environ ${points} points de plus que la meilleure alternative analysée tout en préservant la suite la plus forte.`,
+    es: `KataGo prefiere ${best.move} en la ${regionEs}. Conserva unos ${points} puntos más que la alternativa analizada más cercana y mantiene la continuación más fuerte.`,
+    zh: `KataGo 更倾向于${regionZh}的 ${best.move}。与最接近的分析候选相比，这手棋多保留约 ${points} 目，同时维持最强后续。`,
+    ja: `KataGoは${regionJa}の ${best.move} を推奨します。解析された次善手より約 ${points} 目多く保ち、最も強い進行を維持します。`,
+    ko: `KataGo는 ${regionKo}의 ${best.move}를 선호합니다. 분석된 차선책보다 약 ${points}집을 더 지키면서 가장 강한 진행을 유지합니다.`,
+  } satisfies LocalizedText;
 }
 
 function catalogDifficulty(rankKyu: number | null, gap: number): PuzzleDifficulty {
@@ -322,25 +338,58 @@ function categoryExplanation(
 ) {
   const responseEn = reply ? ` After ${userMove}, ${reply} is the forcing reply.` : "";
   const responseDe = reply ? ` Nach ${userMove} ist ${reply} die zwingende Antwort.` : "";
+  const responseFr = reply ? ` Après ${userMove}, ${reply} est la réponse forcée.` : "";
+  const responseEs = reply ? ` Después de ${userMove}, ${reply} es la respuesta forzada.` : "";
+  const responseZh = reply ? ` ${userMove} 之后，${reply} 是强制应手。` : "";
+  const responseJa = reply ? ` ${userMove} の後は ${reply} が必然の応手です。` : "";
+  const responseKo = reply ? ` ${userMove} 다음에는 ${reply}가 강제 응수입니다.` : "";
   const copy = {
     life_and_death: {
       en: "This route misses the vital point that decides the group's eye space.",
       de: "Diese Variante verpasst den vitalen Punkt, der über den Augenraum der Gruppe entscheidet.",
+      fr: "Cette variante manque le point vital qui détermine l'espace d'yeux du groupe.",
+      es: "Esta variante pasa por alto el punto vital que decide el espacio de ojos del grupo.",
+      zh: "这个变化错过了决定棋块眼位的要点。",
+      ja: "この変化は、石の眼形を決める急所を逃しています。",
+      ko: "이 변화도는 돌의 눈 모양을 결정하는 급소를 놓칩니다.",
     },
     tesuji: {
       en: "This move loses the forcing order; the opponent can answer efficiently and keep the shape connected.",
       de: "Dieser Zug verliert die zwingende Reihenfolge; der Gegner kann effizient antworten und seine Form verbinden.",
+      fr: "Ce coup perd l'ordre forcé ; l'adversaire peut répondre efficacement et conserver une forme connectée.",
+      es: "Esta jugada pierde el orden forzado; el rival puede responder con eficiencia y mantener la forma conectada.",
+      zh: "这手棋失去了强制次序；对手可以高效应对并保持棋形连接。",
+      ja: "この手では強制的な手順を失い、相手に効率よく応じて連絡を保たれてしまいます。",
+      ko: "이 수는 강제 수순을 잃어 상대가 효율적으로 응수하며 연결을 유지할 수 있습니다.",
     },
     capturing_race: {
       en: "This route falls behind in the liberty race and lets the opponent take the key shared liberty.",
       de: "Diese Variante verliert im Freiheitsrennen ein Tempo und überlässt dem Gegner die entscheidende gemeinsame Freiheit.",
+      fr: "Cette variante prend du retard dans la course aux libertés et laisse à l'adversaire la liberté commune décisive.",
+      es: "Esta variante queda atrás en la carrera de libertades y permite al rival tomar la libertad compartida clave.",
+      zh: "这个变化在对杀中慢了一气，让对手抢到关键的公气。",
+      ja: "この変化は攻め合いで遅れ、相手に重要な共通のダメを取らせてしまいます。",
+      ko: "이 변화도는 수상전에서 한 수 뒤처져 상대에게 핵심 공배를 내줍니다.",
     },
     endgame: {
       en: "This route gives up endgame value or sente, so the opponent can take the larger follow-up.",
       de: "Diese Variante verschenkt Endspielwert oder Sente, sodass der Gegner die größere Fortsetzung erhält.",
+      fr: "Cette variante abandonne de la valeur de fin de partie ou le sente, ce qui permet à l'adversaire de prendre la suite la plus importante.",
+      es: "Esta variante cede valor de final o sente, de modo que el rival puede tomar la continuación mayor.",
+      zh: "这个变化损失了官子价值或先手，让对手抢到更大的后续。",
+      ja: "この変化はヨセの価値または先手を失い、相手により大きな後続手を許します。",
+      ko: "이 변화도는 끝내기 가치나 선수를 포기해 상대가 더 큰 후속 수를 차지하게 합니다.",
     },
   }[category];
-  return { en: `${copy.en}${responseEn}`, de: `${copy.de}${responseDe}` };
+  return {
+    en: `${copy.en}${responseEn}`,
+    de: `${copy.de}${responseDe}`,
+    fr: `${copy.fr}${responseFr}`,
+    es: `${copy.es}${responseEs}`,
+    zh: `${copy.zh}${responseZh}`,
+    ja: `${copy.ja}${responseJa}`,
+    ko: `${copy.ko}${responseKo}`,
+  } satisfies LocalizedText;
 }
 
 function buildVariation(

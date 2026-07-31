@@ -100,7 +100,7 @@ export function Navbar() {
           ))}
           {!user ? <Link href={href("/register")} onClick={() => setOpen(false)}>{dictionary.nav.createAccount}</Link> : null}
           <Link href={href("/impressum")} onClick={() => setOpen(false)}>{dictionary.nav.legal}</Link>
-          <LanguageSwitcher compact />
+          <LanguageSwitcher />
           {user ? (
             <button onClick={signOut} type="button"><LogOut size={18} /> {dictionary.nav.logout}</button>
           ) : null}

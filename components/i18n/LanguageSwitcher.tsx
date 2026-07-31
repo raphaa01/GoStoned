@@ -1,8 +1,15 @@
 "use client";
 
+import { Check, ChevronDown, Globe2 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
-import type { Locale } from "@/lib/i18n/config";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+import { LOCALES, localeDetails, type Locale } from "@/lib/i18n/config";
 import { buildLocaleSwitchHref } from "@/lib/i18n/routing";
 import { useI18n } from "./I18nProvider";
 
@@ -38,42 +45,115 @@ export function useLocaleSwitch() {
   return { busy, error, switchLocale };
 }
 
-export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
+export function LanguageSwitcher() {
   const { dictionary, locale } = useI18n();
   const { busy, error, switchLocale } = useLocaleSwitch();
-  return (
-    <div
-      aria-label={dictionary.language.switcherLabel}
-      className={`language-switcher ${compact ? "language-switcher--compact" : ""}`}
-      role="group"
-    >
-      {(["en", "de"] as const).map((option) => (
-        <button
-          aria-label={option === "en" ? dictionary.language.english : dictionary.language.german}
-          aria-pressed={locale === option}
-          disabled={busy || locale === option}
-          key={option}
-          lang={option}
-          onClick={() => void switchLocale(option)}
-          type="button"
-        >
-          {option.toUpperCase()}
-        </button>
-      ))}
-      {error ? <span className="language-switch-error" role="alert">{error}</span> : null}
-    </div>
-  );
-}
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const menuId = useId();
+  const activeIndex = LOCALES.findIndex(({ code }) => code === locale);
+  const currentLocale = localeDetails(locale);
 
-export function GermanLanguageHint() {
-  const { dictionary } = useI18n();
-  const { busy, error, switchLocale } = useLocaleSwitch();
+  useEffect(() => {
+    if (!open) return;
+    itemRefs.current[activeIndex]?.focus();
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeIndex, open]);
+
+  function moveFocus(currentIndex: number, direction: 1 | -1) {
+    const nextIndex = (currentIndex + direction + LOCALES.length) % LOCALES.length;
+    itemRefs.current[nextIndex]?.focus();
+  }
+
   return (
-    <div className="language-hint" role="status">
-      <span>{dictionary.language.hint}</span>
-      <button disabled={busy} lang="de" onClick={() => void switchLocale("de")} type="button">
-        {dictionary.language.useGerman}
+    <div className="language-menu" ref={containerRef}>
+      <button
+        aria-controls={menuId}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`${dictionary.language.switcherLabel}: ${currentLocale.nativeName}`}
+        className="language-menu-trigger"
+        disabled={busy}
+        onClick={() => setOpen((current) => !current)}
+        ref={triggerRef}
+        type="button"
+      >
+        <Globe2 aria-hidden="true" size={17} strokeWidth={1.8} />
+        <span>{currentLocale.nativeName}</span>
+        <ChevronDown aria-hidden="true" className="language-menu-chevron" size={14} />
       </button>
+
+      {open ? (
+        <div
+          aria-label={dictionary.language.switcherLabel}
+          className="language-menu-popover"
+          id={menuId}
+          role="menu"
+        >
+          <p className="language-menu-heading">{dictionary.language.switcherLabel}</p>
+          <div className="language-menu-options">
+            {LOCALES.map((option, index) => (
+              <button
+                aria-checked={locale === option.code}
+                className="language-menu-option"
+                disabled={busy}
+                key={option.code}
+                lang={option.code}
+                onClick={() => {
+                  if (locale === option.code) {
+                    setOpen(false);
+                    triggerRef.current?.focus();
+                    return;
+                  }
+                  void switchLocale(option.code);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    moveFocus(index, 1);
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    moveFocus(index, -1);
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    itemRefs.current[0]?.focus();
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    itemRefs.current[LOCALES.length - 1]?.focus();
+                  }
+                }}
+                ref={(element) => { itemRefs.current[index] = element; }}
+                role="menuitemradio"
+                type="button"
+              >
+                <span>{option.nativeName}</span>
+                {locale === option.code ? <Check aria-hidden="true" size={16} /> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {error ? <span className="language-switch-error" role="alert">{error}</span> : null}
     </div>
   );

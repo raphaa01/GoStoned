@@ -4,6 +4,7 @@ import { toGtpCoordinate } from "@/lib/analysis/coordinates";
 import { applyMove } from "@/lib/game/goEngine";
 import { GameServiceError } from "@/lib/game/gameService";
 import type { Board, BoardSize, Stone } from "@/lib/game/types";
+import { SUPPORTED_LOCALES, type LocalizedText } from "@/lib/i18n/config";
 import {
   PUZZLES_PER_CATEGORY,
   type PuzzleAttemptResult,
@@ -31,7 +32,7 @@ type PuzzleRow = {
   solution_move: string;
   solution_x: number;
   solution_y: number;
-  explanation: { en: string; de: string };
+  explanation: LocalizedText;
   variation: unknown;
   published_at: Date;
   attempt_count: number | null;
@@ -76,11 +77,14 @@ function parsePly(value: unknown, boardSize: BoardSize): PuzzlePly {
   return { color, move, x: x as number, y: y as number };
 }
 
-function parseLocalized(value: unknown): { en: string; de: string } {
+function parseLocalized(value: unknown): LocalizedText {
   if (!isRecord(value) || typeof value.en !== "string" || typeof value.de !== "string") {
     throw new Error("Stored puzzle explanation is invalid.");
   }
-  return { en: value.en, de: value.de };
+  return Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [
+    locale,
+    typeof value[locale] === "string" ? value[locale] : value.en,
+  ])) as LocalizedText;
 }
 
 function parseVariation(row: PuzzleRow): PuzzleVariation | null {

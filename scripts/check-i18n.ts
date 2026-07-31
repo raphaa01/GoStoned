@@ -6,7 +6,7 @@ import {
   type HardcodedUiText,
 } from "@/lib/i18n/sourceGuard";
 
-const ROOTS = ["app/(en)", "app/(de)", "app/og", "components"];
+const ROOTS = ["app/(en)", "app/[locale]", "app/og", "components"];
 const FILES = ["app/globals.css", "lib/i18n/metadata.ts", "lib/i18n/openGraphImage.tsx"];
 
 async function sourceFiles(directory: string): Promise<string[]> {

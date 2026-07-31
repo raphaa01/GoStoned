@@ -1,4 +1,5 @@
 import { coordinateRegion } from "./coordinates";
+import type { LocalizedText } from "@/lib/i18n/config";
 import {
   ANALYSIS_ENGINE_CONTRACT_VERSION,
   type AnalysisInput,
@@ -27,10 +28,6 @@ function moverScore(value: number, resultPlayer: "B" | "W", mover: "black" | "wh
   return resultPlayer === (mover === "black" ? "B" : "W") ? value : -value;
 }
 
-function signedPoints(value: number) {
-  return `${Math.abs(value).toFixed(1)} points`;
-}
-
 function explanations(
   input: AnalysisInput,
   playedMove: string,
@@ -40,28 +37,47 @@ function explanations(
   pv: string[],
 ) {
   const region = coordinateRegion(bestMove, input.boardSize);
-  const enRegion = region === "corner" ? "secures the corner efficiently"
-    : region === "side" ? "builds from the side while staying connected"
-      : region === "center" ? "keeps influence and initiative in the center"
-        : "avoids an unnecessary local commitment";
-  const deRegion = region === "corner" ? "sichert die Ecke effizient"
-    : region === "side" ? "baut vom Rand aus auf und bleibt verbunden"
-      : region === "center" ? "behält Einfluss und Initiative im Zentrum"
-        : "vermeidet eine unnötige lokale Festlegung";
-  const sequenceEn = pv.length > 1 ? ` The expected continuation starts ${pv.slice(0, 4).join(" – ")}.` : "";
-  const sequenceDe = pv.length > 1 ? ` Die erwartete Fortsetzung beginnt mit ${pv.slice(0, 4).join(" – ")}.` : "";
+  const continuation = pv.slice(0, 4).join(" – ");
+  const regionCopy = {
+    en: region === "corner" ? "secures the corner efficiently" : region === "side" ? "builds from the side while staying connected" : region === "center" ? "keeps influence and initiative in the center" : "avoids an unnecessary local commitment",
+    de: region === "corner" ? "sichert die Ecke effizient" : region === "side" ? "baut vom Rand aus auf und bleibt verbunden" : region === "center" ? "behält Einfluss und Initiative im Zentrum" : "vermeidet eine unnötige lokale Festlegung",
+    fr: region === "corner" ? "sécurise efficacement le coin" : region === "side" ? "se développe depuis le bord tout en restant connecté" : region === "center" ? "conserve l'influence et l'initiative au centre" : "évite un engagement local inutile",
+    es: region === "corner" ? "asegura la esquina con eficiencia" : region === "side" ? "se desarrolla desde el lateral sin perder la conexión" : region === "center" ? "mantiene la influencia y la iniciativa en el centro" : "evita un compromiso local innecesario",
+    zh: region === "corner" ? "高效守住角部" : region === "side" ? "从边上发展并保持连接" : region === "center" ? "保持中央的影响力和先手" : "避免不必要的局部定型",
+    ja: region === "corner" ? "隅を効率よく確保します" : region === "side" ? "連絡を保ちながら辺から展開します" : region === "center" ? "中央での影響力と先手を保ちます" : "不要な局地戦を避けます",
+    ko: region === "corner" ? "귀를 효율적으로 지킵니다" : region === "side" ? "연결을 유지하며 변에서 전개합니다" : region === "center" ? "중앙의 영향력과 선수를 유지합니다" : "불필요한 국지전을 피합니다",
+  } satisfies LocalizedText;
+  const sequence = {
+    en: pv.length > 1 ? ` The expected continuation starts ${continuation}.` : "",
+    de: pv.length > 1 ? ` Die erwartete Fortsetzung beginnt mit ${continuation}.` : "",
+    fr: pv.length > 1 ? ` La suite attendue commence par ${continuation}.` : "",
+    es: pv.length > 1 ? ` La continuación prevista comienza con ${continuation}.` : "",
+    zh: pv.length > 1 ? ` 预期后续从 ${continuation} 开始。` : "",
+    ja: pv.length > 1 ? ` 想定される進行は ${continuation} から始まります。` : "",
+    ko: pv.length > 1 ? ` 예상 진행은 ${continuation}로 시작합니다.` : "",
+  } satisfies LocalizedText;
   if (playedMove === bestMove) {
     return {
-      en: `${bestMove} is KataGo's first choice. It ${enRegion} and preserves the position's winning chances.${sequenceEn}`,
-      de: `${bestMove} ist KataGos erste Wahl. Der Zug ${deRegion} und erhält die Gewinnchancen der Stellung.${sequenceDe}`,
-    };
+      en: `${bestMove} is KataGo's first choice. It ${regionCopy.en} and preserves the position's winning chances.${sequence.en}`,
+      de: `${bestMove} ist KataGos erste Wahl. Der Zug ${regionCopy.de} und erhält die Gewinnchancen der Stellung.${sequence.de}`,
+      fr: `${bestMove} est le premier choix de KataGo. Ce coup ${regionCopy.fr} et préserve les chances de victoire de la position.${sequence.fr}`,
+      es: `${bestMove} es la primera opción de KataGo. La jugada ${regionCopy.es} y conserva las posibilidades de victoria de la posición.${sequence.es}`,
+      zh: `${bestMove} 是 KataGo 的首选。这手棋${regionCopy.zh}，并保持当前局面的胜率。${sequence.zh}`,
+      ja: `${bestMove} はKataGoの第一候補です。この手は${regionCopy.ja}、局面の勝率を維持します。${sequence.ja}`,
+      ko: `${bestMove}는 KataGo의 최우선 수입니다. 이 수는 ${regionCopy.ko} 포지션의 승률을 유지합니다.${sequence.ko}`,
+    } satisfies LocalizedText;
   }
-  const lossText = `${(winrateLoss * 100).toFixed(1)} percentage points`;
-  const scoreText = signedPoints(scoreLoss);
+  const loss = (winrateLoss * 100).toFixed(1);
+  const points = Math.abs(scoreLoss).toFixed(1);
   return {
-    en: `${bestMove} is stronger than ${playedMove}: it ${enRegion}. KataGo estimates about ${lossText} more winning chance and ${scoreText} more score for the player to move.${sequenceEn}`,
-    de: `${bestMove} ist stärker als ${playedMove}: Der Zug ${deRegion}. KataGo schätzt etwa ${(winrateLoss * 100).toFixed(1)} Prozentpunkte mehr Gewinnchance und ${Math.abs(scoreLoss).toFixed(1)} Punkte mehr Ergebnis für den Spieler am Zug.${sequenceDe}`,
-  };
+    en: `${bestMove} is stronger than ${playedMove}: it ${regionCopy.en}. KataGo estimates about ${loss} percentage points more winning chance and ${points} points more score for the player to move.${sequence.en}`,
+    de: `${bestMove} ist stärker als ${playedMove}: Der Zug ${regionCopy.de}. KataGo schätzt etwa ${loss} Prozentpunkte mehr Gewinnchance und ${points} Punkte mehr Ergebnis für den Spieler am Zug.${sequence.de}`,
+    fr: `${bestMove} est plus fort que ${playedMove} : ce coup ${regionCopy.fr}. KataGo estime environ ${loss} points de pourcentage de chances de victoire et ${points} points de score supplémentaires pour le joueur au trait.${sequence.fr}`,
+    es: `${bestMove} es más fuerte que ${playedMove}: la jugada ${regionCopy.es}. KataGo estima unos ${loss} puntos porcentuales más de probabilidad de victoria y ${points} puntos más para el jugador que mueve.${sequence.es}`,
+    zh: `${bestMove} 比 ${playedMove} 更强：这手棋${regionCopy.zh}。KataGo 估计当前行棋方可多获得约 ${loss} 个百分点的胜率和 ${points} 目。${sequence.zh}`,
+    ja: `${bestMove} は ${playedMove} より優れています。この手は${regionCopy.ja}。KataGoは手番側の勝率が約 ${loss} ポイント、スコアが ${points} 目高くなると推定しています。${sequence.ja}`,
+    ko: `${bestMove}는 ${playedMove}보다 강합니다. 이 수는 ${regionCopy.ko}. KataGo는 둘 차례인 쪽의 승률이 약 ${loss}%포인트, 점수가 ${points}집 높아진다고 평가합니다.${sequence.ko}`,
+  } satisfies LocalizedText;
 }
 
 function emptySummary(): Record<MoveClassification, number> {

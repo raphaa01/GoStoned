@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import type { LocalizedText } from "@/lib/i18n/config";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
@@ -55,7 +56,7 @@ export function PuzzleWorkspace() {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [branchLine, setBranchLine] = useState<PuzzlePly[] | null>(null);
-  const [branchExplanation, setBranchExplanation] = useState<{ en: string; de: string } | null>(null);
+  const [branchExplanation, setBranchExplanation] = useState<LocalizedText | null>(null);
   const [error, setError] = useState<string | null>(null);
   const puzzles = useMemo(() => hub?.puzzles ?? [], [hub?.puzzles]);
 
