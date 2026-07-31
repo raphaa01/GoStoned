@@ -29,6 +29,13 @@ const requiredTables = [
   "player_rating_history",
   "player_glicko2_ratings",
   "game_glicko2_rating_events",
+  "player_rating_preferences",
+  "player_initial_rating_claims",
+  "calibrated_bot_profiles",
+  "calibrated_bot_profile_configurations",
+  "calibrated_bot_profile_activation_events",
+  "game_calibrated_bot_bindings",
+  "game_calibrated_bot_actions",
   "game_scoring_state",
   "game_dead_stones",
   "game_scoring_resume_events",
@@ -73,7 +80,14 @@ const requiredScoringColumns = [
   "finalized_at",
 ] as const;
 
-const requiredQueueColumns = ["rules_profile"] as const;
+const requiredQueueColumns = [
+  "rules_profile", "matchmaking_policy_version", "match_pool", "rules_snapshot",
+  "rules_version_snapshot", "scoring_method_snapshot", "komi_snapshot",
+  "handicap_snapshot", "rating_snapshot", "rating_deviation_snapshot",
+  "rating_algorithm_version", "rating_state_updated_at", "preference_revision",
+  "display_preference_snapshot", "bot_match_preference", "abandonment_risk", "abandonment_policy_version",
+  "abandonment_evaluated_at", "handicap_preference", "bot_fallback_not_before",
+] as const;
 
 const requiredJapaneseScoringColumns = [
   "proposal_hash",
@@ -140,6 +154,8 @@ const requiredGameRatingEventColumns = [
   "volatility_after", "rated_game_count_before", "rated_game_count_after",
   "last_rating_period_at_before", "last_rating_period_at_after",
   "algorithm_version", "rating_period_at", "processed_at",
+  "opponent_profile_id", "opponent_profile_fingerprint",
+  "opponent_binding_version", "opponent_configuration_key", "opponent_credit_mode",
 ] as const;
 
 const requiredLegacyRatingColumns = ["rating_algorithm_version"] as const;
@@ -193,6 +209,18 @@ const requiredIndexDefinitions = {
   ],
   idx_game_glicko2_events_player_period: [
     "ON public.game_glicko2_rating_events USING btree (player_key, rating_period_at DESC, game_id)",
+  ],
+  idx_matchmaking_adaptive_waiting: [
+    "ON public.matchmaking_queue USING btree (matchmaking_policy_version, match_pool, board_size, time_control, rules_profile, created_at, player_key)",
+    "WHERE (status = 'waiting'::text)",
+  ],
+  idx_calibrated_bot_action_move_once: [
+    "ON public.game_calibrated_bot_actions USING btree (game_id, move_number)",
+    "WHERE (action_kind = ANY",
+  ],
+  idx_calibrated_bot_action_resign_once: [
+    "ON public.game_calibrated_bot_actions USING btree (game_id)",
+    "WHERE (action_kind = 'resign'::text)",
   ],
   idx_player_blocks_blocked_blocker: [
     "ON public.player_blocks USING btree (blocked_key, blocker_key)",
@@ -316,6 +344,14 @@ const requiredConstraintSignatures = [
   "game_glicko2_rating_events_player_fk:game_glicko2_rating_events:f",
   "game_glicko2_rating_events_outcome_check:game_glicko2_rating_events:c",
   "game_glicko2_rating_events_algorithm_check:game_glicko2_rating_events:c",
+  "player_rating_preferences_pkey:player_rating_preferences:p",
+  "player_initial_rating_claims_pkey:player_initial_rating_claims:p",
+  "matchmaking_queue_adaptive_state_check:matchmaking_queue:c",
+  "calibrated_bot_profiles_pkey:calibrated_bot_profiles:p",
+  "calibrated_bot_profile_configurations_pkey:calibrated_bot_profile_configurations:p",
+  "calibrated_bot_profile_activation_events_pkey:calibrated_bot_profile_activation_events:p",
+  "game_calibrated_bot_bindings_pkey:game_calibrated_bot_bindings:p",
+  "game_calibrated_bot_actions_pkey:game_calibrated_bot_actions:p",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -604,6 +640,8 @@ const requiredConstraintDefinitions = {
       "variation_revision >= 0",
       "variation_revision <= 1000",
     ],
+    excludes: [],
+  },
   player_rating_history_algorithm_check: {
     includes: ["fixed-elo-legacy-v1"],
     excludes: [],
@@ -630,6 +668,10 @@ const requiredConstraintDefinitions = {
   },
   game_glicko2_rating_events_algorithm_check: {
     includes: ["glicko2-v1-tau-0.5"],
+    excludes: [],
+  },
+  matchmaking_queue_adaptive_state_check: {
+    includes: ["adaptive-global-glicko-match-v1", "registered-rated", "guest-unrated", "glicko2-v1-tau-0.5"],
     excludes: [],
   },
 } as const;
@@ -667,6 +709,17 @@ const requiredTriggerSignatures = [
   "game_glicko2_rating_events_commit_guard:game_glicko2_rating_events:public:validate_glicko2_rating_event_commit:5",
   "game_glicko2_rating_events_immutable_guard:game_glicko2_rating_events:public:guard_glicko2_rating_event_mutation:27",
   "game_glicko2_rating_events_truncate_guard:game_glicko2_rating_events:public:guard_glicko2_rating_event_mutation:34",
+  "player_initial_rating_claims_insert_guard:player_initial_rating_claims:public:validate_initial_rating_claim_insert:7",
+  "player_initial_rating_claims_immutable_guard:player_initial_rating_claims:public:guard_initial_rating_claim_mutation:27",
+  "player_initial_rating_claims_truncate_guard:player_initial_rating_claims:public:guard_initial_rating_claim_mutation:34",
+  "player_rating_preferences_update_guard:player_rating_preferences:public:guard_rating_preference_update:19",
+  "calibrated_bot_activation_insert_guard:calibrated_bot_profile_activation_events:public:validate_calibrated_bot_activation:7",
+  "calibrated_bot_binding_insert_guard:game_calibrated_bot_bindings:public:validate_calibrated_bot_binding:7",
+  "calibrated_bot_action_insert_guard:game_calibrated_bot_actions:public:validate_calibrated_bot_action_insert:7",
+  "bound_game_bot_identity_guard:game_bots:public:guard_bound_game_bot_identity:19",
+  "game_glicko2_calibrated_bot_event_insert_guard:game_glicko2_rating_events:public:validate_calibrated_bot_rating_event_insert:7",
+  "game_glicko2_calibrated_bot_event_commit_guard:game_glicko2_rating_events:public:validate_calibrated_bot_rating_event_commit:5",
+  "player_glicko2_ratings_transition_guard:player_glicko2_ratings:public:validate_glicko2_state_transition:19",
 ] as const;
 
 const requiredTriggerDefinitions = {
@@ -720,6 +773,28 @@ const requiredTriggerDefinitions = {
     "BEFORE DELETE OR UPDATE ON public.game_glicko2_rating_events",
   game_glicko2_rating_events_truncate_guard:
     "BEFORE TRUNCATE ON public.game_glicko2_rating_events",
+  player_initial_rating_claims_insert_guard:
+    "BEFORE INSERT ON public.player_initial_rating_claims",
+  player_initial_rating_claims_immutable_guard:
+    "BEFORE DELETE OR UPDATE ON public.player_initial_rating_claims",
+  player_initial_rating_claims_truncate_guard:
+    "BEFORE TRUNCATE ON public.player_initial_rating_claims",
+  player_rating_preferences_update_guard:
+    "BEFORE UPDATE ON public.player_rating_preferences",
+  calibrated_bot_activation_insert_guard:
+    "BEFORE INSERT ON public.calibrated_bot_profile_activation_events",
+  calibrated_bot_binding_insert_guard:
+    "BEFORE INSERT ON public.game_calibrated_bot_bindings",
+  calibrated_bot_action_insert_guard:
+    "BEFORE INSERT ON public.game_calibrated_bot_actions",
+  bound_game_bot_identity_guard:
+    "BEFORE UPDATE ON public.game_bots",
+  game_glicko2_calibrated_bot_event_insert_guard:
+    "BEFORE INSERT ON public.game_glicko2_rating_events",
+  game_glicko2_calibrated_bot_event_commit_guard:
+    "AFTER INSERT ON public.game_glicko2_rating_events DEFERRABLE INITIALLY DEFERRED",
+  player_glicko2_ratings_transition_guard:
+    "BEFORE UPDATE ON public.player_glicko2_ratings",
 } as const;
 
 const requiredProtectedTables = [
@@ -743,6 +818,13 @@ const requiredProtectedTables = [
   "game_japanese_repetition_claims",
   "player_glicko2_ratings",
   "game_glicko2_rating_events",
+  "player_rating_preferences",
+  "player_initial_rating_claims",
+  "calibrated_bot_profiles",
+  "calibrated_bot_profile_configurations",
+  "calibrated_bot_profile_activation_events",
+  "game_calibrated_bot_bindings",
+  "game_calibrated_bot_actions",
 ] as const;
 
 const requiredGuardFunctions = [
@@ -768,6 +850,17 @@ const requiredGuardFunctions = [
   "public.guard_japanese_repetition_finish()",
   "public.guard_japanese_repetition_claim_mutation()",
   "public.guard_glicko2_rating_event_mutation()",
+  "public.guard_initial_rating_claim_mutation()",
+  "public.validate_initial_rating_claim_insert()",
+  "public.guard_rating_preference_update()",
+  "public.guard_calibrated_bot_evidence_mutation()",
+  "public.validate_calibrated_bot_activation()",
+  "public.validate_calibrated_bot_binding()",
+  "public.validate_calibrated_bot_action_insert()",
+  "public.guard_bound_game_bot_identity()",
+  "public.validate_calibrated_bot_rating_event_insert()",
+  "public.validate_calibrated_bot_rating_event_commit()",
+  "public.validate_glicko2_state_transition()",
   "public.validate_glicko2_rating_event_insert()",
   "public.validate_glicko2_rating_event_commit()",
 ] as const;
@@ -872,9 +965,14 @@ const requiredGuardFunctionDefinitions = {
   ],
   "public.guard_japanese_repetition_claim_mutation()": [
     "Japanese repetition claims are append-only.",
+  ],
   "public.guard_glicko2_rating_event_mutation()": [
     "Glicko-2 game rating evidence is append-only.",
     "TG_OP = 'DELETE'",
+  ],
+  "public.guard_rating_preference_update()": [
+    "NEW.preference_revision <> OLD.preference_revision + 1",
+    "NEW.updated_at <= OLD.updated_at",
   ],
   "public.validate_glicko2_rating_event_insert()": [
     "FROM public.games WHERE id = NEW.game_id FOR UPDATE",
@@ -888,6 +986,32 @@ const requiredGuardFunctionDefinitions = {
     "event_count <> 2",
     "complete paired state transition",
     "player_state.rating IS DISTINCT FROM NEW.rating_after",
+  ],
+  "public.validate_calibrated_bot_binding()": [
+    "queue_row.bot_match_preference <> 'calibrated-rated-after-wait'",
+    "config_row.rules_version <> queue_row.rules_version_snapshot",
+    "fixed_rating_deviation IS DISTINCT FROM NEW.opponent_rating_deviation",
+  ],
+  "public.validate_calibrated_bot_action_insert()": [
+    "NEW.completed_at < binding_row.bound_at",
+    "move.color = binding_row.bot_color",
+    "game_row.finish_reason = 'resignation'",
+  ],
+  "public.guard_bound_game_bot_identity()": [
+    "NEW.bot_player_key IS DISTINCT FROM OLD.bot_player_key",
+    "NEW.rating_mode IS DISTINCT FROM OLD.rating_mode",
+  ],
+  "public.validate_calibrated_bot_rating_event_insert()": [
+    "binding_row.human_player_key <> NEW.player_key",
+    "action.engine_version = binding_row.engine_version",
+    "Bot rating evidence must begin at the locked human global state.",
+  ],
+  "public.validate_calibrated_bot_rating_event_commit()": [
+    "event_count <> 1",
+    "one complete human state transition",
+  ],
+  "public.validate_glicko2_state_transition()": [
+    "Global rating state changes require matching immutable game evidence.",
   ],
 } as const;
 

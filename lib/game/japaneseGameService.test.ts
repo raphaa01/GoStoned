@@ -209,6 +209,11 @@ async function withProtocol<T>(store: Store, action: () => Promise<T>): Promise<
         return result();
       }
       if (sql.includes("FROM games g")) return result([store.game]);
+      if (sql.includes("FROM games WHERE id=$1 FOR UPDATE")) return result([store.game]);
+      if (sql.includes("FROM game_glicko2_rating_events") && sql.includes("FOR UPDATE")) {
+        return result();
+      }
+      if (sql.includes("AS player_key") && sql.includes("FROM users")) return result();
       if (sql.includes("FROM moves")) return result(store.moves);
       if (sql.includes("FROM game_japanese_repetition_claims")) return result();
       if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM game_japanese_resume_authorizations")) return result(store.resumes);
@@ -897,4 +902,18 @@ test("Japanese scoring mutation routes preserve the authenticated mutation guard
   }
 });
 
-test.todo("all eligible Japanese terminal transitions must invoke the idempotent rating ledger in the same transaction");
+test("all eligible Japanese terminal transitions invoke the idempotent rating ledger after the terminal write", () => {
+  assert.equal(serviceSource.match(/await finalizeGameRatings\(/g)?.length, 5);
+
+  for (const [name, section] of [
+    ["timeout", sourceBetween(serviceSource, "export async function submitJapaneseMove", "export async function setJapaneseDeadGroup")],
+    ["agreement", sourceBetween(serviceSource, "export async function confirmJapaneseScore", "export async function resumeJapanesePlay")],
+    ["deadline", sourceBetween(serviceSource, "async function finishJapaneseDeadline", "export async function resolveJapaneseScoringDeadline")],
+    ["repetition", sourceBetween(serviceSource, "export async function claimJapaneseWholeBoardRepetition", "export async function resignJapaneseGame")],
+    ["resignation", serviceSource.slice(serviceSource.indexOf("export async function resignJapaneseGame"))],
+  ] as const) {
+    const terminalWrite = section.indexOf("UPDATE games SET status='finished'");
+    const finalizer = section.indexOf("await finalizeGameRatings");
+    assert.ok(terminalWrite >= 0 && finalizer > terminalWrite, name);
+  }
+});

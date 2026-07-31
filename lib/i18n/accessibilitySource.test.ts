@@ -16,13 +16,13 @@ test("mobile disclosure and global focus contracts remain wired", () => {
   assert.match(styles, /:is\(a, button, input, select, textarea, summary, \[tabindex\]\)[^{]+:focus-visible/);
 });
 
-test("selectors and leaderboard retain explicit selection and table semantics", () => {
+test("selectors and the global leaderboard retain explicit accessible semantics", () => {
   const boardSelector = source("components/game/BoardSizeSelector.tsx");
   const leaderboard = source("components/leaderboard/LeaderboardView.tsx");
   assert.match(boardSelector, /role="group"/);
   assert.match(boardSelector, /aria-pressed=\{value === size\.value\}/);
-  assert.match(leaderboard, /role="group"/);
-  assert.match(leaderboard, /aria-pressed=\{boardSize === size\}/);
+  assert.match(leaderboard, /copy\.globalScope/);
+  assert.doesNotMatch(leaderboard, /boardSize|aria-pressed/);
   assert.match(leaderboard, /<table>/);
   assert.match(leaderboard, /<th scope="col">/);
   assert.match(leaderboard, /<th scope="row">/);

@@ -1,15 +1,13 @@
-import type { BoardSize } from "@/lib/game/types";
-
 export type LeaderboardEntry = {
   position: number;
   playerName: string;
   games: number;
   wins: number;
   rating: number;
+  ratingDeviation: number;
 };
 
 export type PublicLeaderboardSnapshot = {
-  boardSize: BoardSize;
   leaderboard: LeaderboardEntry[];
   observedAt: string;
 };
@@ -42,12 +40,9 @@ function parseObservedAt(value: unknown, now: number): string {
 
 export function parsePublicLeaderboardSnapshot(
   value: unknown,
-  expectedBoardSize: BoardSize,
   now = Date.now(),
 ): PublicLeaderboardSnapshot {
-  if (!isRecord(value) || value.boardSize !== expectedBoardSize) {
-    throw new Error("Leaderboard board size is invalid.");
-  }
+  if (!isRecord(value)) throw new Error("Leaderboard response is invalid.");
   if (
     !Array.isArray(value.leaderboard)
     || value.leaderboard.length > MAX_LEADERBOARD_ENTRIES
@@ -65,7 +60,14 @@ export function parsePublicLeaderboardSnapshot(
       || playerName.length > MAX_PUBLIC_PLAYER_NAME_LENGTH
       || !isBoundedInteger(entry.games, 1, MAX_POSTGRES_INT)
       || !isBoundedInteger(entry.wins, 0, entry.games)
-      || !isBoundedInteger(entry.rating, 100, MAX_POSTGRES_INT)
+      || typeof entry.rating !== "number"
+      || !Number.isFinite(entry.rating)
+      || entry.rating < -10000
+      || entry.rating > 10000
+      || typeof entry.ratingDeviation !== "number"
+      || !Number.isFinite(entry.ratingDeviation)
+      || entry.ratingDeviation <= 0
+      || entry.ratingDeviation > 10000
     ) {
       throw new Error("Leaderboard entry is invalid.");
     }
@@ -75,11 +77,11 @@ export function parsePublicLeaderboardSnapshot(
       games: entry.games,
       wins: entry.wins,
       rating: entry.rating,
+      ratingDeviation: entry.ratingDeviation,
     };
   });
 
   return {
-    boardSize: expectedBoardSize,
     leaderboard,
     observedAt: parseObservedAt(value.observedAt, now),
   };

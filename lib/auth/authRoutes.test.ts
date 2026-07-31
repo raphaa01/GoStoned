@@ -39,7 +39,14 @@ function credentialRequest(
   path: string,
   address: string,
   headers: Record<string, string> = {},
-  body = JSON.stringify({ username: "named_player", password: "password123" }),
+  body = JSON.stringify(path.endsWith("/register")
+    ? {
+        username: "named_player",
+        password: "password123",
+        startingStrength: "unspecified",
+        knownRank: null,
+      }
+    : { username: "named_player", password: "password123" }),
 ) {
   return new NextRequest(`https://gostone.test${path}`, {
     method: "POST",
@@ -487,7 +494,12 @@ test("successful registration exposes only the committed user and hardened sessi
     "/api/auth/register",
     "203.0.113.99",
     {},
-    JSON.stringify({ username: "atomic_player", password: "password123" }),
+    JSON.stringify({
+      username: "atomic_player",
+      password: "password123",
+      startingStrength: "known",
+      knownRank: "12k",
+    }),
   )));
 
   assert.equal(committed, true);
@@ -502,8 +514,11 @@ test("successful registration exposes only the committed user and hardened sessi
       playerKey: `user:${userId}`,
     },
   });
-  assert.deepEqual(transactionStatements.slice(2), [
-    "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $1) RETURNING id, username, display_name",
+  const accountStatement = transactionStatements[2];
+  assert.match(accountStatement, /^WITH account AS/);
+  assert.match(accountStatement, /INSERT INTO player_rating_preferences/);
+  assert.match(accountStatement, /INSERT INTO player_glicko2_ratings/);
+  assert.deepEqual(transactionStatements.slice(3), [
     "INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')",
     "WITH expired_sessions AS MATERIALIZED ( SELECT user_session.id FROM user_sessions AS user_session WHERE user_session.expires_at <= NOW() ORDER BY user_session.expires_at, user_session.id LIMIT 200 FOR UPDATE OF user_session SKIP LOCKED ) DELETE FROM user_sessions AS user_session USING expired_sessions AS expired WHERE user_session.id = expired.id",
     "COMMIT",
@@ -602,7 +617,12 @@ test("registration failures roll back the account and never set a session cookie
           "/api/auth/register",
           `203.0.113.${100 + index}`,
           {},
-          JSON.stringify({ username: `atomic_${index}`, password: "password123" }),
+          JSON.stringify({
+            username: `atomic_${index}`,
+            password: "password123",
+            startingStrength: "unspecified",
+            knownRank: null,
+          }),
         )));
 
         assert.equal(response.status, failure.status);
@@ -631,8 +651,9 @@ test("registration failures roll back the account and never set a session cookie
         if (failure.stage === "username" || failure.stage === "user-primary") {
           assert.equal(sessionInsert, -1);
         } else {
-          assert.ok(transactionStatements.indexOf(
-            "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $1) RETURNING id, username, display_name",
+          assert.ok(transactionStatements.findIndex(
+            (sql) => sql.startsWith("WITH account AS")
+              && sql.includes("INSERT INTO player_glicko2_ratings"),
           ) < sessionInsert);
         }
       } finally {

@@ -13,11 +13,9 @@ test("leaderboard requests accept shared caching and cannot commit stale respons
   assert.match(component, /signal: controller\.signal/);
   assert.match(component, /if \(!active\) return/);
   assert.match(component, /active = false;\s+controller\.abort\(\)/);
-  assert.match(component, /parsePublicLeaderboardSnapshot\(body, boardSize\)/);
-  assert.match(
-    component,
-    /setEntries\(\[\]\);\s+setObservedAt\(null\);\s+setBoardSize\(size\)/,
-  );
+  assert.match(component, /fetch\("\/api\/stats"/);
+  assert.match(component, /parsePublicLeaderboardSnapshot\(body\)/);
+  assert.doesNotMatch(component, /boardSize=|setBoardSize/);
   assert.doesNotMatch(component, /cache:\s*["']no-store["']/);
 });
 

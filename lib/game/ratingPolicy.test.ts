@@ -78,11 +78,10 @@ test("routes every terminal flow through the global rating finalizer", () => {
   assert.doesNotMatch(japaneseService, /INSERT INTO player_rating_history/);
   assert.match(finalizer, /INSERT INTO game_glicko2_rating_events/);
   assert.match(finalizer, /UPDATE player_glicko2_ratings/);
-  assert.match(chineseService, /COUNT\(DISTINCT evidence\.player_key\) = 2/);
-  assert.match(
-    japaneseService,
-    /COUNT\(DISTINCT rating_evidence\.player_key\) = 2/,
-  );
+  for (const service of [chineseService, japaneseService]) {
+    assert.match(service, /COUNT\(\*\) = 2 AND BOOL_AND\(event\.opponent_kind = 'registered_human'\)/);
+    assert.match(service, /COUNT\(\*\) = 1 AND BOOL_AND\(event\.opponent_kind = 'calibrated_bot'\)/);
+  }
   assert.match(finalizer, /FROM games WHERE id=\$1 FOR UPDATE/);
   assert.match(finalizer, /ORDER BY player_key\s+FOR UPDATE/);
   assert.match(finalizer, /if \(existing\.rowCount !== 0\)/);

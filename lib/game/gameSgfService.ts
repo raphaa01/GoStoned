@@ -25,6 +25,13 @@ type ExportGameRow = QueryResultRow & {
   handicap: number;
   black_player_name: string;
   white_player_name: string;
+  bot_player_key: string | null;
+  bot_color: Stone | null;
+  bot_rating_mode: "unrated" | "calibrated-v1" | null;
+  bot_profile_id: string | null;
+  bot_engine_family: string | null;
+  bot_model_version: string | null;
+  bot_config_version: string | null;
 };
 
 type ExportMoveRow = QueryResultRow & {
@@ -116,13 +123,21 @@ async function loadSgfInput(
     `SELECT g.id,g.board_size,g.black_player_key,g.white_player_key,g.winner_key,
             g.status,g.result,g.finish_reason,g.rules,g.rules_profile,
             g.scoring_method,g.komi,g.handicap,
-            COALESCE(NULLIF(BTRIM(black_user.display_name), ''),black_user.username,
+            COALESCE(CASE WHEN g.black_player_key=game_bot.bot_player_key THEN game_bot.display_name END,
+              NULLIF(BTRIM(black_user.display_name), ''),black_user.username,
               'Guest ' || UPPER(RIGHT(g.black_player_key, 6))) AS black_player_name,
-            COALESCE(NULLIF(BTRIM(white_user.display_name), ''),white_user.username,
-              'Guest ' || UPPER(RIGHT(g.white_player_key, 6))) AS white_player_name
+            COALESCE(CASE WHEN g.white_player_key=game_bot.bot_player_key THEN game_bot.display_name END,
+              NULLIF(BTRIM(white_user.display_name), ''),white_user.username,
+              'Guest ' || UPPER(RIGHT(g.white_player_key, 6))) AS white_player_name,
+            game_bot.bot_player_key,game_bot.color AS bot_color,
+            game_bot.rating_mode AS bot_rating_mode,
+            binding.profile_id AS bot_profile_id,binding.engine_family AS bot_engine_family,
+            binding.model_version AS bot_model_version,binding.config_version AS bot_config_version
        FROM games g
        LEFT JOIN users black_user ON g.black_player_key='user:' || black_user.id::text
        LEFT JOIN users white_user ON g.white_player_key='user:' || white_user.id::text
+       LEFT JOIN game_bots game_bot ON game_bot.game_id=g.id
+       LEFT JOIN game_calibrated_bot_bindings binding ON binding.game_id=g.id
       WHERE g.id=$1`,
     [gameId],
   );
@@ -160,6 +175,13 @@ async function loadSgfInput(
     game.finish_reason === "japanese_repetition"
     && repetitionRows.rows[0]?.move_number !== moves.at(-1)?.moveNumber
   ) return corrupt("repetition move evidence");
+  const botDisclosure = game.bot_player_key && game.bot_color ? {
+    provider: game.bot_engine_family ?? "KataGo",
+    model: game.bot_model_version ?? "not-recorded",
+    version: game.bot_profile_id
+      ? `${game.bot_profile_id}/${game.bot_config_version}`
+      : game.bot_rating_mode ?? "unrated",
+  } : null;
   return {
     gameId: game.id,
     boardSize: boardSize(game.board_size),
@@ -173,6 +195,7 @@ async function loadSgfInput(
     moves,
     result: terminalResult(game, terminalResultRows.rows[0], repetitionRows.rows[0]),
     players: { blackName: game.black_player_name, whiteName: game.white_player_name },
+    bots: botDisclosure ? { [game.bot_color!]: botDisclosure } : undefined,
   };
 }
 

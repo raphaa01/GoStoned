@@ -133,15 +133,26 @@ test("registration commits the user, session, and bounded cleanup before exposin
   });
   assert.equal(isSessionTokenFormat(result.token), true);
   assert.deepEqual(database.committedUsers, new Set(["atomic_player"]));
-  assert.deepEqual(database.statements.map(({ sql }) => sql), [
+  assert.deepEqual(database.statements.map(({ sql }) => (
+    sql.startsWith("WITH account AS") ? "CREATE ACCOUNT WITH GLOBAL RATING" : sql
+  )), [
     "BEGIN",
     "SET LOCAL statement_timeout = '8s'",
-    "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $1) RETURNING id, username, display_name",
+    "CREATE ACCOUNT WITH GLOBAL RATING",
     "INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')",
     "WITH expired_sessions AS MATERIALIZED ( SELECT user_session.id FROM user_sessions AS user_session WHERE user_session.expires_at <= NOW() ORDER BY user_session.expires_at, user_session.id LIMIT 200 FOR UPDATE OF user_session SKIP LOCKED ) DELETE FROM user_sessions AS user_session USING expired_sessions AS expired WHERE user_session.id = expired.id",
     "COMMIT",
   ]);
   assert.match(String(database.statements[2].values[1]), /^scrypt\$/);
+  assert.deepEqual(database.statements[2].values.slice(2), [
+    "unspecified",
+    null,
+    "starting-strength-v1",
+    1200,
+    350,
+    0.06,
+    "glicko2-v1-tau-0.5",
+  ]);
   assert.deepEqual(database.statements[3].values, [
     database.userId,
     createHash("sha256").update(result.token).digest("hex"),

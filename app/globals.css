@@ -1377,6 +1377,29 @@ a {
   padding: 12px;
 }
 
+.queue-rating {
+  align-items: center;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.queue-rating > span {
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.queue-rating .rating-label {
+  min-width: 0;
+  text-align: right;
+}
+
 .panel-note {
   color: var(--muted-2);
   font-size: 9px;
@@ -2861,6 +2884,38 @@ a {
   gap: 7px;
 }
 
+.auth-strength {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.9rem;
+}
+
+.auth-strength legend {
+  font-weight: 700;
+  padding: 0 0.35rem;
+}
+
+.auth-strength p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.auth-strength select,
+.input-wrap select {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  min-height: 2.5rem;
+  outline: 0;
+  padding: 0 0.5rem;
+  width: 100%;
+}
+
 .auth-form label > span:first-child {
   font-size: 12px;
   font-weight: 750;
@@ -4030,4 +4085,72 @@ a {
 
 .mobile-menu[hidden] {
   display: none;
+}
+
+.rating-grid--global {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 1fr);
+}
+
+.rating-grid--global > * {
+  min-width: 0;
+}
+
+.rating-label {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.rating-label small,
+.leaderboard-rating-detail {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.rating-details summary {
+  cursor: pointer;
+  margin-top: 0.55rem;
+}
+
+.rating-details dl {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rating-details dl div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.rating-preferences {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.rating-preferences label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rating-preferences select {
+  font: inherit;
+  max-width: 100%;
+  min-height: 2.75rem;
+  width: 100%;
+}
+
+.rating-preferences p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .rating-grid--global {
+    grid-template-columns: 1fr;
+  }
 }

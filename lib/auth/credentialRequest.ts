@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
+import { parseStartingStrength } from "@/lib/rating/preferences";
 
 export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 1_024;
 export const MAX_CREDENTIAL_REQUEST_BODY_CHUNKS = MAX_CREDENTIAL_REQUEST_BODY_BYTES;
@@ -81,7 +82,7 @@ export function assertAuthMutationRequest(
   }
 }
 
-export async function readCredentialRequest(request: NextRequest) {
+async function readCredentialBody(request: NextRequest) {
   assertAuthMutationRequest(request, { requireJson: true });
   const body = await readBoundedJsonObject(request, {
     maxBytes: MAX_CREDENTIAL_REQUEST_BODY_BYTES,
@@ -99,6 +100,11 @@ export async function readCredentialRequest(request: NextRequest) {
       "invalid_request",
     ),
   });
+  return body;
+}
+
+export async function readCredentialRequest(request: NextRequest) {
+  const body = await readCredentialBody(request);
   const fields = Object.keys(body);
   if (
     fields.length !== 2
@@ -112,4 +118,35 @@ export async function readCredentialRequest(request: NextRequest) {
     );
   }
   return validateCredentials(body.username, body.password);
+}
+
+export async function readRegistrationRequest(request: NextRequest) {
+  const body = await readCredentialBody(request);
+  const fields = Object.keys(body);
+  if (
+    fields.length !== 4
+    || !Object.prototype.hasOwnProperty.call(body, "username")
+    || !Object.prototype.hasOwnProperty.call(body, "password")
+    || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
+    || !Object.prototype.hasOwnProperty.call(body, "knownRank")
+  ) {
+    throw new AuthError(
+      "The registration request has an invalid shape.",
+      400,
+      "invalid_request",
+    );
+  }
+  const credentials = validateCredentials(body.username, body.password);
+  try {
+    return {
+      ...credentials,
+      startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
+    };
+  } catch {
+    throw new AuthError(
+      "Choose a supported optional starting strength.",
+      400,
+      "invalid_starting_strength",
+    );
+  }
 }

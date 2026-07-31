@@ -19,6 +19,7 @@ import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { PlayerClock } from "./PlayerClock";
 import { ScoringDecisionCountdown } from "./ScoringDecisionCountdown";
+import { RatingLabel } from "@/components/rating/RatingLabel";
 
 function deadStoneCounts(game: GameState) {
   return (game.scoring?.deadStones ?? []).reduce(
@@ -66,7 +67,7 @@ export function GamePanel({
   onUndoScoring,
   onLeave,
 }: GamePanelProps) {
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
   const copy = dictionary.game;
   const rulesSummary = localizedRulesSummary(game, dictionary);
   const [selectedGroupKey, setSelectedGroupKey] = useState("");
@@ -106,7 +107,7 @@ export function GamePanel({
       : false;
   const resultText =
     game.status === "finished"
-      ? game.finishReason === "japanese_no_result"
+      ? game.finishReason === "japanese_no_result" || game.finishReason === "japanese_repetition"
         ? `${copy.gameOver} · ${copy.noResult}`
         : !yourColor
         ? `${copy.gameOver} · ${game.result}`
@@ -130,6 +131,9 @@ export function GamePanel({
         <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
           <span>{game.whitePlayerIsBot ? `${copy.botOpponent} · ${copy.white}` : yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
+          {game.whiteRating !== null && game.whiteRating !== undefined
+            ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
+            : null}
         </div>
         <PlayerClock
           clock={game.clock}
@@ -162,6 +166,10 @@ export function GamePanel({
                 ? copy.disputeResumed
               : copy.movesVerified}
           </span>
+          {game.status === "finished" && game.rated && game.viewerRatingChange !== null
+            && game.viewerRatingChange !== undefined
+            ? <span>{dictionary.profile.ratingChange}: {game.viewerRatingChange > 0 ? "+" : ""}{Math.round(game.viewerRatingChange)}</span>
+            : null}
         </div>
       </div>
 
@@ -170,6 +178,9 @@ export function GamePanel({
         <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
           <span>{game.blackPlayerIsBot ? `${copy.botOpponent} · ${copy.black}` : yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
+          {game.blackRating !== null && game.blackRating !== undefined
+            ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
+            : null}
         </div>
         <PlayerClock
           clock={game.clock}

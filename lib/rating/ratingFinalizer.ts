@@ -52,6 +52,22 @@ type ExistingEventRow = QueryResultRow & {
   player_key: string;
   outcome_kind: RatingOutcomeKind;
   algorithm_version: string;
+  opponent_kind: "registered_human" | "calibrated_bot";
+};
+
+type CalibratedBotBindingRow = QueryResultRow & {
+  human_player_key: string;
+  bot_player_key: string;
+  bot_color: "black" | "white";
+  profile_id: string;
+  profile_contract_version: string;
+  profile_fingerprint: string;
+  binding_version: string;
+  configuration_key: string;
+  credit_mode: "fixed-versioned-profile";
+  opponent_rating: string | number;
+  opponent_rating_deviation: string | number;
+  execution_complete: boolean;
 };
 
 type RatingOutcomeKind = "win" | "loss" | "draw" | "no_result";
@@ -195,12 +211,21 @@ function updatedState(
   };
 }
 
-function exactExistingPair(
+function exactExistingEvidence(
   events: readonly ExistingEventRow[],
   game: TerminalGameRow,
   terminal: ClassifiedTerminal,
 ): boolean {
-  if (events.length !== 2) return false;
+  if (events.length === 1 && events[0].opponent_kind === "calibrated_bot") {
+    const color = events[0].player_key === game.black_player_key ? "black"
+      : events[0].player_key === game.white_player_key ? "white" : null;
+    return color !== null
+      && events[0].algorithm_version === GLICKO2_ALGORITHM_VERSION
+      && events[0].outcome_kind === terminal.outcomes[color];
+  }
+  if (events.length !== 2 || events.some((event) => event.opponent_kind !== "registered_human")) {
+    return false;
+  }
   const expected = new Map([
     [game.black_player_key, terminal.outcomes.black],
     [game.white_player_key, terminal.outcomes.white],
@@ -232,7 +257,7 @@ export async function finalizeGameRatings(
   const terminal = classifyTerminal(game);
 
   const existing = await client.query<ExistingEventRow>(
-    `SELECT player_key,outcome_kind,algorithm_version
+    `SELECT player_key,outcome_kind,algorithm_version,opponent_kind
        FROM game_glicko2_rating_events
       WHERE game_id=$1
       ORDER BY player_key
@@ -240,7 +265,7 @@ export async function finalizeGameRatings(
     [gameId],
   );
   if (existing.rowCount !== 0) {
-    if (!exactExistingPair(existing.rows, game, terminal)) {
+    if (!exactExistingEvidence(existing.rows, game, terminal)) {
       return conflict("The game has partial or contradictory rating evidence.");
     }
     return { rated: true, kind: terminal.kind };
@@ -254,6 +279,134 @@ export async function finalizeGameRatings(
     [game.black_player_key, game.white_player_key],
   );
   const registeredKeys = new Set(registered.rows.map(({ player_key }) => player_key));
+  if (registered.rowCount === 1 && registeredKeys.size === 1) {
+    const human = registered.rows[0];
+    const botKey = game.black_player_key === human.player_key
+      ? game.white_player_key : game.black_player_key;
+    const binding = (await client.query<CalibratedBotBindingRow>(
+      `SELECT binding.human_player_key,binding.bot_player_key,binding.bot_color,
+              binding.profile_id,binding.profile_contract_version,
+              binding.profile_fingerprint,binding.binding_version,
+              binding.configuration_key,binding.credit_mode,
+              binding.opponent_rating,binding.opponent_rating_deviation,
+              (
+                NOT EXISTS (
+                  SELECT 1 FROM moves bot_move
+                   WHERE bot_move.game_id = binding.game_id
+                     AND bot_move.color = binding.bot_color
+                     AND NOT EXISTS (
+                       SELECT 1 FROM game_calibrated_bot_actions action
+                        WHERE action.game_id = binding.game_id
+                          AND action.move_number = bot_move.move_number
+                          AND action.action_kind = CASE WHEN bot_move.x IS NULL
+                            THEN 'pass' ELSE 'move' END
+                          AND action.x IS NOT DISTINCT FROM bot_move.x
+                          AND action.y IS NOT DISTINCT FROM bot_move.y
+                          AND action.profile_id = binding.profile_id
+                          AND action.profile_fingerprint = binding.profile_fingerprint
+                          AND action.engine_version = binding.engine_version
+                          AND action.model_version = binding.model_version
+                          AND action.config_version = binding.config_version
+                     )
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM game_calibrated_bot_actions action
+                   WHERE action.game_id = binding.game_id
+                     AND action.action_kind IN ('move','pass')
+                     AND NOT EXISTS (
+                       SELECT 1 FROM moves bot_move
+                        WHERE bot_move.game_id = binding.game_id
+                          AND bot_move.color = binding.bot_color
+                          AND bot_move.move_number = action.move_number
+                          AND action.action_kind = CASE WHEN bot_move.x IS NULL
+                            THEN 'pass' ELSE 'move' END
+                          AND action.x IS NOT DISTINCT FROM bot_move.x
+                          AND action.y IS NOT DISTINCT FROM bot_move.y
+                     )
+                )
+                AND (
+                  game_record.finish_reason <> 'resignation'
+                  OR game_record.winner_key = binding.bot_player_key
+                  OR EXISTS (
+                    SELECT 1 FROM game_calibrated_bot_actions action
+                     WHERE action.game_id = binding.game_id AND action.action_kind = 'resign'
+                       AND action.profile_id = binding.profile_id
+                       AND action.profile_fingerprint = binding.profile_fingerprint
+                  )
+                )
+              ) AS execution_complete
+         FROM game_calibrated_bot_bindings binding
+         JOIN games game_record ON game_record.id = binding.game_id
+         JOIN game_bots bot ON bot.game_id = binding.game_id
+        WHERE binding.game_id = $1 AND binding.human_player_key = $2
+          AND binding.bot_player_key = $3 AND bot.rating_mode = 'calibrated-v1'
+        FOR UPDATE OF binding`,
+      [gameId, human.player_key, botKey],
+    )).rows[0];
+    if (!binding || !binding.execution_complete) return { rated: false, kind: "unrated" };
+
+    const lockedHuman = (await client.query<GlobalRatingRow>(
+      `SELECT player_key,rating,rating_deviation,volatility,rated_game_count,
+              algorithm_version,last_rating_period_at
+         FROM player_glicko2_ratings WHERE player_key=$1 FOR UPDATE`,
+      [human.player_key],
+    )).rows[0];
+    if (!lockedHuman) return conflict("The human global rating state is missing.");
+    const before = stateFromRow(lockedHuman);
+    const botState: PersistedRatingState = {
+      playerKey: binding.bot_player_key,
+      rating: finiteNumber(binding.opponent_rating, "calibrated bot rating"),
+      ratingDeviation: finiteNumber(binding.opponent_rating_deviation, "calibrated bot deviation"),
+      volatility: GLICKO2_INITIAL_VOLATILITY,
+      ratedGameCount: 0,
+      lastRatingPeriodAt: before.lastRatingPeriodAt,
+    };
+    const humanColor = game.black_player_key === human.player_key ? "black" : "white";
+    const score = terminal.scores[humanColor];
+    const computed = terminal.kind === "rated" ? updatedState(before, botState, score!) : before;
+    const period = (await client.query<{ rating_period_at: Date }>(
+      "SELECT statement_timestamp() AS rating_period_at",
+    )).rows[0]?.rating_period_at;
+    if (!(period instanceof Date) || !Number.isFinite(period.getTime())) {
+      return conflict("The rating period timestamp is unavailable.");
+    }
+    await client.query(
+      `INSERT INTO game_glicko2_rating_events
+         (game_id,player_key,opponent_key,opponent_kind,opponent_profile_version,
+          opponent_profile_id,opponent_profile_fingerprint,opponent_binding_version,
+          opponent_configuration_key,opponent_credit_mode,player_color,outcome_kind,
+          score,finish_reason,game_result,game_finished_at,opponent_rating,
+          opponent_rating_deviation,rating_before,rating_after,rating_deviation_before,
+          rating_deviation_after,volatility_before,volatility_after,rated_game_count_before,
+          rated_game_count_after,last_rating_period_at_before,last_rating_period_at_after,
+          algorithm_version,rating_period_at)
+       VALUES ($1,$2,$3,'calibrated_bot',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+               $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
+      [
+        game.id, before.playerKey, binding.bot_player_key,
+        binding.profile_contract_version, binding.profile_id, binding.profile_fingerprint,
+        binding.binding_version, binding.configuration_key, binding.credit_mode,
+        humanColor, terminal.outcomes[humanColor], score, game.finish_reason, game.result,
+        game.finished_at, botState.rating, botState.ratingDeviation, before.rating,
+        computed.rating, before.ratingDeviation, computed.ratingDeviation,
+        before.volatility, computed.volatility, before.ratedGameCount,
+        computed.ratedGameCount, before.lastRatingPeriodAt,
+        terminal.kind === "rated" ? period : before.lastRatingPeriodAt,
+        GLICKO2_ALGORITHM_VERSION, period,
+      ],
+    );
+    if (terminal.kind === "rated") {
+      await client.query(
+        `UPDATE player_glicko2_ratings
+            SET rating=$2,rating_deviation=$3,volatility=$4,rated_game_count=$5,
+                algorithm_version=$6,last_rating_period_at=$7,updated_at=statement_timestamp()
+          WHERE player_key=$1`,
+        [before.playerKey,computed.rating,computed.ratingDeviation,computed.volatility,
+          computed.ratedGameCount,GLICKO2_ALGORITHM_VERSION,period],
+      );
+    }
+    return { rated: true, kind: terminal.kind };
+  }
   if (
     registered.rowCount !== 2
     || registeredKeys.size !== 2
