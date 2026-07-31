@@ -196,7 +196,7 @@ export async function publishWorkerHeartbeat(input: {
     `INSERT INTO katago_workers (
        worker_id, capabilities, engine_version, model_name, ready, last_seen_at
      )
-     VALUES ($1, ARRAY['analysis', 'bot'], $2, $3, $4, NOW())
+     VALUES ($1, ARRAY['analysis', 'bot', 'puzzle'], $2, $3, $4, NOW())
      ON CONFLICT (worker_id) DO UPDATE
        SET capabilities = EXCLUDED.capabilities,
            engine_version = EXCLUDED.engine_version,
