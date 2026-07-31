@@ -10,6 +10,8 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - persistenter Gegner-Chat im fokussierten Spielraum
 - serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
 - serverseitig ausgestellte Gast-Sitzungen per HTTP-only Cookie
+- tägliche und weitere von KataGo erzeugte und geprüfte Go-Probleme
+- serverseitig geschützte Puzzle-Lösungen und gespeicherter Lösungsfortschritt
 - atomare, aktionsbezogene Missbrauchslimits für Authentifizierung, Matchmaking,
   Spielzüge, Chat und teure Datenbankabfragen
 - Matchmaking für 9×9, 13×13 und 19×19
@@ -53,6 +55,7 @@ Danach öffnen:
 
 - [http://localhost:3000](http://localhost:3000/)
 - [http://localhost:3000/play](http://localhost:3000/play)
+- [http://localhost:3000/puzzles](http://localhost:3000/puzzles)
 - [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - [http://localhost:3000/api/db-health](http://localhost:3000/api/db-health)
 
@@ -79,6 +82,7 @@ npm run test:player-report-races
 npm run test:move-hash-db
 npm run test:scoring-races
 npm run test:statement-timeout
+npm run test:puzzles-local
 ```
 
 Diese mutierenden Smokes verlangen zusätzlich die expliziten Werte
@@ -353,6 +357,7 @@ URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 - `components/` – UI, Brett und Spielansicht
 - `lib/db.ts` – einzige PostgreSQL-Verbindung
 - `lib/game/` – React-unabhängige Regeln und serverseitiger Game Service
+- `lib/puzzles/` – transportierbare Puzzle-API-, Speicher- und Typverträge
 - `lib/matchmaking/` – transaktionales PostgreSQL-Matchmaking
 - `db/migrations/` – versionierte Datenbankänderungen
 - `scripts/` – Migration und Live-Smoke-Test
@@ -432,6 +437,31 @@ Der Test wartet tatsächlich zehn Sekunden, erstellt eine Gastpartie, prüft die
 sichtbare Bot-Identität, spielt einen menschlichen Zug, wartet auf KataGos
 Antwort und beendet die Testpartie anschließend sauber.
 
+### Daily Puzzle und weitere Go-Probleme
+
+Der KataGo-Worker hält täglich genau eine gemeinsame Aufgabe und zusätzlich
+einen Vorrat weiterer Aufgaben bereit. Er kann geeignete Stellungen aus
+beendeten Partien übernehmen oder reproduzierbare Trainingsstellungen erzeugen,
+lässt KataGo den stärksten Zug und Alternativen bewerten und speichert Ergebnis,
+Schwierigkeitsgrad und eine kurze Erklärung in PostgreSQL. Das Frontend erhält
+die Lösung erst, nachdem der Spieler richtig gelöst hat. Gast- und
+Accountfortschritt werden serverseitig in `puzzle_attempts` gespeichert.
+
+Lokal startet derselbe `katago`-Container Analyse, Bot und Puzzle-Erzeugung. Die
+CPU-Voreinstellung `KATAGO_PUZZLE_MAX_VISITS=16` hält die Generierung auf einem
+Laptop überschaubar. Ein externer GPU-Worker darf diesen Wert ohne Änderung an
+Website, API oder Datenbankschema erhöhen. Zum vollständigen lokalen Test:
+
+```powershell
+$env:GOSTONE_SMOKE_DATABASE_NAME="gostoned"
+$env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
+npm run test:puzzles-local
+```
+
+Der Smoke-Test prüft die echte HTTP-API, eine korrekte Lösung, den gespeicherten
+Fortschritt und insbesondere, dass ungelöste Antworten nicht an den Browser
+gesendet werden.
+
 ### Worker später auf einem externen Server
 
 Auf dem Server werden Docker, dieser Repository-Stand und eine sichere
@@ -459,6 +489,15 @@ wird zuerst der neue Stand geholt und dann dieser Branch darauf rebased.
 Engine-Kernlogik liegt in `lib/analysis/`, `lib/bot/` und `workers/katago/`, der
 Container in `docker/katago/` und die UI in `components/review/`. So bleiben
 Konflikte klein und klar.
+
+Die Puzzle-Erweiterung liegt darauf aufbauend getrennt im Branch
+`codex/katago-puzzles`. Datenbankmigration, Worker, API und UI sind klar in
+`db/migrations/019_katago_puzzles.sql`, `workers/katago/puzzles.ts`,
+`lib/puzzles/`, `app/api/puzzles/` und `components/puzzles/` abgegrenzt. Nach dem
+Merge des Bot-Branches kann der Puzzle-Commit deshalb auf einen neueren
+Design-Branch übernommen oder der Puzzle-Branch darauf rebased werden; für ein
+neues Design müssen normalerweise nur Navigation und Puzzle-CSS angepasst
+werden.
 
 ## Mobile Strategie
 

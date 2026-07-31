@@ -10,6 +10,7 @@ import {
   type BotLoopState,
 } from "./bot";
 import { KataGoEngine } from "./engine";
+import { runPuzzleLoop, type PuzzleLoopState } from "./puzzles";
 
 type ClaimedJob = { id: string; input: AnalysisInput; attempts: number };
 
@@ -28,6 +29,7 @@ const botEngine = new KataGoEngine(engineOptions);
 let stopping = false;
 let activeJob: string | null = null;
 const botState: BotLoopState = { activeGameId: null };
+const puzzleState: PuzzleLoopState = { activeJobId: null };
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function claimJob(): Promise<ClaimedJob | null> {
@@ -119,6 +121,7 @@ const healthServer = createServer((request, response) => {
     service: "gostone-katago-worker",
     activeJob,
     activeBotGame: botState.activeGameId,
+    activePuzzleJob: puzzleState.activeJobId,
     error: analysisEngine.error ?? botEngine.error,
   }));
 });
@@ -164,6 +167,7 @@ publishWorkerHeartbeat({
 Promise.all([
   loop(),
   runBotLoop(botEngine, botState, () => stopping),
+  runPuzzleLoop(analysisEngine, puzzleState, () => stopping, { engineVersion, modelName }),
 ]).catch(async (error) => {
   console.error("KataGo worker stopped:", error);
   await shutdown();

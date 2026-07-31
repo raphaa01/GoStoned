@@ -18,7 +18,7 @@ test("bot games require a fresh worker and retain explicit bot identity", () => 
   assert.match(matchmaking, /last_seen_at >= NOW\(\) - INTERVAL '15 seconds'/);
   assert.match(matchmaking, /status = 'matched', game_id = \$1/);
   assert.ok(
-    schema.replaceAll("\r\n", "\n").endsWith(migration.replaceAll("\r\n", "\n")),
-    "Canonical schema must end with migration 018.",
+    schema.replaceAll("\r\n", "\n").includes(migration.replaceAll("\r\n", "\n").trim()),
+    "Canonical schema must contain migration 018 before later migrations.",
   );
 });

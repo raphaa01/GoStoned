@@ -34,6 +34,9 @@ const requiredTables = [
   "game_analysis_jobs",
   "katago_workers",
   "game_bots",
+  "puzzles",
+  "puzzle_generation_jobs",
+  "puzzle_attempts",
 ] as const;
 
 const requiredGameColumns = [
@@ -128,6 +131,25 @@ const requiredIndexDefinitions = {
   idx_game_bots_claim: [
     "ON public.game_bots USING btree (next_move_at, game_id)",
     "WHERE (lease_expires_at IS NULL)",
+  ],
+  idx_puzzles_daily_date: [
+    "ON public.puzzles USING btree (daily_date)",
+    "WHERE (kind = 'daily'::text)",
+  ],
+  idx_puzzles_practice_published: [
+    "ON public.puzzles USING btree (published_at DESC, id)",
+    "WHERE (kind = 'practice'::text)",
+  ],
+  idx_puzzle_jobs_daily_target: [
+    "ON public.puzzle_generation_jobs USING btree (target_date)",
+    "WHERE (kind = 'daily'::text)",
+  ],
+  idx_puzzle_generation_jobs_claim: [
+    "ON public.puzzle_generation_jobs USING btree (status, created_at, id)",
+    "WHERE (status = ANY",
+  ],
+  idx_puzzle_attempts_player: [
+    "ON public.puzzle_attempts USING btree (player_key, last_attempt_at DESC)",
   ],
 } as const;
 
@@ -304,6 +326,9 @@ const requiredProtectedTables = [
   "game_analysis_jobs",
   "katago_workers",
   "game_bots",
+  "puzzles",
+  "puzzle_generation_jobs",
+  "puzzle_attempts",
 ] as const;
 
 const requiredGuardFunctions = [
