@@ -87,6 +87,7 @@ export type KataGoScoringResponse = Readonly<{
 export type KataGoGroupDecisionReason =
   | "suggested-dead"
   | "seki"
+  | "unknown-status"
   | "status-not-dead"
   | "inconsistent-status"
   | "low-confidence"

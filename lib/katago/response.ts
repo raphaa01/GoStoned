@@ -265,6 +265,7 @@ function decisionForGroup(
   ));
   let reason: KataGoGroupDecisionReason;
   if (statuses.some(({ status }) => status === "seki")) reason = "seki";
+  else if (statuses.some(({ status }) => status === "unknown")) reason = "unknown-status";
   else if (distinctStatuses.size > 1) reason = "inconsistent-status";
   else if (statuses.some(({ status }) => status !== "dead")) reason = "status-not-dead";
   else if (confidence < KATAGO_DEAD_CONFIDENCE_THRESHOLD) reason = "low-confidence";

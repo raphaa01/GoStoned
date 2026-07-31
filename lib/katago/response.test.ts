@@ -83,6 +83,14 @@ test("low confidence, seki, inconsistent status, and weak ownership conservative
       ownership: [-0.95, -0.95],
     },
     {
+      reason: "unknown-status",
+      statuses: [
+        { x: 1, y: 1, status: "unknown" as const, confidence: 0.99 },
+        { x: 2, y: 1, status: "unknown" as const, confidence: 0.99 },
+      ],
+      ownership: [-0.95, -0.95],
+    },
+    {
       reason: "inconsistent-status",
       statuses: [
         { x: 1, y: 1, status: "dead" as const, confidence: 0.99 },

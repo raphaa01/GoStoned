@@ -550,8 +550,11 @@ function serializeJapaneseGame(loaded: LoadedJapaneseGame, now = new Date()): Ga
       finalResolution: isJapaneseFinalResolutionPhase(resumes.length),
       blackParticipated: scoring.black_participated_at !== null,
       whiteParticipated: scoring.white_participated_at !== null,
-      canUndo: loaded.currentProposal?.parent_scoring_revision !== null,
-      canResetToSuggestion: loaded.currentProposal?.source !== "katago_initial",
+      canUndo: loaded.currentProposal !== null
+        && loaded.currentProposal.parent_scoring_revision !== null,
+      canResetToSuggestion: loaded.currentProposal !== null
+        && scoring.suggestion_status === "ready"
+        && loaded.currentProposal.source !== "katago_initial",
       suggestion: {
         status: scoring.suggestion_status,
         transparentRole: "suggestion",
@@ -589,7 +592,11 @@ function assertExpectedVersion(game: JapaneseGameRow, expectedVersion: number): 
   }
 }
 
-function assertScoring(loaded: LoadedJapaneseGame, expectedRevision: number): JapaneseScoringRow {
+function assertScoring(
+  loaded: LoadedJapaneseGame,
+  expectedRevision: number,
+  options: Readonly<{ allowExpired?: boolean; allowPending?: boolean }> = {},
+): JapaneseScoringRow {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
     throw new GameServiceError("A valid scoring revision is required.", 400, "invalid_scoring_revision");
   }
@@ -598,6 +605,20 @@ function assertScoring(loaded: LoadedJapaneseGame, expectedRevision: number): Ja
   }
   if (loaded.scoring.revision !== expectedRevision || loaded.game.scoring_revision !== expectedRevision) {
     throw new GameServiceError("The scoring proposal changed.", 409, "scoring_revision_conflict");
+  }
+  if (!options.allowExpired && loaded.scoring.expires_at.getTime() <= Date.now()) {
+    throw new GameServiceError(
+      "The scoring decision window has ended.",
+      409,
+      "scoring_deadline_expired",
+    );
+  }
+  if (!options.allowPending && loaded.scoring.suggestion_status === "pending") {
+    throw new GameServiceError(
+      "The initial scoring suggestion is still being prepared.",
+      409,
+      "scoring_suggestion_pending",
+    );
   }
   return loaded.scoring;
 }
@@ -1419,7 +1440,10 @@ export async function resolveJapaneseScoringDeadline(
 ): Promise<GameState> {
   const decision = await withTransaction(async (client) => {
     const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
-    const scoring = assertScoring(loaded, expectedRevision);
+    const scoring = assertScoring(loaded, expectedRevision, {
+      allowExpired: true,
+      allowPending: true,
+    });
     if (scoring.expires_at.getTime() > Date.now()) {
       throw new GameServiceError("The scoring deadline has not expired.", 409, "scoring_deadline_active");
     }
@@ -1449,7 +1473,10 @@ export async function resolveJapaneseScoringDeadline(
   } catch {
     return withTransaction(async (client) => {
       const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
-      assertScoring(loaded, expectedRevision);
+      assertScoring(loaded, expectedRevision, {
+        allowExpired: true,
+        allowPending: true,
+      });
       return finishJapaneseDeadline(client, loaded, {
         outcomeKind: "katago_unavailable", winner: null, abandonedBy: null,
       });
@@ -1457,7 +1484,10 @@ export async function resolveJapaneseScoringDeadline(
   }
   return withTransaction(async (client) => {
     const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
-    assertScoring(loaded, expectedRevision);
+    assertScoring(loaded, expectedRevision, {
+      allowExpired: true,
+      allowPending: true,
+    });
     if (
       proposal.stoppedBoardHash !== loaded.scoring!.board_hash
       || proposal.scoringRevision !== loaded.scoring!.revision
