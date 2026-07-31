@@ -196,9 +196,18 @@ const GAME_READ_SQL = `
               WHERE history.game_id = g.id
                 AND history.player_key IN (g.black_player_key, g.white_player_key)
            )
-           ELSE g.black_player_key <> g.white_player_key
-             AND black_user.id IS NOT NULL AND white_user.id IS NOT NULL
-         END AS rated
+         ELSE g.black_player_key <> g.white_player_key
+             AND (
+               (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
+               OR (
+                 game_bot.game_id IS NOT NULL
+                 AND (
+                   (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
+                   OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
+                 )
+               )
+             )
+       END AS rated
     FROM games g
     LEFT JOIN users black_user
       ON g.black_player_key = 'user:' || black_user.id::text

@@ -67,7 +67,7 @@ export function ReviewGuide() {
               {games.map((game) => (
                 <Link className={styles.gameRow} href={href(`/review/${game.gameId}`)} key={game.gameId}>
                   <span className={`${styles.result} ${styles[game.result]}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}</span>
-                  <span><strong>{game.boardSize}×{game.boardSize} {copy.versus} {game.opponentName}{game.opponentIsBot ? ` · ${dictionary.game.bot}` : ""}</strong><small>{new Date(game.finishedAt).toLocaleDateString(locale)} · {game.gameResult ?? copy.finished}</small></span>
+                  <span><strong>{game.boardSize}×{game.boardSize} {copy.versus} {game.opponentName}</strong><small>{new Date(game.finishedAt).toLocaleDateString(locale)} · {game.gameResult ?? copy.finished}</small></span>
                   <span className={styles.open}>{copy.analyze} <ArrowRight size={17} /></span>
                 </Link>
               ))}

@@ -71,3 +71,14 @@ test("live games use quiet but honest computer-opponent disclosure", () => {
   assert.doesNotMatch(panel, /bot-badge/);
   assert.match(panel, /copy\.botOpponent/);
 });
+
+test("review and game history focus on the opponent name without bot labels", () => {
+  for (const relativePath of [
+    "../../components/review/ReviewGuide.tsx",
+    "../../components/review/AnalysisReview.tsx",
+    "../../components/profile/ProfileView.tsx",
+  ]) {
+    const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /dictionary\.game\.bot/);
+  }
+});

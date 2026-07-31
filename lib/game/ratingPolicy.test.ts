@@ -2,39 +2,59 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { hasExactlyRegisteredParticipants } from "./ratingPolicy";
+import { resolveRatingParticipants, type RatingParticipantRow } from "./ratingPolicy";
 
 const black = "user:22222222-2222-4222-8222-222222222222";
 const white = "user:33333333-3333-4333-8333-333333333333";
 
-test("rates only two distinct participants backed by the exact two account rows", () => {
-  assert.equal(hasExactlyRegisteredParticipants(
+const account = (playerKey: string): RatingParticipantRow => ({
+  player_key: playerKey,
+  initial_rating: 1_200,
+  participant_type: "account",
+});
+const bot = (playerKey: string, rating = 1_350): RatingParticipantRow => ({
+  player_key: playerKey,
+  initial_rating: rating,
+  participant_type: "bot",
+});
+
+test("rates account games and account-versus-bot games with verified identities", () => {
+  assert.deepEqual(resolveRatingParticipants(
     [black, white],
-    [{ player_key: white }, { player_key: black }],
-  ), true);
+    [account(white), account(black)],
+  ), [account(black), account(white)]);
+
+  const botKey = "bot:44444444-4444-4444-8444-444444444444";
+  assert.deepEqual(resolveRatingParticipants(
+    [black, botKey],
+    [bot(botKey), account(black)],
+  ), [account(black), bot(botKey)]);
 
   for (const [name, participants, rows] of [
     ["guest versus guest", ["guest:black", "guest:white"], []],
-    ["account versus guest", [black, "guest:white"], [{ player_key: black }]],
-    ["deleted account", [black, white], [{ player_key: black }]],
-    ["malformed account key", [black, "user:not-a-uuid"], [{ player_key: black }]],
-    ["same account twice", [black, black], [{ player_key: black }]],
+    ["account versus guest", [black, "guest:white"], [account(black)]],
+    ["guest versus bot", ["guest:black", botKey], [bot(botKey)]],
+    ["deleted account", [black, white], [account(black)]],
+    ["malformed account key", [black, "user:not-a-uuid"], [account(black)]],
+    ["same account twice", [black, black], [account(black)]],
+    ["bot versus bot", [botKey, "bot:second"], [bot(botKey), bot("bot:second")]],
     ["duplicate resolver evidence", [black, white], [
-      { player_key: black },
-      { player_key: black },
+      account(black),
+      account(black),
     ]],
-    ["partial resolver evidence", [black, white], [{ player_key: white }]],
+    ["partial resolver evidence", [black, white], [account(white)]],
     ["unrelated resolver evidence", [black, white], [
-      { player_key: black },
-      { player_key: "user:44444444-4444-4444-8444-444444444444" },
+      account(black),
+      account("user:44444444-4444-4444-8444-444444444444"),
     ]],
+    ["invalid bot rating", [black, botKey], [account(black), bot(botKey, 99)]],
   ] as const) {
     assert.equal(
-      hasExactlyRegisteredParticipants(
+      resolveRatingParticipants(
         participants as readonly [string, string],
         rows,
       ),
-      false,
+      null,
       name,
     );
   }
@@ -50,6 +70,8 @@ test("keeps every terminal rating write behind one eligibility boundary", () => 
   assert.equal(service.match(/INSERT INTO player_rating_history/g)?.length, 1);
   assert.equal(service.match(/UPDATE player_stats/g)?.length, 1);
   assert.match(service, /SELECT 'user:' \|\| id::text AS player_key/);
+  assert.match(service, /SELECT bot_player_key AS player_key/);
+  assert.match(service, /target_rating AS initial_rating/);
   assert.match(service, /COUNT\(DISTINCT history\.player_key\) = 2/);
   assert.match(
     service,

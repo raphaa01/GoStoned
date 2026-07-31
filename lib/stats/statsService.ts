@@ -34,7 +34,6 @@ export type RecentGame = {
   boardSize: BoardSize;
   timeControl: "blitz" | "rapid" | "classic";
   opponentName: string;
-  opponentIsBot?: boolean;
   result: "win" | "loss" | "draw";
   gameResult: string | null;
   ratingChange: number | null;
@@ -70,7 +69,6 @@ type RecentGameRow = {
   board_size: BoardSize;
   time_control: "blitz" | "rapid" | "classic";
   opponent_name: string;
-  opponent_is_bot: boolean;
   result: "win" | "loss" | "draw";
   game_result: string | null;
   rating_change: number | null;
@@ -91,7 +89,7 @@ export async function getLeaderboard(
   const normalizedLimit = Number.isFinite(limit) ? Math.trunc(limit) : 50;
   const safeLimit = Math.min(Math.max(normalizedLimit, 1), 100);
   const result = await query<LeaderboardSnapshotRow>(
-    `WITH registered_rating_rows AS (
+    `WITH eligible_rating_rows AS (
        SELECT history.id,
               history.player_key,
               history.board_size,
@@ -101,6 +99,10 @@ export async function getLeaderboard(
               history.result,
               history.recorded_at,
               game_record.winner_key,
+              CASE
+                WHEN history.player_key = game_bot.bot_player_key THEN game_bot.target_rating
+                ELSE 1200
+              END AS initial_rating,
               (
                 SELECT COUNT(*)::int
                   FROM player_rating_history game_history
@@ -108,10 +110,11 @@ export async function getLeaderboard(
               ) AS total_game_ledger_rows
          FROM player_rating_history history
          JOIN games game_record ON game_record.id = history.game_id
-         JOIN users black_user
+         LEFT JOIN users black_user
            ON game_record.black_player_key = 'user:' || black_user.id::text
-         JOIN users white_user
+         LEFT JOIN users white_user
            ON game_record.white_player_key = 'user:' || white_user.id::text
+         LEFT JOIN game_bots game_bot ON game_bot.game_id = game_record.id
         WHERE history.board_size = $1
           AND game_record.status = 'finished'
           AND game_record.board_size = history.board_size
@@ -119,13 +122,23 @@ export async function getLeaderboard(
                 game_record.black_player_key,
                 game_record.white_player_key
               )
+          AND (
+            (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
+            OR (
+              game_bot.game_id IS NOT NULL
+              AND (
+                (game_record.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
+                OR (game_record.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
+              )
+            )
+          )
      ), ordered_rating_rows AS (
-       SELECT registered_rating_rows.*,
-              LAG(rating_after, 1, 1200) OVER (
+       SELECT eligible_rating_rows.*,
+              LAG(rating_after, 1, initial_rating) OVER (
                 PARTITION BY player_key, board_size
                 ORDER BY recorded_at, id
               ) AS expected_rating_before
-         FROM registered_rating_rows
+         FROM eligible_rating_rows
      ), atomic_rating_games AS (
        SELECT game_id
          FROM ordered_rating_rows
@@ -299,10 +312,6 @@ export async function getPlayerProfileStats(playerKey: string) {
               )
           END AS opponent_name,
           CASE
-            WHEN g.black_player_key = $1 THEN g.white_player_key = game_bot.bot_player_key
-            ELSE g.black_player_key = game_bot.bot_player_key
-          END AS opponent_is_bot,
-          CASE
             WHEN g.winner_key IS NULL THEN 'draw'
             WHEN g.winner_key = $1 THEN 'win'
             ELSE 'loss'
@@ -370,7 +379,6 @@ export async function getPlayerProfileStats(playerKey: string) {
     boardSize: row.board_size,
     timeControl: row.time_control,
     opponentName: row.opponent_name,
-    opponentIsBot: row.opponent_is_bot,
     result: row.result,
     gameResult: row.game_result,
     ratingChange: row.rating_change,

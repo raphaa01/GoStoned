@@ -604,7 +604,7 @@ export const en = {
     rated: "Rated",
     unrated: "Unrated",
     chartEmptyTitle: "Your timeline starts after your next rated game.",
-    chartEmptyDescription: "Your first rated game against another registered player will start this chart.",
+    chartEmptyDescription: "Your first rated game will start this chart.",
     historyEmptyPrefix: "Finish a",
     historyEmptySuffix: "game to start this history.",
     startingRating: "Starting rating",
@@ -665,7 +665,7 @@ export const en = {
   leaderboard: {
     kicker: "Account ratings",
     title: "Leaderboard",
-    description: "Only account ratings fully backed by completed rated games against other registered accounts are included.",
+    description: "Only account ratings fully backed by completed rated games are included. Games against a rating-matched KataGo opponent count as rated games.",
     boardSize: "Board size",
     players: "eligible players",
     loading: "Loading rankings…",

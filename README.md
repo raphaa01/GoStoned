@@ -379,10 +379,12 @@ Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
 
 Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
 ein Spieler zehn Sekunden lang keinen echten Gegner findet und ein gesunder
-Worker-Heartbeat vorliegt, erstellt PostgreSQL atomar eine ungewertete
-Bot-Partie. Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt
-einen normalen Anzeigenamen und wird in Partie, Ergebnis, Profil und Review
-klar als `Bot` gekennzeichnet. Bot-Chat ist deaktiviert.
+Worker-Heartbeat vorliegt, erstellt PostgreSQL atomar eine Bot-Partie. Für
+registrierte Konten ist sie gewertet; Gäste bleiben ohne dauerhaftes Rating.
+Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt einen
+normalen Anzeigenamen. Während der laufenden Partie bleibt der Computergegner
+dezent erkennbar; Spielverlauf und Review konzentrieren sich anschließend auf
+Gegnername, Ergebnis und Zugqualität. Der Chat ist für Bot-Partien deaktiviert.
 
 Vor jedem Bot-Zug wird neu ein Ziel zwischen drei und neun Sekunden bestimmt.
 Der Bot nutzt einen getrennten, hoch priorisierten KataGo-Prozess und verwertet

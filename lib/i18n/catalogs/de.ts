@@ -606,7 +606,7 @@ export const de = {
     rated: "Gewertet",
     unrated: "Ungewertet",
     chartEmptyTitle: "Dein Verlauf beginnt nach deiner nächsten gewerteten Partie.",
-    chartEmptyDescription: "Deine erste gewertete Partie gegen einen anderen registrierten Spieler startet diesen Verlauf.",
+    chartEmptyDescription: "Deine erste gewertete Partie startet diesen Verlauf.",
     historyEmptyPrefix: "Beende eine",
     historyEmptySuffix: "Partie, um diesen Verlauf zu beginnen.",
     startingRating: "Startwertung",
@@ -667,7 +667,7 @@ export const de = {
   leaderboard: {
     kicker: "Kontowertungen",
     title: "Rangliste",
-    description: "Es erscheinen nur Kontowertungen, die vollständig durch abgeschlossene gewertete Partien gegen andere registrierte Konten belegt sind.",
+    description: "Es erscheinen nur Kontowertungen, die vollständig durch abgeschlossene gewertete Partien belegt sind. Partien gegen einen wertungsangepassten KataGo-Gegner werden mitgewertet.",
     boardSize: "Brettgröße",
     players: "teilnahmeberechtigte Spieler",
     loading: "Rangliste wird geladen…",

@@ -33,8 +33,8 @@ import {
   type ScoredOutcome,
 } from "./scoreContract";
 import {
-  hasExactlyRegisteredParticipants,
-  type RegisteredPlayerRow,
+  resolveRatingParticipants,
+  type RatingParticipantRow,
 } from "./ratingPolicy";
 import type {
   Board,
@@ -800,7 +800,16 @@ async function loadGame(
                    AND history.player_key IN (g.black_player_key, g.white_player_key)
               )
               ELSE g.black_player_key <> g.white_player_key
-                AND black_user.id IS NOT NULL AND white_user.id IS NOT NULL
+                AND (
+                  (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
+                  OR (
+                    game_bot.game_id IS NOT NULL
+                    AND (
+                      (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
+                      OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
+                    )
+                  )
+                )
             END AS rated
        FROM games g
        LEFT JOIN users black_user
@@ -1272,26 +1281,39 @@ async function recordFinishedStats(
     );
   }
 
-  const registered = await client.query<RegisteredPlayerRow>(
-    `SELECT 'user:' || id::text AS player_key
+  const candidates = await client.query<RatingParticipantRow>(
+    `SELECT 'user:' || id::text AS player_key,
+            1200::int AS initial_rating,
+            'account'::text AS participant_type
        FROM users
-      WHERE 'user:' || id::text IN ($1::text, $2::text)`,
-    [game.black_player_key, game.white_player_key],
+      WHERE 'user:' || id::text IN ($1::text, $2::text)
+      UNION ALL
+     SELECT bot_player_key AS player_key,
+            target_rating AS initial_rating,
+            'bot'::text AS participant_type
+       FROM game_bots
+      WHERE game_id = $3
+        AND bot_player_key IN ($1::text, $2::text)`,
+    [game.black_player_key, game.white_player_key, game.id],
   );
-  if (!hasExactlyRegisteredParticipants(
+  const ratedParticipants = resolveRatingParticipants(
     [game.black_player_key, game.white_player_key],
-    registered.rows,
-  )) return false;
+    candidates.rows,
+  );
+  if (!ratedParticipants) return false;
+  const initialRatings = new Map(
+    ratedParticipants.map(({ player_key, initial_rating }) => [player_key, initial_rating]),
+  );
 
   for (const playerKey of [game.black_player_key, game.white_player_key].sort()) {
     const won = winnerKey === playerKey;
     const draw = winnerKey === null;
     const ratingDelta = draw ? 0 : won ? 16 : -16;
     await client.query(
-      `INSERT INTO player_stats (player_key, board_size)
-       VALUES ($1, $2)
+      `INSERT INTO player_stats (player_key, board_size, rating, highest_rating)
+       VALUES ($1, $2, $3, $3)
        ON CONFLICT (player_key, board_size) DO NOTHING`,
-      [playerKey, game.board_size],
+      [playerKey, game.board_size, initialRatings.get(playerKey)],
     );
     const current = await client.query<{ rating: number }>(
       `SELECT rating
