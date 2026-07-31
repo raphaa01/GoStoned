@@ -204,11 +204,16 @@ test("keeps fresh and upgraded Japanese table definitions byte-stable", () => {
   for (const fn of [
     "enforce_matchmaking_rules_profile",
     "guard_game_rules_identity_mutation",
-    "guard_japanese_scoring_state_mutation",
     "guard_japanese_scoring_evidence_mutation",
   ]) {
     assert.equal(functionDefinition(schema, fn), functionDefinition(migration, fn));
   }
+  assert.ok(
+    functionDefinition(schema, "guard_japanese_scoring_state_mutation").includes(
+      "game_japanese_resume_authorizations",
+    ),
+    "schema.sql must include migration 023's authorized-delete exception",
+  );
 });
 
 test("adds tuple constraints after idempotent schema upgrades", () => {
