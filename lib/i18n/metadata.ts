@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LOCALES, localeDetails, type Locale } from "./config";
 import { getDictionary } from "./dictionary";
+import { getPrivacyCopy } from "./privacy";
 import { localizePathname } from "./routing";
 
 type MetadataPage = keyof ReturnType<typeof getDictionary>["metadata"];
@@ -95,5 +96,32 @@ export function pageMetadata(
       images: [openGraphImage(locale).url],
     },
     robots: options.noIndex ? { index: false, follow: false } : undefined,
+  };
+}
+
+export function privacyPageMetadata(locale: Locale): Metadata {
+  const copy = getPrivacyCopy(locale);
+  const localizedPath = localizePathname("/privacy", locale);
+  return {
+    title: copy.title,
+    description: copy.metadataDescription,
+    alternates: alternates(localizedPath),
+    openGraph: {
+      title: copy.title,
+      description: copy.metadataDescription,
+      type: "website",
+      url: localizedPath,
+      locale: localeDetails(locale).openGraphLocale,
+      alternateLocale: LOCALES
+        .filter(({ code }) => code !== locale)
+        .map(({ openGraphLocale }) => openGraphLocale),
+      images: [openGraphImage(locale)],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: copy.title,
+      description: copy.metadataDescription,
+      images: [openGraphImage(locale).url],
+    },
   };
 }
