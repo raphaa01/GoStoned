@@ -12,7 +12,7 @@ export const POLL_BENCHMARK_STATEMENTS = [
   "scoring_read",
   "dead_stones_read",
   "rating_history_read",
-  "registered_users_read",
+  "rating_participants_read",
   "scoring_resume_insert",
   "scoring_delete",
   "timeout_game_update",
@@ -252,10 +252,19 @@ const RATING_HISTORY_READ_SQL = `
    FOR UPDATE
 `;
 
-const REGISTERED_USERS_READ_SQL = `
-  SELECT 'user:' || id::text AS player_key
+const RATING_PARTICIPANTS_READ_SQL = `
+  SELECT 'user:' || id::text AS player_key,
+         1200::int AS initial_rating,
+         'account'::text AS participant_type
     FROM users
    WHERE 'user:' || id::text IN ($1::text, $2::text)
+   UNION ALL
+  SELECT bot_player_key AS player_key,
+         target_rating AS initial_rating,
+         'bot'::text AS participant_type
+    FROM game_bots
+   WHERE game_id = $3
+     AND bot_player_key IN ($1::text, $2::text)
 `;
 
 const SCORING_RESUME_INSERT_SQL = `
@@ -333,8 +342,8 @@ const SQL_CASES = [
   sqlCase(RATING_HISTORY_READ_SQL, {
     statement: "rating_history_read", read: true, write: false, locking: true,
   }),
-  sqlCase(REGISTERED_USERS_READ_SQL, {
-    statement: "registered_users_read", read: true, write: false, locking: false,
+  sqlCase(RATING_PARTICIPANTS_READ_SQL, {
+    statement: "rating_participants_read", read: true, write: false, locking: false,
   }),
   sqlCase(SCORING_RESUME_INSERT_SQL, {
     statement: "scoring_resume_insert", read: false, write: true, locking: false,
@@ -495,7 +504,7 @@ const TIMEOUT_SEQUENCE: readonly PollBenchmarkStatement[] = [
   "scoring_read",
   "timeout_game_update",
   "rating_history_read",
-  "registered_users_read",
+  "rating_participants_read",
   "transaction_commit",
 ];
 

@@ -109,7 +109,7 @@ const READS = new Set<PollBenchmarkStatement>([
   "scoring_read",
   "dead_stones_read",
   "rating_history_read",
-  "registered_users_read",
+  "rating_participants_read",
 ]);
 const WRITES = new Set<PollBenchmarkStatement>([
   "scoring_resume_insert",
