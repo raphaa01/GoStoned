@@ -8,6 +8,7 @@ import {
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
+import { GameServiceError } from "./gameServiceError";
 import {
   isRepeatedPositionForbidden,
   removeDeadStones,
@@ -202,15 +203,7 @@ type LoadedGame = {
   deadRows: DeadStoneRow[];
 };
 
-export class GameServiceError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code: string,
-  ) {
-    super(message);
-  }
-}
+export { GameServiceError } from "./gameServiceError";
 
 function storedRulesConfiguration(input: {
   rules: unknown;
