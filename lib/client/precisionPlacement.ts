@@ -1,5 +1,13 @@
 import type { BoardSize, Position } from "@/lib/game/types";
 
+/**
+ * The playable grid occupies one shared, square region inside the wooden board.
+ * Rendering and pointer snapping both consume these values so a visual
+ * intersection can never drift away from its interactive coordinate.
+ */
+export const BOARD_GRID_INSET_RATIO = 0.07;
+export const BOARD_GRID_SPAN_RATIO = 1 - BOARD_GRID_INSET_RATIO * 2;
+
 export type PrecisionPlacementContext = {
   boardSize: BoardSize;
   disabled: boolean;
@@ -27,10 +35,12 @@ export function boardPositionFromClientPoint(
   boardSize: BoardSize,
 ): Position | null {
   if (bounds.width <= 0 || bounds.height <= 0) return null;
-  const gridRatio = 0.86;
-  const insetRatio = 0.07;
-  const xRatio = ((clientX - bounds.left) / bounds.width - insetRatio) / gridRatio;
-  const yRatio = ((clientY - bounds.top) / bounds.height - insetRatio) / gridRatio;
+  const xRatio = (
+    (clientX - bounds.left) / bounds.width - BOARD_GRID_INSET_RATIO
+  ) / BOARD_GRID_SPAN_RATIO;
+  const yRatio = (
+    (clientY - bounds.top) / bounds.height - BOARD_GRID_INSET_RATIO
+  ) / BOARD_GRID_SPAN_RATIO;
   const last = boardSize - 1;
   return {
     x: Math.max(0, Math.min(last, Math.round(xRatio * last))),

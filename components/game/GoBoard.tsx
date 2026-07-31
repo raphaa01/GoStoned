@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { useI18n } from "@/components/i18n/I18nProvider";
 import {
   activatePrecisionPlacement,
+  BOARD_GRID_INSET_RATIO,
+  BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
   reconcilePrecisionPlacement,
   type PrecisionPlacementActivation,
@@ -96,7 +98,10 @@ export function GoBoard({
   const gridLines = Array.from({ length: boardSize });
   const gridPosition = (value: number) => `${(value / (boardSize - 1)) * 100}%`;
   const intersectionPosition = (value: number) =>
-    `calc(7% + ${(value / (boardSize - 1)) * 86}%)`;
+    `${(
+      BOARD_GRID_INSET_RATIO
+      + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO
+    ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
   const precisionContext = {
     boardSize,
@@ -122,7 +127,8 @@ export function GoBoard({
     if (!precisionPosition || !boardRef.current || !viewportRef.current) return;
     const board = boardRef.current;
     const viewport = viewportRef.current;
-    const ratio = (value: number) => (7 + (value / (boardSize - 1)) * 86) / 100;
+    const ratio = (value: number) => BOARD_GRID_INSET_RATIO
+      + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO;
     viewport.scrollTo({
       behavior: "auto",
       left: board.clientWidth * ratio(precisionPosition.x) - viewport.clientWidth / 2,
@@ -322,8 +328,10 @@ export function GoBoard({
           style={
             {
               "--board-size": boardSize,
+              "--board-grid-inset": `${BOARD_GRID_INSET_RATIO * 100}%`,
+              "--board-grid-span": `${BOARD_GRID_SPAN_RATIO * 100}%`,
               "--grid-step": `${100 / (boardSize - 1)}%`,
-              "--intersection-size": `${86 / (boardSize - 1)}%`,
+              "--intersection-size": `${(BOARD_GRID_SPAN_RATIO * 100) / (boardSize - 1)}%`,
             } as React.CSSProperties
           }
           data-size={boardSize}

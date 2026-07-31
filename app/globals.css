@@ -2494,11 +2494,11 @@ a {
 }
 
 .go-board-grid {
-  bottom: 7%;
-  left: 7%;
+  height: var(--board-grid-span, 86%);
+  left: var(--board-grid-inset, 7%);
   position: absolute;
-  right: 7%;
-  top: 7%;
+  top: var(--board-grid-inset, 7%);
+  width: var(--board-grid-span, 86%);
 }
 
 /*
