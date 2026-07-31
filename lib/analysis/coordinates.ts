@@ -16,6 +16,22 @@ export function toGtpCoordinate(
   return `${GTP_COLUMNS[move.x]}${boardSize - move.y}`;
 }
 
+export function fromGtpCoordinate(
+  boardSize: BoardSize,
+  coordinate: string,
+): { x?: number; y?: number; isPass?: boolean } {
+  if (coordinate.toLowerCase() === "pass") return { isPass: true };
+  const match = /^([A-HJ-T])(\d{1,2})$/i.exec(coordinate);
+  if (!match) throw new Error("KataGo returned an invalid coordinate.");
+  const x = GTP_COLUMNS.indexOf(match[1].toUpperCase());
+  const row = Number(match[2]);
+  const y = boardSize - row;
+  if (x < 0 || x >= boardSize || row < 1 || row > boardSize || y < 0 || y >= boardSize) {
+    throw new Error("KataGo returned a coordinate outside the board.");
+  }
+  return { x, y };
+}
+
 export function coordinateRegion(move: string, boardSize: BoardSize): "corner" | "side" | "center" | "pass" {
   if (move.toLowerCase() === "pass") return "pass";
   const match = /^([A-HJ-T])(\d{1,2})$/.exec(move.toUpperCase());

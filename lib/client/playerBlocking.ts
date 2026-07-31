@@ -6,6 +6,7 @@ import { assertResponseActor } from "./identityAuthority";
 export type GameOpponent = Readonly<{
   playerKey: string;
   playerName: string;
+  isBot: boolean;
 }>;
 
 export type GameChatSnapshot = Readonly<{
@@ -60,6 +61,8 @@ export function deriveGameOpponent(
     | "whitePlayerKey"
     | "blackPlayerName"
     | "whitePlayerName"
+    | "blackPlayerIsBot"
+    | "whitePlayerIsBot"
   >,
   playerKey: string,
 ): GameOpponent | null {
@@ -70,6 +73,7 @@ export function deriveGameOpponent(
     return {
       playerKey: game.whitePlayerKey,
       playerName: game.whitePlayerName,
+      isBot: Boolean(game.whitePlayerIsBot),
     };
   }
   if (
@@ -79,6 +83,7 @@ export function deriveGameOpponent(
     return {
       playerKey: game.blackPlayerKey,
       playerName: game.blackPlayerName,
+      isBot: Boolean(game.blackPlayerIsBot),
     };
   }
   return null;

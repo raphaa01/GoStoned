@@ -23,6 +23,7 @@ type ChatPanelProps = {
   chatPolicyUnavailable: boolean;
   messages: GameMessage[];
   opponentName: string;
+  opponentIsBot: boolean;
   playerKey: string;
   disabled: boolean;
   onBlock: () => void;
@@ -40,6 +41,7 @@ export function ChatPanel({
   chatPolicyUnavailable,
   messages,
   opponentName,
+  opponentIsBot,
   playerKey,
   disabled,
   onBlock,
@@ -76,6 +78,7 @@ export function ChatPanel({
 
   const blockActionUnavailable = blockBusy
     || blockReconciling
+    || opponentIsBot
     || (blockedByYou === null && !blockError);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -106,7 +109,7 @@ export function ChatPanel({
           <MessageCircle aria-hidden="true" size={18} />
           <h2 id={titleId}>{copy.chatTitle}</h2>
         </span>
-        <button
+        {!opponentIsBot ? <button
           aria-disabled={blockActionUnavailable}
           aria-label={
             blockedByYou === null
@@ -135,9 +138,9 @@ export function ChatPanel({
             : blockBusy
               ? blockedByYou ? copy.unblockingOpponent : copy.blockingOpponent
               : blockedByYou ? copy.unblockOpponent : copy.blockOpponent}
-        </button>
+        </button> : null}
       </header>
-      {chatPolicyUnavailable ? (
+      {chatPolicyUnavailable || opponentIsBot ? (
         <div className="chat-list chat-list--unavailable">
           <p
             id={unavailableId}
@@ -145,7 +148,7 @@ export function ChatPanel({
             role="status"
             tabIndex={-1}
           >
-            {copy.chatPolicyUnavailable}
+            {opponentIsBot ? copy.botChatUnavailable : copy.chatPolicyUnavailable}
           </p>
         </div>
       ) : (
@@ -174,21 +177,21 @@ export function ChatPanel({
         <input
           aria-describedby={chatPolicyUnavailable ? unavailableId : undefined}
           aria-label={copy.chatMessage}
-          disabled={disabled || busy}
+          disabled={disabled || busy || opponentIsBot}
           maxLength={500}
           onChange={(event) => {
             setText(event.target.value);
             if (error) setError(null);
           }}
-          placeholder={disabled ? copy.chatUnavailable : copy.writeMessage}
+          placeholder={opponentIsBot ? copy.botChatUnavailable : disabled ? copy.chatUnavailable : copy.writeMessage}
           value={text}
         />
-        <button aria-label={copy.sendMessage} disabled={disabled || busy || !text.trim()} type="submit">
+        <button aria-label={copy.sendMessage} disabled={disabled || busy || opponentIsBot || !text.trim()} type="submit">
           <Send aria-hidden="true" size={17} />
         </button>
       </form>
       {error ? <p className="chat-error" role="alert">{error}</p> : null}
-      {blockError ? <p className="chat-error" role="alert">{blockError}</p> : null}
+      {blockError && !opponentIsBot ? <p className="chat-error" role="alert">{blockError}</p> : null}
     </section>
   );
 }

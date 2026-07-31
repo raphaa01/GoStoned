@@ -32,6 +32,8 @@ const requiredTables = [
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
+  "katago_workers",
+  "game_bots",
 ] as const;
 
 const requiredGameColumns = [
@@ -118,6 +120,14 @@ const requiredIndexDefinitions = {
   ],
   idx_game_analysis_jobs_game: [
     "ON public.game_analysis_jobs USING btree (game_id, game_version DESC)",
+  ],
+  idx_katago_workers_ready: [
+    "ON public.katago_workers USING btree (last_seen_at DESC)",
+    "WHERE ready",
+  ],
+  idx_game_bots_claim: [
+    "ON public.game_bots USING btree (next_move_at, game_id)",
+    "WHERE (lease_expires_at IS NULL)",
   ],
 } as const;
 
@@ -292,6 +302,8 @@ const requiredProtectedTables = [
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
+  "katago_workers",
+  "game_bots",
 ] as const;
 
 const requiredGuardFunctions = [

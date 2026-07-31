@@ -34,6 +34,7 @@ export type RecentGame = {
   boardSize: BoardSize;
   timeControl: "blitz" | "rapid" | "classic";
   opponentName: string;
+  opponentIsBot?: boolean;
   result: "win" | "loss" | "draw";
   gameResult: string | null;
   ratingChange: number | null;
@@ -69,6 +70,7 @@ type RecentGameRow = {
   board_size: BoardSize;
   time_control: "blitz" | "rapid" | "classic";
   opponent_name: string;
+  opponent_is_bot: boolean;
   result: "win" | "loss" | "draw";
   game_result: string | null;
   rating_change: number | null;
@@ -283,17 +285,23 @@ export async function getPlayerProfileStats(playerKey: string) {
           CASE
             WHEN g.black_player_key = $1 THEN
               COALESCE(
+                CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
                 NULLIF(BTRIM(white_user.display_name), ''),
                 white_user.username,
                 'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
               )
             ELSE
               COALESCE(
+                CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
                 NULLIF(BTRIM(black_user.display_name), ''),
                 black_user.username,
                 'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
               )
           END AS opponent_name,
+          CASE
+            WHEN g.black_player_key = $1 THEN g.white_player_key = game_bot.bot_player_key
+            ELSE g.black_player_key = game_bot.bot_player_key
+          END AS opponent_is_bot,
           CASE
             WHEN g.winner_key IS NULL THEN 'draw'
             WHEN g.winner_key = $1 THEN 'win'
@@ -327,6 +335,7 @@ export async function getPlayerProfileStats(playerKey: string) {
           ON g.black_player_key = 'user:' || black_user.id::text
         LEFT JOIN users white_user
           ON g.white_player_key = 'user:' || white_user.id::text
+        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
         LEFT JOIN player_rating_history history
           ON history.game_id = g.id AND history.player_key = $1
        WHERE g.board_rank <= 12
@@ -361,6 +370,7 @@ export async function getPlayerProfileStats(playerKey: string) {
     boardSize: row.board_size,
     timeControl: row.time_control,
     opponentName: row.opponent_name,
+    opponentIsBot: row.opponent_is_bot,
     result: row.result,
     gameResult: row.game_result,
     ratingChange: row.rating_change,

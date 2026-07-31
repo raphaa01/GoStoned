@@ -15,7 +15,7 @@ test("analysis jobs are persistent, leaseable, private, and version-bound", () =
     assert.match(source, /REVOKE ALL ON game_analysis_jobs FROM PUBLIC/);
   }
   assert.ok(
-    schema.replaceAll("\r\n", "\n").endsWith(migration.replaceAll("\r\n", "\n")),
-    "Canonical schema must end with migration 017.",
+    schema.replaceAll("\r\n", "\n").includes(migration.replaceAll("\r\n", "\n").trim()),
+    "Canonical schema must contain migration 017 before later migrations.",
   );
 });

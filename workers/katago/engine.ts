@@ -116,11 +116,15 @@ export class KataGoEngine {
     this.pending.clear();
   }
 
-  analyze(id: string, input: AnalysisInput, maxVisits: number): Promise<KataGoTurnResult[]> {
+  private analyzeTurns(
+    id: string,
+    input: AnalysisInput,
+    maxVisits: number,
+    analyzeTurns: readonly number[],
+  ): Promise<KataGoTurnResult[]> {
     if (this.process.exitCode !== null || !this.process.stdin.writable) {
       return Promise.reject(new Error("KataGo is not running."));
     }
-    const analyzeTurns = Array.from({ length: input.moves.length + 1 }, (_, index) => index);
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
@@ -140,6 +144,31 @@ export class KataGoEngine {
         includePolicy: true,
       })}\n`);
     });
+  }
+
+  analyze(id: string, input: AnalysisInput, maxVisits: number): Promise<KataGoTurnResult[]> {
+    return this.analyzeTurns(
+      id,
+      input,
+      maxVisits,
+      Array.from({ length: input.moves.length + 1 }, (_, index) => index),
+    );
+  }
+
+  async analyzeCurrent(
+    id: string,
+    input: AnalysisInput,
+    maxVisits: number,
+  ): Promise<KataGoTurnResult> {
+    const results = await this.analyzeTurns(
+      id,
+      input,
+      maxVisits,
+      [input.moves.length],
+    );
+    const current = results[0];
+    if (!current) throw new Error("KataGo did not return the current position.");
+    return current;
   }
 
   close() {

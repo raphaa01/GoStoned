@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "@/lib/db";
+import { botDifficultyForRating } from "@/lib/bot/difficulty";
+import { botDisplayName, deterministicUnit } from "@/lib/bot/identity";
 import { DEFAULT_MATCH_RULES, resolveRulesConfiguration } from "@/lib/game/rulesPolicy";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
@@ -22,6 +25,8 @@ type QueueRow = {
   created_at: Date;
   game_status?: "active" | "finished" | null;
   is_stale?: boolean;
+  bot_fallback_due?: boolean;
+  bot_worker_available?: boolean;
 };
 
 type CancellationOptions = {
@@ -29,6 +34,7 @@ type CancellationOptions = {
 };
 
 const MAX_BLOCKED_CANDIDATE_RECHECKS = 8;
+const BOT_FALLBACK_SECONDS = 10;
 
 export function isBoardSize(value: unknown): value is BoardSize {
   return value === 9 || value === 13 || value === 19;
@@ -52,12 +58,169 @@ function mapQueue(row?: QueueRow): MatchmakingStatus {
   };
 }
 
+async function matchWaitingPlayerWithBot(
+  playerKey: string,
+  expected: Pick<QueueRow, "board_size" | "time_control" | "rules_profile">,
+): Promise<MatchmakingStatus> {
+  const timeControl = getTimeControl(expected.time_control);
+  const rules = resolveRulesConfiguration({
+    ruleset: DEFAULT_MATCH_RULES.ruleset,
+    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
+    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
+    komi: DEFAULT_MATCH_RULES.komi,
+    handicap: DEFAULT_MATCH_RULES.handicap,
+  });
+  return withTransaction(async (client) => {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`matchmaking-pool:v1:${expected.board_size}:${expected.time_control}:${expected.rules_profile}`],
+    );
+    const currentResult = await client.query<QueueRow>(
+      `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
+              q.status, q.game_id, q.created_at,
+              g.status AS game_status
+         FROM matchmaking_queue q
+         LEFT JOIN games g ON g.id = q.game_id
+        WHERE q.player_key = $1
+        FOR UPDATE OF q`,
+      [playerKey],
+    );
+    const current = currentResult.rows[0];
+    if (!current) return mapQueue();
+    if (current.status === "matched" && current.game_id && current.game_status === "active") {
+      return mapQueue(current);
+    }
+    if (
+      current.status !== "waiting"
+      || current.game_id !== null
+      || current.board_size !== expected.board_size
+      || current.time_control !== expected.time_control
+      || current.rules_profile !== expected.rules_profile
+      || current.rules_profile !== rules.rulesProfile
+    ) {
+      return mapQueue(current);
+    }
+
+    const eligibility = await client.query<{ due: boolean; worker_available: boolean }>(
+      `SELECT $1::timestamptz <= NOW() - make_interval(secs => $2::int) AS due,
+              EXISTS (
+                SELECT 1 FROM katago_workers
+                 WHERE ready
+                   AND 'bot' = ANY(capabilities)
+                   AND last_seen_at >= NOW() - INTERVAL '15 seconds'
+              ) AS worker_available`,
+      [current.created_at, BOT_FALLBACK_SECONDS],
+    );
+    if (!eligibility.rows[0]?.due || !eligibility.rows[0].worker_available) {
+      return mapQueue(current);
+    }
+
+    const activeGame = await client.query<{ id: string }>(
+      `SELECT id FROM games
+        WHERE status = 'active'
+          AND (black_player_key = $1 OR white_player_key = $1)
+        LIMIT 1
+        FOR UPDATE`,
+      [playerKey],
+    );
+    if (activeGame.rows[0]) return mapQueue(current);
+
+    const ratingResult = await client.query<{ rating: number }>(
+      `SELECT COALESCE((
+         SELECT rating FROM player_stats
+          WHERE player_key = $1 AND board_size = $2
+       ), 1200)::int AS rating`,
+      [playerKey, current.board_size],
+    );
+    const difficulty = botDifficultyForRating(ratingResult.rows[0]?.rating ?? 1200);
+    const identitySeed = `${playerKey}:${current.created_at.toISOString()}:${current.board_size}`;
+    const botPlayerKey = `bot:${randomUUID()}`;
+    const botIsBlack = deterministicUnit(`${identitySeed}:color`) < 0.5;
+    const blackPlayerKey = botIsBlack ? botPlayerKey : playerKey;
+    const whitePlayerKey = botIsBlack ? playerKey : botPlayerKey;
+    const gameResult = await client.query<{ id: string }>(
+      `INSERT INTO games (
+         board_size, black_player_key, white_player_key, time_control,
+         rules, rules_profile, scoring_method, komi, handicap, phase, to_move,
+         main_time_seconds, byo_yomi_periods, byo_yomi_seconds,
+         black_time_remaining_ms, white_time_remaining_ms,
+         black_periods_remaining, white_periods_remaining, turn_started_at
+       )
+       VALUES (
+         $1, $2, $3, $4,
+         $5, $6, $7, $8, $9, 'play', $10,
+         $11, $12, $13, $14, $14, $12, $12, NOW()
+       )
+       RETURNING id`,
+      [
+        current.board_size,
+        blackPlayerKey,
+        whitePlayerKey,
+        current.time_control,
+        rules.ruleset,
+        rules.rulesProfile,
+        rules.scoringMethod,
+        rules.komi,
+        rules.handicap,
+        rules.policy.initialTurn,
+        timeControl.mainTimeSeconds,
+        timeControl.byoYomiPeriods,
+        timeControl.byoYomiSeconds,
+        timeControl.mainTimeSeconds * 1_000,
+      ],
+    );
+    const gameId = gameResult.rows[0].id;
+    await client.query(
+      `INSERT INTO game_bots (
+         game_id, bot_player_key, display_name, color, target_rating,
+         visits_per_turn, candidate_limit, temperature
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        gameId,
+        botPlayerKey,
+        botDisplayName(identitySeed),
+        botIsBlack ? "black" : "white",
+        difficulty.targetRating,
+        difficulty.visitsPerTurn,
+        difficulty.candidateLimit,
+        difficulty.temperature,
+      ],
+    );
+    const publication = await client.query(
+      `UPDATE matchmaking_queue
+          SET status = 'matched', game_id = $1, rules_profile = $2,
+              updated_at = NOW()
+        WHERE player_key = $3
+          AND board_size = $4 AND time_control = $5 AND rules_profile = $2
+          AND status = 'waiting' AND game_id IS NULL`,
+      [gameId, rules.rulesProfile, playerKey, current.board_size, current.time_control],
+    );
+    if (publication.rowCount !== 1) {
+      throw new Error("Matchmaking state changed before the bot game could be published.");
+    }
+    return {
+      status: "matched",
+      gameId,
+      boardSize: current.board_size,
+      timeControl: current.time_control,
+    };
+  });
+}
+
 export async function getMatchmakingStatus(playerKey: string): Promise<MatchmakingStatus> {
   const result = await query<QueueRow>(
     `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
             q.status, q.game_id, q.created_at,
             g.status AS game_status,
-            q.updated_at < NOW() - INTERVAL '5 minutes' AS is_stale
+            q.updated_at < NOW() - INTERVAL '5 minutes' AS is_stale,
+            q.created_at <= NOW() - INTERVAL '10 seconds' AS bot_fallback_due,
+            EXISTS (
+              SELECT 1 FROM katago_workers
+               WHERE ready
+                 AND 'bot' = ANY(capabilities)
+                 AND last_seen_at >= NOW() - INTERVAL '15 seconds'
+            ) AS bot_worker_available
        FROM matchmaking_queue q
        LEFT JOIN games g ON g.id = q.game_id
       WHERE q.player_key = $1`,
@@ -69,6 +232,9 @@ export async function getMatchmakingStatus(playerKey: string): Promise<Matchmaki
   }
   if (row?.status === "waiting" && row.is_stale) {
     return cancelMatchmaking(playerKey, { staleOnly: true });
+  }
+  if (row?.status === "waiting" && row.bot_fallback_due && row.bot_worker_available) {
+    return matchWaitingPlayerWithBot(playerKey, row);
   }
   return mapQueue(row);
 }

@@ -1640,6 +1640,27 @@ a {
   font-size: 12px;
 }
 
+.game-panel-player strong,
+.result-player-list strong {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.game-panel-player .bot-badge,
+.result-player-list .bot-badge {
+  background: rgba(129, 182, 76, 0.14);
+  border: 1px solid rgba(129, 182, 76, 0.28);
+  border-radius: 99px;
+  color: #b9df94;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 3px 5px;
+  text-transform: uppercase;
+}
+
 .game-panel-player span,
 .game-state span {
   color: var(--muted);

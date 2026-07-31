@@ -369,6 +369,21 @@ Aufträge atomar, spricht über KataGos offizielle zeilenbasierte JSON-Analysis-
 mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL.
 Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
 
+Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
+ein Spieler zehn Sekunden lang keinen echten Gegner findet und ein gesunder
+Worker-Heartbeat vorliegt, erstellt PostgreSQL atomar eine ungewertete
+Bot-Partie. Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt
+einen normalen Anzeigenamen und wird in Partie, Ergebnis, Profil und Review
+klar als `Bot` gekennzeichnet. Bot-Chat ist deaktiviert.
+
+Die Zielstärke wird beim Match aus der Wertung des Spielers für die gewählte
+Brettgröße übernommen; Gäste starten bei 1200. Niedrigere Stufen wählen
+variabler aus mehreren legalen KataGo-Kandidaten, höhere Stufen durchsuchen mehr
+Stellungen und bleiben näher am besten Zug. `KATAGO_BOT_MAX_VISITS` begrenzt die
+Rechenzeit pro Zug auf dem jeweiligen Worker. Auf einem GPU-Server kann dieses
+Limit höher als auf einem Laptop gesetzt werden, ohne Website- oder
+Datenbankcode zu ändern.
+
 Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
 
 1. lokal: PostgreSQL, Website und KataGo-Worker laufen auf demselben Laptop;
@@ -397,6 +412,19 @@ Besuche pro Stellung, damit ein Review auf einem Laptop testbar bleibt. Mehr
 Besuche erhöhen Qualität und Laufzeit; für einen externen stärkeren Server sind
 beispielsweise 200 bis 500 Besuche sinnvoll.
 
+Der vollständige lokale Bot-Test benötigt den laufenden Next.js-Server und den
+gesunden Worker. Er verweigert jede nicht eindeutig lokale Datenbank:
+
+```powershell
+$env:GOSTONE_SMOKE_DATABASE_NAME="gostoned"
+$env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
+npm run test:bot-local
+```
+
+Der Test wartet tatsächlich zehn Sekunden, erstellt eine Gastpartie, prüft die
+sichtbare Bot-Identität, spielt einen menschlichen Zug, wartet auf KataGos
+Antwort und beendet die Testpartie anschließend sauber.
+
 ### Worker später auf einem externen Server
 
 Auf dem Server werden Docker, dieser Repository-Stand und eine sichere
@@ -407,6 +435,7 @@ export KATAGO_DATABASE_URL='postgresql://...supabase-session-url...'
 export KATAGO_DATABASE_SSL=require
 export KATAGO_DATABASE_POOL_MAX=2
 export KATAGO_MAX_VISITS=500
+export KATAGO_BOT_MAX_VISITS=800
 docker compose up -d --build katago
 ```
 
@@ -417,11 +446,12 @@ Health-Endpunkt sollte extern nur hinter Firewall oder VPN erreichbar sein.
 
 ### Parallel zum Design weiterarbeiten
 
-Die KataGo-Entwicklung liegt im Branch `codex/katago-analysis`. Wenn sich `main`
-durch Designarbeit weiterentwickelt, wird zuerst der neue Stand geholt und dann
-dieser Branch darauf rebased. Engine-Kernlogik liegt in `lib/analysis/` und
-`workers/katago/`, der Container in `docker/katago/` und die UI in
-`components/review/`. So bleiben Konflikte klein und klar.
+Analyse und Bot-Fallback liegen gemeinsam im Branch
+`codex/katago-bot-fallback`. Wenn sich `main` durch Designarbeit weiterentwickelt,
+wird zuerst der neue Stand geholt und dann dieser Branch darauf rebased.
+Engine-Kernlogik liegt in `lib/analysis/`, `lib/bot/` und `workers/katago/`, der
+Container in `docker/katago/` und die UI in `components/review/`. So bleiben
+Konflikte klein und klar.
 
 ## Mobile Strategie
 

@@ -63,7 +63,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
     <div className={styles.reviewWorkspace}>
       <header className={styles.reviewHeader}>
         <Link href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
-        <div><span>{game.blackPlayerName} · {game.whitePlayerName}</span><strong>{game.boardSize}×{game.boardSize} · {game.result}</strong></div>
+        <div><span>{game.blackPlayerName}{game.blackPlayerIsBot ? ` · ${dictionary.game.bot}` : ""} · {game.whitePlayerName}{game.whitePlayerIsBot ? ` · ${dictionary.game.bot}` : ""}</span><strong>{game.boardSize}×{game.boardSize} · {game.result}</strong></div>
         {result ? <span className={styles.engineBadge}><BrainCircuit size={16} /> {result.engine.name} {result.engine.version}</span> : null}
       </header>
 

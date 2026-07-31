@@ -311,6 +311,8 @@ export const en = {
     recordBody: "Moves are checked by the server, and completed games preserve their result. Games agreed by score also preserve that scoring agreement. These facts are the starting point for your own review; GoStone does not present an invented engine judgment as analysis.",
   },
   game: {
+    bot: "Bot",
+    botOpponent: "Automated opponent",
     loadFailed: "Could not load the game.",
     moveFailed: "Move failed.",
     resignFailed: "Could not resign.",
@@ -440,6 +442,7 @@ export const en = {
     chatMessage: "Chat message",
     chatUnavailable: "Chat unavailable",
     chatPolicyUnavailable: "Chat is unavailable for this game.",
+    botChatUnavailable: "Bot opponents cannot read chat messages.",
     writeMessage: "Write a message…",
     sendMessage: "Send message",
     sendFailed: "Message could not be sent.",

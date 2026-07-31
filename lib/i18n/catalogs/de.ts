@@ -313,6 +313,8 @@ export const de = {
     recordBody: "Züge werden vom Server geprüft, und beendete Partien bewahren ihr Ergebnis. Durch vereinbarte Wertung beendete Partien bewahren zusätzlich diese Wertungsvereinbarung. Diese Fakten sind der Ausgangspunkt deiner eigenen Auswertung; GoStone gibt kein erfundenes Engine-Urteil als Analyse aus.",
   },
   game: {
+    bot: "Bot",
+    botOpponent: "Automatisierter Gegner",
     loadFailed: "Die Partie konnte nicht geladen werden.",
     moveFailed: "Der Zug ist fehlgeschlagen.",
     resignFailed: "Die Aufgabe ist fehlgeschlagen.",
@@ -442,6 +444,7 @@ export const de = {
     chatMessage: "Chatnachricht",
     chatUnavailable: "Chat nicht verfügbar",
     chatPolicyUnavailable: "Der Chat ist für diese Partie nicht verfügbar.",
+    botChatUnavailable: "Bot-Gegner können keine Chatnachrichten lesen.",
     writeMessage: "Nachricht schreiben…",
     sendMessage: "Nachricht senden",
     sendFailed: "Die Nachricht konnte nicht gesendet werden.",

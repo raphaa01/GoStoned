@@ -23,11 +23,17 @@ test("opponent presentation is derived only for one exact participant", () => {
   assert.deepEqual(deriveGameOpponent(participants, black), {
     playerKey: white,
     playerName: "White player",
+    isBot: false,
   });
   assert.deepEqual(deriveGameOpponent(participants, white), {
     playerKey: black,
     playerName: "Black player",
+    isBot: false,
   });
+  assert.equal(deriveGameOpponent({
+    ...participants,
+    whitePlayerIsBot: true,
+  }, black)?.isBot, true);
   assert.equal(deriveGameOpponent(participants, "guest:outsider"), null);
   assert.equal(deriveGameOpponent({
     ...participants,

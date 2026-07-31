@@ -250,7 +250,7 @@ export function ProfileView() {
                     {game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}
                   </span>
                   <div>
-                    <strong>{game.result === "win" ? copy.victory : game.result === "loss" ? copy.defeat : copy.draw} {copy.versus} {game.opponentName}</strong>
+                    <strong>{game.result === "win" ? copy.victory : game.result === "loss" ? copy.defeat : copy.draw} {copy.versus} {game.opponentName}{game.opponentIsBot ? ` · ${dictionary.game.bot}` : ""}</strong>
                     <span>{formatDate(game.finishedAt, locale)} · {dictionary.timeControls[game.timeControl].name} · {game.gameResult ?? copy.completed}</span>
                   </div>
                   <strong className={ratingClass}>{ratingLabel}</strong>

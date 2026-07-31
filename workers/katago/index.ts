@@ -4,6 +4,11 @@ import { hostname } from "node:os";
 import { buildGameAnalysis } from "@/lib/analysis/evaluate";
 import type { AnalysisInput } from "@/lib/analysis/types";
 import { closePool, query } from "@/lib/db";
+import {
+  publishWorkerHeartbeat,
+  runBotLoop,
+  type BotLoopState,
+} from "./bot";
 import { KataGoEngine } from "./engine";
 
 type ClaimedJob = { id: string; input: AnalysisInput; attempts: number };
@@ -20,6 +25,8 @@ const engine = new KataGoEngine({
 });
 let stopping = false;
 let activeJob: string | null = null;
+const botState: BotLoopState = { activeGameId: null };
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function claimJob(): Promise<ClaimedJob | null> {
   await query(
@@ -109,6 +116,7 @@ const healthServer = createServer((request, response) => {
     ok: engine.running,
     service: "gostone-katago-worker",
     activeJob,
+    activeBotGame: botState.activeGameId,
     error: engine.error,
   }));
 });
@@ -119,7 +127,14 @@ healthServer.listen(healthPort, "0.0.0.0", () => {
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   healthServer.close();
+  await publishWorkerHeartbeat({
+    workerId,
+    engineVersion,
+    modelName,
+    ready: false,
+  }).catch(() => undefined);
   engine.close();
   await closePool();
 }
@@ -127,7 +142,26 @@ async function shutdown() {
 process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());
 
-loop().catch(async (error) => {
+publishWorkerHeartbeat({
+  workerId,
+  engineVersion,
+  modelName,
+  ready: engine.running,
+}).then(() => {
+  heartbeatTimer = setInterval(() => {
+    void publishWorkerHeartbeat({
+      workerId,
+      engineVersion,
+      modelName,
+      ready: engine.running,
+    }).catch((error) => console.error("KataGo heartbeat failed:", error));
+  }, 5_000);
+}).catch((error) => console.error("Initial KataGo heartbeat failed:", error));
+
+Promise.all([
+  loop(),
+  runBotLoop(engine, botState, () => stopping),
+]).catch(async (error) => {
   console.error("KataGo worker stopped:", error);
   await shutdown();
   process.exitCode = 1;

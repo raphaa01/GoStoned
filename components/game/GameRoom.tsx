@@ -877,6 +877,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (
       !playerKey
       || !opponent
+      || opponent.isBot
       || blockBusy
       || blockedByYou === null
       || blockedByYou === blocked
@@ -1297,6 +1298,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             chatPolicyUnavailable={chatPolicyUnavailable}
             disabled={
               !chatAvailable
+              || Boolean(opponent?.isBot)
               || !connectionAllowsChat(connectionState)
             }
             key={identityKey}
@@ -1315,6 +1317,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onSend={sendMessage}
             onUnblock={() => void updateOpponentBlock(false)}
             opponentName={opponent?.playerName ?? copy.opponent}
+            opponentIsBot={Boolean(opponent?.isBot)}
             playerKey={playerKey}
           />
         </aside>
