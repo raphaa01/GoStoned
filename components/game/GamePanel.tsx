@@ -96,7 +96,7 @@ export function GamePanel({
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
-          <span>{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
+          <span>{game.whitePlayerIsBot ? `${copy.botOpponent} · ${copy.white}` : yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
         </div>
         <PlayerClock
           clock={game.clock}
@@ -136,7 +136,7 @@ export function GamePanel({
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
-          <span>{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
+          <span>{game.blackPlayerIsBot ? `${copy.botOpponent} · ${copy.black}` : yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
         </div>
         <PlayerClock
           clock={game.clock}

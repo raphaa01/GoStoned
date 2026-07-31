@@ -10,6 +10,11 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - persistenter Gegner-Chat im fokussierten Spielraum
 - serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
 - serverseitig ausgestellte Gast-Sitzungen per HTTP-only Cookie
+- tägliche und 40 weitere von KataGo erzeugte und geprüfte Go-Probleme
+- vier Trainingssammlungen mit je zehn Aufgaben: Leben & Tod, Tesuji,
+  Freiheitsrennen und Endspiel (30 Kyu bis 15 Kyu)
+- mehrzügige Puzzle-Varianten mit KataGo-Antwort, verzögerter Fehlererklärung
+  und serverseitig gespeichertem Fortschritt
 - atomare, aktionsbezogene Missbrauchslimits für Authentifizierung, Matchmaking,
   Spielzüge, Chat und teure Datenbankabfragen
 - Matchmaking für 9×9, 13×13 und 19×19
@@ -53,6 +58,7 @@ Danach öffnen:
 
 - [http://localhost:3000](http://localhost:3000/)
 - [http://localhost:3000/play](http://localhost:3000/play)
+- [http://localhost:3000/puzzles](http://localhost:3000/puzzles)
 - [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - [http://localhost:3000/api/db-health](http://localhost:3000/api/db-health)
 
@@ -79,6 +85,7 @@ npm run test:player-report-races
 npm run test:move-hash-db
 npm run test:scoring-races
 npm run test:statement-timeout
+npm run test:puzzles-local
 ```
 
 Diese mutierenden Smokes verlangen zusätzlich die expliziten Werte
@@ -353,6 +360,7 @@ URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 - `components/` – UI, Brett und Spielansicht
 - `lib/db.ts` – einzige PostgreSQL-Verbindung
 - `lib/game/` – React-unabhängige Regeln und serverseitiger Game Service
+- `lib/puzzles/` – transportierbare Puzzle-API-, Speicher- und Typverträge
 - `lib/matchmaking/` – transaktionales PostgreSQL-Matchmaking
 - `db/migrations/` – versionierte Datenbankänderungen
 - `scripts/` – Migration und Live-Smoke-Test
@@ -360,6 +368,154 @@ URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 ## Zusammenarbeit über GitHub
 
 `main` bleibt stabil. Jede Aufgabe bekommt einen eigenen Branch, zum Beispiel `codex/chat`. Vor Änderungen zuerst den aktuellen Stand von `main` holen. Danach nur den eigenen Branch pushen und einen Pull Request öffnen. Die verbindlichen automatischen Regeln stehen in `AGENTS.md`.
+
+## KataGo-Partieanalyse (lokal und extern)
+
+Die Partieanalyse ist absichtlich als separater Worker gebaut. Next.js legt nur
+einen unveränderlichen Auftrag in `game_analysis_jobs` ab. Der Worker beansprucht
+Aufträge atomar, spricht über KataGos offizielle zeilenbasierte JSON-Analysis-API
+mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL.
+Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
+
+Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
+ein Spieler zehn Sekunden lang keinen echten Gegner findet und ein gesunder
+Worker-Heartbeat vorliegt, erstellt PostgreSQL atomar eine ungewertete
+Bot-Partie. Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt
+einen normalen Anzeigenamen und wird in Partie, Ergebnis, Profil und Review
+klar als `Bot` gekennzeichnet. Bot-Chat ist deaktiviert.
+
+Vor jedem Bot-Zug wird neu ein Ziel zwischen drei und neun Sekunden bestimmt.
+Der Bot nutzt einen getrennten, hoch priorisierten KataGo-Prozess und verwertet
+bei langen Suchen einen Zwischenstand, sodass der Zug inklusive technischer
+Reserve innerhalb von zehn Sekunden übermittelt werden kann. Der Chat behält
+dabei sein normales Layout, zeigt aber neutral an,
+dass er für diese Partie nicht verfügbar ist, und deaktiviert die Eingabe.
+
+Die Zielstärke wird beim Match aus der Wertung des Spielers für die gewählte
+Brettgröße übernommen; Gäste starten bei 1200. Niedrigere Stufen wählen
+variabler aus mehreren legalen KataGo-Kandidaten, höhere Stufen durchsuchen mehr
+Stellungen und bleiben näher am besten Zug. `KATAGO_BOT_MAX_VISITS` begrenzt die
+Rechenzeit pro Zug auf dem jeweiligen Worker. Auf einem GPU-Server kann dieses
+Limit höher als auf einem Laptop gesetzt werden, ohne Website- oder
+Datenbankcode zu ändern.
+
+Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
+
+1. lokal: PostgreSQL, Website und KataGo-Worker laufen auf demselben Laptop;
+2. Vercel + externer Worker: Vercel nutzt Supabase und ein externer Linux-Server
+   startet nur den KataGo-Container mit derselben `DATABASE_URL`;
+3. mehrere Worker: identische Container teilen sich die Warteschlange sicher
+   über `FOR UPDATE SKIP LOCKED`.
+
+### Lokal ausprobieren
+
+Der erste Build lädt KataGo 1.17.0 und das offizielle CPU-Modell
+`b10c384h6nbttflrs`. Er kann einige Minuten dauern; Docker cached danach Binary,
+Modell und npm-Abhängigkeiten.
+
+```powershell
+docker compose up -d postgres
+npm run db:migrate
+docker compose up -d --build katago
+npm run dev
+```
+
+Danach anmelden, eine Partie beenden, `Review` öffnen, die Partie auswählen und
+`Mit KataGo analysieren` drücken. Der Workerstatus ist unter
+`http://localhost:8080/health` sichtbar. Die lokale CPU-Voreinstellung nutzt 20
+Besuche pro Stellung, damit ein Review auf einem Laptop testbar bleibt. Mehr
+Besuche erhöhen Qualität und Laufzeit; für einen externen stärkeren Server sind
+beispielsweise 200 bis 500 Besuche sinnvoll.
+
+Der vollständige lokale Bot-Test benötigt den laufenden Next.js-Server und den
+gesunden Worker. Er verweigert jede nicht eindeutig lokale Datenbank:
+
+```powershell
+$env:GOSTONE_SMOKE_DATABASE_NAME="gostoned"
+$env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
+npm run test:bot-local
+```
+
+Der Test wartet tatsächlich zehn Sekunden, erstellt eine Gastpartie, prüft die
+sichtbare Bot-Identität, spielt einen menschlichen Zug, wartet auf KataGos
+Antwort und beendet die Testpartie anschließend sauber.
+
+### Daily Puzzle und weitere Go-Probleme
+
+Der KataGo-Worker hält täglich genau eine gemeinsame Aufgabe und vier
+Trainingssammlungen mit je zehn Aufgaben bereit:
+
+- **Leben & Tod** – Augenraum und vitale Punkte;
+- **Tesuji** – taktische Zugfolge und Form;
+- **Freiheitsrennen** – Semeai und gemeinsame Freiheiten;
+- **Endspiel** – Yose, Sente und Zugwert.
+
+Die Trainingsreihe reicht von 30 Kyu bis 15 Kyu. Die Ausgangsstellungen werden
+im GoStone-Projekt reproduzierbar erzeugt; KataGo prüft den besten Weg, spielt
+die gegnerischen Antworten und erzeugt Widerlegungen für untersuchte
+Fehlversuche. Damit werden keine Aufgaben oder Lösungstexte unklar lizenzierter
+Webseiten kopiert. Bekannte Go-Problemarchive dienen nur zur fachlichen
+Einordnung der Kategorien.
+
+Ein Fehlzug wird nicht sofort verraten: Der Server spielt zunächst eine
+KataGo-Antwort, erklärt dann, warum diese Variante scheitert, und setzt die
+Aufgabe erst auf Wunsch zurück. Eine richtige Variante kann drei bis fünf
+Halbzüge lang sein. Zukünftige Züge bleiben dabei serverseitig verborgen; das
+Frontend erhält nur den bereits gespielten Teil. Gast- und Accountfortschritt
+werden in `puzzle_attempts` gespeichert.
+
+Lokal startet derselbe `katago`-Container Analyse, Bot und Puzzle-Erzeugung. Die
+CPU-Voreinstellung `KATAGO_PUZZLE_MAX_VISITS=8` hält die Generierung auf einem
+Laptop überschaubar. Ein externer GPU-Worker darf diesen Wert ohne Änderung an
+Website, API oder Datenbankschema erhöhen. Zum vollständigen lokalen Test:
+
+```powershell
+$env:GOSTONE_SMOKE_DATABASE_NAME="gostoned"
+$env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
+npm run test:puzzles-local
+```
+
+Der Smoke-Test prüft die echte HTTP-API, alle 40 Katalogaufgaben, eine
+KataGo-Widerlegung nach einem legalen Fehlzug, die komplette richtige
+Mehrzugvariante, den gespeicherten Fortschritt und insbesondere, dass zukünftige
+Lösungszüge nicht an den Browser gesendet werden.
+
+### Worker später auf einem externen Server
+
+Auf dem Server werden Docker, dieser Repository-Stand und eine sichere
+Supabase-Verbindungszeichenfolge benötigt. Die Website bleibt auf Vercel.
+
+```bash
+export KATAGO_DATABASE_URL='postgresql://...supabase-session-url...'
+export KATAGO_DATABASE_SSL=require
+export KATAGO_DATABASE_POOL_MAX=2
+export KATAGO_MAX_VISITS=500
+export KATAGO_BOT_MAX_VISITS=800
+docker compose up -d --build katago
+```
+
+Für einen GPU-Server kann ein CUDA-KataGo-Binary samt passender `analysis.cfg`
+in einem abgeleiteten Image verwendet werden. Datenbank- und API-Vertrag bleiben
+identisch. `DATABASE_URL` darf niemals in Image oder Repository gelangen. Der
+Health-Endpunkt sollte extern nur hinter Firewall oder VPN erreichbar sein.
+
+### Parallel zum Design weiterarbeiten
+
+Analyse und Bot-Fallback liegen gemeinsam im Branch
+`codex/katago-bot-fallback`. Wenn sich `main` durch Designarbeit weiterentwickelt,
+wird zuerst der neue Stand geholt und dann dieser Branch darauf rebased.
+Engine-Kernlogik liegt in `lib/analysis/`, `lib/bot/` und `workers/katago/`, der
+Container in `docker/katago/` und die UI in `components/review/`. So bleiben
+Konflikte klein und klar.
+
+Die Puzzle-Erweiterung liegt darauf aufbauend getrennt im Branch
+`codex/katago-puzzles`. Datenbankmigration, Worker, API und UI sind klar in
+`db/migrations/019_katago_puzzles.sql`, `workers/katago/puzzles.ts`,
+`lib/puzzles/`, `app/api/puzzles/` und `components/puzzles/` abgegrenzt. Nach dem
+Merge des Bot-Branches kann der Puzzle-Commit deshalb auf einen neueren
+Design-Branch übernommen oder der Puzzle-Branch darauf rebased werden; für ein
+neues Design müssen normalerweise nur Navigation und Puzzle-CSS angepasst
+werden.
 
 ## Mobile Strategie
 

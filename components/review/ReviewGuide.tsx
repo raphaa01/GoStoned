@@ -1,86 +1,80 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, Gamepad2, ListChecks, Search } from "lucide-react";
+import { ArrowRight, BrainCircuit, Gamepad2, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { readApi } from "@/lib/client/api";
+import type { RecentGame } from "@/lib/stats/statsService";
+import styles from "./review.module.css";
 
 export function ReviewGuide() {
-  const { user, loading, error, refresh } = useAuth();
-  const { dictionary, href } = useI18n();
-  const copy = dictionary.review;
+  const { user, loading } = useAuth();
+  const { dictionary, href, locale } = useI18n();
+  const copy = dictionary.analysisReview;
+  const [games, setGames] = useState<RecentGame[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const accountAction = loading ? (
-    <span className="button button--primary button--lg content-action-status" role="status">
-      {copy.checkingAccount}
-    </span>
-  ) : error ? (
-    <button className="button button--primary button--lg" onClick={() => refresh().catch(() => undefined)} type="button">
-      {copy.retryAccount}
-    </button>
-  ) : (
-    <Link
-      className="button button--primary button--lg"
-      href={href(user ? "/profile#game-history" : "/register")}
-    >
-      {user ? copy.openGames : copy.saveFuture} <ArrowRight size={19} />
-    </Link>
-  );
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    let active = true;
+    fetch("/api/profile", { cache: "no-store", signal: controller.signal })
+      .then((response) => readApi<{ recentGames?: RecentGame[] }>(response))
+      .then((body) => {
+        if (active) setGames((body.recentGames ?? []).filter((game) => game.moveCount > 0));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [user]);
 
   return (
-    <div className="content-page">
-      <header className="content-hero">
-        <span className="section-kicker">{copy.kicker}</span>
+    <div className={styles.hub}>
+      <header className={styles.hero}>
+        <span className="section-kicker"><Sparkles size={15} /> {copy.kicker}</span>
         <h1>{copy.title}</h1>
         <p>{copy.description}</p>
-        <div className="content-actions">
-          {accountAction}
-          <Link className="button button--secondary button--lg" href={href("/play")}>
-            <Gamepad2 size={19} /> {copy.playAgain}
-          </Link>
-        </div>
-        {error ? <p className="content-auth-error" role="alert">{error}</p> : null}
+        {!loading && !user ? (
+          <div className={styles.actions}>
+            <Link className="button button--primary button--lg" href={href("/login")}>{copy.signIn}</Link>
+            <Link className="button button--secondary button--lg" href={href("/register")}>{copy.create}</Link>
+          </div>
+        ) : null}
       </header>
 
-      <section className="content-section" aria-labelledby="review-method">
-        <header>
-          <h2 id="review-method">{copy.methodTitle}</h2>
-          <p>{copy.methodDescription}</p>
-        </header>
-        <ol className="content-card-grid">
-          <li className="content-card">
-            <span className="content-card__icon"><Search size={22} /></span>
-            <h3>{copy.revisitTitle}</h3>
-            <p>{copy.revisitBody}</p>
-          </li>
-          <li className="content-card">
-            <span className="content-card__icon"><ListChecks size={22} /></span>
-            <h3>{copy.understandTitle}</h3>
-            <p>{copy.understandBody}</p>
-          </li>
-          <li className="content-card">
-            <span className="content-card__icon"><CheckCircle2 size={22} /></span>
-            <h3>{copy.practiceTitle}</h3>
-            <p>{copy.practiceBody}</p>
-          </li>
-        </ol>
+      <section className={styles.trustGrid}>
+        <article><BrainCircuit /><div><strong>{copy.engine}</strong><p>{copy.engineBody}</p></div></article>
+        <article><Sparkles /><div><strong>{copy.labels}</strong><p>{copy.labelsBody}</p></div></article>
       </section>
 
-      <section className="content-split content-split--review">
-        <article className="content-panel" aria-labelledby="review-questions">
-          <h2 id="review-questions">{copy.questionsTitle}</h2>
-          <ul className="review-questions">
-            <li>{copy.questionOne}</li>
-            <li>{copy.questionTwo}</li>
-            <li>{copy.questionThree}</li>
-          </ul>
-        </article>
-        <aside className="content-panel content-panel--trust" aria-labelledby="verified-record">
-          <span className="content-card__icon"><CheckCircle2 size={22} /></span>
-          <h2 id="verified-record">{copy.recordTitle}</h2>
-          <p>{copy.recordBody}</p>
-        </aside>
-      </section>
+      {user ? (
+        <section className={styles.gamePicker} aria-labelledby="review-games-title">
+          <div className={styles.sectionHeading}>
+            <div><span className="section-kicker">{copy.kicker}</span><h2 id="review-games-title">{copy.recent}</h2></div>
+            <Link className="button button--secondary" href={href("/play")}><Gamepad2 size={17} /> {copy.play}</Link>
+          </div>
+          {!loaded ? <div className={styles.loading} role="status">…</div> : games.length === 0 ? (
+            <p className={styles.empty}>{copy.empty}</p>
+          ) : (
+            <div className={styles.gameList}>
+              {games.map((game) => (
+                <Link className={styles.gameRow} href={href(`/review/${game.gameId}`)} key={game.gameId}>
+                  <span className={`${styles.result} ${styles[game.result]}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}</span>
+                  <span><strong>{game.boardSize}×{game.boardSize} {copy.versus} {game.opponentName}{game.opponentIsBot ? ` · ${dictionary.game.bot}` : ""}</strong><small>{new Date(game.finishedAt).toLocaleDateString(locale)} · {game.gameResult ?? copy.finished}</small></span>
+                  <span className={styles.open}>{copy.analyze} <ArrowRight size={17} /></span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

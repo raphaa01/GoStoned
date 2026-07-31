@@ -13,7 +13,10 @@ const migrationRunner = readFileSync(
 );
 
 test("fresh and upgraded databases share one role-and-database statement timeout", () => {
-  assert.ok(schema.endsWith(migration), "Canonical schema must end with migration 016.");
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").includes(migration.replaceAll("\r\n", "\n")),
+    "Canonical schema must include migration 016 exactly.",
+  );
   assert.match(migration, /current_user <> session_user/);
   assert.match(
     migration,

@@ -7,6 +7,7 @@ import { getGameMessages, sendGameMessage } from "./chatService";
 const gameId = "33333333-3333-4333-8333-333333333333";
 const black = "user:11111111-1111-4111-8111-111111111111";
 const white = "guest:22222222-2222-4222-8222-222222222222";
+const bot = "bot:44444444-4444-4444-8444-444444444444";
 
 type StoredMessage = {
   id: string;
@@ -56,7 +57,7 @@ class ChatPool {
         return { rows: [], rowCount: 0 };
       }
       const opponent = actor === game.black ? game.white : game.black;
-      const available = !this.isBlocked(actor, opponent);
+      const available = !opponent.startsWith("bot:") && !this.isBlocked(actor, opponent);
       const visible = available
         ? this.messages.filter(({ id }) => Number(id) > Number(values[2]))
         : [];
@@ -183,6 +184,22 @@ test("either block direction rejects sends identically before retaining a new me
       assert.equal(pool.statements.some((sql) => sql.startsWith("WITH inserted AS")), false);
     });
   }
+});
+
+test("bot games disable chat reads and writes at the service boundary", async () => {
+  const pool = new ChatPool();
+  pool.game = { black, white: bot };
+  assert.deepEqual(
+    await withPool(pool, () => getGameMessages(gameId, black, 0)),
+    { available: false, messages: [] },
+  );
+  await assert.rejects(
+    withPool(pool, () => sendGameMessage(gameId, black, "Hello")),
+    (error) => error instanceof GameServiceError
+      && error.status === 409
+      && error.code === "chat_unavailable",
+  );
+  assert.equal(pool.statements.some((sql) => sql.startsWith("WITH inserted AS")), false);
 });
 
 test("chat send locks and rechecks the pair before inserting", async () => {

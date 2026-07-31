@@ -150,6 +150,25 @@ export function Hero({ suggestGerman = false }: { suggestGerman?: boolean }) {
           </div>
         </section>
 
+        <section className="home-chapter home-chapter--puzzles" aria-labelledby="home-puzzles-title">
+          <div className="chapter-copy">
+            <span className="section-kicker">{copy.puzzlesChapterKicker}</span>
+            <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle}</h2>
+            <p>{copy.puzzlesChapterBody}</p>
+            <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction} <ArrowRight size={17} /></Link>
+          </div>
+          <div className="chapter-visual chapter-visual--puzzles" aria-hidden="true">
+            <span className="puzzle-stone puzzle-stone--black puzzle-stone--one" />
+            <span className="puzzle-stone puzzle-stone--black puzzle-stone--two" />
+            <span className="puzzle-stone puzzle-stone--black puzzle-stone--three" />
+            <span className="puzzle-stone puzzle-stone--white puzzle-stone--four" />
+            <span className="puzzle-stone puzzle-stone--white puzzle-stone--five" />
+            <span className="puzzle-vital-point" />
+            <span className="puzzle-sequence-line" />
+            <span className="puzzle-sequence-label">1</span>
+          </div>
+        </section>
+
         <section className="home-chapter home-chapter--review" aria-labelledby="home-review-title">
           <div className="chapter-visual chapter-visual--review" aria-hidden="true">
             <span className="review-path review-path--played" />

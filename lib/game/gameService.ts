@@ -56,6 +56,8 @@ type GameRow = {
   white_player_key: string;
   black_player_name: string;
   white_player_name: string;
+  black_player_is_bot: boolean;
+  white_player_is_bot: boolean;
   winner_key: string | null;
   rated: boolean;
   status: "active" | "finished";
@@ -777,15 +779,19 @@ async function loadGame(
             g.black_periods_remaining, g.white_periods_remaining,
             g.turn_started_at, g.version, g.started_at, g.finished_at,
             COALESCE(
+              CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
               NULLIF(BTRIM(black_user.display_name), ''),
               black_user.username,
               'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
             ) AS black_player_name,
             COALESCE(
+              CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
               NULLIF(BTRIM(white_user.display_name), ''),
               white_user.username,
               'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
             ) AS white_player_name,
+            g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
+            g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
             CASE
               WHEN g.status = 'finished' THEN (
                 SELECT COUNT(DISTINCT history.player_key) = 2
@@ -801,6 +807,7 @@ async function loadGame(
          ON g.black_player_key = 'user:' || black_user.id::text
        LEFT JOIN users white_user
          ON g.white_player_key = 'user:' || white_user.id::text
+       LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
       WHERE g.id = $1${lock ? " FOR UPDATE OF g" : ""}`,
     [gameId],
   );
@@ -1186,6 +1193,8 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerKey: game.white_player_key,
     blackPlayerName: game.black_player_name,
     whitePlayerName: game.white_player_name,
+    blackPlayerIsBot: game.black_player_is_bot,
+    whitePlayerIsBot: game.white_player_is_bot,
     winnerKey: game.winner_key,
     rated: game.rated,
     status: game.status,
@@ -1236,6 +1245,8 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
       ...row,
       black_player_name: loaded.game.black_player_name,
       white_player_name: loaded.game.white_player_name,
+      black_player_is_bot: loaded.game.black_player_is_bot,
+      white_player_is_bot: loaded.game.white_player_is_bot,
       rated: loaded.game.rated,
     },
   };

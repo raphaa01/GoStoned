@@ -17,6 +17,7 @@ export function DesktopHeader() {
     { href: "/play", label: dictionary.nav.play },
     { href: "/learn", label: dictionary.nav.learn },
     { href: "/review", label: dictionary.nav.review },
+    { href: "/puzzles", label: dictionary.nav.puzzles },
     { href: "/leaderboard", label: dictionary.nav.leaderboard },
   ];
 

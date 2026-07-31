@@ -92,7 +92,7 @@ export function GameResultModal({
           <div className={game.winnerKey === game.blackPlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--black" />
             <span>
-              <strong>{game.blackPlayerName}</strong>
+              <strong>{game.blackPlayerName}{game.blackPlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
               <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
             </span>
             {game.winnerKey === game.blackPlayerKey ? <b>{copy.winner}</b> : null}
@@ -100,7 +100,7 @@ export function GameResultModal({
           <div className={game.winnerKey === game.whitePlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--white" />
             <span>
-              <strong>{game.whitePlayerName}</strong>
+              <strong>{game.whitePlayerName}{game.whitePlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
               <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
             </span>
             {game.winnerKey === game.whitePlayerKey ? <b>{copy.winner}</b> : null}
