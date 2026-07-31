@@ -313,6 +313,10 @@ export function GoBoard({
       ) : null}
       <div className="go-board-viewport" ref={viewportRef}>
         <div
+          aria-colcount={boardSize}
+          aria-describedby={instructionsId}
+          aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
+          aria-rowcount={boardSize}
           className="go-board"
           ref={boardRef}
           style={
@@ -328,6 +332,7 @@ export function GoBoard({
           onPointerDownCapture={handleBoardPointerDown}
           onPointerMoveCapture={handleBoardPointerMove}
           onPointerUpCapture={handleBoardPointerEnd}
+          role="grid"
         >
       <span className="sr-only" id={instructionsId}>
         {copy.boardInstructions}{" "}
@@ -371,12 +376,7 @@ export function GoBoard({
         ))}
       </div>
       <div
-        aria-colcount={boardSize}
-        aria-describedby={instructionsId}
-        aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
-        aria-rowcount={boardSize}
         className="go-board-points"
-        role="grid"
       >
         {gridLines.map((_, y) => (
           <div aria-rowindex={y + 1} key={`row-${y}`} role="row">

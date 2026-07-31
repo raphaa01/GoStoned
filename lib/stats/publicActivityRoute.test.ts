@@ -158,7 +158,7 @@ test("public activity rejects cache-busting query parameters before database wor
 
 test("the landing activity view discloses freshness, loading, and failure semantics", () => {
   const component = readFileSync(
-    new URL("../../components/home/StatusOverview.tsx", import.meta.url),
+    new URL("../../components/home/Hero.tsx", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(
