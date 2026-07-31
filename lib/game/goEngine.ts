@@ -1,12 +1,30 @@
 import type {
   Board,
   BoardSize,
+  ChineseAreaScore,
   MoveResult,
   Position,
-  Score,
   Stone,
   StoredMove,
 } from "./types";
+
+export type PrisonerLedger = Readonly<{
+  capturedWhiteByBlack: number;
+  capturedBlackByWhite: number;
+}>;
+
+export type ReplayResult = Readonly<{
+  board: Board;
+  prisoners: PrisonerLedger;
+  positionHistory: readonly string[];
+}>;
+
+type ReplayAccumulator = {
+  board: Board;
+  capturedWhiteByBlack: number;
+  capturedBlackByWhite: number;
+  positionHistory: string[] | null;
+};
 
 export function createEmptyBoard(size: BoardSize): Board {
   return Array.from({ length: size }, () => Array<null>(size).fill(null));
@@ -111,35 +129,99 @@ export function boardHash(board: Board): string {
     .join("/");
 }
 
-export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
+/**
+ * Reconstructs a persisted move record and its capture ledger. Turn ownership
+ * is enforced when moves are inserted by the game service, not here: a scoring
+ * resumption may deliberately override ordinary color alternation, and older
+ * records do not retain every resume event needed to reproduce that decision.
+ */
+function replayMovesInternal(
+  size: BoardSize,
+  moves: StoredMove[],
+  includePositionHistory: boolean,
+): ReplayAccumulator {
   let board = createEmptyBoard(size);
+  let expectedMoveNumber = 1;
+  let capturedWhiteByBlack = 0;
+  let capturedBlackByWhite = 0;
+  const positionHistory = includePositionHistory ? [boardHash(board)] : null;
 
   for (const move of moves) {
-    if (move.isPass || move.x === null || move.y === null) continue;
-    const result = applyMove(board, move.color, move.x, move.y);
-    if (!result.ok) {
-      throw new Error(`Stored move ${move.moveNumber} is invalid (${result.error}).`);
+    if (move.moveNumber !== expectedMoveNumber) {
+      throw new Error(
+        `Stored move sequence expected ${expectedMoveNumber}, received ${move.moveNumber}.`,
+      );
     }
-    board = result.board;
+    if (move.color !== "black" && move.color !== "white") {
+      throw new Error(`Stored move ${move.moveNumber} has an invalid color.`);
+    }
+    if (typeof move.isPass !== "boolean") {
+      throw new Error(`Stored move ${move.moveNumber} has a non-boolean pass flag.`);
+    }
+    if (move.isPass) {
+      if (move.x !== null || move.y !== null) {
+        throw new Error(`Stored pass ${move.moveNumber} has coordinates.`);
+      }
+    } else {
+      if (move.x === null || move.y === null) {
+        throw new Error(`Stored move ${move.moveNumber} has no coordinates.`);
+      }
+      if (!Number.isInteger(move.x) || !Number.isInteger(move.y)) {
+        throw new Error(`Stored move ${move.moveNumber} has non-integer coordinates.`);
+      }
+      const result = applyMove(board, move.color, move.x, move.y);
+      if (!result.ok) {
+        throw new Error(`Stored move ${move.moveNumber} is invalid (${result.error}).`);
+      }
+      board = result.board;
+      if (move.color === "black") capturedWhiteByBlack += result.captured.length;
+      else capturedBlackByWhite += result.captured.length;
+    }
+    positionHistory?.push(boardHash(board));
+    expectedMoveNumber += 1;
   }
 
-  return board;
+  return {
+    board,
+    capturedWhiteByBlack,
+    capturedBlackByWhite,
+    positionHistory,
+  };
 }
 
-export function scoreChinese(board: Board, komi = 6.5): Score {
-  let black = 0;
-  let white = komi;
+export function replayMovesWithPrisoners(size: BoardSize, moves: StoredMove[]): ReplayResult {
+  const replayed = replayMovesInternal(size, moves, true);
+  return {
+    board: replayed.board,
+    prisoners: Object.freeze({
+      capturedWhiteByBlack: replayed.capturedWhiteByBlack,
+      capturedBlackByWhite: replayed.capturedBlackByWhite,
+    }),
+    positionHistory: Object.freeze(replayed.positionHistory!),
+  };
+}
+
+export function replayMoves(size: BoardSize, moves: StoredMove[]): Board {
+  return replayMovesInternal(size, moves, false).board;
+}
+
+export function scoreChinese(board: Board, komi: number): ChineseAreaScore {
+  let blackStones = 0;
+  let whiteStones = 0;
+  let blackTerritory = 0;
+  let whiteTerritory = 0;
+  let neutralPoints = 0;
   const visited = new Set<string>();
 
   for (let y = 0; y < board.length; y += 1) {
     for (let x = 0; x < board[y].length; x += 1) {
       const stone = board[y][x];
       if (stone === "black") {
-        black += 1;
+        blackStones += 1;
         continue;
       }
       if (stone === "white") {
-        white += 1;
+        whiteStones += 1;
         continue;
       }
 
@@ -165,14 +247,30 @@ export function scoreChinese(board: Board, komi = 6.5): Score {
       }
 
       if (borders.size === 1) {
-        if (borders.has("black")) black += region.length;
-        else white += region.length;
+        if (borders.has("black")) blackTerritory += region.length;
+        else whiteTerritory += region.length;
+      } else {
+        neutralPoints += region.length;
       }
     }
   }
 
+  const sharedNeutral = neutralPoints / 2;
+  const black = blackStones + blackTerritory + sharedNeutral;
+  const white = whiteStones + whiteTerritory + sharedNeutral + komi;
   const margin = Math.abs(black - white);
   const winner: Stone | null = black === white ? null : black > white ? "black" : "white";
   const result = winner ? `${winner === "black" ? "B" : "W"}+${margin}` : "Draw";
-  return { black, white, winner, margin, result };
+  return {
+    black,
+    white,
+    blackStones,
+    whiteStones,
+    blackTerritory,
+    whiteTerritory,
+    neutralPoints,
+    winner,
+    margin,
+    result,
+  };
 }

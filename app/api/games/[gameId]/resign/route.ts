@@ -1,7 +1,18 @@
 import { NextRequest } from "next/server";
-import { apiError, noStoreJson } from "@/lib/api/responses";
+import { noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  consumePolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { resignGame } from "@/lib/game/gameService";
+import {
+  assertEmptyGameMutationBody,
+  assertGameMutationMetadata,
+  gameMutationRouteError,
+} from "@/lib/game/gameMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,12 +22,17 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const body = (await request.json()) as { playerKey?: unknown };
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
     const { gameId } = await context.params;
+    assertGameMutationMetadata(request, gameId, "none");
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    await assertEmptyGameMutationBody(request);
+    const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.resignBurst, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.resign, playerKey);
     const game = await resignGame(gameId, playerKey);
-    return noStoreJson({ ok: true, game });
+    return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
-    return apiError(error);
+    return gameMutationRouteError(error);
   }
 }

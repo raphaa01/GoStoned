@@ -1,16 +1,10 @@
 import { query } from "@/lib/db";
 import type { BoardSize } from "@/lib/game/types";
+import type { LeaderboardEntry } from "./leaderboardContract";
 
-export type PlayerStat = {
-  player_name: string;
-  board_size: BoardSize;
-  games: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  rating: number;
-  highest_rating: number;
-  updated_at: Date;
+export type LeaderboardSnapshot = {
+  entries: LeaderboardEntry[];
+  observedAt: Date;
 };
 
 export type ProfileStat = {
@@ -43,6 +37,7 @@ export type RecentGame = {
   result: "win" | "loss" | "draw";
   gameResult: string | null;
   ratingChange: number | null;
+  rated: boolean;
   finishedAt: string;
 };
 
@@ -76,29 +71,169 @@ type RecentGameRow = {
   result: "win" | "loss" | "draw";
   game_result: string | null;
   rating_change: number | null;
+  rated: boolean;
   finished_at: Date;
 };
 
-export async function getLeaderboard(boardSize: BoardSize, limit = 50) {
-  const safeLimit = Math.min(Math.max(limit, 1), 100);
-  const result = await query<PlayerStat>(
-    `SELECT
-            CASE
-              WHEN ps.player_key LIKE 'guest:%'
-                THEN 'Guest ' || UPPER(RIGHT(ps.player_key, 6))
-              ELSE COALESCE(NULLIF(BTRIM(u.display_name), ''), u.username, 'Player')
-            END AS player_name,
-            ps.board_size, ps.games, ps.wins, ps.losses, ps.draws, ps.rating,
-            ps.highest_rating, ps.updated_at
-       FROM player_stats ps
-       LEFT JOIN users u ON ps.player_key = 'user:' || u.id::text
-      WHERE ps.board_size = $1
-      ORDER BY ps.rating DESC, ps.games DESC
-      LIMIT $2`,
+type LeaderboardSnapshotRow = {
+  entries: LeaderboardEntry[];
+  observed_at: Date;
+};
+
+export async function getLeaderboard(
+  boardSize: BoardSize,
+  limit = 50,
+): Promise<LeaderboardSnapshot> {
+  const normalizedLimit = Number.isFinite(limit) ? Math.trunc(limit) : 50;
+  const safeLimit = Math.min(Math.max(normalizedLimit, 1), 100);
+  const result = await query<LeaderboardSnapshotRow>(
+    `WITH registered_rating_rows AS (
+       SELECT history.id,
+              history.player_key,
+              history.board_size,
+              history.game_id,
+              history.rating_before,
+              history.rating_after,
+              history.result,
+              history.recorded_at,
+              game_record.winner_key,
+              (
+                SELECT COUNT(*)::int
+                  FROM player_rating_history game_history
+                 WHERE game_history.game_id = history.game_id
+              ) AS total_game_ledger_rows
+         FROM player_rating_history history
+         JOIN games game_record ON game_record.id = history.game_id
+         JOIN users black_user
+           ON game_record.black_player_key = 'user:' || black_user.id::text
+         JOIN users white_user
+           ON game_record.white_player_key = 'user:' || white_user.id::text
+        WHERE history.board_size = $1
+          AND game_record.status = 'finished'
+          AND game_record.board_size = history.board_size
+          AND history.player_key IN (
+                game_record.black_player_key,
+                game_record.white_player_key
+              )
+     ), ordered_rating_rows AS (
+       SELECT registered_rating_rows.*,
+              LAG(rating_after, 1, 1200) OVER (
+                PARTITION BY player_key, board_size
+                ORDER BY recorded_at, id
+              ) AS expected_rating_before
+         FROM registered_rating_rows
+     ), atomic_rating_games AS (
+       SELECT game_id
+         FROM ordered_rating_rows
+        GROUP BY game_id
+       HAVING COUNT(*) = 2
+          AND COUNT(DISTINCT player_key) = 2
+          AND (
+            BOOL_AND(winner_key IS NULL)
+            OR COUNT(*) FILTER (WHERE winner_key = player_key) = 1
+          )
+          AND BOOL_AND(
+            total_game_ledger_rows = 2
+            AND rating_before = expected_rating_before
+            AND CASE result
+              WHEN 'win' THEN rating_after = rating_before + 16
+              WHEN 'loss' THEN rating_after = GREATEST(100, rating_before - 16)
+              ELSE rating_after = rating_before
+            END
+            AND CASE
+              WHEN winner_key IS NULL THEN result = 'draw'
+              WHEN winner_key = player_key THEN result = 'win'
+              ELSE result = 'loss'
+            END
+          )
+     ), verified_rating_games AS (
+       SELECT ordered_rating_rows.id,
+              ordered_rating_rows.player_key,
+              ordered_rating_rows.board_size,
+              ordered_rating_rows.game_id,
+              ordered_rating_rows.rating_after,
+              ordered_rating_rows.result,
+              ordered_rating_rows.recorded_at
+         FROM ordered_rating_rows
+         JOIN atomic_rating_games USING (game_id)
+     ), verified_totals AS (
+       SELECT player_key,
+              board_size,
+              COUNT(*)::int AS games,
+              COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+              COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+              COUNT(*) FILTER (WHERE result = 'draw')::int AS draws
+         FROM verified_rating_games
+        GROUP BY player_key, board_size
+     ), history_inventory AS (
+       SELECT player_key, board_size, COUNT(*)::int AS games
+         FROM player_rating_history
+        WHERE board_size = $1
+        GROUP BY player_key, board_size
+     ), latest_verified_rating AS (
+       SELECT DISTINCT ON (player_key, board_size)
+              player_key, board_size, rating_after
+         FROM verified_rating_games
+        ORDER BY player_key, board_size, recorded_at DESC, id DESC
+     ), eligible AS (
+       SELECT ps.player_key,
+              COALESCE(NULLIF(BTRIM(u.display_name), ''), u.username, 'Player') AS player_name,
+              ps.games, ps.wins, ps.rating
+         FROM player_stats ps
+         JOIN users u ON ps.player_key = 'user:' || u.id::text
+         JOIN verified_totals totals
+           ON totals.player_key = ps.player_key
+          AND totals.board_size = ps.board_size
+         JOIN history_inventory inventory
+           ON inventory.player_key = ps.player_key
+          AND inventory.board_size = ps.board_size
+         JOIN latest_verified_rating latest
+           ON latest.player_key = ps.player_key
+          AND latest.board_size = ps.board_size
+        WHERE ps.board_size = $1
+          AND ps.games > 0
+          AND ps.games = totals.games
+          AND inventory.games = totals.games
+          AND ps.wins = totals.wins
+          AND ps.losses = totals.losses
+          AND ps.draws = totals.draws
+          AND ps.rating = latest.rating_after
+          AND ps.rating >= 100
+          AND CHAR_LENGTH(
+                COALESCE(NULLIF(BTRIM(u.display_name), ''), u.username, 'Player')
+              ) BETWEEN 1 AND 80
+     ), ranked AS (
+       SELECT (ROW_NUMBER() OVER (
+                ORDER BY rating DESC, games DESC, player_key ASC
+              ))::int AS position,
+              player_name, games, wins, rating
+         FROM eligible
+     ), visible AS (
+       SELECT position, player_name, games, wins, rating
+         FROM ranked
+        WHERE position <= $2
+        ORDER BY position
+     )
+     SELECT statement_timestamp() AS observed_at,
+            COALESCE(
+              JSONB_AGG(
+                JSONB_BUILD_OBJECT(
+                  'position', position,
+                  'playerName', player_name,
+                  'games', games,
+                  'wins', wins,
+                  'rating', rating
+                ) ORDER BY position
+              ),
+              '[]'::jsonb
+            ) AS entries
+       FROM visible`,
     [boardSize, safeLimit],
   );
 
-  return result.rows;
+  const snapshot = result.rows[0];
+  if (!snapshot) throw new Error("Leaderboard query did not return a snapshot.");
+  return { entries: snapshot.entries, observedAt: snapshot.observed_at };
 }
 
 export async function getPlayerProfileStats(playerKey: string) {
@@ -164,6 +299,15 @@ export async function getPlayerProfileStats(playerKey: string) {
           END AS result,
           g.result AS game_result,
           history.rating_change,
+          (
+            SELECT COUNT(DISTINCT rated_history.player_key) = 2
+              FROM player_rating_history rated_history
+             WHERE rated_history.game_id = g.id
+               AND rated_history.player_key IN (
+                 g.black_player_key,
+                 g.white_player_key
+               )
+          ) AS rated,
           g.finished_at
         FROM (
           SELECT games.*,
@@ -217,6 +361,7 @@ export async function getPlayerProfileStats(playerKey: string) {
     result: row.result,
     gameResult: row.game_result,
     ratingChange: row.rating_change,
+    rated: row.rated,
     finishedAt: row.finished_at.toISOString(),
   }));
 

@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import "dotenv/config";
+import { closePool, getPool } from "../lib/db";
+import { isUnambiguousLocalDatabase } from "../lib/env";
+import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
+import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
+const databaseUrl = process.env.DATABASE_URL;
+const smokeHost = new URL(baseUrl).hostname;
+
+if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
+  throw new Error("The auth/chat smoke test only runs against an isolated local server.");
+}
+if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
+  throw new Error("The auth/chat smoke test requires an isolated local DATABASE_URL.");
+}
 
 type ApiBody = { ok: boolean; error?: string; [key: string]: unknown };
 
@@ -23,24 +37,33 @@ async function request(
   };
 }
 
-function json(method: string, body: object, cookie?: string): RequestInit {
+function json(
+  method: string,
+  body: object,
+  cookie?: string,
+  expectedPlayerKey?: string,
+): RequestInit {
   return {
     method,
     headers: {
       "Content-Type": "application/json",
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(expectedPlayerKey
+        ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }
+        : {}),
     },
     body: JSON.stringify(body),
   };
 }
 
 async function run() {
+  await assertSmokeDatabaseIdentity(getPool());
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
   const firstUsername = `black_${suffix}`;
   const secondUsername = `white_${suffix}`;
   const password = "Test-password-42";
 
-  console.log(`Testing account and chat flow at ${baseUrl}`);
+  console.log(`Testing account and chat flow at ${new URL(baseUrl).origin}`);
 
   const registeredFirst = await request(
     "/api/auth/register",
@@ -73,18 +96,20 @@ async function run() {
   });
   assert.equal(endedSession.body.user, null);
 
+  const firstLogin = await request(
+    "/api/auth/login",
+    json("POST", { username: firstUsername, password }),
+  );
+  assert.ok(firstLogin.cookie);
+
+  // Keep the deliberate failure after the valid login: a failed attempt correctly
+  // activates the per-account burst window for an immediate retry.
   const wrongLogin = await request(
     "/api/auth/login",
     json("POST", { username: firstUsername, password: "definitely-wrong" }),
     401,
   );
   assert.equal(wrongLogin.body.ok, false);
-
-  const firstLogin = await request(
-    "/api/auth/login",
-    json("POST", { username: firstUsername, password }),
-  );
-  assert.ok(firstLogin.cookie);
 
   const registeredSecond = await request(
     "/api/auth/register",
@@ -98,8 +123,9 @@ async function run() {
     "/api/matchmaking",
     json(
       "POST",
-      { playerKey: firstUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      { boardSize: 9, timeControl: "rapid" },
       firstLogin.cookie!,
+      firstUser.playerKey,
     ),
   );
   assert.equal((waiting.body.matchmaking as { status: string }).status, "waiting");
@@ -108,52 +134,74 @@ async function run() {
     "/api/matchmaking",
     json(
       "POST",
-      { playerKey: secondUser.playerKey, boardSize: 9, timeControl: "rapid" },
+      { boardSize: 9, timeControl: "rapid" },
       registeredSecond.cookie!,
+      secondUser.playerKey,
     ),
   );
+  assert.equal(waiting.body.actor, firstUser.playerKey);
+  assert.equal(matched.body.actor, secondUser.playerKey);
   const gameId = (matched.body.matchmaking as { gameId: string }).gameId;
   assert.ok(gameId);
 
   const game = await request(
-    `/api/games/${gameId}?playerKey=${encodeURIComponent(firstUser.playerKey)}`,
-    { headers: { Cookie: firstLogin.cookie! } },
+    `/api/games/${gameId}`,
+    {
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
   assert.equal((game.body.game as { blackPlayerName: string }).blackPlayerName, firstUsername);
 
   await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { playerKey: firstUser.playerKey, message: "Good luck!" }, firstLogin.cookie!),
+    json("POST", { message: "Good luck!" }, firstLogin.cookie!, firstUser.playerKey),
     201,
   );
-  await request(
+  const secondMessage = await request(
     `/api/games/${gameId}/chat`,
-    json("POST", { playerKey: secondUser.playerKey, message: "Have fun!" }, registeredSecond.cookie!),
+    json("POST", { message: "Have fun!" }, registeredSecond.cookie!, secondUser.playerKey),
     201,
   );
+  assert.equal(secondMessage.body.actor, secondUser.playerKey);
   const blockedChat = await request(
     `/api/games/${gameId}/chat`,
     json(
       "POST",
-      { playerKey: firstUser.playerKey, message: "f.u.c.k" },
+      { message: "f.u.c.k" },
       firstLogin.cookie!,
+      firstUser.playerKey,
     ),
     400,
   );
   assert.equal(blockedChat.body.code, "message_blocked");
   const chat = await request(
-    `/api/games/${gameId}/chat?playerKey=${encodeURIComponent(firstUser.playerKey)}`,
-    { headers: { Cookie: firstLogin.cookie! } },
+    `/api/games/${gameId}/chat`,
+    {
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
   assert.deepEqual(
     (chat.body.messages as Array<{ message: string }>).map((message) => message.message),
     ["Good luck!", "Have fun!"],
   );
 
-  await request(
+  const resigned = await request(
     `/api/games/${gameId}/resign`,
-    json("POST", { playerKey: firstUser.playerKey }, firstLogin.cookie!),
+    {
+      method: "POST",
+      headers: {
+        Cookie: firstLogin.cookie!,
+        [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+      },
+    },
   );
+  assert.equal((resigned.body.game as { rated: boolean }).rated, true);
 
   const firstProfile = await request("/api/profile", {
     headers: { Cookie: firstLogin.cookie! },
@@ -179,6 +227,7 @@ async function run() {
     gameId: string;
     result: string;
     ratingChange: number;
+    rated: boolean;
   }>;
   const firstGameHistory = firstHistory.find((entry) => entry.gameId === gameId);
   const firstBoardStat = firstStats.find((stat) => stat.boardSize === 9);
@@ -196,6 +245,15 @@ async function run() {
   assert.equal(firstRecentGames[0].gameId, gameId);
   assert.equal(firstRecentGames[0].result, "loss");
   assert.equal(firstRecentGames[0].ratingChange, -16);
+  assert.equal(firstRecentGames[0].rated, true);
+
+  const storedGame = await request(`/api/games/${gameId}`, {
+    headers: {
+      Cookie: firstLogin.cookie!,
+      [EXPECTED_PLAYER_HEADER]: firstUser.playerKey,
+    },
+  });
+  assert.equal((storedGame.body.game as { rated: boolean }).rated, true);
 
   const secondProfile = await request("/api/profile", {
     headers: { Cookie: registeredSecond.cookie! },
@@ -212,7 +270,9 @@ async function run() {
   console.log(`Accounts, sessions, matchmaking, chat, rating history, and game ${gameId} passed.`);
 }
 
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+run()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Auth/chat smoke failed.");
+    process.exitCode = 1;
+  })
+  .finally(closePool);

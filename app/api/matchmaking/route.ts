@@ -1,6 +1,13 @@
 import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  consumeEphemeralPolicyRateLimit,
+  consumePolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { isTimeControlId } from "@/lib/game/timeControls";
 import {
   cancelMatchmaking,
@@ -8,18 +15,24 @@ import {
   isBoardSize,
   joinMatchmaking,
 } from "@/lib/matchmaking/matchmakingService";
+import {
+  assertMatchmakingMutationMetadata,
+  invalidMatchmakingRequest,
+  matchmakingMutationRouteError,
+  readMatchmakingJoinRequest,
+} from "@/lib/matchmaking/matchmakingMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
+    consumeEphemeralPolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingRead, playerKey);
     const matchmaking = await getMatchmakingStatus(playerKey);
-    return noStoreJson({ ok: true, matchmaking });
+    return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
     return apiError(error);
   }
@@ -27,34 +40,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
-      playerKey?: unknown;
-      boardSize?: unknown;
-      timeControl?: unknown;
-    };
-    if (!isBoardSize(body.boardSize) || !isTimeControlId(body.timeControl)) {
-      return noStoreJson(
-        { ok: false, error: "A valid board size and time control are required." },
-        { status: 400 },
-      );
+    assertMatchmakingMutationMetadata(request, "json");
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoinBurst, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingJoin, playerKey);
+    const input = await readMatchmakingJoinRequest(request);
+    if (!isBoardSize(input.boardSize) || !isTimeControlId(input.timeControl)) {
+      throw invalidMatchmakingRequest();
     }
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
-    const matchmaking = await joinMatchmaking(playerKey, body.boardSize, body.timeControl);
-    return noStoreJson({ ok: true, matchmaking });
+    const matchmaking = await joinMatchmaking(
+      playerKey,
+      input.boardSize,
+      input.timeControl,
+    );
+    return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
-    return apiError(error);
+    return matchmakingMutationRouteError(error);
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const playerKey = await resolvePlayerKey(
-      request,
-      request.nextUrl.searchParams.get("playerKey"),
-    );
-    await cancelMatchmaking(playerKey);
-    return noStoreJson({ ok: true });
+    assertMatchmakingMutationMetadata(request, "none");
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.matchmakingCancel, playerKey);
+    const matchmaking = await cancelMatchmaking(playerKey);
+    return noStoreJson({ ok: true, actor: playerKey, matchmaking });
   } catch (error) {
-    return apiError(error);
+    return matchmakingMutationRouteError(error);
   }
 }

@@ -1,5 +1,6 @@
-import { query } from "@/lib/db";
-import { hashPassword, normalizeUsername, validatePassword, verifyPassword } from "./password";
+import { query, withTransaction } from "@/lib/db";
+import { hashPassword, normalizeUsername, validatePasswordIssue, verifyPassword } from "./password";
+import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
 
@@ -17,6 +18,18 @@ export class AuthError extends Error {
   }
 }
 
+function isUsernameUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error) || !("constraint" in error)) {
+    return false;
+  }
+  const databaseError = error as { code?: string; constraint?: string };
+  return databaseError.code === "23505"
+    && (
+      databaseError.constraint === "users_username_key"
+      || databaseError.constraint === "idx_users_username_lower"
+    );
+}
+
 export function validateCredentials(usernameValue: unknown, passwordValue: unknown) {
   const username = normalizeUsername(usernameValue);
   if (!username) {
@@ -26,32 +39,34 @@ export function validateCredentials(usernameValue: unknown, passwordValue: unkno
       "invalid_username",
     );
   }
-  const passwordError = validatePassword(passwordValue);
-  if (passwordError) throw new AuthError(passwordError, 400, "invalid_password");
+  const passwordIssue = validatePasswordIssue(passwordValue);
+  if (passwordIssue) throw new AuthError(passwordIssue.message, 400, passwordIssue.code);
   return { username, password: passwordValue as string };
 }
 
-export async function registerAccount(username: string, password: string): Promise<AuthUser> {
+type Registration = {
+  user: AuthUser;
+  token: string;
+};
+
+export async function registerAccount(username: string, password: string): Promise<Registration> {
   const passwordHash = await hashPassword(password);
-  try {
-    const result = await query<AuthUserRow>(
+  return withTransaction(async (client) => {
+    const result = await client.query<AuthUserRow>(
       `INSERT INTO users (username, password_hash, display_name)
        VALUES ($1, $2, $1)
        RETURNING id, username, display_name`,
       [username, passwordHash],
-    );
-    return serializeAuthUser(result.rows[0]);
-  } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code: string }).code === "23505"
-    ) {
-      throw new AuthError("This username is already taken.", 409, "username_taken");
-    }
-    throw error;
-  }
+    ).catch((error: unknown) => {
+      if (isUsernameUniqueViolation(error)) {
+        throw new AuthError("This username is already taken.", 409, "username_taken");
+      }
+      throw error;
+    });
+    const user = serializeAuthUser(result.rows[0]);
+    const token = await createSessionInTransaction(client, user.id);
+    return { user, token };
+  });
 }
 
 export async function authenticateAccount(

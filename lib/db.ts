@@ -63,6 +63,25 @@ export async function withTransaction<T>(
   }
 }
 
+export async function withReadOnlyTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    await client.query("SET LOCAL statement_timeout = '8s'");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function closePool(): Promise<void> {
   if (globalThis.goStonedDbPool) {
     await globalThis.goStonedDbPool.end();

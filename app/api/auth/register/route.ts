@@ -1,9 +1,17 @@
 import { NextRequest } from "next/server";
-import { noStoreJson } from "@/lib/api/responses";
-import { AuthError, registerAccount, validateCredentials } from "@/lib/auth/accountService";
-import { consumeRateLimit, RateLimitError } from "@/lib/auth/rateLimit";
+import { apiError, noStoreJson } from "@/lib/api/responses";
+import { AuthError, registerAccount } from "@/lib/auth/accountService";
 import {
-  createSession,
+  assertAuthMutationRequest,
+  readCredentialRequest,
+} from "@/lib/auth/credentialRequest";
+import {
+  consumeIpPolicyRateLimit,
+  consumeRateLimit,
+  RATE_LIMIT_POLICIES,
+  RateLimitError,
+} from "@/lib/auth/rateLimit";
+import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/auth/session";
@@ -13,11 +21,17 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { username?: unknown; password?: unknown };
-    const credentials = validateCredentials(body.username, body.password);
-    await consumeRateLimit(request, "register", "all-accounts", 5, 60);
-    const user = await registerAccount(credentials.username, credentials.password);
-    const token = await createSession(user.id);
+    assertAuthMutationRequest(request, { requireJson: true });
+    await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.registerAddress);
+    const credentials = await readCredentialRequest(request);
+    await consumeRateLimit(
+      request,
+      RATE_LIMIT_POLICIES.registerTarget.scope,
+      credentials.username,
+      RATE_LIMIT_POLICIES.registerTarget.limit,
+      RATE_LIMIT_POLICIES.registerTarget.windowMinutes,
+    );
+    const { user, token } = await registerAccount(credentials.username, credentials.password);
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
@@ -36,9 +50,12 @@ export async function POST(request: NextRequest) {
       );
     }
     if (error instanceof RateLimitError) {
-      return noStoreJson({ ok: false, error: error.message }, { status: 429 });
+      return apiError(error);
     }
     console.error("Registration failed:", error);
-    return noStoreJson({ ok: false, error: "Could not create the account." }, { status: 500 });
+    return noStoreJson(
+      { ok: false, error: "Could not create the account.", code: "register_failed" },
+      { status: 500 },
+    );
   }
 }

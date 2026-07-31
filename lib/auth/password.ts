@@ -56,11 +56,34 @@ export async function verifyPassword(password: string, encoded: string): Promise
   }
 }
 
-export function validatePassword(value: unknown): string | null {
-  if (typeof value !== "string") return "Password is required.";
-  if (value.length < 8) return "Password must contain at least 8 characters.";
-  if (value.length > 128) return "Password must contain at most 128 characters.";
+export type PasswordValidationCode =
+  | "password_required"
+  | "password_too_short"
+  | "password_too_long";
+
+export function validatePasswordIssue(
+  value: unknown,
+): { code: PasswordValidationCode; message: string } | null {
+  if (typeof value !== "string") {
+    return { code: "password_required", message: "Password is required." };
+  }
+  if (value.length < 8) {
+    return {
+      code: "password_too_short",
+      message: "Password must contain at least 8 characters.",
+    };
+  }
+  if (value.length > 128) {
+    return {
+      code: "password_too_long",
+      message: "Password must contain at most 128 characters.",
+    };
+  }
   return null;
+}
+
+export function validatePassword(value: unknown): string | null {
+  return validatePasswordIssue(value)?.message ?? null;
 }
 
 export function normalizeUsername(value: unknown): string | null {

@@ -1,54 +1,110 @@
 "use client";
 
 import { Medal, Trophy } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { readApi } from "@/lib/client/api";
 import type { BoardSize } from "@/lib/game/types";
-
-type LeaderboardEntry = {
-  player_name: string;
-  board_size: BoardSize;
-  games: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  rating: number;
-};
+import { localizedApiError } from "@/lib/i18n/dictionary";
+import {
+  parsePublicLeaderboardSnapshot,
+  type LeaderboardEntry,
+} from "@/lib/stats/leaderboardContract";
 
 export function LeaderboardView() {
+  const { dictionary, locale } = useI18n();
+  const copy = dictionary.leaderboard;
   const [boardSize, setBoardSize] = useState<BoardSize>(19);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [observedAt, setObservedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/stats?boardSize=${boardSize}`, { cache: "no-store" });
-      const body = (await response.json()) as { ok: boolean; leaderboard?: LeaderboardEntry[] };
-      setEntries(response.ok && body.ok ? body.leaderboard ?? [] : []);
-    } finally {
-      setLoading(false);
-    }
-  }, [boardSize]);
+  const [error, setError] = useState<string | null>(null);
+  const [requestKey, setRequestKey] = useState(0);
+  const resultStatusRef = useRef<HTMLParagraphElement>(null);
+  const focusRetryStatus = useRef(false);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => load().catch(() => setLoading(false)), 0);
-    return () => window.clearTimeout(timeout);
-  }, [load]);
+    const controller = new AbortController();
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/stats?boardSize=${boardSize}`, {
+          signal: controller.signal,
+        });
+        const body = await readApi<unknown>(response);
+        if (!active) return;
+        const snapshot = parsePublicLeaderboardSnapshot(body, boardSize);
+        setEntries(snapshot.leaderboard);
+        setObservedAt(snapshot.observedAt);
+        setError(null);
+      } catch (requestError) {
+        if (!active || controller.signal.aborted) return;
+        setEntries([]);
+        setObservedAt(null);
+        setError(localizedApiError(dictionary, requestError, copy.loadFailed));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [boardSize, copy.loadFailed, dictionary, requestKey]);
+
+  useEffect(() => {
+    if (!focusRetryStatus.current) return;
+    resultStatusRef.current?.focus();
+    if (!loading) focusRetryStatus.current = false;
+  }, [error, loading, observedAt]);
+
+  const snapshotSummary = observedAt
+    ? copy.snapshotSummary
+      .replace("{size}", String(boardSize))
+      .replace("{count}", String(entries.length))
+      .replace(
+        "{time}",
+        new Intl.DateTimeFormat(locale, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(observedAt)),
+      )
+    : null;
+  const tableLabel = copy.tableScrollLabel.replace("{size}", String(boardSize));
+  const selectBoardSize = (size: BoardSize) => {
+    if (size === boardSize) return;
+    setLoading(true);
+    setError(null);
+    setEntries([]);
+    setObservedAt(null);
+    setBoardSize(size);
+  };
+  const retry = () => {
+    focusRetryStatus.current = true;
+    setLoading(true);
+    setError(null);
+    setEntries([]);
+    setObservedAt(null);
+    setRequestKey((value) => value + 1);
+  };
 
   return (
     <>
       <header className="page-header">
         <div>
-          <span className="section-kicker">Global rankings</span>
-          <h1>Leaderboard</h1>
-          <p>Ratings are updated when a saved game finishes.</p>
+          <span className="section-kicker">{copy.kicker}</span>
+          <h1>{copy.title}</h1>
+          <p>{copy.description}</p>
         </div>
-        <div className="leaderboard-filter" aria-label="Board size">
+        <div className="leaderboard-filter" aria-label={copy.boardSize} role="group">
           {([9, 13, 19] as const).map((size) => (
             <button
               className={boardSize === size ? "is-selected" : ""}
+              aria-pressed={boardSize === size}
               key={size}
-              onClick={() => setBoardSize(size)}
+              onClick={() => selectBoardSize(size)}
               type="button"
             >
               {size}×{size}
@@ -58,26 +114,83 @@ export function LeaderboardView() {
       </header>
 
       <section className="leaderboard-card">
-        <div className="leaderboard-title"><Trophy size={20} /><strong>{boardSize}×{boardSize} players</strong></div>
+        <div className="leaderboard-title"><Trophy aria-hidden="true" size={20} /><strong>{boardSize}×{boardSize} {copy.players}</strong></div>
+        <p className="leaderboard-method">{copy.ratingMethod}</p>
         {loading ? (
-          <p className="empty-state">Loading rankings…</p>
-        ) : entries.length === 0 ? (
-          <p className="empty-state">No rated games on this board yet. The first completed match will appear here.</p>
-        ) : (
-          <div className="leaderboard-table">
-            <div className="leaderboard-row leaderboard-row--head">
-              <span>Rank</span><span>Player</span><span>Games</span><span>Wins</span><span>Rating</span>
-            </div>
-            {entries.map((entry, index) => (
-              <div className="leaderboard-row" key={`${entry.player_name}-${index}`}>
-                <span className={`rank rank--${index + 1}`}>{index < 3 ? <Medal size={18} /> : index + 1}</span>
-                <strong>{entry.player_name}</strong>
-                <span>{entry.games}</span>
-                <span>{entry.wins}</span>
-                <strong>{entry.rating}</strong>
-              </div>
-            ))}
+          <p
+            aria-live="polite"
+            className="empty-state"
+            ref={resultStatusRef}
+            role="status"
+            tabIndex={-1}
+          >
+            {copy.loading}
+          </p>
+        ) : error ? (
+          <div className="empty-state" role="alert">
+            <p ref={resultStatusRef} tabIndex={-1}>{error}</p>
+            <button className="button button--secondary" onClick={retry} type="button">
+              {copy.retry}
+            </button>
           </div>
+        ) : (
+          <>
+            {entries.length === 0 ? (
+              <p className="empty-state">{copy.empty}</p>
+            ) : (
+              <div
+                aria-label={tableLabel}
+                className="leaderboard-table"
+                role="region"
+                tabIndex={0}
+              >
+                <table>
+                  <caption className="sr-only">
+                    {boardSize}×{boardSize} {copy.players}. {copy.resultCount.replace("{count}", String(entries.length))}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{copy.rank}</th>
+                      <th scope="col">{copy.player}</th>
+                      <th scope="col">{copy.games}</th>
+                      <th scope="col">{copy.wins}</th>
+                      <th scope="col">{copy.rating}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry) => (
+                      <tr key={entry.position}>
+                        <td>
+                          <span className={`rank rank--${entry.position}`}>
+                            <span className="sr-only">{entry.position}</span>
+                            {entry.position <= 3
+                              ? <Medal aria-hidden="true" size={18} />
+                              : <span aria-hidden="true">{entry.position}</span>}
+                          </span>
+                        </td>
+                        <th scope="row">{entry.playerName}</th>
+                        <td>{entry.games}</td>
+                        <td>{entry.wins}</td>
+                        <td><strong>{entry.rating}</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {snapshotSummary ? (
+              <p
+                aria-atomic="true"
+                aria-live="polite"
+                className="leaderboard-snapshot"
+                ref={resultStatusRef}
+                role="status"
+                tabIndex={-1}
+              >
+                {snapshotSummary}
+              </p>
+            ) : null}
+          </>
         )}
       </section>
     </>

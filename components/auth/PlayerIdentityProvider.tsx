@@ -1,29 +1,120 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getOrCreateGuestPlayerKey, shortPlayerName } from "@/lib/client/guestIdentity";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import type { GuestIdentity } from "@/lib/auth/guestSession";
+import { readApi } from "@/lib/client/api";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 
 export function usePlayerIdentity() {
-  const { user, loading: authLoading } = useAuth();
-  const [guestKey, setGuestKey] = useState<string | null>(null);
+  const { dictionary } = useI18n();
+  const {
+    user,
+    loading: authLoading,
+    error: authError,
+    refresh: refreshAuth,
+  } = useAuth();
+  const [guest, setGuest] = useState<GuestIdentity | null>(null);
+  const [guestError, setGuestError] = useState<string | null>(null);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setGuestKey(getOrCreateGuestPlayerKey());
-    }, 0);
-    return () => window.clearTimeout(timeout);
+    if (authLoading || authError || user || guest || guestError) return;
+    const controller = new AbortController();
+    fetch("/api/auth/guest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: controller.signal,
+    })
+      .then((response) => readApi<{ identity: GuestIdentity }>(response))
+      .then((body) => setGuest(body.identity))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setGuestError(localizedApiError(
+            dictionary,
+            error,
+            dictionary.apiErrors.guest_session_failed,
+          ));
+        }
+      });
+    return () => controller.abort();
+  }, [authError, authLoading, dictionary, guest, guestError, user]);
+
+  const retry = useCallback(() => {
+    if (authError) {
+      refreshAuth().catch(() => undefined);
+      return;
+    }
+    setGuestError(null);
+  }, [authError, refreshAuth]);
+
+  const restartGuest = useCallback(() => {
+    setGuest(null);
+    setGuestError(null);
   }, []);
 
+  const refreshIdentity = useCallback(async () => {
+    setGuest(null);
+    setGuestError(null);
+    await refreshAuth();
+  }, [refreshAuth]);
+
   return useMemo(() => {
-    if (authLoading) return { playerKey: null, playerName: null, loading: true };
+    if (authLoading) {
+      return {
+        playerKey: null,
+        playerName: null,
+        identityKind: null,
+        loading: true,
+        error: null,
+        retry,
+        restartGuest,
+        refreshIdentity,
+      };
+    }
     if (user) {
-      return { playerKey: user.playerKey, playerName: user.displayName, loading: false };
+      return {
+        playerKey: user.playerKey,
+        playerName: user.displayName,
+        identityKind: "account" as const,
+        loading: false,
+        error: null,
+        retry,
+        restartGuest,
+        refreshIdentity,
+      };
+    }
+    if (authError) {
+      return {
+        playerKey: null,
+        playerName: null,
+        identityKind: null,
+        loading: false,
+        error: authError,
+        retry,
+        restartGuest,
+        refreshIdentity,
+      };
     }
     return {
-      playerKey: guestKey,
-      playerName: guestKey ? shortPlayerName(guestKey) : null,
-      loading: guestKey === null,
+      playerKey: guest?.playerKey ?? null,
+      playerName: guest?.displayName ?? null,
+      identityKind: guest ? "guest" as const : null,
+      loading: !guest && !guestError,
+      error: guestError,
+      retry,
+      restartGuest,
+      refreshIdentity,
     };
-  }, [authLoading, guestKey, user]);
+  }, [
+    authError,
+    authLoading,
+    guest,
+    guestError,
+    refreshIdentity,
+    restartGuest,
+    retry,
+    user,
+  ]);
 }

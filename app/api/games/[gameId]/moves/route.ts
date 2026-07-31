@@ -1,7 +1,20 @@
 import { NextRequest } from "next/server";
-import { apiError, noStoreJson } from "@/lib/api/responses";
+import { noStoreJson } from "@/lib/api/responses";
+import {
+  consumeEphemeralIpPolicyRateLimit,
+  consumePolicyRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
+import { MAX_PERSISTED_GAME_VERSION } from "@/lib/game/gamePolling";
 import { submitMove } from "@/lib/game/gameService";
+import {
+  assertGameMutationMetadata,
+  gameMutationRouteError,
+  invalidGameMutationRequest,
+  readGameMutationJson,
+} from "@/lib/game/gameMutationRequest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,25 +24,41 @@ export async function POST(
   context: { params: Promise<{ gameId: string }> },
 ) {
   try {
-    const body = (await request.json()) as {
-      playerKey?: unknown;
-      x?: unknown;
-      y?: unknown;
-      isPass?: unknown;
-    };
-    const playerKey = await resolvePlayerKey(request, body.playerKey);
-    if (body.isPass !== true && (!Number.isInteger(body.x) || !Number.isInteger(body.y))) {
-      return noStoreJson({ ok: false, error: "Integer x and y are required." }, { status: 400 });
+    const { gameId } = await context.params;
+    assertGameMutationMetadata(request, gameId, "json");
+    consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
+    const playerKey = await resolvePlayerKey(request);
+    assertExpectedPlayer(request, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.moveBurst, playerKey);
+    await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.move, playerKey);
+    const body = await readGameMutationJson(
+      request,
+      [
+        ["x", "y", "expectedVersion"],
+        ["isPass", "expectedVersion"],
+        ["x", "y", "isPass", "expectedVersion"],
+      ],
+    );
+    const isPass = body.isPass === true;
+    if (
+      !Number.isSafeInteger(body.expectedVersion)
+      || Number(body.expectedVersion) < 0
+      || Number(body.expectedVersion) > MAX_PERSISTED_GAME_VERSION
+      || (isPass && ("x" in body || "y" in body))
+      || (!isPass && body.isPass !== undefined && body.isPass !== false)
+      || (!isPass && (!Number.isSafeInteger(body.x) || !Number.isSafeInteger(body.y)))
+    ) {
+      throw invalidGameMutationRequest();
     }
 
-    const { gameId } = await context.params;
     const game = await submitMove(gameId, playerKey, {
       x: body.x as number | undefined,
       y: body.y as number | undefined,
-      isPass: body.isPass === true,
+      isPass,
+      expectedVersion: body.expectedVersion as number,
     });
-    return noStoreJson({ ok: true, game });
+    return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
-    return apiError(error);
+    return gameMutationRouteError(error);
   }
 }

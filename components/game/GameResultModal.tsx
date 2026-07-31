@@ -1,9 +1,12 @@
 "use client";
 
 import { Eye, Home, Minus, RotateCcw, Trophy, XCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
-import { getTimeControl } from "@/lib/game/timeControls";
+import { type RefObject, useId, useRef, useState } from "react";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { ModalDialog } from "@/components/ui/ModalDialog";
 import type { GameState } from "@/lib/game/types";
+import { localizedGameResult } from "@/lib/game/gameAccessibility";
+import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 
 type GameResultModalProps = {
   game: GameState;
@@ -12,17 +15,8 @@ type GameResultModalProps = {
   onHome: () => void;
   onPlayAgain: () => void;
   onViewBoard: () => void;
+  finalFocusRef?: RefObject<HTMLElement | null>;
 };
-
-function resultDescription(result: string | null) {
-  if (!result) return "The game has ended.";
-  const [winner, detail] = result.split("+");
-  if (winner !== "B" && winner !== "W") return result;
-  const color = winner === "B" ? "Black" : "White";
-  if (detail === "R") return `${color} wins by resignation`;
-  if (detail === "T") return `${color} wins on time`;
-  return `${color} wins by ${detail} points`;
-}
 
 export function GameResultModal({
   game,
@@ -31,48 +25,67 @@ export function GameResultModal({
   onHome,
   onPlayAgain,
   onViewBoard,
+  finalFocusRef,
 }: GameResultModalProps) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.game;
+  const rulesSummary = localizedRulesSummary(game, dictionary);
+  const titleId = useId();
+  const descriptionId = useId();
   const playAgainButton = useRef<HTMLButtonElement>(null);
+  const exitingRef = useRef(false);
+  const [exiting, setExiting] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    playAgainButton.current?.focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onViewBoard();
+  async function exitResult(action: () => void | Promise<void>) {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    setExiting(true);
+    try {
+      await action();
+    } catch {
+      exitingRef.current = false;
+      setExiting(false);
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onViewBoard, open]);
+  }
 
   if (!open) return null;
 
   const draw = !game.winnerKey;
   const won = game.winnerKey === playerKey;
-  const outcome = draw ? "Draw" : won ? "Victory" : "Defeat";
+  const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
   const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
+  const deadCounts = (game.scoring?.deadStones ?? []).reduce(
+    (counts, { x, y }) => {
+      const color = game.board[y]?.[x];
+      if (color) counts[color] += 1;
+      return counts;
+    },
+    { black: 0, white: 0 },
+  );
 
   return (
-    <div className="modal-backdrop modal-backdrop--result">
-      <section
-        aria-labelledby="game-result-title"
-        aria-modal="true"
-        className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
-        role="dialog"
-      >
+    <ModalDialog
+      backdropClassName="modal-backdrop--result"
+      className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
+      descriptionId={descriptionId}
+      finalFocusRef={finalFocusRef}
+      initialFocusRef={playAgainButton}
+      onDismiss={exiting ? undefined : () => void exitResult(onViewBoard)}
+      open={open}
+      titleId={titleId}
+    >
         <div className="result-modal-header">
           <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
           <div>
-            <span className="result-modal-kicker">Game complete</span>
-            <h2 id="game-result-title">{outcome}</h2>
-            <p>{resultDescription(game.result)}</p>
+            <span className="result-modal-kicker">{copy.complete}</span>
+            <h2 id={titleId}>{outcome}</h2>
+            <p id={descriptionId}>
+              {localizedGameResult(game.result, copy)} {game.rated
+                ? copy.ratedResultSaved
+                : copy.unratedResultSaved}
+            </p>
           </div>
-          <strong className="result-code">{game.result ?? "Draw"}</strong>
+          <strong className="result-code">{game.result ?? copy.draw}</strong>
         </div>
 
         <div className="result-player-list">
@@ -80,40 +93,66 @@ export function GameResultModal({
             <span className="player-stone player-stone--black" />
             <span>
               <strong>{game.blackPlayerName}</strong>
-              <small>{game.blackPlayerKey === playerKey ? "You · Black" : "Black"}</small>
+              <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
             </span>
-            {game.winnerKey === game.blackPlayerKey ? <b>Winner</b> : null}
+            {game.winnerKey === game.blackPlayerKey ? <b>{copy.winner}</b> : null}
           </div>
           <div className={game.winnerKey === game.whitePlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--white" />
             <span>
               <strong>{game.whitePlayerName}</strong>
-              <small>{game.whitePlayerKey === playerKey ? "You · White" : "White"}</small>
+              <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
             </span>
-            {game.winnerKey === game.whitePlayerKey ? <b>Winner</b> : null}
+            {game.winnerKey === game.whitePlayerKey ? <b>{copy.winner}</b> : null}
           </div>
         </div>
 
         <div className="result-facts">
-          <span><small>Board</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
-          <span><small>Moves</small><strong>{game.moveCount}</strong></span>
-          <span><small>Clock</small><strong>{getTimeControl(game.timeControl).name}</strong></span>
+          <span><small>{copy.board}</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
+          <span><small>{copy.moves}</small><strong>{game.moveCount}</strong></span>
+          <span><small>{copy.clock}</small><strong>{dictionary.timeControls[game.timeControl].name}</strong></span>
         </div>
+
+        {game.finishReason === "score" && game.scoring ? (
+          <section className="result-score-details" aria-label={copy.agreedDetails}>
+            <div>
+              <span><small>{copy.blackTotal}</small><strong>{game.scoring.preview.black}</strong></span>
+              <span><small>{copy.whiteTotal}</small><strong>{game.scoring.preview.white}</strong></span>
+            </div>
+            <div>
+              <span>
+                <small>{copy.blackStonesTerritory}</small>
+                <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
+              </span>
+              <span>
+                <small>{copy.whiteStonesTerritory}</small>
+                <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
+              </span>
+            </div>
+            <p>
+              {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
+              {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+            </p>
+          </section>
+        ) : null}
 
         <button
           className="button button--primary result-primary"
-          onClick={onPlayAgain}
+          disabled={exiting}
+          onClick={() => void exitResult(onPlayAgain)}
           ref={playAgainButton}
           type="button"
         >
           <RotateCcw size={18} />
-          Find another game
+          {copy.findAnother}
         </button>
+        <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+          {exiting ? dictionary.common.pleaseWait : ""}
+        </span>
         <div className="result-secondary-actions">
-          <button onClick={onViewBoard} type="button"><Eye size={16} /> View board</button>
-          <button onClick={onHome} type="button"><Home size={16} /> Home</button>
+          <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button"><Eye size={16} /> {copy.viewBoard}</button>
+          <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button"><Home size={16} /> {copy.home}</button>
         </div>
-      </section>
-    </div>
+    </ModalDialog>
   );
 }
