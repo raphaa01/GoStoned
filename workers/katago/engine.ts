@@ -4,10 +4,17 @@ import type { AnalysisInput, KataGoTurnResult } from "@/lib/analysis/types";
 
 type PendingQuery = {
   expectedTurns: number;
+  latestResults: Map<number, KataGoTurnResult>;
   results: KataGoTurnResult[];
   resolve: (results: KataGoTurnResult[]) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+};
+
+type AnalysisQueryOptions = {
+  priority?: number;
+  reportDuringSearchEvery?: number;
+  timeoutMs?: number;
 };
 
 function finite(value: unknown, fallback = 0): number {
@@ -92,9 +99,13 @@ export class KataGoEngine {
       pending.reject(new Error(`KataGo rejected the analysis: ${value.error}`));
       return;
     }
-    if (value.isDuringSearch === true) return;
     try {
-      pending.results.push(parseTurn(value));
+      const turn = parseTurn(value);
+      if (value.isDuringSearch === true) {
+        pending.latestResults.set(turn.turnNumber, turn);
+        return;
+      }
+      pending.results.push(turn);
     } catch (error) {
       clearTimeout(pending.timeout);
       this.pending.delete(id);
@@ -121,16 +132,35 @@ export class KataGoEngine {
     input: AnalysisInput,
     maxVisits: number,
     analyzeTurns: readonly number[],
+    options: AnalysisQueryOptions = {},
   ): Promise<KataGoTurnResult[]> {
     if (this.process.exitCode !== null || !this.process.stdin.writable) {
       return Promise.reject(new Error("KataGo is not running."));
     }
     return new Promise((resolve, reject) => {
+      const latestResults = new Map<number, KataGoTurnResult>();
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error("KataGo analysis timed out."));
-      }, Math.max(120_000, input.moves.length * 20_000));
-      this.pending.set(id, { expectedTurns: analyzeTurns.length, results: [], resolve, reject, timeout });
+        if (this.process.stdin.writable) {
+          this.process.stdin.write(`${JSON.stringify({
+            id: `terminate:${id}`,
+            action: "terminate",
+            terminateId: id,
+          })}\n`);
+        }
+        const partial = [...latestResults.values()]
+          .sort((left, right) => left.turnNumber - right.turnNumber);
+        if (partial.length >= analyzeTurns.length) resolve(partial);
+        else reject(new Error("KataGo analysis timed out before producing a usable result."));
+      }, options.timeoutMs ?? Math.max(120_000, input.moves.length * 20_000));
+      this.pending.set(id, {
+        expectedTurns: analyzeTurns.length,
+        latestResults,
+        results: [],
+        resolve,
+        reject,
+        timeout,
+      });
       this.process.stdin.write(`${JSON.stringify({
         id,
         moves: input.moves.map((move) => [move.color === "black" ? "B" : "W", move.move]),
@@ -142,6 +172,10 @@ export class KataGoEngine {
         maxVisits,
         analysisPVLen: 12,
         includePolicy: true,
+        ...(options.priority === undefined ? {} : { priority: options.priority }),
+        ...(options.reportDuringSearchEvery === undefined
+          ? {}
+          : { reportDuringSearchEvery: options.reportDuringSearchEvery }),
       })}\n`);
     });
   }
@@ -159,12 +193,14 @@ export class KataGoEngine {
     id: string,
     input: AnalysisInput,
     maxVisits: number,
+    options: AnalysisQueryOptions = {},
   ): Promise<KataGoTurnResult> {
     const results = await this.analyzeTurns(
       id,
       input,
       maxVisits,
       [input.moves.length],
+      options,
     );
     const current = results[0];
     if (!current) throw new Error("KataGo did not return the current position.");

@@ -135,7 +135,12 @@ async function run() {
     assert.ok(botName.length >= 2 && !botName.toLowerCase().includes("guest"));
 
     const humanColor = game.blackPlayerKey === identity.playerKey ? "black" : "white";
+    const initialBotStartedAt = Date.now();
     game = await waitForGame(gameId, identity, (current) => current.turn === humanColor);
+    const initialBotMoveMs = game.moveCount > 0 ? Date.now() - initialBotStartedAt : null;
+    if (initialBotMoveMs !== null) {
+      assert.ok(initialBotMoveMs <= 10_500, `Initial bot move took ${initialBotMoveMs}ms.`);
+    }
     const beforeHumanMove = game.moveCount;
     const humanMove = nearestEmptyMove(game);
     const moveResponse = await api<{ game: GameState }>(
@@ -148,18 +153,22 @@ async function run() {
       },
     );
     assert.equal(moveResponse.game.moveCount, beforeHumanMove + 1);
+    const replyStartedAt = Date.now();
     const afterBot = await waitForGame(
       gameId,
       identity,
       (current) => current.moveCount >= beforeHumanMove + 2 || current.status === "finished",
     );
+    const botReplyMs = Date.now() - replyStartedAt;
     assert.ok(afterBot.moveCount >= beforeHumanMove + 2, "KataGo did not answer the human move.");
+    assert.ok(botReplyMs <= 10_500, `Bot reply took ${botReplyMs}ms.`);
     console.log(JSON.stringify({
       ok: true,
       fallbackMs: matchedAfterMs,
       gameId,
       botName,
       botColor: game.blackPlayerIsBot ? "black" : "white",
+      botReplyMs,
       moveCount: afterBot.moveCount,
     }));
   } finally {

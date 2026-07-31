@@ -18,11 +18,13 @@ const pollMs = Math.max(500, Number(process.env.KATAGO_POLL_INTERVAL_MS) || 2_00
 const maxVisits = Math.max(20, Number(process.env.KATAGO_MAX_VISITS) || 20);
 const engineVersion = process.env.KATAGO_VERSION || "v1.17.0";
 const modelName = process.env.KATAGO_MODEL_NAME || "b10c384h6nbttflrs";
-const engine = new KataGoEngine({
+const engineOptions = {
   binary: process.env.KATAGO_BINARY || "/opt/katago/katago",
   model: process.env.KATAGO_MODEL || "/opt/katago/model.bin.gz",
   config: process.env.KATAGO_CONFIG || "/opt/katago/analysis.cfg",
-});
+};
+const analysisEngine = new KataGoEngine(engineOptions);
+const botEngine = new KataGoEngine(engineOptions);
 let stopping = false;
 let activeJob: string | null = null;
 const botState: BotLoopState = { activeGameId: null };
@@ -56,7 +58,7 @@ async function claimJob(): Promise<ClaimedJob | null> {
 }
 
 async function finishJob(job: ClaimedJob) {
-  const turns = await engine.analyze(job.id, job.input, maxVisits);
+  const turns = await analysisEngine.analyze(job.id, job.input, maxVisits);
   const result = buildGameAnalysis(job.input, turns, {
     version: engineVersion,
     model: modelName,
@@ -111,13 +113,13 @@ const healthServer = createServer((request, response) => {
     return;
   }
   response.setHeader("content-type", "application/json");
-  response.statusCode = engine.running ? 200 : 503;
+  response.statusCode = analysisEngine.running && botEngine.running ? 200 : 503;
   response.end(JSON.stringify({
-    ok: engine.running,
+    ok: analysisEngine.running && botEngine.running,
     service: "gostone-katago-worker",
     activeJob,
     activeBotGame: botState.activeGameId,
-    error: engine.error,
+    error: analysisEngine.error ?? botEngine.error,
   }));
 });
 healthServer.listen(healthPort, "0.0.0.0", () => {
@@ -135,7 +137,8 @@ async function shutdown() {
     modelName,
     ready: false,
   }).catch(() => undefined);
-  engine.close();
+  analysisEngine.close();
+  botEngine.close();
   await closePool();
 }
 
@@ -146,21 +149,21 @@ publishWorkerHeartbeat({
   workerId,
   engineVersion,
   modelName,
-  ready: engine.running,
+  ready: analysisEngine.running && botEngine.running,
 }).then(() => {
   heartbeatTimer = setInterval(() => {
     void publishWorkerHeartbeat({
       workerId,
       engineVersion,
       modelName,
-      ready: engine.running,
+      ready: analysisEngine.running && botEngine.running,
     }).catch((error) => console.error("KataGo heartbeat failed:", error));
   }, 5_000);
 }).catch((error) => console.error("Initial KataGo heartbeat failed:", error));
 
 Promise.all([
   loop(),
-  runBotLoop(engine, botState, () => stopping),
+  runBotLoop(botEngine, botState, () => stopping),
 ]).catch(async (error) => {
   console.error("KataGo worker stopped:", error);
   await shutdown();

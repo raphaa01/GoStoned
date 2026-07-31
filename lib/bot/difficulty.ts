@@ -10,7 +10,7 @@ export type BotDifficulty = Readonly<{
 }>;
 
 export const BOT_MINIMUM_THINK_MS = 3_000;
-export const BOT_MAXIMUM_THINK_MS = 20_000;
+export const BOT_MAXIMUM_THINK_MS = 9_000;
 
 export function botDifficultyForRating(rawRating: number): BotDifficulty {
   const targetRating = Math.max(100, Math.min(3000, Math.round(rawRating || 1200)));

@@ -86,27 +86,14 @@ async function claimBotTurn(workerId: string): Promise<ClaimedBot | null> {
   return result.rows[0] ?? null;
 }
 
-async function scheduleThinking(bot: ClaimedBot) {
-  const difficulty = botDifficultyForRating(bot.target_rating);
-  const unit = deterministicUnit(`${bot.game_id}:${bot.game_version}:think`);
-  const delayMs = selectBotThinkDelayMs(difficulty, unit);
-  await query(
-    `UPDATE game_bots
-        SET scheduled_game_version = $2,
-            next_move_at = NOW() + make_interval(secs => $3::double precision / 1000),
-            worker_id = NULL, lease_expires_at = NULL, updated_at = NOW()
-      WHERE game_id = $1 AND worker_id = $4`,
-    [bot.game_id, bot.game_version, delayMs, botWorkerId],
-  );
-}
-
 async function releaseBot(bot: ClaimedBot) {
   await query(
     `UPDATE game_bots
-        SET worker_id = NULL, lease_expires_at = NULL,
+        SET scheduled_game_version = $3, next_move_at = NOW(),
+            worker_id = NULL, lease_expires_at = NULL,
             failure_count = 0, last_error = NULL, updated_at = NOW()
       WHERE game_id = $1 AND worker_id = $2`,
-    [bot.game_id, botWorkerId],
+    [bot.game_id, botWorkerId, bot.game_version],
   );
 }
 
@@ -126,6 +113,7 @@ async function failBot(bot: ClaimedBot, error: unknown) {
 }
 
 async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: number) {
+  const startedAt = performance.now();
   const game = await getGameState(bot.game_id, bot.bot_player_key);
   if (game.status !== "active") return;
   if (game.phase === "scoring" && game.scoring) {
@@ -139,10 +127,21 @@ async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: numb
   }
   if (game.phase !== "play" || game.turn !== bot.color) return;
 
+  const difficulty = botDifficultyForRating(bot.target_rating);
+  const thinkDelayMs = selectBotThinkDelayMs(
+    difficulty,
+    deterministicUnit(`${bot.game_id}:${game.version}:think`),
+  );
+
   const result = await engine.analyzeCurrent(
     `bot:${bot.game_id}:${game.version}:${randomUUID()}`,
     inputForGame(game),
     Math.max(1, Math.min(bot.visits_per_turn, visitCap)),
+    {
+      priority: 100,
+      reportDuringSearchEvery: 0.25,
+      timeoutMs: 8_000,
+    },
   );
   const selected = selectBotMove(
     result.moveInfos,
@@ -150,6 +149,10 @@ async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: numb
     deterministicUnit(`${bot.game_id}:${game.version}:move`),
     { moveNumber: game.moveCount, boardSize: game.boardSize },
   );
+  const remainingThinkMs = thinkDelayMs - (performance.now() - startedAt);
+  if (remainingThinkMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remainingThinkMs));
+  }
   await submitMove(game.id, bot.bot_player_key, {
     ...fromGtpCoordinate(game.boardSize, selected.move),
     expectedVersion: game.version,
@@ -173,12 +176,8 @@ export async function runBotLoop(
     }
     state.activeGameId = bot.game_id;
     try {
-      if (bot.scheduled_game_version !== bot.game_version) {
-        await scheduleThinking(bot);
-      } else {
-        await playBotTurn(engine, bot, visitCap);
-        await releaseBot(bot);
-      }
+      await playBotTurn(engine, bot, visitCap);
+      await releaseBot(bot);
     } catch (error) {
       await failBot(bot, error);
     } finally {

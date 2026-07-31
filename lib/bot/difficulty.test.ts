@@ -41,14 +41,14 @@ test("early move selection excludes pass when board moves exist", () => {
   assert.notEqual(selectBotMove(withPass, beginner, 0, { moveNumber: 2, boardSize: 9 }).move, "pass");
 });
 
-test("every bot level thinks for a varied three to twenty second delay", () => {
+test("every bot level stays inside the three to nine second response budget", () => {
   for (const rating of [100, 600, 1_200, 2_200, 3_000]) {
     const difficulty = botDifficultyForRating(rating);
     assert.equal(difficulty.minimumThinkMs, BOT_MINIMUM_THINK_MS);
     assert.equal(difficulty.maximumThinkMs, BOT_MAXIMUM_THINK_MS);
     assert.equal(selectBotThinkDelayMs(difficulty, -1), 3_000);
-    assert.equal(selectBotThinkDelayMs(difficulty, 0.5), 11_500);
-    assert.equal(selectBotThinkDelayMs(difficulty, 2), 20_000);
+    assert.equal(selectBotThinkDelayMs(difficulty, 0.5), 6_000);
+    assert.equal(selectBotThinkDelayMs(difficulty, 2), 9_000);
   }
 });
 
