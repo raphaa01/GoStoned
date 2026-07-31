@@ -206,12 +206,13 @@ export const en = {
     classic: { name: "Classic", shortLabel: "20 min + 5×30 sec", description: "More thinking time" },
   },
   rules: {
-    rulesets: { chinese: "Chinese" },
+    rulesets: { chinese: "Chinese", japanese: "Japanese" },
     profiles: {
       "legacy-immediate-area": "legacy immediate scoring",
       "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1",
     },
-    methods: { area: "area" },
+    methods: { area: "area", territory: "territory" },
     komi: "komi",
     handicap: "Handicap",
   },

@@ -18,7 +18,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
-  DEFAULT_RULES_PROFILE,
+  CURRENT_CHINESE_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
@@ -1571,7 +1571,7 @@ async function verifyPollState(
   if (
     loaded.game.version === knownVersion
     && loaded.game.status === "active"
-    && loaded.rules.rulesProfile === DEFAULT_RULES_PROFILE
+    && loaded.rules.rulesProfile === CURRENT_CHINESE_RULES_PROFILE
   ) {
     return {
       needsMutation: false,

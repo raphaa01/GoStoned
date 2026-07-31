@@ -208,12 +208,13 @@ export const de = {
     classic: { name: "Klassisch", shortLabel: "20 Min. + 5×30 Sek.", description: "Mehr Bedenkzeit" },
   },
   rules: {
-    rulesets: { chinese: "Chinesisch" },
+    rulesets: { chinese: "Chinesisch", japanese: "Japanisch" },
     profiles: {
       "legacy-immediate-area": "alte Sofortwertung",
       "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1",
     },
-    methods: { area: "Fläche" },
+    methods: { area: "Fläche", territory: "Gebiet" },
     komi: "Komi",
     handicap: "Vorgabe",
   },

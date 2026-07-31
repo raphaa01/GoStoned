@@ -80,7 +80,7 @@ export type GameScoringState = {
   deadStones: Position[];
   blackConfirmed: boolean;
   whiteConfirmed: boolean;
-  preview: ChineseAreaScore;
+  preview: ScorePreview;
   finalizedAt: string | null;
   expiresAt: string;
 };
@@ -128,6 +128,24 @@ export type ChineseAreaScore = {
   margin: number;
   result: string;
 };
+
+export type JapaneseTerritoryPreview = {
+  black: number;
+  white: number;
+  blackStones: number;
+  whiteStones: number;
+  blackTerritory: number;
+  whiteTerritory: number;
+  neutralPoints: number;
+  territoryExcludedByAgreement: number;
+  blackPrisoners: number;
+  whitePrisoners: number;
+  winner: Stone | null;
+  margin: number;
+  result: string;
+};
+
+export type ScorePreview = ChineseAreaScore | JapaneseTerritoryPreview;
 
 /** @deprecated Use the scoring-rule-specific ChineseAreaScore name. */
 export type Score = ChineseAreaScore;
