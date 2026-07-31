@@ -14,6 +14,8 @@ export type AnalysisInput = {
   boardSize: BoardSize;
   komi: number;
   rules: "chinese" | "japanese";
+  initialStones?: AnalysisMove[];
+  initialPlayer?: Stone;
   moves: AnalysisMove[];
 };
 

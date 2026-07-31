@@ -28,7 +28,7 @@ export function assertPuzzleAttemptMetadata(request: NextRequest): void {
 
 export async function readPuzzleAttemptBody(
   request: NextRequest,
-): Promise<{ x: number; y: number }> {
+): Promise<{ x: number; y: number; revision: number }> {
   const body = await readBoundedJsonObject(request, {
     maxBytes: 128,
     maxChunks: 16,
@@ -38,13 +38,17 @@ export async function readPuzzleAttemptBody(
   });
   const fields = Object.keys(body);
   if (
-    fields.length !== 2
+    fields.length !== 3
     || !Object.prototype.hasOwnProperty.call(body, "x")
     || !Object.prototype.hasOwnProperty.call(body, "y")
+    || !Object.prototype.hasOwnProperty.call(body, "revision")
     || !Number.isInteger(body.x)
     || !Number.isInteger(body.y)
+    || !Number.isInteger(body.revision)
+    || (body.revision as number) < 0
+    || (body.revision as number) > 1_000
   ) {
     throw invalidPuzzleRequest();
   }
-  return { x: body.x as number, y: body.y as number };
+  return { x: body.x as number, y: body.y as number, revision: body.revision as number };
 }

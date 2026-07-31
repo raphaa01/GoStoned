@@ -163,6 +163,15 @@ export class KataGoEngine {
       });
       this.process.stdin.write(`${JSON.stringify({
         id,
+        ...(input.initialStones === undefined ? {} : {
+          initialStones: input.initialStones.map((stone) => [
+            stone.color === "black" ? "B" : "W",
+            stone.move,
+          ]),
+        }),
+        ...(input.initialPlayer === undefined ? {} : {
+          initialPlayer: input.initialPlayer === "black" ? "B" : "W",
+        }),
         moves: input.moves.map((move) => [move.color === "black" ? "B" : "W", move.move]),
         rules: input.rules,
         komi: input.komi,

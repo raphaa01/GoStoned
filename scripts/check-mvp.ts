@@ -151,6 +151,18 @@ const requiredIndexDefinitions = {
   idx_puzzle_attempts_player: [
     "ON public.puzzle_attempts USING btree (player_key, last_attempt_at DESC)",
   ],
+  idx_puzzles_category_order: [
+    "ON public.puzzles USING btree (category, collection_order)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
+  idx_puzzle_jobs_category_order: [
+    "ON public.puzzle_generation_jobs USING btree (category, collection_order)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
+  idx_puzzles_category_catalog: [
+    "ON public.puzzles USING btree (category, collection_order, id)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
 } as const;
 
 const requiredConstraintSignatures = [
@@ -170,6 +182,9 @@ const requiredConstraintSignatures = [
   "player_reports_distinct_players_check:player_reports:c",
   "player_reports_key_bounds_check:player_reports:c",
   "player_reports_category_check:player_reports:c",
+  "puzzles_category_shape_check:puzzles:c",
+  "puzzle_generation_jobs_category_shape_check:puzzle_generation_jobs:c",
+  "puzzle_attempts_variation_progress_check:puzzle_attempts:c",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -282,6 +297,45 @@ const requiredConstraintDefinitions = {
       "stalling_or_abandonment",
       "spam_scam_or_identity",
       "other",
+    ],
+    excludes: [],
+  },
+  puzzles_category_shape_check: {
+    includes: [
+      "life_and_death",
+      "tesuji",
+      "capturing_race",
+      "endgame",
+      "rank_kyu >= 1",
+      "rank_kyu <= 30",
+      "collection_order >= 1",
+      "collection_order <= 10",
+      "jsonb_typeof(variation) = 'object'::text",
+      "mainLine",
+      "refutations",
+    ],
+    excludes: [],
+  },
+  puzzle_generation_jobs_category_shape_check: {
+    includes: [
+      "life_and_death",
+      "tesuji",
+      "capturing_race",
+      "endgame",
+      "target_date IS NULL",
+      "rank_kyu >= 1",
+      "rank_kyu <= 30",
+      "collection_order >= 1",
+      "collection_order <= 10",
+    ],
+    excludes: [],
+  },
+  puzzle_attempts_variation_progress_check: {
+    includes: [
+      "jsonb_typeof(variation_progress) = 'array'::text",
+      "jsonb_array_length(variation_progress) <= 12",
+      "variation_revision >= 0",
+      "variation_revision <= 1000",
     ],
     excludes: [],
   },

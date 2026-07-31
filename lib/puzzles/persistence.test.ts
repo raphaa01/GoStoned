@@ -4,6 +4,7 @@ import test from "node:test";
 
 const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../db/migrations/019_katago_puzzles.sql", import.meta.url), "utf8");
+const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_variation_training.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 
@@ -19,9 +20,15 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(worker, /engine\.analyzeCurrent/);
   assert.match(worker, /KATAGO_PUZZLE_MAX_VISITS/);
   assert.match(worker, /FOR UPDATE SKIP LOCKED/);
-  assert.match(service, /solution: solved \? solution\(row\) : null/);
+  assert.match(worker, /PUZZLES_PER_CATEGORY/);
+  assert.match(worker, /mainLine/);
+  assert.match(service, /variationProgress/);
+  assert.match(service, /solution: solved \? solution\(row, variation\) : null/);
+  assert.match(variationMigration, /puzzles_category_shape_check/);
+  assert.match(variationMigration, /idx_puzzles_category_order/);
+  assert.match(variationMigration, /variation_progress JSONB NOT NULL/);
   assert.ok(
-    schema.replaceAll("\r\n", "\n").endsWith(migration.replaceAll("\r\n", "\n")),
-    "Canonical schema must end with migration 019.",
+    schema.replaceAll("\r\n", "\n").endsWith(variationMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must end with migration 020.",
   );
 });
