@@ -444,7 +444,6 @@ export const de = {
     chatMessage: "Chatnachricht",
     chatUnavailable: "Chat nicht verfügbar",
     chatPolicyUnavailable: "Der Chat ist für diese Partie nicht verfügbar.",
-    botChatUnavailable: "Bot-Gegner können keine Chatnachrichten lesen.",
     writeMessage: "Nachricht schreiben…",
     sendMessage: "Nachricht senden",
     sendFailed: "Die Nachricht konnte nicht gesendet werden.",

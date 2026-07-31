@@ -376,6 +376,10 @@ Bot-Partie. Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt
 einen normalen Anzeigenamen und wird in Partie, Ergebnis, Profil und Review
 klar als `Bot` gekennzeichnet. Bot-Chat ist deaktiviert.
 
+Vor jedem Bot-Zug wird neu eine Denkpause zwischen drei und zwanzig Sekunden
+bestimmt. Der Chat behält dabei sein normales Layout, zeigt aber neutral an,
+dass er für diese Partie nicht verfügbar ist, und deaktiviert die Eingabe.
+
 Die Zielstärke wird beim Match aus der Wertung des Spielers für die gewählte
 Brettgröße übernommen; Gäste starten bei 1200. Niedrigere Stufen wählen
 variabler aus mehreren legalen KataGo-Kandidaten, höhere Stufen durchsuchen mehr

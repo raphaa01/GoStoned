@@ -2011,22 +2011,7 @@ a {
   padding: 12px;
 }
 
-.chat-list--unavailable {
-  align-items: center;
-  color: var(--muted-2);
-  display: flex;
-  justify-content: center;
-  text-align: center;
-}
-
-.chat-list--unavailable p {
-  line-height: 1.5;
-  margin: 0;
-  max-width: 220px;
-  padding: 8px;
-}
-
-.chat-list--unavailable p:focus-visible {
+.chat-empty:focus-visible {
   border-radius: 5px;
   outline: 2px solid #b9df93;
   outline-offset: 3px;

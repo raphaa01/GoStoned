@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { KataGoMoveInfo } from "@/lib/analysis/types";
-import { botDifficultyForRating, selectBotMove } from "./difficulty";
+import {
+  BOT_MAXIMUM_THINK_MS,
+  BOT_MINIMUM_THINK_MS,
+  botDifficultyForRating,
+  selectBotMove,
+  selectBotThinkDelayMs,
+} from "./difficulty";
 import { botDisplayName, deterministicUnit } from "./identity";
 
 const candidates: KataGoMoveInfo[] = Array.from({ length: 8 }, (_, index) => ({
@@ -33,6 +39,17 @@ test("early move selection excludes pass when board moves exist", () => {
   const beginner = botDifficultyForRating(600);
   const withPass = [{ ...candidates[0], move: "pass" }, ...candidates.slice(1)];
   assert.notEqual(selectBotMove(withPass, beginner, 0, { moveNumber: 2, boardSize: 9 }).move, "pass");
+});
+
+test("every bot level thinks for a varied three to twenty second delay", () => {
+  for (const rating of [100, 600, 1_200, 2_200, 3_000]) {
+    const difficulty = botDifficultyForRating(rating);
+    assert.equal(difficulty.minimumThinkMs, BOT_MINIMUM_THINK_MS);
+    assert.equal(difficulty.maximumThinkMs, BOT_MAXIMUM_THINK_MS);
+    assert.equal(selectBotThinkDelayMs(difficulty, -1), 3_000);
+    assert.equal(selectBotThinkDelayMs(difficulty, 0.5), 11_500);
+    assert.equal(selectBotThinkDelayMs(difficulty, 2), 20_000);
+  }
 });
 
 test("bot identities and random units are stable for a game seed", () => {

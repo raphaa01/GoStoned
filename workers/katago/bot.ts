@@ -4,7 +4,11 @@ import {
   ANALYSIS_ENGINE_CONTRACT_VERSION,
   type AnalysisInput,
 } from "@/lib/analysis/types";
-import { botDifficultyForRating, selectBotMove } from "@/lib/bot/difficulty";
+import {
+  botDifficultyForRating,
+  selectBotMove,
+  selectBotThinkDelayMs,
+} from "@/lib/bot/difficulty";
 import { deterministicUnit } from "@/lib/bot/identity";
 import { query } from "@/lib/db";
 import { confirmScore, getGameState, submitMove } from "@/lib/game/gameService";
@@ -85,10 +89,7 @@ async function claimBotTurn(workerId: string): Promise<ClaimedBot | null> {
 async function scheduleThinking(bot: ClaimedBot) {
   const difficulty = botDifficultyForRating(bot.target_rating);
   const unit = deterministicUnit(`${bot.game_id}:${bot.game_version}:think`);
-  const delayMs = Math.round(
-    difficulty.minimumThinkMs
-      + unit * (difficulty.maximumThinkMs - difficulty.minimumThinkMs),
-  );
+  const delayMs = selectBotThinkDelayMs(difficulty, unit);
   await query(
     `UPDATE game_bots
         SET scheduled_game_version = $2,

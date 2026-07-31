@@ -9,6 +9,9 @@ export type BotDifficulty = Readonly<{
   maximumThinkMs: number;
 }>;
 
+export const BOT_MINIMUM_THINK_MS = 3_000;
+export const BOT_MAXIMUM_THINK_MS = 20_000;
+
 export function botDifficultyForRating(rawRating: number): BotDifficulty {
   const targetRating = Math.max(100, Math.min(3000, Math.round(rawRating || 1200)));
   const visitsPerTurn = Math.max(
@@ -29,8 +32,8 @@ export function botDifficultyForRating(rawRating: number): BotDifficulty {
   const temperature = targetRating >= 2100
     ? 0.08
     : Math.max(0.22, Math.min(1.8, 1.8 - (targetRating - 400) / 1_250));
-  const minimumThinkMs = targetRating >= 1700 ? 1_100 : targetRating >= 1100 ? 750 : 450;
-  const maximumThinkMs = targetRating >= 1700 ? 2_800 : targetRating >= 1100 ? 2_100 : 1_500;
+  const minimumThinkMs = BOT_MINIMUM_THINK_MS;
+  const maximumThinkMs = BOT_MAXIMUM_THINK_MS;
   return {
     targetRating,
     visitsPerTurn,
@@ -39,6 +42,17 @@ export function botDifficultyForRating(rawRating: number): BotDifficulty {
     minimumThinkMs,
     maximumThinkMs,
   };
+}
+
+export function selectBotThinkDelayMs(
+  difficulty: Pick<BotDifficulty, "minimumThinkMs" | "maximumThinkMs">,
+  randomUnit: number,
+): number {
+  const unit = Math.max(0, Math.min(1, randomUnit));
+  return Math.round(
+    difficulty.minimumThinkMs
+      + unit * (difficulty.maximumThinkMs - difficulty.minimumThinkMs),
+  );
 }
 
 export function selectBotMove(
