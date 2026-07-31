@@ -394,7 +394,8 @@ body {
 .home-hero {
   background: var(--color-canvas);
   display: block;
-  min-height: max(700px, calc(100svh - 82px));
+  height: calc(100svh - 82px);
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
@@ -1801,7 +1802,7 @@ body {
   }
 
   .home-hero {
-    min-height: max(680px, calc(100svh - 60px));
+    height: calc(100svh - 60px);
   }
 
   .home-hero-copy {
@@ -1872,7 +1873,7 @@ body {
   }
 
   .home-hero {
-    min-height: max(680px, calc(100dvh - 60px));
+    height: calc(100svh - 60px);
   }
 
   .home-hero h1 {
@@ -1888,7 +1889,7 @@ body {
   .hero-stone-stage {
     left: 50%;
     top: 175px;
-    width: 650px;
+    width: min(650px, max(500px, calc((100svh - 60px) * .83)));
   }
 
   .hero-ripple--one { width: 230px; }
@@ -2007,7 +2008,7 @@ body {
 
   .hero-stone-stage {
     top: 165px;
-    width: 620px;
+    width: min(620px, max(500px, calc((100svh - 60px) * .83)));
   }
 
   .hero-actions {
@@ -2056,6 +2057,44 @@ body {
     font-size: 9px;
     letter-spacing: .1em;
     white-space: normal;
+  }
+}
+
+@media (max-height: 620px) {
+  .home-hero-copy {
+    top: 24px;
+  }
+
+  .hero-stone-stage {
+    top: 34px;
+  }
+
+  .hero-actions {
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .hero-live-status {
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 840px) and (max-height: 620px) {
+  .home-hero h1 {
+    font-size: 19px;
+    margin-bottom: 8px;
+  }
+
+  .home-hero-copy {
+    top: 18px;
+  }
+
+  .hero-stone-stage {
+    top: 72px;
+    width: min(560px, max(420px, calc((100svh - 60px) * 1.05)));
+  }
+
+  .hero-start {
+    min-height: 54px;
   }
 }
 
