@@ -361,6 +361,34 @@ URL, fehlende Tabellen oder unvollständige Betreiberangaben verwendet werden.
 
 `main` bleibt stabil. Jede Aufgabe bekommt einen eigenen Branch, zum Beispiel `codex/chat`. Vor Änderungen zuerst den aktuellen Stand von `main` holen. Danach nur den eigenen Branch pushen und einen Pull Request öffnen. Die verbindlichen automatischen Regeln stehen in `AGENTS.md`.
 
+## Modal-Vorbereitung für KataGo
+
+Modal ist als späterer externer KataGo-Worker vorbereitet, aber absichtlich noch
+nicht deployed. `modal_worker/app.py` enthält derzeit nur eine leere App-Definition:
+keine Function, kein Image, kein Modell, kein Volume und keinen Zeitplan.
+
+Die lokale Modal-CLI verwendet das isolierte Environment `GoStone`. Der Workflow
+`.github/workflows/modal-worker.yml` läuft ausschließlich manuell. Seine
+Voreinstellung `validate-only` kontaktiert Modal nicht. Selbst die Auswahl
+`deploy` bleibt gesperrt, solange die GitHub-Repository-Variable
+`MODAL_DEPLOYMENT_ENABLED` nicht ausdrücklich auf `true` gesetzt wird.
+
+Lokale, kostenfreie Prüfung:
+
+```powershell
+py -3.12 -m pip install --requirement requirements-modal.txt
+py -3.12 scripts/check_modal_bootstrap.py
+py -3.12 -m compileall -q modal_worker
+```
+
+Die Zugangsdaten gehören ausschließlich in die GitHub-Environment-Secrets
+`MODAL_TOKEN_ID` und `MODAL_TOKEN_SECRET` des GitHub-Environments `GoStone`.
+Sie dürfen niemals in `.env`, Python-Dateien oder Commits gespeichert werden.
+
+Erst nach einer eigenen Kostenfreigabe wird die Sperrvariable aktiviert und die
+KataGo-Function ergänzt. Bis dahin erzeugt dieser Repository-Stand keine
+Modal-Rechenzeit und lädt weder Engine noch Modell hoch.
+
 ## Mobile Strategie
 
 Die Website ist bereits responsive und API-basiert. Eine spätere PWA, Capacitor-App oder React-Native/Expo-App kann dieselben APIs verwenden. Persistente Spiellogik bleibt dabei weiterhin auf dem Server.

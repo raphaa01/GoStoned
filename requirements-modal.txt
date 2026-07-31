@@ -1,0 +1,2 @@
+# Local SDK/CLI and GitHub Actions use the same reviewed client version.
+modal==1.5.3

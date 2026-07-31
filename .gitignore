@@ -31,3 +31,9 @@ yarn-error.log*
 # TypeScript
 next-env.d.ts
 *.tsbuildinfo
+
+# Python / Modal client state
+__pycache__/
+*.py[cod]
+.venv/
+.modal.toml
