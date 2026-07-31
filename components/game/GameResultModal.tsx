@@ -50,10 +50,12 @@ export function GameResultModal({
 
   if (!open) return null;
 
-  const draw = !game.winnerKey;
+  const noResult = game.finishReason === "japanese_no_result";
+  const draw = !game.winnerKey && !noResult;
+  const neutralOutcome = draw || noResult;
   const won = game.winnerKey === playerKey;
-  const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
-  const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
+  const outcome = noResult ? copy.noResult : draw ? copy.draw : won ? copy.victory : copy.defeat;
+  const OutcomeIcon = neutralOutcome ? Minus : won ? Trophy : XCircle;
   const deadCounts = (game.scoring?.deadStones ?? []).reduce(
     (counts, { x, y }) => {
       const color = game.board[y]?.[x];
@@ -66,7 +68,7 @@ export function GameResultModal({
   return (
     <ModalDialog
       backdropClassName="modal-backdrop--result"
-      className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
+      className={`result-modal ${neutralOutcome ? "is-draw" : won ? "is-win" : "is-loss"}`}
       descriptionId={descriptionId}
       finalFocusRef={finalFocusRef}
       initialFocusRef={playAgainButton}
@@ -119,20 +121,41 @@ export function GameResultModal({
               <span><small>{copy.blackTotal}</small><strong>{game.scoring.preview.black}</strong></span>
               <span><small>{copy.whiteTotal}</small><strong>{game.scoring.preview.white}</strong></span>
             </div>
-            <div>
-              <span>
-                <small>{copy.blackStonesTerritory}</small>
-                <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
-              </span>
-              <span>
-                <small>{copy.whiteStonesTerritory}</small>
-                <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
-              </span>
-            </div>
-            <p>
-              {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
-              {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
-            </p>
+            {"blackPrisoners" in game.scoring.preview ? (
+              <>
+                <div>
+                  <span>
+                    <small>{copy.blackTerritoryPrisoners}</small>
+                    <strong>{game.scoring.preview.blackTerritory} · {game.scoring.preview.blackPrisoners}</strong>
+                  </span>
+                  <span>
+                    <small>{copy.whiteTerritoryPrisoners}</small>
+                    <strong>{game.scoring.preview.whiteTerritory} · {game.scoring.preview.whitePrisoners}</strong>
+                  </span>
+                </div>
+                <p>
+                  {rulesSummary} · {copy.dame.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}
+                  {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                </p>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span>
+                    <small>{copy.blackStonesTerritory}</small>
+                    <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
+                  </span>
+                  <span>
+                    <small>{copy.whiteStonesTerritory}</small>
+                    <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
+                  </span>
+                </div>
+                <p>
+                  {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
+                  {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                </p>
+              </>
+            )}
           </section>
         ) : null}
 

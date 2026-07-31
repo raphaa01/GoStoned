@@ -664,7 +664,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && yourColor
     && game.status === "active"
     && game.phase === "scoring"
-    && game.scoring,
+    && game.scoring
+    && !(
+      game?.rulesProfile === "japanese-1989-gostone-v1"
+      && game.scoring?.suggestion?.status === "pending"
+    ),
   ) && gameInteractionAllowed && !busy;
 
   function reconcileAfterOperation(requestError: unknown) {
@@ -763,7 +767,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   async function scoringAction(
-    action: "dead-stones" | "confirm" | "resume",
+    action: "dead-stones" | "confirm" | "reset" | "resolve-deadline" | "resume" | "undo",
     body: Record<string, unknown>,
   ) {
     if (!game || !game.scoring || !playerKey || !gameInteractionAllowed || busy) return;
@@ -1259,7 +1263,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
           {game.phase === "scoring" || game.boardSize > 9 ? (
             <p className="scoring-board-hint">
               {game.phase === "scoring"
-                ? copy.scoringBoardHint
+                ? game.rulesProfile === "japanese-1989-gostone-v1"
+                  && game.scoring?.suggestion?.status === "pending"
+                  ? copy.suggestionPendingBoardHint
+                  : copy.scoringBoardHint
                 : copy.boardHint}
             </p>
           ) : null}
@@ -1275,6 +1282,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onResetScoring={() => scoringAction("reset", {})}
+            onResolveDeadline={() => scoringAction("resolve-deadline", {})}
             onResign={() => {
               if (!gameInteractionAllowed) return;
               setError(null);
@@ -1287,6 +1296,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 y: disputedStone.y,
               });
             }}
+            onResumeJapanesePlay={() => scoringAction("resume", {})}
+            onUndoScoring={() => scoringAction("undo", {})}
             playerKey={playerKey}
           />
           <ChatPanel
