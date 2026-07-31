@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import { noStoreJson } from "@/lib/api/responses";
 import { readGameAnalysis, queueGameAnalysis } from "@/lib/analysis/analysisService";
 import {
@@ -13,6 +13,7 @@ import {
   assertGameMutationMetadata,
   gameMutationRouteError,
 } from "@/lib/game/gameMutationRequest";
+import { dispatchKataGoJob, safelyDispatch } from "@/lib/katago/dispatch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,7 +43,9 @@ export async function POST(request: NextRequest, context: Context) {
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.analysisRequest, playerKey);
-    return noStoreJson({ ok: true, actor: playerKey, ...await queueGameAnalysis(gameId, playerKey) }, { status: 202 });
+    const queued = await queueGameAnalysis(gameId, playerKey);
+    after(() => safelyDispatch(() => dispatchKataGoJob("analysis", queued.analysis.id)));
+    return noStoreJson({ ok: true, actor: playerKey, ...queued }, { status: 202 });
   } catch (error) {
     return gameMutationRouteError(error);
   }
