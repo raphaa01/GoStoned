@@ -39,6 +39,10 @@ export function rootMetadata(locale: Locale): Metadata {
     title: { default: home.title, template: "%s · GoStone" },
     description: home.description,
     applicationName: "GoStone",
+    icons: {
+      icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+      shortcut: "/icon.svg",
+    },
     alternates: alternates(pathname),
     openGraph: {
       title: home.title,
