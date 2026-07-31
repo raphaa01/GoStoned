@@ -31,6 +31,7 @@ const requiredTables = [
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
+  "game_analysis_jobs",
 ] as const;
 
 const requiredGameColumns = [
@@ -110,6 +111,13 @@ const requiredIndexDefinitions = {
   ],
   idx_player_reports_reported_created: [
     "ON public.player_reports USING btree (reported_key, created_at DESC, game_id, reporter_key)",
+  ],
+  idx_game_analysis_jobs_claim: [
+    "ON public.game_analysis_jobs USING btree (status, created_at, id)",
+    "WHERE (status = ANY",
+  ],
+  idx_game_analysis_jobs_game: [
+    "ON public.game_analysis_jobs USING btree (game_id, game_version DESC)",
   ],
 } as const;
 
@@ -283,6 +291,7 @@ const requiredProtectedTables = [
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
+  "game_analysis_jobs",
 ] as const;
 
 const requiredGuardFunctions = [

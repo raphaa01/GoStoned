@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const migration = readFileSync(
   new URL("../../db/migrations/012_leaderboard_rating_history_index.sql", import.meta.url),
   "utf8",
-);
+).replaceAll("\r\n", "\n");
 const productionPreflight = readFileSync(
   new URL("../../scripts/check-mvp.ts", import.meta.url),
   "utf8",
