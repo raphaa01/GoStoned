@@ -131,6 +131,7 @@ test("maps every supported terminal outcome to a canonical SGF RE value", () => 
     [{ kind: "score", winner: "white", margin: 7 }, "W+7"],
     [{ kind: "resignation", winner: "black" }, "B+R"],
     [{ kind: "timeout", winner: "white" }, "W+T"],
+    [{ kind: "forfeit", winner: "black" }, "B+F"],
     [{ kind: "draw" }, "0"],
     [{ kind: "no-result", reason: "cyclic-repetition" }, "Void"],
   ];

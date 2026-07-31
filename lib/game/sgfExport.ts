@@ -38,6 +38,7 @@ export type SgfTerminalResult =
   | Readonly<{ kind: "score"; winner: Stone; margin: number }>
   | Readonly<{ kind: "resignation"; winner: Stone }>
   | Readonly<{ kind: "timeout"; winner: Stone }>
+  | Readonly<{ kind: "forfeit"; winner: Stone }>
   | Readonly<{ kind: "draw" }>
   | Readonly<{
       kind: "no-result";
@@ -388,6 +389,7 @@ function validateResult(value: unknown): SgfTerminalResult {
       break;
     case "resignation":
     case "timeout":
+    case "forfeit":
       requireExactKeys(value, ["kind", "winner"], [], "invalid_result", "Decisive result");
       if (value.winner !== "black" && value.winner !== "white") {
         throw new SgfExportError("invalid_result", "A decisive result requires a winner.");
@@ -473,6 +475,8 @@ function resultValue(result: SgfTerminalResult): string {
       return `${result.winner === "black" ? "B" : "W"}+R`;
     case "timeout":
       return `${result.winner === "black" ? "B" : "W"}+T`;
+    case "forfeit":
+      return `${result.winner === "black" ? "B" : "W"}+F`;
     case "draw":
       return "0";
     case "no-result":
