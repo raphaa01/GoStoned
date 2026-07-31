@@ -11,6 +11,8 @@ Screenshots.
 Für einen öffentlich angebotenen Dienst wie GoStone werden mindestens folgende
 Angaben veröffentlicht:
 
+- `LEGAL_OPERATOR_TYPE`: `individual`, `gbr` oder `entity`; die Auswahl steuert,
+  welche weiteren Pflichtangaben der Produktions-Preflight verlangt.
 - `LEGAL_NAME`: vollständiger bürgerlicher Vor- und Nachname des Betreibers;
   „GoStone“ oder ein Benutzername reicht nicht aus.
 - `LEGAL_STREET`: Straße und Hausnummer einer zustellfähigen Anschrift.
@@ -40,7 +42,8 @@ können, solange beide Sprachen im Impressum zugesagt werden.
 
 | Sachverhalt | Umgebungsvariablen |
 | --- | --- |
-| Juristische Person oder eingetragene Gesellschaft | `LEGAL_ENTITY_DETAILS` mit Rechtsform und vertretungsberechtigter Person |
+| Gemeinsamer Betrieb als GbR | `LEGAL_ENTITY_DETAILS`, `LEGAL_PARTNER_1`, `LEGAL_PARTNER_2` und `LEGAL_REPRESENTED_BY` |
+| Andere juristische Person oder eingetragene Gesellschaft | `LEGAL_ENTITY_DETAILS` mit Rechtsform und vertretungsberechtigter Person |
 | Eintrag im Handels-, Vereins-, Partnerschafts- oder Genossenschaftsregister | `LEGAL_REGISTER_NAME` und `LEGAL_REGISTER_NUMBER` |
 | Erteilte Umsatzsteuer-Identifikationsnummer | `LEGAL_VAT_ID` |
 | Erteilte Wirtschafts-Identifikationsnummer | `LEGAL_BUSINESS_ID` |
@@ -50,6 +53,12 @@ können, solange beide Sprachen im Impressum zugesagt werden.
 Die persönliche Steuernummer ist **keine** Umsatzsteuer-Identifikationsnummer
 und gehört nicht in das Impressum. Register- und Kennnummern dürfen nicht
 erfunden oder vorsorglich durch Platzhalter ersetzt werden.
+
+Vercel-Preview-Deployments zeigen nur dann automatisch realistisch formulierte
+Vorschauwerte, wenn die vier Kernvariablen noch nicht vollständig gesetzt sind.
+Die Vorschau bleibt deutlich als vorläufig gekennzeichnet und gilt nicht als
+veröffentlichungsfertiges Impressum. Produktion verwendet niemals diese
+Vorschauwerte.
 
 Bei einer journalistisch-redaktionell verantwortlichen Person gelten zusätzlich
 die persönlichen Voraussetzungen aus § 18 Abs. 2 MStV. Eine reine Spiel-, Regel-

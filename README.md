@@ -327,13 +327,16 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
    - `DATABASE_URL`: Supabase Transaction Pooler, normalerweise Port `6543`
    - `DATABASE_POOL_MAX=3`
    - `NEXT_PUBLIC_APP_URL`: die endgültige `https://`-Adresse der Website
-   - `LEGAL_NAME`: vollständiger Name des Betreibers
+   - `LEGAL_OPERATOR_TYPE`: `individual`, `gbr` oder `entity`
+   - `LEGAL_NAME`: vollständiger Name des Betreibers beziehungsweise der Gesellschaft
    - `LEGAL_STREET`: Straße und Hausnummer
    - `LEGAL_CITY`: Postleitzahl und Ort
    - `LEGAL_EMAIL`: erreichbare Kontaktadresse
    - optional: `LEGAL_COUNTRY` und `LEGAL_PHONE`
-   - bei juristischen Personen: `LEGAL_ENTITY_DETAILS` mit Rechtsform und
-     Vertretungsberechtigten
+   - bei einer GbR: `LEGAL_ENTITY_DETAILS` mit Rechtsform sowie
+     `LEGAL_PARTNER_1`, `LEGAL_PARTNER_2` und `LEGAL_REPRESENTED_BY`
+   - bei anderen juristischen Personen: `LEGAL_ENTITY_DETAILS` mit Rechtsform
+     und Vertretungsberechtigten
    - bei Registereintrag: `LEGAL_REGISTER_NAME` und `LEGAL_REGISTER_NUMBER`
    - nur falls tatsächlich erteilt: `LEGAL_VAT_ID` und `LEGAL_BUSINESS_ID`
    - nur bei erlaubnispflichtiger Tätigkeit: `LEGAL_SUPERVISORY_AUTHORITY`

@@ -1,10 +1,12 @@
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
 import { isLocalDatabase } from "../lib/env";
+import { getLegalNotice } from "../lib/legal";
 
 const requiredVariables = [
   "DATABASE_URL",
   "NEXT_PUBLIC_APP_URL",
+  "LEGAL_OPERATOR_TYPE",
   "LEGAL_NAME",
   "LEGAL_STREET",
   "LEGAL_CITY",
@@ -319,6 +321,12 @@ async function checkMvp() {
   const missing = requiredVariables.filter((name) => !process.env[name]?.trim());
   if (missing.length > 0) {
     throw new Error(`Missing environment variables: ${missing.join(", ")}`);
+  }
+
+  if (!getLegalNotice().configured) {
+    throw new Error(
+      "Legal notice configuration is incomplete for the selected LEGAL_OPERATOR_TYPE.",
+    );
   }
 
   const appUrl = new URL(process.env.NEXT_PUBLIC_APP_URL!);

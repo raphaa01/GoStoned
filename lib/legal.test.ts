@@ -3,8 +3,12 @@ import test from "node:test";
 import { getLegalNotice } from "./legal";
 
 const legalEnvironmentKeys = [
+  "LEGAL_OPERATOR_TYPE",
   "LEGAL_NAME",
   "LEGAL_ENTITY_DETAILS",
+  "LEGAL_PARTNER_1",
+  "LEGAL_PARTNER_2",
+  "LEGAL_REPRESENTED_BY",
   "LEGAL_STREET",
   "LEGAL_CITY",
   "LEGAL_COUNTRY",
@@ -19,6 +23,7 @@ const legalEnvironmentKeys = [
   "LEGAL_EDITORIAL_STREET",
   "LEGAL_EDITORIAL_CITY",
   "LEGAL_DSA_EMAIL",
+  "VERCEL_ENV",
 ] as const;
 
 function withLegalEnvironment(
@@ -40,6 +45,7 @@ function withLegalEnvironment(
 
 test("legal notice requires only the core provider details", () => {
   withLegalEnvironment({
+    LEGAL_OPERATOR_TYPE: "individual",
     LEGAL_NAME: "Example Operator",
     LEGAL_STREET: "Example Street 1",
     LEGAL_CITY: "12345 Example City",
@@ -48,6 +54,7 @@ test("legal notice requires only the core provider details", () => {
     const notice = getLegalNotice();
 
     assert.equal(notice.configured, true);
+    assert.equal(notice.preview, false);
     assert.equal(notice.dsaEmail, "legal@example.test");
     assert.equal(notice.phone, null);
     assert.equal(notice.vatId, null);
@@ -57,8 +64,12 @@ test("legal notice requires only the core provider details", () => {
 
 test("legal notice exposes conditional details only when configured", () => {
   withLegalEnvironment({
-    LEGAL_NAME: "Example Company GmbH",
-    LEGAL_ENTITY_DETAILS: "Vertreten durch Example Person",
+    LEGAL_OPERATOR_TYPE: "gbr",
+    LEGAL_NAME: "Example Company GbR",
+    LEGAL_ENTITY_DETAILS: "Nicht eingetragene Gesellschaft bürgerlichen Rechts",
+    LEGAL_PARTNER_1: "Example Partner One",
+    LEGAL_PARTNER_2: "Example Partner Two",
+    LEGAL_REPRESENTED_BY: "Example Partner One and Example Partner Two jointly",
     LEGAL_STREET: "Example Street 1",
     LEGAL_CITY: "12345 Example City",
     LEGAL_COUNTRY: "Deutschland",
@@ -78,6 +89,8 @@ test("legal notice exposes conditional details only when configured", () => {
     assert.equal(notice.registerName, "Handelsregister B des Amtsgerichts Example City");
     assert.equal(notice.registerNumber, "HRB 12345");
     assert.equal(notice.dsaEmail, "dsa@example.test");
+    assert.deepEqual(notice.partners, ["Example Partner One", "Example Partner Two"]);
+    assert.equal(notice.representedBy, "Example Partner One and Example Partner Two jointly");
     assert.deepEqual(notice.editorialResponsible, {
       name: "Editorial Person",
       street: "Editorial Street 2",
@@ -89,5 +102,36 @@ test("legal notice exposes conditional details only when configured", () => {
 test("partial editorial details are not published", () => {
   withLegalEnvironment({ LEGAL_EDITORIAL_NAME: "Editorial Person" }, () => {
     assert.equal(getLegalNotice().editorialResponsible, null);
+  });
+});
+
+test("a GbR is not configured without both partners and its representation", () => {
+  withLegalEnvironment({
+    LEGAL_OPERATOR_TYPE: "gbr",
+    LEGAL_NAME: "Example Company GbR",
+    LEGAL_ENTITY_DETAILS: "Nicht eingetragene Gesellschaft bürgerlichen Rechts",
+    LEGAL_PARTNER_1: "Example Partner One",
+    LEGAL_STREET: "Example Street 1",
+    LEGAL_CITY: "12345 Example City",
+    LEGAL_EMAIL: "legal@example.test",
+  }, () => {
+    assert.equal(getLegalNotice().configured, false);
+  });
+});
+
+test("Vercel previews show realistic provisional data without becoming configured", () => {
+  withLegalEnvironment({ VERCEL_ENV: "preview" }, () => {
+    const notice = getLegalNotice();
+
+    assert.equal(notice.configured, false);
+    assert.equal(notice.preview, true);
+    assert.equal(notice.name, "GoStone GbR");
+    assert.deepEqual(notice.partners, [
+      "Felix Neuber",
+      "Vollständiger Name des zweiten Gesellschafters",
+    ]);
+    assert.equal(notice.street, "Straße und Hausnummer");
+    assert.equal(notice.city, "PLZ Petersberg");
+    assert.equal(notice.email, "f.neu.dev@gmail.com");
   });
 });
