@@ -15,6 +15,7 @@ export function deterministicAliveResponse(request: CanonicalKataGoScoringReques
   ));
   return {
     contractVersion: request.contractVersion,
+    analysisPurpose: request.analysisPurpose,
     requestIdentity: request.requestIdentity,
     gameId: request.gameId,
     stoppedBoardHash: request.stoppedBoardHash,

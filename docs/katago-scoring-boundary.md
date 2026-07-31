@@ -26,7 +26,8 @@ configured URL or token.
 Every request is validated, copied, frozen, deterministically serialized, and
 identified by a SHA-256 digest. Its identity includes:
 
-- contract and confidence-policy versions;
+- contract, analysis purpose (`initial-suggestion` or `deadline-adjudication`),
+  and confidence-policy versions;
 - game ID, stopped board hash and move number, and scoring revision;
 - board size, exact stopped board, and dense complete canonical move history;
 - ruleset, rules profile, rules version, scoring method, komi, and handicap;
@@ -49,7 +50,11 @@ the stopped board; it never trusts a provider-supplied partial group.
 A group is suggested dead only when every stone is consistently `dead`, every
 status confidence is at least `0.85`, and every point has at least `0.80`
 opponent ownership. Seki, unknown/alive, inconsistent, low-confidence, and weak
-ownership groups default alive. Ownership alone never removes a stone.
+ownership groups default alive. Ownership alone never removes a stone. After
+removing only those complete suggested-dead groups, GoStone emits one canonical
+neutral seed for an otherwise-owned empty region when it touches a seki group or
+the ownership evidence is weak. This prevents ambiguous eyes from silently
+becoming territory; final validation remains in the Japanese scoring service.
 
 ## Efficiency and failure policy
 

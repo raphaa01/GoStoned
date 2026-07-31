@@ -174,6 +174,7 @@ function parseResponse(
   const response = plainRecord(value, "KataGo scoring response");
   exactKeys(response, [
     "contractVersion",
+    "analysisPurpose",
     "requestIdentity",
     "gameId",
     "stoppedBoardHash",
@@ -190,6 +191,7 @@ function parseResponse(
     invalidResponse("The provider returned an unsupported contract version.");
   }
   for (const [field, expected] of [
+    ["analysisPurpose", request.analysisPurpose],
     ["requestIdentity", request.requestIdentity],
     ["gameId", request.gameId],
     ["stoppedBoardHash", request.stoppedBoardHash],
@@ -228,6 +230,7 @@ function parseResponse(
 
   return Object.freeze({
     contractVersion: KATAGO_SCORING_CONTRACT_VERSION,
+    analysisPurpose: request.analysisPurpose,
     requestIdentity: request.requestIdentity,
     gameId: request.gameId,
     stoppedBoardHash: request.stoppedBoardHash,
@@ -278,6 +281,64 @@ function decisionForGroup(
   });
 }
 
+function conservativeNeutralRegionSeeds(
+  request: CanonicalKataGoScoringRequest,
+  deadStones: readonly KataGoPosition[],
+  groups: readonly KataGoGroupProposal[],
+  ownership: KataGoScoringResponse["ownership"],
+): readonly KataGoPosition[] {
+  const dead = new Set(deadStones.map(positionKey));
+  const seki = new Set(
+    groups.filter(({ reason }) => reason === "seki").flatMap(({ stones }) => stones.map(positionKey)),
+  );
+  const visited = new Set<string>();
+  const seeds: KataGoPosition[] = [];
+  const point = (x: number, y: number) => dead.has(`${x}:${y}`) ? null : request.board[y][x];
+  for (let y = 0; y < request.boardSize; y += 1) {
+    for (let x = 0; x < request.boardSize; x += 1) {
+      const start = { x, y };
+      if (point(x, y) !== null || visited.has(positionKey(start))) continue;
+      const region: KataGoPosition[] = [];
+      const borders = new Set<KataGoColor>();
+      let touchesSeki = false;
+      const pending = [start];
+      while (pending.length > 0) {
+        const current = pending.pop()!;
+        const key = positionKey(current);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (point(current.x, current.y) !== null) continue;
+        region.push(current);
+        for (const [nextX, nextY] of [
+          [current.x - 1, current.y],
+          [current.x + 1, current.y],
+          [current.x, current.y - 1],
+          [current.x, current.y + 1],
+        ]) {
+          if (nextX < 0 || nextY < 0 || nextX >= request.boardSize || nextY >= request.boardSize) {
+            continue;
+          }
+          const neighbor = point(nextX, nextY);
+          if (neighbor === null) pending.push({ x: nextX, y: nextY });
+          else {
+            borders.add(neighbor);
+            if (seki.has(`${nextX}:${nextY}`)) touchesSeki = true;
+          }
+        }
+      }
+      if (borders.size !== 1) continue;
+      const owner = [...borders][0];
+      const weakOwnership = region.some(({ x: regionX, y: regionY }) =>
+        owner === "black"
+          ? ownership[regionY][regionX] < KATAGO_OPPONENT_OWNERSHIP_THRESHOLD
+          : ownership[regionY][regionX] > -KATAGO_OPPONENT_OWNERSHIP_THRESHOLD
+      );
+      if (touchesSeki || weakOwnership) seeds.push(sortedPositions(region)[0]);
+    }
+  }
+  return sortedPositions(seeds);
+}
+
 /**
  * Strictly validates the provider wire response, rejects stale identity/model
  * evidence, and derives suggestions only at complete connected-group scope.
@@ -311,17 +372,25 @@ export function validateKataGoScoringResponse(
     groups.push(group);
     if (group.suggestedDead) deadStones.push(...group.stones);
   }
+  const sortedDeadStones = sortedPositions(deadStones);
   return Object.freeze({
     contractVersion: KATAGO_SCORING_CONTRACT_VERSION,
     confidencePolicyVersion: KATAGO_CONFIDENCE_POLICY_VERSION,
     requestIdentity: request.requestIdentity,
     providerKind,
+    analysisPurpose: request.analysisPurpose,
     gameId: request.gameId,
     stoppedBoardHash: request.stoppedBoardHash,
     stoppedMoveNumber: request.stoppedMoveNumber,
     scoringRevision: request.scoringRevision,
     engine: response.engine,
-    deadStones: sortedPositions(deadStones),
+    deadStones: sortedDeadStones,
+    neutralRegionSeeds: conservativeNeutralRegionSeeds(
+      request,
+      sortedDeadStones,
+      groups,
+      response.ownership,
+    ),
     groups: Object.freeze(groups),
   });
 }

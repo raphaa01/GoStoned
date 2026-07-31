@@ -15,6 +15,7 @@ export function scoringRequestFixture(): KataGoScoringRequest {
   const stoppedBoardHash = kataGoBoardHash(board);
   return {
     contractVersion: KATAGO_SCORING_CONTRACT_VERSION,
+    analysisPurpose: "initial-suggestion",
     gameId: "33333333-3333-4333-8333-333333333333",
     stoppedBoardHash,
     stoppedMoveNumber: 5,
@@ -61,6 +62,7 @@ export function providerResponseFixture(
   );
   return {
     contractVersion: request.contractVersion,
+    analysisPurpose: request.analysisPurpose,
     requestIdentity: request.requestIdentity,
     gameId: request.gameId,
     stoppedBoardHash: request.stoppedBoardHash,

@@ -35,6 +35,7 @@ export type KataGoEngineIdentity = Readonly<{
 
 export type KataGoScoringRequest = Readonly<{
   contractVersion: typeof KATAGO_SCORING_CONTRACT_VERSION;
+  analysisPurpose: "initial-suggestion" | "deadline-adjudication";
   gameId: string;
   stoppedBoardHash: string;
   stoppedMoveNumber: number;
@@ -69,6 +70,7 @@ export type KataGoStoneAssessment = Readonly<{
  */
 export type KataGoScoringResponse = Readonly<{
   contractVersion: typeof KATAGO_SCORING_CONTRACT_VERSION;
+  analysisPurpose: KataGoScoringRequest["analysisPurpose"];
   requestIdentity: string;
   gameId: string;
   stoppedBoardHash: string;
@@ -104,12 +106,14 @@ export type KataGoScoringProposal = Readonly<{
   confidencePolicyVersion: typeof KATAGO_CONFIDENCE_POLICY_VERSION;
   requestIdentity: string;
   providerKind: KataGoProviderKind;
+  analysisPurpose: KataGoScoringRequest["analysisPurpose"];
   gameId: string;
   stoppedBoardHash: string;
   stoppedMoveNumber: number;
   scoringRevision: number;
   engine: KataGoScoringResponse["engine"];
   deadStones: readonly KataGoPosition[];
+  neutralRegionSeeds: readonly KataGoPosition[];
   groups: readonly KataGoGroupProposal[];
 }>;
 

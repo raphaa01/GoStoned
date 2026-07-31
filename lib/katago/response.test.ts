@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canonicalizeKataGoScoringRequest } from "./canonical";
+import { canonicalizeKataGoScoringRequest, kataGoBoardHash } from "./canonical";
 import { KataGoScoringError } from "./errors";
 import { validateKataGoScoringResponse } from "./response";
 import { providerResponseFixture, scoringRequestFixture } from "./testFixtures";
@@ -24,6 +24,7 @@ test("response validation marks only complete, consistently dead, high-confidenc
   });
   const proposal = validateKataGoScoringResponse(response, request, "deterministic");
   assert.deepEqual(proposal.deadStones, [{ x: 1, y: 1 }, { x: 2, y: 1 }]);
+  assert.equal(Array.isArray(proposal.neutralRegionSeeds), true);
   assert.equal(proposal.groups.length, 2);
   assert.deepEqual(proposal.groups[0], {
     color: "black",
@@ -35,6 +36,31 @@ test("response validation marks only complete, consistently dead, high-confidenc
   });
   assert.equal(Object.isFrozen(proposal.deadStones), true);
   assert.equal(Object.isFrozen(proposal.groups[0].stones), true);
+});
+
+test("seki and weak ownership conservatively seed otherwise-owned empty regions", () => {
+  const input = scoringRequestFixture();
+  const board = Array.from({ length: 9 }, () => Array<"black" | "white" | null>(9).fill(null));
+  for (const [x, y] of [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [0, 2], [1, 2], [2, 2]]) {
+    board[y][x] = "black";
+  }
+  const stoppedBoardHash = kataGoBoardHash(board);
+  const request = canonicalizeKataGoScoringRequest({
+    ...input,
+    board,
+    stoppedBoardHash,
+    moves: input.moves.map((move) => ({ ...move, boardHash: stoppedBoardHash })),
+  });
+  const response = providerResponseFixture(request, {
+    ownership: request.board.map((row) => row.map(() => 0)),
+    assessments: request.board.flatMap((row, y) => row.flatMap((point, x) =>
+      point ? [{ x, y, status: "seki" as const, confidence: 1 }] : []
+    )),
+  });
+  const proposal = validateKataGoScoringResponse(response, request, "deterministic");
+  assert.equal(proposal.deadStones.length, 0);
+  assert.ok(proposal.neutralRegionSeeds.some(({ x, y }) => x === 1 && y === 1));
+  assert.equal(Object.isFrozen(proposal.neutralRegionSeeds), true);
 });
 
 test("low confidence, seki, inconsistent status, and weak ownership conservatively remain alive", () => {

@@ -195,6 +195,7 @@ export function canonicalizeKataGoScoringRequest(
   const input = plainRecord(value, "KataGo scoring request");
   exactKeys(input, [
     "contractVersion",
+    "analysisPurpose",
     "gameId",
     "stoppedBoardHash",
     "stoppedMoveNumber",
@@ -213,6 +214,9 @@ export function canonicalizeKataGoScoringRequest(
   }
   if (input.confidencePolicyVersion !== KATAGO_CONFIDENCE_POLICY_VERSION) {
     invalidRequest("The KataGo confidence policy version is unsupported.");
+  }
+  if (input.analysisPurpose !== "initial-suggestion" && input.analysisPurpose !== "deadline-adjudication") {
+    invalidRequest("analysisPurpose must identify initial suggestion or deadline adjudication.");
   }
   if (
     typeof input.gameId !== "string"
@@ -238,6 +242,7 @@ export function canonicalizeKataGoScoringRequest(
 
   const request = Object.freeze({
     contractVersion: KATAGO_SCORING_CONTRACT_VERSION,
+    analysisPurpose: input.analysisPurpose,
     gameId: input.gameId,
     stoppedBoardHash,
     stoppedMoveNumber: input.stoppedMoveNumber as number,
