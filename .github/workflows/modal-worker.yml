@@ -1,0 +1,73 @@
+name: Modal KataGo worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Validate only, or deploy after the separate cost approval"
+        required: true
+        default: validate-only
+        type: choice
+        options:
+          - validate-only
+          - deploy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modal-katago-gostone
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate dormant Modal configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-modal.txt
+
+      - name: Install pinned Modal client
+        run: python -m pip install --requirement requirements-modal.txt
+
+      - name: Validate configuration without contacting Modal
+        run: |
+          python -m compileall -q modal_worker scripts/check_modal_bootstrap.py
+          python scripts/check_modal_bootstrap.py
+          python -c "from modal_worker.app import app; assert app.name == 'gostone-katago-worker'"
+
+  deploy:
+    name: Deploy only after explicit cost approval
+    needs: validate
+    if: ${{ inputs.action == 'deploy' && vars.MODAL_DEPLOYMENT_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: GoStone
+    env:
+      MODAL_ENVIRONMENT: GoStone
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-modal.txt
+
+      - name: Install pinned Modal client
+        run: python -m pip install --requirement requirements-modal.txt
+
+      - name: Deploy to the isolated Modal environment
+        run: python -m modal deploy -m modal_worker.app --env GoStone
