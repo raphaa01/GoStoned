@@ -31,7 +31,14 @@ export function LegalNotice({ locale }: { locale: Locale }) {
           <h2>{copy.provider}</h2>
           <strong>{legal.name}</strong>
           {legal.entityDetails ? <p>{legal.entityDetails}</p> : null}
-          <p className="legal-contact-line"><MapPin size={17} /> <span>{legal.street}<br />{legal.city}</span></p>
+          <p className="legal-contact-line">
+            <MapPin size={17} />
+            <span>
+              {legal.street}<br />
+              {legal.city}
+              {legal.country ? <><br />{legal.country}</> : null}
+            </span>
+          </p>
         </section>
 
         <section className="legal-card">
@@ -45,19 +52,51 @@ export function LegalNotice({ locale }: { locale: Locale }) {
           ) : null}
         </section>
 
-        {legal.vatId ? (
+        {legal.registerName && legal.registerNumber ? (
           <section className="legal-card">
-            <h2>{copy.vatId}</h2>
-            <p>{copy.vatDescription}: {legal.vatId}</p>
+            <h2>{copy.register}</h2>
+            <p>{legal.registerName}: {legal.registerNumber}</p>
+          </section>
+        ) : null}
+
+        {legal.vatId || legal.businessId ? (
+          <section className="legal-card">
+            <h2>{copy.taxIdentifiers}</h2>
+            {legal.vatId ? <p>{copy.vatDescription}: {legal.vatId}</p> : null}
+            {legal.businessId ? <p>{copy.businessIdDescription}: {legal.businessId}</p> : null}
+          </section>
+        ) : null}
+
+        {legal.supervisoryAuthority ? (
+          <section className="legal-card">
+            <h2>{copy.supervisoryAuthority}</h2>
+            <p>{legal.supervisoryAuthority}</p>
+          </section>
+        ) : null}
+
+        {legal.editorialResponsible ? (
+          <section className="legal-card">
+            <h2>{copy.editorialResponsibility}</h2>
+            <p>{copy.editorialDescription}</p>
+            <strong>{legal.editorialResponsible.name}</strong>
+            <p>
+              {legal.editorialResponsible.street}<br />
+              {legal.editorialResponsible.city}
+            </p>
           </section>
         ) : null}
 
         <section className="legal-card">
-          <h2>{copy.copyright}</h2>
-          <p>{copy.copyrightDescription}</p>
+          <h2>{copy.dsaContact}</h2>
+          <p>{copy.dsaDescription}</p>
+          <p className="legal-contact-line">
+            <Mail size={17} />
+            {legal.configured
+              ? <a href={`mailto:${legal.dsaEmail}`}>{legal.dsaEmail}</a>
+              : <span>{legal.dsaEmail}</span>}
+          </p>
+          <p>{copy.dsaLanguages}</p>
         </section>
-
-        <p className="legal-note">{copy.note}</p>
       </article>
     </AppShell>
   );

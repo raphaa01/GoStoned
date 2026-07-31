@@ -331,7 +331,18 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
    - `LEGAL_STREET`: Straße und Hausnummer
    - `LEGAL_CITY`: Postleitzahl und Ort
    - `LEGAL_EMAIL`: erreichbare Kontaktadresse
-   - optional: `LEGAL_ENTITY_DETAILS`, `LEGAL_PHONE`, `LEGAL_VAT_ID`
+   - optional: `LEGAL_COUNTRY` und `LEGAL_PHONE`
+   - bei juristischen Personen: `LEGAL_ENTITY_DETAILS` mit Rechtsform und
+     Vertretungsberechtigten
+   - bei Registereintrag: `LEGAL_REGISTER_NAME` und `LEGAL_REGISTER_NUMBER`
+   - nur falls tatsächlich erteilt: `LEGAL_VAT_ID` und `LEGAL_BUSINESS_ID`
+   - nur bei erlaubnispflichtiger Tätigkeit: `LEGAL_SUPERVISORY_AUTHORITY`
+   - nur bei journalistisch-redaktionellen Inhalten: `LEGAL_EDITORIAL_NAME`,
+     `LEGAL_EDITORIAL_STREET` und `LEGAL_EDITORIAL_CITY`
+   - optional für eine getrennte DSA-Kontaktadresse: `LEGAL_DSA_EMAIL`; andernfalls
+     wird `LEGAL_EMAIL` verwendet
+   - die Datenminimierungs- und Pflichtangaben-Checkliste in
+     [`docs/legal-notice.md`](docs/legal-notice.md) vor dem Eintragen vollständig prüfen
 4. Vor dem ersten Deployment die Migrationen gegen Supabase ausführen.
 5. Deploy starten und anschließend `/api/health`, `/api/db-health` und einen Test mit zwei Browsern prüfen.
 
