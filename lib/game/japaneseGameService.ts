@@ -454,16 +454,28 @@ function validateJapaneseLifecycle(loaded: LoadedJapaneseGame): void {
   if (finalValues.some((value) => value === null)) throw corruption("final score evidence incomplete");
   const score = scoreCurrent(loaded)!;
   const preview = toJapaneseTerritoryPreview(score);
+  const scoredBoard = loaded.authority.normalPlay.board.map((row) => [...row]);
+  for (const { x, y } of loaded.deadRows) scoredBoard[y][x] = null;
+  const deadBlack = loaded.deadRows.filter(({ color }) => color === "black").length;
+  const deadWhite = loaded.deadRows.length - deadBlack;
   const expectedWinnerKey = preview.winner === "black" ? game.black_player_key
     : preview.winner === "white" ? game.white_player_key : null;
   if (
     scoring.scored_proposal_hash !== scoring.proposal_hash
+    || scoring.scored_board_hash !== boardHash(scoredBoard)
+    || scoring.living_black_stones !== score.livingBlackStones
+    || scoring.living_white_stones !== score.livingWhiteStones
     || numeric(scoring.black_total!) !== score.blackTotal
     || numeric(scoring.white_total!) !== score.whiteTotal
     || scoring.black_territory !== score.blackTerritory
     || scoring.white_territory !== score.whiteTerritory
+    || scoring.dame_points !== score.damePoints
+    || scoring.territory_excluded_by_agreement !== score.territoryExcludedByAgreement
+    || scoring.dead_black_stones !== deadBlack
+    || scoring.dead_white_stones !== deadWhite
     || scoring.black_prisoners_final !== score.blackPrisonersFinal
     || scoring.white_prisoners_final !== score.whitePrisonersFinal
+    || scoring.outcome_kind !== score.outcome.kind
     || numeric(scoring.margin!) !== preview.margin
     || scoring.winner !== preview.winner
     || game.result !== preview.result
