@@ -20,10 +20,6 @@ export const en = {
   },
   language: {
     switcherLabel: "Choose language",
-    english: "English",
-    german: "German",
-    hint: "Prefer German? GoStone is also available in German.",
-    useGerman: "Use German",
     switchFailed: "The language preference could not be saved. Please try again.",
   },
   nav: {
@@ -688,6 +684,10 @@ export const en = {
     subtitle: "Provider information under Section 5 of the German Digital Services Act (DDG)",
     missingTitle: "Provider details are not configured yet",
     missingDescription: "Before public release, the bracketed details must be completed through the Vercel environment variables.",
+    placeholderName: "[Full name of the provider]",
+    placeholderStreet: "[Street and house number]",
+    placeholderCity: "[Postal code and city]",
+    placeholderEmail: "[Email address]",
     provider: "Provider",
     contact: "Contact",
     vatId: "VAT identification number",

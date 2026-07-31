@@ -22,10 +22,6 @@ export const de = {
   },
   language: {
     switcherLabel: "Sprache wählen",
-    english: "Englisch",
-    german: "Deutsch",
-    hint: "GoStone ist auch auf Deutsch verfügbar.",
-    useGerman: "Deutsch verwenden",
     switchFailed: "Die Spracheinstellung konnte nicht gespeichert werden. Bitte versuche es erneut.",
   },
   nav: {
@@ -690,6 +686,10 @@ export const de = {
     subtitle: "Angaben gemäß § 5 Digitale-Dienste-Gesetz (DDG)",
     missingTitle: "Betreiberangaben fehlen noch",
     missingDescription: "Vor der öffentlichen Veröffentlichung müssen die mit Klammern markierten Angaben über die Vercel-Umgebungsvariablen ergänzt werden.",
+    placeholderName: "[Vollständiger Name des Betreibers]",
+    placeholderStreet: "[Straße und Hausnummer]",
+    placeholderCity: "[PLZ und Ort]",
+    placeholderEmail: "[E-Mail-Adresse]",
     provider: "Anbieter",
     contact: "Kontakt",
     vatId: "Umsatzsteuer-ID",

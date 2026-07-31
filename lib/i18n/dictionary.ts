@@ -1,11 +1,18 @@
-import { en, type Dictionary } from "./catalogs/en";
 import { de } from "./catalogs/de";
+import { en, type Dictionary } from "./catalogs/en";
+import { es } from "./catalogs/es";
+import { fr } from "./catalogs/fr";
+import { ja } from "./catalogs/ja";
+import { ko } from "./catalogs/ko";
+import { zh } from "./catalogs/zh";
 import type { Locale } from "./config";
 
 export type { Dictionary } from "./catalogs/en";
 
+const DICTIONARIES: Record<Locale, Dictionary> = { de, en, es, fr, ja, ko, zh };
+
 export function getDictionary(locale: Locale): Dictionary {
-  return locale === "de" ? de : en;
+  return DICTIONARIES[locale];
 }
 
 export type AuthErrorCode = keyof Dictionary["auth"]["errors"];

@@ -4,7 +4,6 @@ import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { GermanLanguageHint } from "@/components/i18n/LanguageSwitcher";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
 type PublicActivityCount = number | "under_5";
@@ -19,7 +18,7 @@ type SummaryState =
   | { kind: "ready"; summary: PlatformSummary }
   | { kind: "unavailable" };
 
-export function Hero({ suggestGerman = false }: { suggestGerman?: boolean }) {
+export function Hero() {
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.home;
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: "loading" });
@@ -86,7 +85,6 @@ export function Hero({ suggestGerman = false }: { suggestGerman?: boolean }) {
   return (
     <div className="home-experience">
       <section className="home-hero" aria-labelledby="home-title">
-        {suggestGerman ? <GermanLanguageHint /> : null}
         <span aria-hidden="true" className="hero-edge hero-edge--left">{copy.edgeLeft}</span>
         <span aria-hidden="true" className="hero-edge hero-edge--right">{copy.edgeRight}</span>
 

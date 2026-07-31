@@ -54,7 +54,7 @@ export function DesktopHeader() {
       </nav>
 
       <div className="sidebar-bottom">
-        <LanguageSwitcher compact />
+        <LanguageSwitcher />
         {loading ? <span className="sidebar-account-loading">{dictionary.nav.accountLoading}</span> : user ? (
           <>
             <Link className="sidebar-user" href={localizedHref("/profile")}>

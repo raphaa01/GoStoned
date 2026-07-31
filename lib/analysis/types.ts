@@ -1,4 +1,5 @@
 import type { BoardSize, Stone } from "@/lib/game/types";
+import type { LocalizedText } from "@/lib/i18n/config";
 
 export const ANALYSIS_ENGINE_CONTRACT_VERSION = 1 as const;
 
@@ -78,7 +79,7 @@ export type MoveAnalysis = {
   scoreLoss: number;
   bestMove: string;
   alternatives: AnalysisAlternative[];
-  explanation: { en: string; de: string };
+  explanation: LocalizedText;
 };
 
 export type GameAnalysisResult = {

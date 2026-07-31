@@ -18,6 +18,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { RatingHistoryChart } from "@/components/profile/RatingHistoryChart";
 import { readApi } from "@/lib/client/api";
 import type { BoardSize } from "@/lib/game/types";
+import type { Locale } from "@/lib/i18n/config";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import type {
   ProfileStat,
@@ -38,7 +39,7 @@ function signedRating(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function formatDate(value: string, locale: "en" | "de") {
+function formatDate(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",

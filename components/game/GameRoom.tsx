@@ -1172,7 +1172,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           />
           {connectionLabel}
         </span>
-        <LanguageSwitcher compact />
+        <LanguageSwitcher />
         <button
           className="game-exit"
           disabled={busy && gameInteractionAllowed}

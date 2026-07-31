@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/components/i18n/I18nProvider";
+import type { Locale } from "@/lib/i18n/config";
 import type { RatingHistoryEntry } from "@/lib/stats/statsService";
 
 type ChartPoint = {
@@ -9,7 +10,7 @@ type ChartPoint = {
   label: string;
 };
 
-function formatShortDate(value: string, locale: "en" | "de") {
+function formatShortDate(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",

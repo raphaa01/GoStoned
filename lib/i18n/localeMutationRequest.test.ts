@@ -9,6 +9,7 @@ import {
   MAX_LOCALE_MUTATION_BODY_CHUNKS,
   readLocaleMutation,
 } from "./localeMutationRequest";
+import { SUPPORTED_LOCALES } from "./config";
 
 function request(
   body: BodyInit | null,
@@ -75,7 +76,7 @@ test("locale mutation metadata preserves the canonical request boundary", () => 
 });
 
 test("locale mutation accepts an exact body across transport-defined chunks", async () => {
-  for (const locale of ["en", "de"] as const) {
+  for (const locale of SUPPORTED_LOCALES) {
     const encoded = new TextEncoder().encode(JSON.stringify({ locale }));
     let offset = 0;
     const fragmented = new ReadableStream<Uint8Array>({
@@ -124,7 +125,7 @@ test("locale mutation rejects malformed JSON and an inexact object contract", as
     "[]",
     "\"de\"",
     "{}",
-    JSON.stringify({ locale: "fr" }),
+    JSON.stringify({ locale: "it" }),
     JSON.stringify({ locale: "de", padding: "" }),
     '{"locale":"de","__proto__":null}',
     new Uint8Array([0xc3, 0x28]),
