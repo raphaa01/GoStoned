@@ -95,10 +95,7 @@ export function GamePanel({
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
-          <strong>
-            {game.whitePlayerName}
-            {game.whitePlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}
-          </strong>
+          <strong>{game.whitePlayerName}</strong>
           <span>{game.whitePlayerIsBot ? `${copy.botOpponent} · ${copy.white}` : yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
         </div>
         <PlayerClock
@@ -138,10 +135,7 @@ export function GamePanel({
       <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
-          <strong>
-            {game.blackPlayerName}
-            {game.blackPlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}
-          </strong>
+          <strong>{game.blackPlayerName}</strong>
           <span>{game.blackPlayerIsBot ? `${copy.botOpponent} · ${copy.black}` : yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
         </div>
         <PlayerClock

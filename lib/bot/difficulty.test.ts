@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { KataGoMoveInfo } from "@/lib/analysis/types";
 import {
@@ -8,7 +9,7 @@ import {
   selectBotMove,
   selectBotThinkDelayMs,
 } from "./difficulty";
-import { botDisplayName, deterministicUnit } from "./identity";
+import { BOT_NAMES, botDisplayName, deterministicUnit } from "./identity";
 
 const candidates: KataGoMoveInfo[] = Array.from({ length: 8 }, (_, index) => ({
   move: `${String.fromCharCode(65 + index)}4`,
@@ -53,7 +54,20 @@ test("every bot level stays inside the three to nine second response budget", ()
 });
 
 test("bot identities and random units are stable for a game seed", () => {
+  assert.equal(BOT_NAMES.length, 50);
+  assert.equal(new Set(BOT_NAMES).size, 50);
+  assert.deepEqual(BOT_NAMES.slice(0, 3), ["QuietPanda", "StoneDrifter", "BambooFox67"]);
+  assert.deepEqual(BOT_NAMES.slice(-3), ["DistantStar", "AutumnGoban3", "LastLiberty"]);
   assert.equal(botDisplayName("game-1"), botDisplayName("game-1"));
   assert.equal(deterministicUnit("game-1:4"), deterministicUnit("game-1:4"));
   assert.ok(deterministicUnit("game-1:4") >= 0 && deterministicUnit("game-1:4") < 1);
+});
+
+test("live games use quiet but honest computer-opponent disclosure", () => {
+  const panel = readFileSync(
+    new URL("../../components/game/GamePanel.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(panel, /bot-badge/);
+  assert.match(panel, /copy\.botOpponent/);
 });

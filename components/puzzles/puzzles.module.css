@@ -70,6 +70,143 @@
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
 }
 
+.catalog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: clamp(18px, 3vw, 30px);
+}
+
+.catalogHeader {
+  max-width: 720px;
+}
+
+.catalogHeader h2 {
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -0.035em;
+  margin: 0 0 8px;
+}
+
+.catalogHeader p,
+.categoryGrid p {
+  color: var(--muted-2);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.categoryGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.categoryGrid > button {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  min-height: 190px;
+  padding: 20px;
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.categoryGrid > button:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.categoryGrid > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.categoryGrid strong {
+  font-size: 20px;
+}
+
+.categoryGrid small {
+  color: var(--accent);
+  font-weight: 700;
+  margin-top: auto;
+}
+
+.categoryIcon {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 9px;
+  color: var(--accent);
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.collectionBar {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(130px, 1fr) auto;
+  padding: 12px;
+}
+
+.backButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted-2);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 7px;
+  padding: 8px;
+}
+
+.collectionBar > div {
+  display: grid;
+  gap: 2px;
+}
+
+.collectionBar > div span {
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.collectionBar nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.collectionBar nav button {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted-2);
+  cursor: pointer;
+  height: 32px;
+  width: 32px;
+}
+
+.collectionBar nav button[aria-current="step"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #18210f;
+  font-weight: 800;
+}
+
+.collectionBar nav button:disabled {
+  cursor: progress;
+  opacity: 0.28;
+}
+
 .boardColumn,
 .panel,
 .state {
@@ -131,6 +268,7 @@
 }
 
 .incorrect,
+.continue,
 .error,
 .solution {
   border-radius: 9px;
@@ -142,6 +280,19 @@
 .incorrect {
   background: #3a3021;
   color: #f1cf91;
+}
+
+.incorrect strong {
+  display: block;
+}
+
+.incorrect p {
+  margin: 8px 0 14px;
+}
+
+.continue {
+  background: #2b3825;
+  color: #d9efc7;
 }
 
 .error {
@@ -238,6 +389,15 @@
   .panel {
     min-height: 0;
   }
+
+  .collectionBar {
+    grid-template-columns: auto 1fr;
+  }
+
+  .collectionBar nav {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 620px) {
@@ -247,6 +407,27 @@
 
   .tabs {
     grid-template-columns: 1fr;
+  }
+
+  .categoryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .categoryGrid > button {
+    min-height: 160px;
+  }
+
+  .collectionBar {
+    margin-inline: -4px;
+  }
+
+  .collectionBar nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .collectionBar nav button {
+    width: 100%;
   }
 
   .tabs button {

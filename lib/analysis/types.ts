@@ -7,6 +7,12 @@ export type AnalysisMove = {
   move: string;
 };
 
+export type AnalysisMoveRestriction = {
+  player: Stone;
+  moves: string[];
+  untilDepth: number;
+};
+
 export type AnalysisInput = {
   contractVersion: typeof ANALYSIS_ENGINE_CONTRACT_VERSION;
   gameId: string;
@@ -14,6 +20,9 @@ export type AnalysisInput = {
   boardSize: BoardSize;
   komi: number;
   rules: "chinese" | "japanese";
+  initialStones?: AnalysisMove[];
+  initialPlayer?: Stone;
+  allowMoves?: AnalysisMoveRestriction[];
   moves: AnalysisMove[];
 };
 

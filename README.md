@@ -10,8 +10,11 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - persistenter Gegner-Chat im fokussierten Spielraum
 - serverseitige Chatmoderation gegen beleidigende, gefährliche und sensible Begriffe
 - serverseitig ausgestellte Gast-Sitzungen per HTTP-only Cookie
-- tägliche und weitere von KataGo erzeugte und geprüfte Go-Probleme
-- serverseitig geschützte Puzzle-Lösungen und gespeicherter Lösungsfortschritt
+- tägliche und 40 weitere von KataGo erzeugte und geprüfte Go-Probleme
+- vier Trainingssammlungen mit je zehn Aufgaben: Leben & Tod, Tesuji,
+  Freiheitsrennen und Endspiel (30 Kyu bis 15 Kyu)
+- mehrzügige Puzzle-Varianten mit KataGo-Antwort, verzögerter Fehlererklärung
+  und serverseitig gespeichertem Fortschritt
 - atomare, aktionsbezogene Missbrauchslimits für Authentifizierung, Matchmaking,
   Spielzüge, Chat und teure Datenbankabfragen
 - Matchmaking für 9×9, 13×13 und 19×19
@@ -439,16 +442,30 @@ Antwort und beendet die Testpartie anschließend sauber.
 
 ### Daily Puzzle und weitere Go-Probleme
 
-Der KataGo-Worker hält täglich genau eine gemeinsame Aufgabe und zusätzlich
-einen Vorrat weiterer Aufgaben bereit. Er kann geeignete Stellungen aus
-beendeten Partien übernehmen oder reproduzierbare Trainingsstellungen erzeugen,
-lässt KataGo den stärksten Zug und Alternativen bewerten und speichert Ergebnis,
-Schwierigkeitsgrad und eine kurze Erklärung in PostgreSQL. Das Frontend erhält
-die Lösung erst, nachdem der Spieler richtig gelöst hat. Gast- und
-Accountfortschritt werden serverseitig in `puzzle_attempts` gespeichert.
+Der KataGo-Worker hält täglich genau eine gemeinsame Aufgabe und vier
+Trainingssammlungen mit je zehn Aufgaben bereit:
+
+- **Leben & Tod** – Augenraum und vitale Punkte;
+- **Tesuji** – taktische Zugfolge und Form;
+- **Freiheitsrennen** – Semeai und gemeinsame Freiheiten;
+- **Endspiel** – Yose, Sente und Zugwert.
+
+Die Trainingsreihe reicht von 30 Kyu bis 15 Kyu. Die Ausgangsstellungen werden
+im GoStone-Projekt reproduzierbar erzeugt; KataGo prüft den besten Weg, spielt
+die gegnerischen Antworten und erzeugt Widerlegungen für untersuchte
+Fehlversuche. Damit werden keine Aufgaben oder Lösungstexte unklar lizenzierter
+Webseiten kopiert. Bekannte Go-Problemarchive dienen nur zur fachlichen
+Einordnung der Kategorien.
+
+Ein Fehlzug wird nicht sofort verraten: Der Server spielt zunächst eine
+KataGo-Antwort, erklärt dann, warum diese Variante scheitert, und setzt die
+Aufgabe erst auf Wunsch zurück. Eine richtige Variante kann drei bis fünf
+Halbzüge lang sein. Zukünftige Züge bleiben dabei serverseitig verborgen; das
+Frontend erhält nur den bereits gespielten Teil. Gast- und Accountfortschritt
+werden in `puzzle_attempts` gespeichert.
 
 Lokal startet derselbe `katago`-Container Analyse, Bot und Puzzle-Erzeugung. Die
-CPU-Voreinstellung `KATAGO_PUZZLE_MAX_VISITS=16` hält die Generierung auf einem
+CPU-Voreinstellung `KATAGO_PUZZLE_MAX_VISITS=8` hält die Generierung auf einem
 Laptop überschaubar. Ein externer GPU-Worker darf diesen Wert ohne Änderung an
 Website, API oder Datenbankschema erhöhen. Zum vollständigen lokalen Test:
 
@@ -458,9 +475,10 @@ $env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
 npm run test:puzzles-local
 ```
 
-Der Smoke-Test prüft die echte HTTP-API, eine korrekte Lösung, den gespeicherten
-Fortschritt und insbesondere, dass ungelöste Antworten nicht an den Browser
-gesendet werden.
+Der Smoke-Test prüft die echte HTTP-API, alle 40 Katalogaufgaben, eine
+KataGo-Widerlegung nach einem legalen Fehlzug, die komplette richtige
+Mehrzugvariante, den gespeicherten Fortschritt und insbesondere, dass zukünftige
+Lösungszüge nicht an den Browser gesendet werden.
 
 ### Worker später auf einem externen Server
 
