@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { getPreviewPlayerCount } from "@/lib/stats/playerCountPreview";
 
 type PublicActivityCount = number | "under_5";
 type PlatformSummary = {
@@ -62,9 +63,7 @@ export function Hero() {
       ? copy.heroActivityUnavailable
       : copy.heroActivityReady.replace(
         "{count}",
-        summaryState.summary.recentlyWaitingPlayers === "under_5"
-          ? copy.fewerThanFive.toLowerCase()
-          : String(summaryState.summary.recentlyWaitingPlayers),
+        String(getPreviewPlayerCount(summaryState.summary.recentlyWaitingPlayers)),
       );
   const activityStatus = summary
     ? copy.activityDefinition.replace(
