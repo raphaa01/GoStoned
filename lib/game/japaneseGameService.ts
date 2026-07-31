@@ -1,10 +1,6 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { query, withReadOnlyTransaction, withTransaction } from "@/lib/db";
-import {
-  applyMove,
-  boardHash,
-  type PrisonerLedger,
-} from "./goEngine";
+import { boardHash, type PrisonerLedger } from "./goEngine";
 import { advanceClock, restingClock } from "./goClock";
 import { GameServiceError } from "./gameServiceError";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
@@ -13,6 +9,7 @@ import {
   replayJapanesePhaseAuthority,
   type JapanesePhaseAuthorityResult,
 } from "./japanesePhaseAuthority";
+import { applyJapaneseSimpleKoMove } from "./japaneseKo";
 import {
   JAPANESE_1989_CONTRACT_ID,
   JAPANESE_1989_RULES_PROFILE,
@@ -1082,7 +1079,14 @@ export async function submitJapaneseMove(
       if (!Number.isInteger(move.x) || !Number.isInteger(move.y)) {
         throw new GameServiceError("A move needs integer coordinates.", 400, "invalid_move");
       }
-      const applied = applyMove(nextBoard, color, move.x!, move.y!);
+      const applied = applyJapaneseSimpleKoMove(
+        nextBoard,
+        color,
+        move.x!,
+        move.y!,
+        loaded.authority.normalPlay.koRestrictions,
+        loaded.moves.length + 1,
+      );
       if (!applied.ok) throw new GameServiceError(`Illegal move: ${applied.error}.`, 409, applied.error);
       nextBoard = applied.board;
     }
