@@ -1854,6 +1854,23 @@ a {
   padding: 9px 10px;
 }
 
+.japanese-provisional-result {
+  font-size: 12px;
+  text-align: center;
+}
+
+.japanese-score-breakdown summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.japanese-score-breakdown > div {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+}
+
 .japanese-suggestion {
   background: rgba(210, 167, 93, 0.06);
 }
@@ -2010,6 +2027,12 @@ a {
 .japanese-scoring-actions button:nth-last-child(2),
 .japanese-scoring-actions button:last-child {
   grid-column: 1 / -1;
+}
+
+.japanese-scoring-actions button:first-child {
+  background: var(--green-dark);
+  color: #f4faee;
+  font-weight: 800;
 }
 
 .final-score-summary {

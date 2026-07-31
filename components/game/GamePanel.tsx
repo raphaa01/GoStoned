@@ -12,6 +12,7 @@ import {
 import { useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
+import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
@@ -205,6 +206,9 @@ export function GamePanel({
             <span><small>{copy.black}</small><strong>{japanesePreview.black}</strong></span>
             <span><small>{copy.white}</small><strong>{japanesePreview.white}</strong></span>
           </div>
+          <strong className="japanese-provisional-result">
+            {localizedGameResult(japanesePreview.result, copy)}
+          </strong>
 
           <ScoringDecisionCountdown
             actionLabel={copy.resolveDeadline}
@@ -227,22 +231,25 @@ export function GamePanel({
             </span>
           </div>
 
-          <div className="japanese-score-breakdown" aria-label={copy.scoreBreakdown}>
-            <strong>{copy.territoryScoringBreakdown}</strong>
-            <span>
-              {copy.black}: {japanesePreview.blackTerritory} {copy.territory.toLocaleLowerCase()}
-              {" + "}{japanesePreview.blackPrisoners} {copy.prisoners}
-            </span>
-            <span>
-              {copy.white}: {japanesePreview.whiteTerritory} {copy.territory.toLocaleLowerCase()}
-              {" + "}{japanesePreview.whitePrisoners} {copy.prisoners}
-              {" + "}{game.komi} {dictionary.rules.komi}
-            </span>
-            <span>
-              {copy.dame}: {japanesePreview.neutralPoints}
-              {" · "}{copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
-            </span>
-          </div>
+          <details className="japanese-score-breakdown">
+            <summary>{copy.territoryScoringBreakdown}</summary>
+            <div aria-label={copy.scoreBreakdown}>
+              <span>
+                {copy.black}: {japanesePreview.blackTerritory} {copy.territory.toLocaleLowerCase()}
+                {" + "}{japanesePreview.blackPrisoners} {copy.prisoners}
+              </span>
+              <span>
+                {copy.white}: {japanesePreview.whiteTerritory} {copy.territory.toLocaleLowerCase()}
+                {" + "}{japanesePreview.whitePrisoners} {copy.prisoners}
+                {" + "}{game.komi} {dictionary.rules.komi}
+              </span>
+              <span>
+                {copy.dame}: {japanesePreview.neutralPoints}
+                {" · "}{copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+              </span>
+              <span>{rulesSummary}</span>
+            </div>
+          </details>
 
           {japaneseScoring.finalResolution ? (
             <div className="final-resolution-note" role="note">
