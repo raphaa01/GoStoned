@@ -31,6 +31,12 @@ const requiredTables = [
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
+  "game_analysis_jobs",
+  "katago_workers",
+  "game_bots",
+  "puzzles",
+  "puzzle_generation_jobs",
+  "puzzle_attempts",
 ] as const;
 
 const requiredGameColumns = [
@@ -111,6 +117,52 @@ const requiredIndexDefinitions = {
   idx_player_reports_reported_created: [
     "ON public.player_reports USING btree (reported_key, created_at DESC, game_id, reporter_key)",
   ],
+  idx_game_analysis_jobs_claim: [
+    "ON public.game_analysis_jobs USING btree (status, created_at, id)",
+    "WHERE (status = ANY",
+  ],
+  idx_game_analysis_jobs_game: [
+    "ON public.game_analysis_jobs USING btree (game_id, game_version DESC)",
+  ],
+  idx_katago_workers_ready: [
+    "ON public.katago_workers USING btree (last_seen_at DESC)",
+    "WHERE ready",
+  ],
+  idx_game_bots_claim: [
+    "ON public.game_bots USING btree (next_move_at, game_id)",
+    "WHERE (lease_expires_at IS NULL)",
+  ],
+  idx_puzzles_daily_date: [
+    "ON public.puzzles USING btree (daily_date)",
+    "WHERE (kind = 'daily'::text)",
+  ],
+  idx_puzzles_practice_published: [
+    "ON public.puzzles USING btree (published_at DESC, id)",
+    "WHERE (kind = 'practice'::text)",
+  ],
+  idx_puzzle_jobs_daily_target: [
+    "ON public.puzzle_generation_jobs USING btree (target_date)",
+    "WHERE (kind = 'daily'::text)",
+  ],
+  idx_puzzle_generation_jobs_claim: [
+    "ON public.puzzle_generation_jobs USING btree (status, created_at, id)",
+    "WHERE (status = ANY",
+  ],
+  idx_puzzle_attempts_player: [
+    "ON public.puzzle_attempts USING btree (player_key, last_attempt_at DESC)",
+  ],
+  idx_puzzles_category_order: [
+    "ON public.puzzles USING btree (category, collection_order)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
+  idx_puzzle_jobs_category_order: [
+    "ON public.puzzle_generation_jobs USING btree (category, collection_order)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
+  idx_puzzles_category_catalog: [
+    "ON public.puzzles USING btree (category, collection_order, id)",
+    "WHERE ((kind = 'practice'::text) AND (category IS NOT NULL))",
+  ],
 } as const;
 
 const requiredConstraintSignatures = [
@@ -130,6 +182,9 @@ const requiredConstraintSignatures = [
   "player_reports_distinct_players_check:player_reports:c",
   "player_reports_key_bounds_check:player_reports:c",
   "player_reports_category_check:player_reports:c",
+  "puzzles_category_shape_check:puzzles:c",
+  "puzzle_generation_jobs_category_shape_check:puzzle_generation_jobs:c",
+  "puzzle_attempts_variation_progress_check:puzzle_attempts:c",
 ] as const;
 
 const requiredRolloutConstraintSignatures = [
@@ -245,6 +300,45 @@ const requiredConstraintDefinitions = {
     ],
     excludes: [],
   },
+  puzzles_category_shape_check: {
+    includes: [
+      "life_and_death",
+      "tesuji",
+      "capturing_race",
+      "endgame",
+      "rank_kyu >= 1",
+      "rank_kyu <= 30",
+      "collection_order >= 1",
+      "collection_order <= 10",
+      "jsonb_typeof(variation) = 'object'::text",
+      "mainLine",
+      "refutations",
+    ],
+    excludes: [],
+  },
+  puzzle_generation_jobs_category_shape_check: {
+    includes: [
+      "life_and_death",
+      "tesuji",
+      "capturing_race",
+      "endgame",
+      "target_date IS NULL",
+      "rank_kyu >= 1",
+      "rank_kyu <= 30",
+      "collection_order >= 1",
+      "collection_order <= 10",
+    ],
+    excludes: [],
+  },
+  puzzle_attempts_variation_progress_check: {
+    includes: [
+      "jsonb_typeof(variation_progress) = 'array'::text",
+      "jsonb_array_length(variation_progress) <= 12",
+      "variation_revision >= 0",
+      "variation_revision <= 1000",
+    ],
+    excludes: [],
+  },
 } as const;
 
 const requiredTriggerSignatures = [
@@ -283,6 +377,12 @@ const requiredProtectedTables = [
   "game_japanese_scoring_state",
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
+  "game_analysis_jobs",
+  "katago_workers",
+  "game_bots",
+  "puzzles",
+  "puzzle_generation_jobs",
+  "puzzle_attempts",
 ] as const;
 
 const requiredGuardFunctions = [

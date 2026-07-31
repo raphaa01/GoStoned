@@ -12,7 +12,7 @@ export const POLL_BENCHMARK_STATEMENTS = [
   "scoring_read",
   "dead_stones_read",
   "rating_history_read",
-  "registered_users_read",
+  "rating_participants_read",
   "scoring_resume_insert",
   "scoring_delete",
   "timeout_game_update",
@@ -176,15 +176,19 @@ const GAME_READ_SQL = `
          g.black_periods_remaining, g.white_periods_remaining,
          g.turn_started_at, g.version, g.started_at, g.finished_at,
          COALESCE(
+           CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
            NULLIF(BTRIM(black_user.display_name), ''),
            black_user.username,
            'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
          ) AS black_player_name,
          COALESCE(
+           CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
            NULLIF(BTRIM(white_user.display_name), ''),
            white_user.username,
            'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
          ) AS white_player_name,
+         g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
+         g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
          CASE
            WHEN g.status = 'finished' THEN (
              SELECT COUNT(DISTINCT history.player_key) = 2
@@ -192,14 +196,24 @@ const GAME_READ_SQL = `
               WHERE history.game_id = g.id
                 AND history.player_key IN (g.black_player_key, g.white_player_key)
            )
-           ELSE g.black_player_key <> g.white_player_key
-             AND black_user.id IS NOT NULL AND white_user.id IS NOT NULL
-         END AS rated
+         ELSE g.black_player_key <> g.white_player_key
+             AND (
+               (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
+               OR (
+                 game_bot.game_id IS NOT NULL
+                 AND (
+                   (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
+                   OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
+                 )
+               )
+             )
+       END AS rated
     FROM games g
     LEFT JOIN users black_user
       ON g.black_player_key = 'user:' || black_user.id::text
     LEFT JOIN users white_user
       ON g.white_player_key = 'user:' || white_user.id::text
+    LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
    WHERE g.id = $1
 `;
 
@@ -238,10 +252,19 @@ const RATING_HISTORY_READ_SQL = `
    FOR UPDATE
 `;
 
-const REGISTERED_USERS_READ_SQL = `
-  SELECT 'user:' || id::text AS player_key
+const RATING_PARTICIPANTS_READ_SQL = `
+  SELECT 'user:' || id::text AS player_key,
+         1200::int AS initial_rating,
+         'account'::text AS participant_type
     FROM users
    WHERE 'user:' || id::text IN ($1::text, $2::text)
+   UNION ALL
+  SELECT bot_player_key AS player_key,
+         target_rating AS initial_rating,
+         'bot'::text AS participant_type
+    FROM game_bots
+   WHERE game_id = $3
+     AND bot_player_key IN ($1::text, $2::text)
 `;
 
 const SCORING_RESUME_INSERT_SQL = `
@@ -319,8 +342,8 @@ const SQL_CASES = [
   sqlCase(RATING_HISTORY_READ_SQL, {
     statement: "rating_history_read", read: true, write: false, locking: true,
   }),
-  sqlCase(REGISTERED_USERS_READ_SQL, {
-    statement: "registered_users_read", read: true, write: false, locking: false,
+  sqlCase(RATING_PARTICIPANTS_READ_SQL, {
+    statement: "rating_participants_read", read: true, write: false, locking: false,
   }),
   sqlCase(SCORING_RESUME_INSERT_SQL, {
     statement: "scoring_resume_insert", read: false, write: true, locking: false,
@@ -481,7 +504,7 @@ const TIMEOUT_SEQUENCE: readonly PollBenchmarkStatement[] = [
   "scoring_read",
   "timeout_game_update",
   "rating_history_read",
-  "registered_users_read",
+  "rating_participants_read",
   "transaction_commit",
 ];
 

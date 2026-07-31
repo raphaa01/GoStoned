@@ -44,8 +44,12 @@ test("leaderboard joins registered users and excludes guest or orphan stats", as
   assert.doesNotMatch(statement, /LEFT JOIN users u/);
   assert.doesNotMatch(statement, /ps\.player_key LIKE 'guest:%'/);
   assert.match(statement, /ps\.games > 0/);
-  assert.match(statement, /JOIN users black_user/);
-  assert.match(statement, /JOIN users white_user/);
+  assert.match(statement, /LEFT JOIN users black_user/);
+  assert.match(statement, /LEFT JOIN users white_user/);
+  assert.match(statement, /LEFT JOIN game_bots game_bot/);
+  assert.match(statement, /game_bot\.target_rating/);
+  assert.match(statement, /game_record\.black_player_key = game_bot\.bot_player_key/);
+  assert.match(statement, /game_record\.white_player_key = game_bot\.bot_player_key/);
   assert.match(statement, /game_record\.status = 'finished'/);
   assert.match(statement, /history\.board_size = \$1/);
   assert.match(statement, /history\.player_key IN \( game_record\.black_player_key, game_record\.white_player_key \)/);
@@ -57,7 +61,7 @@ test("leaderboard joins registered users and excludes guest or orphan stats", as
   assert.match(statement, /history_inventory/);
   assert.match(statement, /FROM player_rating_history WHERE board_size = \$1 GROUP BY player_key, board_size/);
   assert.match(statement, /inventory\.games = totals\.games/);
-  assert.match(statement, /LAG\(rating_after, 1, 1200\)/);
+  assert.match(statement, /LAG\(rating_after, 1, initial_rating\)/);
   assert.match(statement, /rating_before = expected_rating_before/);
   assert.match(statement, /rating_after = rating_before \+ 16/);
   assert.match(statement, /rating_after = GREATEST\(100, rating_before - 16\)/);
@@ -89,7 +93,7 @@ test("leaderboard joins registered users and excludes guest or orphan stats", as
   });
 });
 
-test("leaderboard SQL quarantines legacy guest and mixed rating histories", async () => {
+test("leaderboard SQL accepts verified bot games while quarantining guest and mixed histories", async () => {
   let statement = "";
   const pool = {
     async query(sql: string) {
@@ -111,6 +115,9 @@ test("leaderboard SQL quarantines legacy guest and mixed rating histories", asyn
     statement,
     /game_record\.white_player_key = 'user:' \|\| white_user\.id::text/,
   );
+  assert.match(statement, /game_record\.black_player_key = game_bot\.bot_player_key/);
+  assert.match(statement, /game_record\.white_player_key = game_bot\.bot_player_key/);
+  assert.match(statement, /history\.player_key = game_bot\.bot_player_key THEN game_bot\.target_rating/);
   assert.match(
     statement,
     /SELECT COUNT\(\*\)::int FROM player_rating_history game_history WHERE game_history\.game_id = history\.game_id/,

@@ -41,6 +41,8 @@ export type GameState = {
   whitePlayerKey: string;
   blackPlayerName: string;
   whitePlayerName: string;
+  blackPlayerIsBot?: boolean;
+  whitePlayerIsBot?: boolean;
   winnerKey: string | null;
   rated: boolean;
   status: "active" | "finished";

@@ -23,6 +23,7 @@ type ChatPanelProps = {
   chatPolicyUnavailable: boolean;
   messages: GameMessage[];
   opponentName: string;
+  opponentIsBot: boolean;
   playerKey: string;
   disabled: boolean;
   onBlock: () => void;
@@ -40,6 +41,7 @@ export function ChatPanel({
   chatPolicyUnavailable,
   messages,
   opponentName,
+  opponentIsBot,
   playerKey,
   disabled,
   onBlock,
@@ -58,6 +60,7 @@ export function ChatPanel({
   const wasPolicyUnavailable = useRef(chatPolicyUnavailable);
   const titleId = useId();
   const unavailableId = useId();
+  const chatUnavailable = chatPolicyUnavailable || opponentIsBot;
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -76,12 +79,13 @@ export function ChatPanel({
 
   const blockActionUnavailable = blockBusy
     || blockReconciling
+    || opponentIsBot
     || (blockedByYou === null && !blockError);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = text.trim();
-    if (!message || busy || disabled) return;
+    if (!message || busy || disabled || chatUnavailable) return;
     setBusy(true);
     setError(null);
     try {
@@ -106,7 +110,7 @@ export function ChatPanel({
           <MessageCircle aria-hidden="true" size={18} />
           <h2 id={titleId}>{copy.chatTitle}</h2>
         </span>
-        <button
+        {!opponentIsBot ? <button
           aria-disabled={blockActionUnavailable}
           aria-label={
             blockedByYou === null
@@ -135,11 +139,19 @@ export function ChatPanel({
             : blockBusy
               ? blockedByYou ? copy.unblockingOpponent : copy.blockingOpponent
               : blockedByYou ? copy.unblockOpponent : copy.blockOpponent}
-        </button>
+        </button> : null}
       </header>
-      {chatPolicyUnavailable ? (
-        <div className="chat-list chat-list--unavailable">
+      <div
+        aria-atomic="false"
+        aria-live="polite"
+        aria-relevant="additions"
+        className="chat-list"
+        ref={listRef}
+        role="log"
+      >
+        {chatUnavailable ? (
           <p
+            className="chat-empty"
             id={unavailableId}
             ref={unavailableStatus}
             role="status"
@@ -147,48 +159,37 @@ export function ChatPanel({
           >
             {copy.chatPolicyUnavailable}
           </p>
-        </div>
-      ) : (
-        <div
-          aria-atomic="false"
-          aria-live="polite"
-          aria-relevant="additions"
-          className="chat-list"
-          ref={listRef}
-          role="log"
-        >
-          {messages.length === 0 ? (
-            <p className="chat-empty">{copy.chatEmpty}</p>
-          ) : messages.map((message) => (
-            <div
-              className={`chat-message ${message.playerKey === playerKey ? "is-mine" : ""}`}
-              key={message.id}
-            >
-              <strong>{message.playerKey === playerKey ? copy.you : message.playerName}</strong>
-              <p>{message.message}</p>
-            </div>
-          ))}
-        </div>
-      )}
+        ) : messages.length === 0 ? (
+          <p className="chat-empty">{copy.chatEmpty}</p>
+        ) : messages.map((message) => (
+          <div
+            className={`chat-message ${message.playerKey === playerKey ? "is-mine" : ""}`}
+            key={message.id}
+          >
+            <strong>{message.playerKey === playerKey ? copy.you : message.playerName}</strong>
+            <p>{message.message}</p>
+          </div>
+        ))}
+      </div>
       <form className="chat-form" onSubmit={submit} ref={formRef}>
         <input
-          aria-describedby={chatPolicyUnavailable ? unavailableId : undefined}
+          aria-describedby={chatUnavailable ? unavailableId : undefined}
           aria-label={copy.chatMessage}
-          disabled={disabled || busy}
+          disabled={disabled || busy || chatUnavailable}
           maxLength={500}
           onChange={(event) => {
             setText(event.target.value);
             if (error) setError(null);
           }}
-          placeholder={disabled ? copy.chatUnavailable : copy.writeMessage}
+          placeholder={chatUnavailable || disabled ? copy.chatUnavailable : copy.writeMessage}
           value={text}
         />
-        <button aria-label={copy.sendMessage} disabled={disabled || busy || !text.trim()} type="submit">
+        <button aria-label={copy.sendMessage} disabled={disabled || busy || chatUnavailable || !text.trim()} type="submit">
           <Send aria-hidden="true" size={17} />
         </button>
       </form>
       {error ? <p className="chat-error" role="alert">{error}</p> : null}
-      {blockError ? <p className="chat-error" role="alert">{blockError}</p> : null}
+      {blockError && !opponentIsBot ? <p className="chat-error" role="alert">{blockError}</p> : null}
     </section>
   );
 }

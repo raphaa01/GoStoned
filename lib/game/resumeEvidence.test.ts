@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
+const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8").replaceAll("\r\n", "\n");
 const migration = readFileSync(
   join(process.cwd(), "db/migrations/011_game_scoring_resume_evidence.sql"),
   "utf8",
-);
+).replaceAll("\r\n", "\n");
 const productionPreflight = readFileSync(
   join(process.cwd(), "scripts/check-mvp.ts"),
   "utf8",

@@ -59,7 +59,7 @@ export async function getGameMessages(
             AND $2 IN (black_player_key, white_player_key)
             AND black_player_key <> white_player_key
        ), availability AS (
-         SELECT NOT (
+         SELECT participant.opponent_key NOT LIKE 'bot:%' AND NOT (
            EXISTS (
              SELECT 1 FROM player_blocks
               WHERE blocker_key = $2 AND blocked_key = participant.opponent_key
@@ -126,6 +126,13 @@ export async function sendGameMessage(
   }
   return withTransaction(async (client) => {
     const opponentKey = await resolveGameOpponent(client, gameId, playerKey);
+    if (opponentKey.startsWith("bot:")) {
+      throw new GameServiceError(
+        "Chat is unavailable for bot games.",
+        409,
+        "chat_unavailable",
+      );
+    }
     await lockPlayerPair(client, playerKey, opponentKey);
     if (await isPlayerPairBlocked(client, playerKey, opponentKey)) {
       throw new GameServiceError(

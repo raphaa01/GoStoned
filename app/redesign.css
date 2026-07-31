@@ -612,7 +612,8 @@ body {
   padding-block: clamp(72px, 9vw, 124px);
 }
 
-.home-chapter--learn {
+.home-chapter--learn,
+.home-chapter--puzzles {
   grid-template-columns: minmax(330px, .94fr) minmax(0, 1.06fr);
 }
 
@@ -738,6 +739,86 @@ body {
 
 .lesson-liberty--one { left: 60%; top: 47.5%; }
 .lesson-liberty--two { left: 47.5%; top: 72.5%; }
+
+.chapter-visual--puzzles {
+  background-size: 12.5% 12.5%, 12.5% 12.5%, 100% 100%;
+}
+
+.chapter-visual--puzzles::after {
+  background: rgb(71 117 99 / .13);
+  border: 1px solid rgb(71 117 99 / .3);
+  content: "";
+  inset: 25% 12.5% 12.5% 37.5%;
+  position: absolute;
+}
+
+.puzzle-stone {
+  border-radius: 50%;
+  height: 12%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 12%;
+  z-index: 2;
+}
+
+.puzzle-stone--black {
+  background: radial-gradient(circle at 31% 24%, #555a54, #151714 47%, #050605 80%);
+  box-shadow: 0 8px 13px rgb(48 35 19 / .26);
+}
+
+.puzzle-stone--white {
+  background: radial-gradient(circle at 31% 24%, white, #f1eee7 56%, #bbb5aa);
+  box-shadow: 0 8px 13px rgb(48 35 19 / .18);
+}
+
+.puzzle-stone--one { left: 37.5%; top: 37.5%; }
+.puzzle-stone--two { left: 50%; top: 37.5%; }
+.puzzle-stone--three { left: 62.5%; top: 50%; }
+.puzzle-stone--four { left: 37.5%; top: 50%; }
+.puzzle-stone--five { left: 50%; top: 62.5%; }
+
+.puzzle-vital-point {
+  background: var(--color-oxide);
+  border: 4px solid rgb(255 253 249 / .9);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--color-oxide);
+  height: 5%;
+  left: 62.5%;
+  position: absolute;
+  top: 62.5%;
+  transform: translate(-50%, -50%);
+  width: 5%;
+  z-index: 3;
+}
+
+.puzzle-sequence-line {
+  border-left: 2px dashed rgb(166 75 45 / .72);
+  border-top: 2px dashed rgb(166 75 45 / .72);
+  height: 12.5%;
+  left: 62.5%;
+  position: absolute;
+  top: 50%;
+  width: 12.5%;
+  z-index: 3;
+}
+
+.puzzle-sequence-label {
+  align-items: center;
+  background: var(--color-oxide);
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  font-size: clamp(10px, 1.2vw, 15px);
+  font-weight: 700;
+  height: 7%;
+  justify-content: center;
+  left: 75%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 7%;
+  z-index: 4;
+}
 
 .chapter-visual--review::after {
   background: rgb(71 117 99 / .12);
@@ -1613,13 +1694,15 @@ body {
   }
 
   .home-chapter,
-  .home-chapter--learn {
+  .home-chapter--learn,
+  .home-chapter--puzzles {
     gap: 52px;
     grid-template-columns: 1fr;
     min-height: auto;
   }
 
-  .home-chapter--learn .chapter-copy {
+  .home-chapter--learn .chapter-copy,
+  .home-chapter--puzzles .chapter-copy {
     order: 2;
   }
 
@@ -1648,6 +1731,16 @@ body {
 @media (max-width: 620px) {
   .app-content {
     padding: 34px 16px 48px;
+  }
+
+  .match-lobby {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .match-lobby-copy,
+  .match-lobby-card {
+    min-width: 0;
+    width: 100%;
   }
 
   .app-content:has(.home-experience) {

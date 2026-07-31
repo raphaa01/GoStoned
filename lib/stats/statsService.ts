@@ -39,6 +39,7 @@ export type RecentGame = {
   ratingChange: number | null;
   rated: boolean;
   finishedAt: string;
+  moveCount: number;
 };
 
 type ProfileStatRow = {
@@ -73,6 +74,7 @@ type RecentGameRow = {
   rating_change: number | null;
   rated: boolean;
   finished_at: Date;
+  move_count: number;
 };
 
 type LeaderboardSnapshotRow = {
@@ -87,7 +89,7 @@ export async function getLeaderboard(
   const normalizedLimit = Number.isFinite(limit) ? Math.trunc(limit) : 50;
   const safeLimit = Math.min(Math.max(normalizedLimit, 1), 100);
   const result = await query<LeaderboardSnapshotRow>(
-    `WITH registered_rating_rows AS (
+    `WITH eligible_rating_rows AS (
        SELECT history.id,
               history.player_key,
               history.board_size,
@@ -97,6 +99,10 @@ export async function getLeaderboard(
               history.result,
               history.recorded_at,
               game_record.winner_key,
+              CASE
+                WHEN history.player_key = game_bot.bot_player_key THEN game_bot.target_rating
+                ELSE 1200
+              END AS initial_rating,
               (
                 SELECT COUNT(*)::int
                   FROM player_rating_history game_history
@@ -104,10 +110,11 @@ export async function getLeaderboard(
               ) AS total_game_ledger_rows
          FROM player_rating_history history
          JOIN games game_record ON game_record.id = history.game_id
-         JOIN users black_user
+         LEFT JOIN users black_user
            ON game_record.black_player_key = 'user:' || black_user.id::text
-         JOIN users white_user
+         LEFT JOIN users white_user
            ON game_record.white_player_key = 'user:' || white_user.id::text
+         LEFT JOIN game_bots game_bot ON game_bot.game_id = game_record.id
         WHERE history.board_size = $1
           AND game_record.status = 'finished'
           AND game_record.board_size = history.board_size
@@ -115,13 +122,23 @@ export async function getLeaderboard(
                 game_record.black_player_key,
                 game_record.white_player_key
               )
+          AND (
+            (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
+            OR (
+              game_bot.game_id IS NOT NULL
+              AND (
+                (game_record.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
+                OR (game_record.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
+              )
+            )
+          )
      ), ordered_rating_rows AS (
-       SELECT registered_rating_rows.*,
-              LAG(rating_after, 1, 1200) OVER (
+       SELECT eligible_rating_rows.*,
+              LAG(rating_after, 1, initial_rating) OVER (
                 PARTITION BY player_key, board_size
                 ORDER BY recorded_at, id
               ) AS expected_rating_before
-         FROM registered_rating_rows
+         FROM eligible_rating_rows
      ), atomic_rating_games AS (
        SELECT game_id
          FROM ordered_rating_rows
@@ -281,12 +298,14 @@ export async function getPlayerProfileStats(playerKey: string) {
           CASE
             WHEN g.black_player_key = $1 THEN
               COALESCE(
+                CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
                 NULLIF(BTRIM(white_user.display_name), ''),
                 white_user.username,
                 'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
               )
             ELSE
               COALESCE(
+                CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
                 NULLIF(BTRIM(black_user.display_name), ''),
                 black_user.username,
                 'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
@@ -308,6 +327,7 @@ export async function getPlayerProfileStats(playerKey: string) {
                  g.white_player_key
                )
           ) AS rated,
+          (SELECT COUNT(*)::int FROM moves recent_move WHERE recent_move.game_id = g.id) AS move_count,
           g.finished_at
         FROM (
           SELECT games.*,
@@ -324,6 +344,7 @@ export async function getPlayerProfileStats(playerKey: string) {
           ON g.black_player_key = 'user:' || black_user.id::text
         LEFT JOIN users white_user
           ON g.white_player_key = 'user:' || white_user.id::text
+        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
         LEFT JOIN player_rating_history history
           ON history.game_id = g.id AND history.player_key = $1
        WHERE g.board_rank <= 12
@@ -363,6 +384,7 @@ export async function getPlayerProfileStats(playerKey: string) {
     ratingChange: row.rating_change,
     rated: row.rated,
     finishedAt: row.finished_at.toISOString(),
+    moveCount: row.move_count,
   }));
 
   return { stats, history, recentGames };

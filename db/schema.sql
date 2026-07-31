@@ -1435,3 +1435,410 @@ BEGIN
   END IF;
 END
 $gostone_statement_timeout$;
+
+CREATE TABLE IF NOT EXISTS game_analysis_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  game_version INT NOT NULL CHECK (game_version > 0),
+  requested_by_key TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  input JSONB NOT NULL CHECK (jsonb_typeof(input) = 'object'),
+  result JSONB CHECK (result IS NULL OR jsonb_typeof(result) = 'object'),
+  attempts INT NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 3),
+  error_code TEXT,
+  error_message TEXT,
+  worker_id TEXT,
+  lease_expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT game_analysis_jobs_game_version_unique UNIQUE (game_id, game_version),
+  CONSTRAINT game_analysis_jobs_result_shape_check CHECK (
+    (status = 'completed' AND result IS NOT NULL AND completed_at IS NOT NULL AND error_code IS NULL)
+    OR (status <> 'completed' AND result IS NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_analysis_jobs_claim
+  ON game_analysis_jobs(status, created_at, id)
+  WHERE status IN ('queued', 'running');
+CREATE INDEX IF NOT EXISTS idx_game_analysis_jobs_game
+  ON game_analysis_jobs(game_id, game_version DESC);
+
+ALTER TABLE game_analysis_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON game_analysis_jobs FROM PUBLIC;
+
+DO $gostone_analysis_access$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON game_analysis_jobs FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON game_analysis_jobs FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON game_analysis_jobs TO gostone_app;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'game_analysis_jobs'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON game_analysis_jobs
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END
+$gostone_analysis_access$;
+
+CREATE TABLE IF NOT EXISTS katago_workers (
+  worker_id TEXT PRIMARY KEY,
+  capabilities TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  engine_version TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  ready BOOLEAN NOT NULL DEFAULT false,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (cardinality(capabilities) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS game_bots (
+  game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  bot_player_key TEXT UNIQUE NOT NULL CHECK (bot_player_key LIKE 'bot:%'),
+  display_name TEXT NOT NULL CHECK (
+    char_length(display_name) BETWEEN 2 AND 40
+    AND display_name = BTRIM(display_name)
+  ),
+  color TEXT NOT NULL CHECK (color IN ('black', 'white')),
+  target_rating INT NOT NULL CHECK (target_rating BETWEEN 100 AND 3000),
+  visits_per_turn INT NOT NULL CHECK (visits_per_turn BETWEEN 1 AND 2000),
+  candidate_limit INT NOT NULL CHECK (candidate_limit BETWEEN 1 AND 12),
+  temperature DOUBLE PRECISION NOT NULL CHECK (temperature BETWEEN 0.05 AND 3),
+  scheduled_game_version INT NOT NULL DEFAULT -1 CHECK (scheduled_game_version >= -1),
+  next_move_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  worker_id TEXT,
+  lease_expires_at TIMESTAMPTZ,
+  failure_count INT NOT NULL DEFAULT 0 CHECK (failure_count BETWEEN 0 AND 1000),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_katago_workers_ready
+  ON katago_workers(last_seen_at DESC)
+  WHERE ready;
+CREATE INDEX IF NOT EXISTS idx_game_bots_claim
+  ON game_bots(next_move_at, game_id)
+  WHERE lease_expires_at IS NULL;
+
+ALTER TABLE katago_workers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_bots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON katago_workers, game_bots FROM PUBLIC;
+
+DO $gostone_bot_access$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON katago_workers, game_bots FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON katago_workers, game_bots FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON katago_workers, game_bots TO gostone_app;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'katago_workers'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON katago_workers
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'game_bots'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON game_bots
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END
+$gostone_bot_access$;
+CREATE TABLE IF NOT EXISTS puzzles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('daily', 'practice')),
+  daily_date DATE,
+  board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
+  to_play TEXT NOT NULL CHECK (to_play IN ('black', 'white')),
+  position_moves JSONB NOT NULL CHECK (jsonb_typeof(position_moves) = 'array'),
+  board JSONB NOT NULL CHECK (jsonb_typeof(board) = 'array'),
+  solution_move TEXT NOT NULL CHECK (char_length(solution_move) BETWEEN 2 AND 4),
+  solution_x INT NOT NULL,
+  solution_y INT NOT NULL,
+  alternatives JSONB NOT NULL CHECK (jsonb_typeof(alternatives) = 'array'),
+  difficulty TEXT NOT NULL CHECK (difficulty IN ('beginner', 'intermediate', 'advanced')),
+  explanation JSONB NOT NULL CHECK (
+    jsonb_typeof(explanation) = 'object'
+    AND explanation ? 'en'
+    AND explanation ? 'de'
+  ),
+  engine_version TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  visits INT NOT NULL CHECK (visits BETWEEN 1 AND 10000),
+  source_game_id UUID REFERENCES games(id) ON DELETE SET NULL,
+  source_move_number INT CHECK (source_move_number IS NULL OR source_move_number >= 0),
+  published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT puzzles_daily_shape_check CHECK (
+    (kind = 'daily' AND daily_date IS NOT NULL)
+    OR (kind = 'practice' AND daily_date IS NULL)
+  ),
+  CONSTRAINT puzzles_solution_bounds_check CHECK (
+    solution_x >= 0 AND solution_x < board_size
+    AND solution_y >= 0 AND solution_y < board_size
+  )
+);
+
+CREATE TABLE IF NOT EXISTS puzzle_generation_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('daily', 'practice')),
+  target_date DATE,
+  board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  attempts INT NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 3),
+  puzzle_id UUID REFERENCES puzzles(id) ON DELETE SET NULL,
+  worker_id TEXT,
+  lease_expires_at TIMESTAMPTZ,
+  error_code TEXT,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT puzzle_generation_jobs_target_shape_check CHECK (
+    (kind = 'daily' AND target_date IS NOT NULL)
+    OR (kind = 'practice' AND target_date IS NULL)
+  ),
+  CONSTRAINT puzzle_generation_jobs_result_shape_check CHECK (
+    (status = 'completed' AND puzzle_id IS NOT NULL AND completed_at IS NOT NULL)
+    OR (status <> 'completed' AND puzzle_id IS NULL)
+  )
+);
+
+CREATE TABLE IF NOT EXISTS puzzle_attempts (
+  puzzle_id UUID NOT NULL REFERENCES puzzles(id) ON DELETE CASCADE,
+  player_key TEXT NOT NULL CHECK (
+    char_length(player_key) BETWEEN 6 AND 128
+    AND (player_key LIKE 'guest:%' OR player_key LIKE 'user:%')
+  ),
+  attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 1000),
+  solved BOOLEAN NOT NULL DEFAULT false,
+  first_attempt_correct BOOLEAN,
+  selected_x INT,
+  selected_y INT,
+  last_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  solved_at TIMESTAMPTZ,
+  PRIMARY KEY (puzzle_id, player_key),
+  CONSTRAINT puzzle_attempts_selection_shape_check CHECK (
+    (attempt_count = 0 AND selected_x IS NULL AND selected_y IS NULL)
+    OR (attempt_count > 0 AND selected_x IS NOT NULL AND selected_y IS NOT NULL)
+  ),
+  CONSTRAINT puzzle_attempts_solved_shape_check CHECK (
+    (solved AND solved_at IS NOT NULL)
+    OR (NOT solved AND solved_at IS NULL)
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puzzles_daily_date
+  ON puzzles(daily_date)
+  WHERE kind = 'daily';
+CREATE INDEX IF NOT EXISTS idx_puzzles_practice_published
+  ON puzzles(published_at DESC, id)
+  WHERE kind = 'practice';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puzzle_jobs_daily_target
+  ON puzzle_generation_jobs(target_date)
+  WHERE kind = 'daily';
+CREATE INDEX IF NOT EXISTS idx_puzzle_generation_jobs_claim
+  ON puzzle_generation_jobs(status, created_at, id)
+  WHERE status IN ('queued', 'running');
+CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_player
+  ON puzzle_attempts(player_key, last_attempt_at DESC);
+
+ALTER TABLE puzzles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE puzzle_generation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE puzzle_attempts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON puzzles, puzzle_generation_jobs, puzzle_attempts FROM PUBLIC;
+
+DO $gostone_puzzle_access$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON puzzles, puzzle_generation_jobs, puzzle_attempts FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON puzzles, puzzle_generation_jobs, puzzle_attempts FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE
+      ON puzzles, puzzle_generation_jobs, puzzle_attempts TO gostone_app;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'puzzles'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON puzzles
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'puzzle_generation_jobs'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON puzzle_generation_jobs
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'puzzle_attempts'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON puzzle_attempts
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END
+$gostone_puzzle_access$;
+
+ALTER TABLE puzzles
+  ADD COLUMN IF NOT EXISTS category TEXT,
+  ADD COLUMN IF NOT EXISTS rank_kyu INT,
+  ADD COLUMN IF NOT EXISTS collection_order INT,
+  ADD COLUMN IF NOT EXISTS variation JSONB;
+
+ALTER TABLE puzzles
+  DROP CONSTRAINT IF EXISTS puzzles_category_shape_check;
+ALTER TABLE puzzles
+  ADD CONSTRAINT puzzles_category_shape_check CHECK (
+    (category IS NULL AND rank_kyu IS NULL AND collection_order IS NULL AND variation IS NULL)
+    OR (
+      kind = 'practice'
+      AND category IN ('life_and_death', 'tesuji', 'capturing_race', 'endgame')
+      AND rank_kyu BETWEEN 1 AND 30
+      AND collection_order BETWEEN 1 AND 10
+      AND jsonb_typeof(variation) = 'object'
+      AND variation ? 'version'
+      AND variation ? 'mainLine'
+      AND variation ? 'refutations'
+    )
+  );
+
+ALTER TABLE puzzle_generation_jobs
+  ADD COLUMN IF NOT EXISTS category TEXT,
+  ADD COLUMN IF NOT EXISTS rank_kyu INT,
+  ADD COLUMN IF NOT EXISTS collection_order INT;
+
+ALTER TABLE puzzle_generation_jobs
+  DROP CONSTRAINT IF EXISTS puzzle_generation_jobs_category_shape_check;
+ALTER TABLE puzzle_generation_jobs
+  ADD CONSTRAINT puzzle_generation_jobs_category_shape_check CHECK (
+    (category IS NULL AND rank_kyu IS NULL AND collection_order IS NULL)
+    OR (
+      kind = 'practice'
+      AND target_date IS NULL
+      AND category IN ('life_and_death', 'tesuji', 'capturing_race', 'endgame')
+      AND rank_kyu BETWEEN 1 AND 30
+      AND collection_order BETWEEN 1 AND 10
+    )
+  );
+
+ALTER TABLE puzzle_attempts
+  ADD COLUMN IF NOT EXISTS variation_progress JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS variation_revision INT NOT NULL DEFAULT 0;
+
+ALTER TABLE puzzle_attempts
+  DROP CONSTRAINT IF EXISTS puzzle_attempts_variation_progress_check;
+ALTER TABLE puzzle_attempts
+  ADD CONSTRAINT puzzle_attempts_variation_progress_check CHECK (
+    jsonb_typeof(variation_progress) = 'array'
+    AND jsonb_array_length(variation_progress) <= 12
+    AND variation_revision BETWEEN 0 AND 1000
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puzzles_category_order
+  ON puzzles(category, collection_order)
+  WHERE kind = 'practice' AND category IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puzzle_jobs_category_order
+  ON puzzle_generation_jobs(category, collection_order)
+  WHERE kind = 'practice' AND category IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_puzzles_category_catalog
+  ON puzzles(category, collection_order, id)
+  WHERE kind = 'practice' AND category IS NOT NULL;
+
+-- The former practice inventory was generated from four rotated templates.
+-- Remove only that generated catalog so the worker can recreate it from the
+-- 40 licensed, distinct source positions. Daily puzzles and player games stay intact.
+DELETE FROM puzzle_attempts
+ WHERE puzzle_id IN (
+   SELECT id FROM puzzles WHERE kind = 'practice' AND category IS NOT NULL
+ );
+
+DELETE FROM puzzle_generation_jobs
+ WHERE kind = 'practice' AND category IS NOT NULL;
+
+DELETE FROM puzzles
+ WHERE kind = 'practice' AND category IS NOT NULL;
+
+-- Close the deployment race in which an older worker can recreate a 9x9
+-- template job between the catalog reset and the new worker rollout.
+DELETE FROM puzzle_attempts
+ WHERE puzzle_id IN (
+   SELECT id FROM puzzles WHERE kind = 'practice' AND category IS NOT NULL
+ );
+
+DELETE FROM puzzle_generation_jobs
+ WHERE kind = 'practice' AND category IS NOT NULL;
+
+DELETE FROM puzzles
+ WHERE kind = 'practice' AND category IS NOT NULL;
+
+ALTER TABLE puzzles
+  DROP CONSTRAINT IF EXISTS puzzles_category_shape_check;
+ALTER TABLE puzzles
+  ADD CONSTRAINT puzzles_category_shape_check CHECK (
+    (category IS NULL AND rank_kyu IS NULL AND collection_order IS NULL AND variation IS NULL)
+    OR (
+      kind = 'practice'
+      AND board_size = 13
+      AND category IN ('life_and_death', 'tesuji', 'capturing_race', 'endgame')
+      AND rank_kyu BETWEEN 1 AND 30
+      AND collection_order BETWEEN 1 AND 10
+      AND jsonb_typeof(variation) = 'object'
+      AND variation ? 'version'
+      AND variation ? 'mainLine'
+      AND variation ? 'refutations'
+    )
+  );
+
+ALTER TABLE puzzle_generation_jobs
+  DROP CONSTRAINT IF EXISTS puzzle_generation_jobs_category_shape_check;
+ALTER TABLE puzzle_generation_jobs
+  ADD CONSTRAINT puzzle_generation_jobs_category_shape_check CHECK (
+    (category IS NULL AND rank_kyu IS NULL AND collection_order IS NULL)
+    OR (
+      kind = 'practice'
+      AND target_date IS NULL
+      AND board_size = 13
+      AND category IN ('life_and_death', 'tesuji', 'capturing_race', 'endgame')
+      AND rank_kyu BETWEEN 1 AND 30
+      AND collection_order BETWEEN 1 AND 10
+    )
+  );

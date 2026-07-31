@@ -104,9 +104,9 @@ test("English and German distinguish rated account games and disclose leaderboar
   assert.equal(de.profile.rated, "Gewertet");
   assert.equal(de.profile.unrated, "Ungewertet");
   assert.match(en.leaderboard.description, /fully backed/);
-  assert.match(en.leaderboard.description, /other registered accounts/);
+  assert.match(en.leaderboard.description, /KataGo opponent count as rated games/);
+  assert.match(de.leaderboard.description, /KataGo-Gegner werden mitgewertet/);
   assert.match(de.leaderboard.description, /vollständig/);
-  assert.match(de.leaderboard.description, /andere registrierte Konten/);
   assert.match(en.leaderboard.ratingMethod, /start at 1200/);
   assert.match(en.leaderboard.ratingMethod, /16 points/);
   assert.match(en.leaderboard.ratingMethod, /100-point floor/);

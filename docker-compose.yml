@@ -17,5 +17,30 @@ services:
       timeout: 5s
       retries: 10
 
+  katago:
+    build:
+      context: .
+      dockerfile: docker/katago/Dockerfile
+    container_name: gostone_katago
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${KATAGO_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gostoned}
+      DATABASE_SSL: ${KATAGO_DATABASE_SSL:-disable}
+      DATABASE_POOL_MAX: ${KATAGO_DATABASE_POOL_MAX:-2}
+      KATAGO_MAX_VISITS: ${KATAGO_MAX_VISITS:-20}
+      KATAGO_BOT_MAX_VISITS: ${KATAGO_BOT_MAX_VISITS:-160}
+      KATAGO_BOT_POLL_INTERVAL_MS: ${KATAGO_BOT_POLL_INTERVAL_MS:-500}
+      KATAGO_PUZZLE_MAX_VISITS: ${KATAGO_PUZZLE_MAX_VISITS:-8}
+      KATAGO_PUZZLE_POLL_INTERVAL_MS: ${KATAGO_PUZZLE_POLL_INTERVAL_MS:-2000}
+      KATAGO_POLL_INTERVAL_MS: "2000"
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   pgdata:
