@@ -93,8 +93,7 @@ export function GamePanel({
     ? activeScoring.preview
     : null;
   const japaneseScoring = japanesePreview ? activeScoring : null;
-  const suggestionPending = japaneseScoring?.suggestion?.status === "pending";
-  const scoringControlsDisabled = controlsDisabled || suggestionPending;
+  const scoringControlsDisabled = controlsDisabled;
   const disputeGroups = groupMarkedDeadStones(game.board, game.scoring?.deadStones ?? []);
   const selectedGroup = disputeGroups.find(({ key }) => key === selectedGroupKey)
     ?? disputeGroups[0]

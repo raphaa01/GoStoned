@@ -23,6 +23,7 @@
     "test:player-report-races": "tsx scripts/smoke-player-report-races.ts",
     "test:move-hash-db": "tsx scripts/smoke-move-hash-guard.ts",
     "test:glicko2-db": "tsx scripts/smoke-glicko2-persistence.ts",
+    "test:katago-scoring-live": "tsx scripts/smoke-katago-scoring.ts",
     "test:rate-limit": "tsx scripts/smoke-rate-limit.ts",
     "test:scoring-races": "tsx scripts/smoke-scoring-races.ts",
     "test:statement-timeout": "tsx scripts/smoke-statement-timeout.ts",
@@ -31,6 +32,7 @@
     "db:prepare-ci-smoke": "tsx scripts/prepare-ci-postgres.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "worker:katago": "tsx workers/katago/index.ts",
+    "worker:katago:once": "tsx workers/katago/once.ts",
     "worker:japanese-deadlines": "tsx scripts/run-japanese-deadline-resolver.ts"
   },
   "dependencies": {

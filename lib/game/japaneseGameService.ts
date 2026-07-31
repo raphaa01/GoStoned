@@ -1155,6 +1155,25 @@ async function analyzeInitialSuggestion(
   }
 }
 
+/**
+ * Explicit operational repair for the narrow crash window after a stopped
+ * position commits but before its durable KataGo job is dispatched. Normal
+ * polling remains read-only; workers and bounded smoke commands call this.
+ */
+export async function repairPendingJapaneseSuggestion(
+  gameId: string,
+  playerKey: string,
+): Promise<GameState> {
+  const pending = await withReadOnlyTransaction(async (client) => {
+    const loaded = await loadJapaneseGame(client, gameId, playerKey);
+    return loaded.scoring?.suggestion_status === "pending"
+      ? analysisBoundary(loaded)
+      : null;
+  });
+  if (!pending) return getJapaneseGameState(gameId, playerKey);
+  return analyzeInitialSuggestion(gameId, playerKey, pending);
+}
+
 export async function getJapaneseGameState(gameId: string, playerKey: string): Promise<GameState> {
   return withReadOnlyTransaction(async (client) =>
     serializeJapaneseGame(await loadJapaneseGame(client, gameId, playerKey)));

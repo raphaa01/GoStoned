@@ -117,7 +117,7 @@ export function MatchmakingPanel({
         </div>
         <div>
           <span>{copy.rules}</span>
-          <strong>{copy.japanese}</strong>
+          <strong>{dictionary.rules.rulesets.japanese} · 1989</strong>
         </div>
       </div>
 

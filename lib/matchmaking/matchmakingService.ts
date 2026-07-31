@@ -117,7 +117,10 @@ function adaptiveEntry(row: QueueRow): AdaptiveMatchEntry {
     : { ...base, pool: "guest-unrated", globalRating: null, ratingDeviation: null };
 }
 
-export async function getMatchmakingStatus(playerKey: string): Promise<MatchmakingStatus> {
+export async function getMatchmakingStatus(
+  playerKey: string,
+  _options: { allowOnDemandBot?: boolean } = {},
+): Promise<MatchmakingStatus> {
   const result = await query<QueueRow>(
     `SELECT q.*,
             g.status AS game_status,

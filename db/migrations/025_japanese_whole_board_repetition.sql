@@ -1,4 +1,7 @@
-BEGIN;
+-- The migration runner owns the surrounding transaction. Keep lock waits
+-- bounded so replacing the live games constraint fails safely under load.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 
 ALTER TABLE games DROP CONSTRAINT IF EXISTS games_finish_reason_check;
 ALTER TABLE games
@@ -164,5 +167,3 @@ DO $$ BEGIN
       public.guard_japanese_repetition_claim_mutation() FROM authenticated;
   END IF;
 END $$;
-
-COMMIT;

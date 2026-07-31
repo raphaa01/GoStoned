@@ -44,24 +44,40 @@ function inputForGame(game: GameState): AnalysisInput {
   };
 }
 
-async function claimBotTurn(workerId: string): Promise<ClaimedBot | null> {
+async function claimBotTurn(workerId: string, gameId?: string): Promise<ClaimedBot | null> {
   const result = await query<ClaimedBot>(
     `WITH candidate AS (
        SELECT bot.game_id, game.version AS game_version
          FROM game_bots bot
          JOIN games game ON game.id = bot.game_id
          LEFT JOIN game_scoring_state scoring ON scoring.game_id = game.id
+         LEFT JOIN game_japanese_scoring_state japanese_scoring
+           ON japanese_scoring.game_id = game.id
         WHERE game.status = 'active'
+          AND ($2::uuid IS NULL OR bot.game_id = $2::uuid)
           AND (bot.lease_expires_at IS NULL OR bot.lease_expires_at < NOW())
           AND (
             (game.phase = 'play' AND game.to_move = bot.color)
             OR (
               game.phase = 'scoring'
-              AND scoring.revision = game.scoring_revision
-              AND CASE bot.color
-                    WHEN 'black' THEN scoring.black_confirmed_revision IS DISTINCT FROM scoring.revision
-                    ELSE scoring.white_confirmed_revision IS DISTINCT FROM scoring.revision
-                  END
+              AND (
+                (
+                  game.rules_profile = 'japanese-1989-gostone-v1'
+                  AND japanese_scoring.revision = game.scoring_revision
+                  AND CASE bot.color
+                        WHEN 'black' THEN japanese_scoring.black_confirmed_revision IS DISTINCT FROM japanese_scoring.revision
+                        ELSE japanese_scoring.white_confirmed_revision IS DISTINCT FROM japanese_scoring.revision
+                      END
+                )
+                OR (
+                  game.rules_profile <> 'japanese-1989-gostone-v1'
+                  AND scoring.revision = game.scoring_revision
+                  AND CASE bot.color
+                        WHEN 'black' THEN scoring.black_confirmed_revision IS DISTINCT FROM scoring.revision
+                        ELSE scoring.white_confirmed_revision IS DISTINCT FROM scoring.revision
+                      END
+                )
+              )
             )
           )
           AND (
@@ -81,7 +97,7 @@ async function claimBotTurn(workerId: string): Promise<ClaimedBot | null> {
       RETURNING bot.game_id, bot.bot_player_key, bot.color, bot.target_rating,
                 bot.visits_per_turn, bot.candidate_limit, bot.temperature,
                 bot.scheduled_game_version, candidate.game_version`,
-    [workerId],
+    [workerId, gameId ?? null],
   );
   return result.rows[0] ?? null;
 }
@@ -184,6 +200,20 @@ export async function runBotLoop(
       state.activeGameId = null;
     }
   }
+}
+
+export async function runBotOnce(engine: KataGoEngine, gameId?: string): Promise<string | null> {
+  const visitCap = Math.max(1, Number(process.env.KATAGO_BOT_MAX_VISITS) || 160);
+  const bot = await claimBotTurn(botWorkerId, gameId);
+  if (!bot) return null;
+  try {
+    await playBotTurn(engine, bot, visitCap);
+    await releaseBot(bot);
+  } catch (error) {
+    await failBot(bot, error);
+    throw error;
+  }
+  return bot.game_id;
 }
 
 export async function publishWorkerHeartbeat(input: {

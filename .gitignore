@@ -8,6 +8,7 @@
 playwright-report/
 test-results/
 /.next/
+/.next-stale-codex/
 /out/
 /dist/
 

@@ -302,7 +302,7 @@ export const en = {
     preparingGuest: "Preparing guest…",
     joiningQueue: "Joining queue…",
     findOpponent: "Find an opponent",
-    matchingNote: "Matches keep the exact board, clock, Japanese-rules version, scoring, komi, and handicap configuration.",
+    matchingNote: "Matches keep the exact board, clock, Japanese 1989 rules, territory scoring, 6.5 komi, and no-handicap configuration. After two passes, the clock pauses for five minutes: one non-responsive player abandons, neither responding is no result, and unresolved positions use transparent KataGo adjudication or no result if analysis is unavailable.",
   },
   learn: {
     kicker: "Learn the whole game",
@@ -324,7 +324,7 @@ export const en = {
     secondStepTitle: "Check liberties before every move",
     secondStepBody: "Count your group's liberties, then the opponent's. A group with one liberty is in atari.",
     thirdStepTitle: "Finish by agreement",
-    thirdStepBody: "GoStone currently uses Chinese area scoring: living stones and surrounded empty points both count, with komi added for White.",
+    thirdStepBody: "GoStone uses Japanese territory scoring: surrounded empty points and prisoners count, with komi added for White. After two passes, both players review and confirm the same dead groups.",
     glossaryTitle: "Essential Go words",
     glossaryDescription: "Open a term when you need it. You can return here at any time.",
     libertyTerm: "Liberty",

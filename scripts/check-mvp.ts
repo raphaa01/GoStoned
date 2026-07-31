@@ -47,6 +47,7 @@ const requiredTables = [
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
+  "katago_scoring_jobs",
   "katago_workers",
   "game_bots",
   "puzzles",
@@ -240,6 +241,10 @@ const requiredIndexDefinitions = {
   idx_game_analysis_jobs_game: [
     "ON public.game_analysis_jobs USING btree (game_id, game_version DESC)",
   ],
+  idx_katago_scoring_jobs_claim: [
+    "ON public.katago_scoring_jobs USING btree (status, created_at, id)",
+    "WHERE (status = ANY",
+  ],
   idx_katago_workers_ready: [
     "ON public.katago_workers USING btree (last_seen_at DESC)",
     "WHERE ready",
@@ -282,6 +287,11 @@ const requiredIndexDefinitions = {
 } as const;
 
 const requiredConstraintSignatures = [
+  "katago_scoring_jobs_pkey:katago_scoring_jobs:p",
+  "katago_scoring_jobs_request_identity_key:katago_scoring_jobs:u",
+  "katago_scoring_jobs_game_id_fkey:katago_scoring_jobs:f",
+  "katago_scoring_jobs_request_shape_check:katago_scoring_jobs:c",
+  "katago_scoring_jobs_result_shape_check:katago_scoring_jobs:c",
   "games_rules_identity_unique:games:u",
   "games_supported_rules_tuple_check:games:c",
   "games_rules_profile_check:games:c",
@@ -677,6 +687,10 @@ const requiredConstraintDefinitions = {
 } as const;
 
 const requiredTriggerSignatures = [
+  "katago_scoring_job_insert_guard:katago_scoring_jobs:public:validate_katago_scoring_job_insert:7",
+  "katago_scoring_job_update_guard:katago_scoring_jobs:public:guard_katago_scoring_job_mutation:19",
+  "katago_scoring_job_delete_guard:katago_scoring_jobs:public:guard_katago_scoring_job_mutation:11",
+  "katago_scoring_job_truncate_guard:katago_scoring_jobs:public:guard_katago_scoring_job_mutation:34",
   "matchmaking_rules_profile_guard:matchmaking_queue:public:enforce_matchmaking_rules_profile:23",
   "game_rules_identity_mutation_guard:games:public:guard_game_rules_identity_mutation:19",
   "game_scoring_resume_events_insert_guard:game_scoring_resume_events:public:validate_game_scoring_resume_event_insert:7",
@@ -723,6 +737,14 @@ const requiredTriggerSignatures = [
 ] as const;
 
 const requiredTriggerDefinitions = {
+  katago_scoring_job_insert_guard:
+    "BEFORE INSERT ON public.katago_scoring_jobs",
+  katago_scoring_job_update_guard:
+    "BEFORE UPDATE ON public.katago_scoring_jobs",
+  katago_scoring_job_delete_guard:
+    "BEFORE DELETE ON public.katago_scoring_jobs",
+  katago_scoring_job_truncate_guard:
+    "BEFORE TRUNCATE ON public.katago_scoring_jobs",
   matchmaking_rules_profile_guard:
     "UPDATE OF status, game_id, rules_profile",
   game_rules_identity_mutation_guard:
@@ -810,6 +832,7 @@ const requiredProtectedTables = [
   "game_japanese_dead_stones",
   "game_japanese_neutral_region_seeds",
   "game_analysis_jobs",
+  "katago_scoring_jobs",
   "katago_workers",
   "game_bots",
   "puzzles",
@@ -828,6 +851,8 @@ const requiredProtectedTables = [
 ] as const;
 
 const requiredGuardFunctions = [
+  "public.validate_katago_scoring_job_insert()",
+  "public.guard_katago_scoring_job_mutation()",
   "public.enforce_matchmaking_rules_profile()",
   "public.guard_game_rules_identity_mutation()",
   "public.validate_game_scoring_resume_event_insert()",
@@ -866,6 +891,15 @@ const requiredGuardFunctions = [
 ] as const;
 
 const requiredGuardFunctionDefinitions = {
+  "public.validate_katago_scoring_job_insert()": [
+    "FROM public.games WHERE id=NEW.game_id FOR UPDATE",
+    "FROM public.game_japanese_scoring_state",
+    "KataGo scoring job does not match the current stopped Japanese position.",
+  ],
+  "public.guard_katago_scoring_job_mutation()": [
+    "TG_OP IN ('DELETE','TRUNCATE')",
+    "KataGo scoring request identity is immutable.",
+  ],
   "public.validate_game_scoring_resume_event_insert()": [
     "FOR SHARE OF game, scoring",
     "NEW.scoring_revision IS DISTINCT FROM snapshot.snapshot_revision",
