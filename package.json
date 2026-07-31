@@ -11,7 +11,7 @@
     "lint:i18n": "tsx scripts/check-i18n.ts",
     "benchmark:game-polls": "tsx scripts/benchmark-game-polls.ts",
     "mvp:check": "tsx scripts/check-mvp.ts",
-    "test": "tsx --test lib/*.test.ts lib/analysis/*.test.ts lib/bot/*.test.ts lib/puzzles/*.test.ts lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts lib/stats/*.test.ts",
+    "test": "tsx --test lib/*.test.ts lib/analysis/*.test.ts lib/bot/*.test.ts lib/puzzles/*.test.ts lib/game/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/katago/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts lib/stats/*.test.ts",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:bot-local": "tsx scripts/smoke-katago-bot.ts",
