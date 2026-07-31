@@ -48,7 +48,15 @@ export type GameState = {
   status: "active" | "finished";
   phase: "play" | "scoring";
   result: string | null;
-  finishReason: "score" | "resignation" | "timeout" | "legacy_score" | null;
+  finishReason:
+    | "score"
+    | "japanese_adjudication"
+    | "japanese_abandonment"
+    | "japanese_no_result"
+    | "resignation"
+    | "timeout"
+    | "legacy_score"
+    | null;
   komi: number;
   ruleset: Ruleset;
   rulesProfile: RulesProfile;
@@ -58,7 +66,7 @@ export type GameState = {
   scoringRevision: number;
   scoring: GameScoringState | null;
   lastResume: {
-    claim: "dead" | "alive" | "deadline";
+    claim: "dead" | "alive" | "deadline" | "resume";
     requestedBy: Stone | null;
     disputedStone: Position | null;
   } | null;
@@ -83,6 +91,24 @@ export type GameScoringState = {
   preview: ScorePreview;
   finalizedAt: string | null;
   expiresAt: string;
+  proposalHash?: string;
+  neutralRegionSeeds?: Position[];
+  resumptionsUsed?: number;
+  resumptionsRemaining?: number;
+  finalResolution?: boolean;
+  blackParticipated?: boolean;
+  whiteParticipated?: boolean;
+  canUndo?: boolean;
+  canResetToSuggestion?: boolean;
+  suggestion?: {
+    status: "pending" | "ready" | "unavailable" | "invalid" | "low_confidence";
+    transparentRole: "suggestion";
+    providerKind: "hosted-http" | "local-http" | "deterministic" | null;
+    engineVersion: string | null;
+    modelVersion: string | null;
+    configVersion: string | null;
+    confidencePolicyVersion: string | null;
+  };
 };
 
 export type PlayerClockState = {

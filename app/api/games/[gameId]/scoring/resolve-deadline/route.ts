@@ -7,7 +7,7 @@ import {
 } from "@/lib/auth/rateLimit";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
-import { resumePlay } from "@/lib/game/gameService";
+import { resolveJapaneseScoringDeadline } from "@/lib/game/gameService";
 import {
   assertGameMutationMetadata,
   gameMutationRouteError,
@@ -18,10 +18,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ gameId: string }> },
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ gameId: string }> }) {
   try {
     const { gameId } = await context.params;
     assertGameMutationMetadata(request, gameId, "json");
@@ -30,26 +27,14 @@ export async function POST(
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.scoringDecisionBurst, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.scoringDecision, playerKey);
-    const body = await readGameMutationJson(
-      request,
-      [["expectedRevision"], ["expectedRevision", "claim", "x", "y"]],
-    );
-    if (
-      !Number.isSafeInteger(body.expectedRevision)
-      || Number(body.expectedRevision) < 1
-      || (body.claim !== undefined && body.claim !== "dead" && body.claim !== "alive")
-      || (body.claim !== undefined && (!Number.isSafeInteger(body.x) || !Number.isSafeInteger(body.y)))
-    ) {
+    const body = await readGameMutationJson(request, [["expectedRevision"]]);
+    if (!Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) {
       throw invalidGameMutationRequest();
     }
-    const game = await resumePlay(
+    const game = await resolveJapaneseScoringDeadline(
       gameId,
       playerKey,
       body.expectedRevision as number,
-      body.claim === "dead" || body.claim === "alive" ? body.claim : null,
-      body.claim === "dead" || body.claim === "alive"
-        ? { x: body.x as number, y: body.y as number }
-        : null,
     );
     return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
