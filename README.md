@@ -353,6 +353,8 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
      wird `LEGAL_EMAIL` verwendet
    - die Datenminimierungs- und Pflichtangaben-Checkliste in
      [`docs/legal-notice.md`](docs/legal-notice.md) vor dem Eintragen vollständig prüfen
+   - die Datenschutz- und Anbietercheckliste in
+     [`docs/privacy-policy.md`](docs/privacy-policy.md) vor dem öffentlichen Start vollständig prüfen
 4. Vor dem ersten Deployment die Migrationen gegen Supabase ausführen.
 5. Deploy starten und anschließend `/api/health`, `/api/db-health` und einen Test mit zwei Browsern prüfen.
 

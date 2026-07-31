@@ -1404,6 +1404,120 @@ body {
   margin-top: 18px;
 }
 
+.privacy-updated {
+  color: var(--color-text-subtle);
+  font-size: 12px !important;
+  margin-top: 14px;
+}
+
+.privacy-controller-name {
+  margin-top: 20px;
+}
+
+.privacy-email {
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.privacy-config-warning {
+  background: rgb(210 167 93 / .12);
+  border: 1px solid rgb(210 167 93 / .32);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-soft) !important;
+  margin-top: 20px !important;
+  padding: 12px 14px;
+}
+
+.privacy-copy > p + p,
+.privacy-copy > .privacy-table-wrap + p,
+.privacy-copy > .privacy-processors + p {
+  margin-top: 20px;
+}
+
+.privacy-copy ul {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding-inline-start: 20px;
+}
+
+.privacy-copy li {
+  font-size: 15px;
+  line-height: 1.7;
+  padding-inline-start: 4px;
+}
+
+.privacy-table-wrap {
+  margin-top: 22px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.privacy-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 620px;
+  width: 100%;
+}
+
+.privacy-table th,
+.privacy-table td {
+  border-bottom: 1px solid var(--color-line);
+  line-height: 1.55;
+  padding: 12px 14px;
+  text-align: start;
+  vertical-align: top;
+}
+
+.privacy-table thead th {
+  color: var(--color-text-subtle);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.privacy-table tbody th {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.privacy-table code {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.privacy-processors {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.privacy-processor {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.privacy-processor h3 {
+  color: var(--color-ink);
+  font-size: 16px;
+  margin: 0;
+}
+
+.privacy-processor p {
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 8px 0 0;
+}
+
+.privacy-processor a {
+  color: var(--color-moss-strong);
+  display: inline-block;
+  font-size: 12px;
+  margin-top: 10px;
+  text-underline-offset: 3px;
+}
+
 .page-header {
   padding-block: 42px 38px;
 }
@@ -2065,6 +2179,12 @@ body {
 
   .legal-page > header {
     padding-top: 12px;
+  }
+
+  .privacy-page h1 {
+    font-size: clamp(36px, 11vw, 48px);
+    hyphens: auto;
+    overflow-wrap: anywhere;
   }
 
   .legal-section {
