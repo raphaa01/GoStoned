@@ -63,6 +63,28 @@ test("responsive CSS keeps a fitted overview and confines magnified panning", ()
   assert.match(styles, /@media \(max-width: 390px\)[\s\S]*?\.precision-placement-toolbar[\s\S]*?grid-template-columns: 1fr;/);
 });
 
+test("rendering and pointer snapping share one intersection geometry contract", () => {
+  const board = source("components/game/GoBoard.tsx");
+  const placement = source("lib/client/precisionPlacement.ts");
+  const styles = source("app/globals.css");
+  assert.match(placement, /export const BOARD_GRID_INSET_RATIO = 0\.07/);
+  assert.match(placement, /export const BOARD_GRID_SPAN_RATIO = 1 - BOARD_GRID_INSET_RATIO \* 2/);
+  assert.match(board, /BOARD_GRID_INSET_RATIO/);
+  assert.match(board, /BOARD_GRID_SPAN_RATIO/);
+  assert.match(board, /"--board-grid-inset"/);
+  assert.match(styles, /var\(--board-grid-inset, 7%\)/);
+  assert.match(styles, /var\(--board-grid-span, 86%\)/);
+});
+
+test("homepage board illustrations center every marker on explicit grid intersections", () => {
+  const styles = source("app/redesign.css");
+  assert.match(styles, /\.chapter-stone,[\s\S]*?transform: translate\(-50%, -50%\);/);
+  assert.match(styles, /\.chapter-stone--black \{ left: 40%; top: 40%; \}/);
+  assert.match(styles, /\.chapter-stone--white \{ left: 50%; top: 50%; \}/);
+  assert.match(styles, /\.lesson-stone--one \{ left: 35%; top: 47\.5%; \}/);
+  assert.match(styles, /\.lesson-liberty--one \{ left: 60%; top: 47\.5%; \}/);
+});
+
 test("move submission binds the rendered version and uses an owned synchronous latch", () => {
   const room = source("components/game/GameRoom.tsx");
   const move = section(room, "async function makeMove", "async function resign");

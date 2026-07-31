@@ -2,11 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activatePrecisionPlacement,
+  BOARD_GRID_INSET_RATIO,
+  BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
   reconcilePrecisionPlacement,
   type PrecisionPlacementContext,
   WHOLE_BOARD,
 } from "./precisionPlacement";
+
+test("the board grid is symmetrical inside its wooden surface", () => {
+  assert.equal(BOARD_GRID_INSET_RATIO, 0.07);
+  assert.equal(BOARD_GRID_INSET_RATIO * 2 + BOARD_GRID_SPAN_RATIO, 1);
+});
 
 const context: PrecisionPlacementContext = {
   boardSize: 19,

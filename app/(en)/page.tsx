@@ -1,7 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Hero } from "@/components/home/Hero";
-import { StatusOverview } from "@/components/home/StatusOverview";
 import { AppShell } from "@/components/layout/AppShell";
 import { isLocale, LOCALE_COOKIE, preferredLocale } from "@/lib/i18n/config";
 
@@ -33,7 +32,6 @@ export default async function HomePage({
   return (
     <AppShell>
       <Hero suggestGerman={suggestGerman} />
-      <StatusOverview />
     </AppShell>
   );
 }
