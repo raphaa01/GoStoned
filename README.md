@@ -518,6 +518,26 @@ Merge des Bot-Branches kann der Puzzle-Commit deshalb auf einen neueren
 Design-Branch übernommen oder der Puzzle-Branch darauf rebased werden; für ein
 neues Design müssen normalerweise nur Navigation und Puzzle-CSS angepasst
 werden.
+## KataGo auf Modal
+
+Der produktive KataGo-Worker wird im isolierten Modal-Environment `GoStone`
+betrieben. `modal_worker/app.py` baut das vorhandene Docker-Image, startet den
+Node/KataGo-Worker als einzelnen dauerhaft warmen Modal Server und stellt dessen
+`/health`-Endpunkt bereit. Das Datenbankpasswort liegt ausschließlich im Modal
+Secret `gostone-database`; es wird weder in das Image noch in Git geschrieben.
+
+Der manuelle Workflow `.github/workflows/modal-worker.yml` validiert die
+Konfiguration oder deployed sie nach Modal. Eine automatische Deployment-
+Ausführung bei jedem Push ist bewusst nicht aktiviert, damit kostenpflichtige
+Worker-Rollouts kontrolliert bleiben.
+
+Lokale Validierung ohne Modal-Rechenzeit:
+
+```powershell
+py -3.12 -m pip install --requirement requirements-modal.txt
+py -3.12 scripts/check_modal_bootstrap.py
+py -3.12 -m compileall -q modal_worker
+```
 
 ## Mobile Strategie
 
