@@ -1,4 +1,4 @@
-"""Fail closed while the Modal integration is intentionally dormant."""
+"""Static, cost-free validation for the production Modal integration."""
 
 from pathlib import Path
 
@@ -24,28 +24,19 @@ def main() -> None:
     require("workflow_dispatch:", WORKFLOW_SOURCE, "Modal workflow must remain manual.")
     forbid("push:", WORKFLOW_SOURCE, "Modal deployment must not run on push.")
     forbid("pull_request:", WORKFLOW_SOURCE, "Modal deployment must not run on pull requests.")
-    require(
-        "vars.MODAL_DEPLOYMENT_ENABLED == 'true'",
-        WORKFLOW_SOURCE,
-        "Modal deployment must retain the repository-variable safety lock.",
-    )
     require("--env GoStone", WORKFLOW_SOURCE, "Modal deploy must target GoStone explicitly.")
 
-    for remote_resource in (
-        "@app.function",
-        "@app.cls",
-        "modal.Image",
-        "modal.Secret",
-        "modal.Volume",
-        ".deploy(",
-    ):
-        forbid(
-            remote_resource,
-            APP_SOURCE,
-            f"Dormant Modal app unexpectedly declares remote resource: {remote_resource}",
-        )
+    require("modal.Image.from_dockerfile", APP_SOURCE, "Modal must reuse the reviewed Docker image.")
+    require("@app.server", APP_SOURCE, "The worker must run as a Modal Server.")
+    require("unauthenticated=False", APP_SOURCE, "The worker health endpoint must require Modal proxy authentication.")
+    require("min_containers=1", APP_SOURCE, "Exactly one warm worker baseline is required.")
+    require("modal.Secret.from_name(DATABASE_SECRET_NAME)", APP_SOURCE, "Database access must use a named Secret.")
+    require('["npm", "run", "worker:katago"]', APP_SOURCE, "Modal must start the shared Node worker.")
+    require('"DATABASE_SSL": "require"', APP_SOURCE, "Production PostgreSQL must require TLS.")
+    forbid("postgresql://", APP_SOURCE, "A database URL must never be hardcoded.")
+    forbid("DATABASE_URL\":", APP_SOURCE, "A database URL value must come only from Modal Secret injection.")
 
-    print("Modal bootstrap is valid and remains deployment-locked.")
+    print("Modal production worker configuration is valid.")
 
 
 if __name__ == "__main__":

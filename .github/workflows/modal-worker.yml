@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Validate only, or deploy after the separate cost approval"
+        description: "Validate the worker definition or deploy it to Modal"
         required: true
         default: validate-only
         type: choice
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate dormant Modal configuration
+    name: Validate Modal worker configuration
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,16 +38,16 @@ jobs:
       - name: Install pinned Modal client
         run: python -m pip install --requirement requirements-modal.txt
 
-      - name: Validate configuration without contacting Modal
+      - name: Validate configuration without starting compute
         run: |
           python -m compileall -q modal_worker scripts/check_modal_bootstrap.py
           python scripts/check_modal_bootstrap.py
           python -c "from modal_worker.app import app; assert app.name == 'gostone-katago-worker'"
 
   deploy:
-    name: Deploy only after explicit cost approval
+    name: Deploy KataGo worker
     needs: validate
-    if: ${{ inputs.action == 'deploy' && vars.MODAL_DEPLOYMENT_ENABLED == 'true' }}
+    if: ${{ inputs.action == 'deploy' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: GoStone
