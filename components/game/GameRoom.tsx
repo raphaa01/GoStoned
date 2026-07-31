@@ -665,10 +665,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && game.status === "active"
     && game.phase === "scoring"
     && game.scoring
-    && !(
-      game?.rulesProfile === "japanese-1989-gostone-v1"
-      && game.scoring?.suggestion?.status === "pending"
-    ),
   ) && gameInteractionAllowed && !busy;
 
   function reconcileAfterOperation(requestError: unknown) {

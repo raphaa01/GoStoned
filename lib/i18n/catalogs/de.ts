@@ -288,7 +288,7 @@ export const de = {
     preparingGuest: "Gast wird vorbereitet…",
     joiningQueue: "Warteschlange wird betreten…",
     findOpponent: "Gegner finden",
-    matchingNote: "Beide Spieler müssen dieselbe Brettgröße und Zeitkontrolle wählen.",
+    matchingNote: "Nach zwei Pässen beginnt die japanische Wertung von 1989. Die normale Uhr pausiert für fünf Minuten: Reagiert nur eine Person, gilt die andere als ausgestiegen; reagiert niemand, endet die Partie ohne Ergebnis. Offene Stellungen werden transparent durch KataGo entschieden oder bleiben ohne Ergebnis, wenn die Analyse nicht verfügbar ist.",
   },
   learn: {
     kicker: "Das ganze Spiel verstehen",
@@ -310,7 +310,7 @@ export const de = {
     secondStepTitle: "Prüfe vor jedem Zug die Freiheiten",
     secondStepBody: "Zähle zuerst die Freiheiten deiner Gruppe, dann die des Gegners. Eine Gruppe mit nur einer Freiheit steht im Atari.",
     thirdStepTitle: "Beendet die Partie durch Einigung",
-    thirdStepBody: "GoStone verwendet derzeit chinesische Flächenwertung: Lebende Steine und umschlossene leere Punkte zählen, dazu kommt Komi für Weiß.",
+    thirdStepBody: "GoStone verwendet japanische Gebietswertung: Umschlossene leere Punkte und Gefangene zählen, dazu kommt Komi für Weiß. Nach zwei Pässen prüfen und bestätigen beide dieselben toten Gruppen.",
     glossaryTitle: "Wichtige Go-Begriffe",
     glossaryDescription: "Öffne einen Begriff, wenn du ihn brauchst. Du kannst jederzeit hierher zurückkehren.",
     libertyTerm: "Freiheit",

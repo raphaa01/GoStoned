@@ -192,7 +192,7 @@ test("keeps the established Chinese dispute controls and area-score copy", () =>
   assert.doesNotMatch(html, /Finish the position in three steps/);
 });
 
-test("fails closed while the initial Japanese suggestion is pending", () => {
+test("keeps manual Japanese scoring available while the initial suggestion is pending", () => {
   const ready = japaneseScoringGame();
   const pending = {
     ...ready,
@@ -208,8 +208,11 @@ test("fails closed while the initial Japanese suggestion is pending", () => {
   };
   const html = panel(pending);
   assert.match(html, /Preparing a suggestion/);
-  assert.ok((html.match(/<button disabled=""/g) ?? []).length >= 4);
-  assert.match(source("components/game/GameRoom.tsx"), /suggestion\?\.status === "pending"/);
+  assert.ok((html.match(/<button disabled=""/g) ?? []).length < 4);
+  assert.match(source("components/game/GamePanel.tsx"), /const scoringControlsDisabled = controlsDisabled;/);
+  const room = source("components/game/GameRoom.tsx");
+  const canMark = room.slice(room.indexOf("const canMarkDead"), room.indexOf("function reconcileAfterOperation"));
+  assert.doesNotMatch(canMark, /suggestion\?\.status === "pending"/);
 });
 
 test("deadline expiry is an explicit mutation and never part of the poll loop", () => {

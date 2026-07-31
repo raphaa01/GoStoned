@@ -46,6 +46,8 @@ export type KataGoTurnResult = {
     scoreLead: number;
   };
   moveInfos: KataGoMoveInfo[];
+  /** Flat row-major ownership from Black's perspective when explicitly requested. */
+  ownership?: number[];
 };
 
 export type MoveClassification =

@@ -36,11 +36,23 @@ test("runtime binds provider, model identity, and bounded visits", () => {
   );
 });
 
+test("runtime selects the repository's authenticated Modal job adapter", () => {
+  const runtime = createKataGoScoringRuntime({
+    ...identity,
+    KATAGO_SCORING_PROVIDER: "modal-job",
+    KATAGO_DISPATCH_URL: "https://example.invalid/dispatch",
+    MODAL_PROXY_TOKEN_ID: "test-id",
+    MODAL_PROXY_TOKEN_SECRET: "test-secret",
+  });
+  assert.equal(runtime.providerKind, "hosted-http");
+});
+
 test("runtime fails closed without exact server-only configuration", () => {
   for (const environment of [
     {},
     { ...identity, KATAGO_SCORING_PROVIDER: "deterministic" },
     { ...identity, KATAGO_SCORING_PROVIDER: "unknown" },
+    { ...identity, KATAGO_SCORING_PROVIDER: "modal-job" },
     { ...identity, KATAGO_SCORING_PROVIDER: "deterministic", KATAGO_MAX_VISITS: "0" },
     { KATAGO_SCORING_PROVIDER: "deterministic" },
   ]) {

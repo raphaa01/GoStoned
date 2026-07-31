@@ -51,6 +51,8 @@ async function claimBotTurn(workerId: string, gameId?: string): Promise<ClaimedB
          FROM game_bots bot
          JOIN games game ON game.id = bot.game_id
          LEFT JOIN game_scoring_state scoring ON scoring.game_id = game.id
+         LEFT JOIN game_japanese_scoring_state japanese_scoring
+           ON japanese_scoring.game_id = game.id
         WHERE game.status = 'active'
           AND ($2::uuid IS NULL OR bot.game_id = $2::uuid)
           AND (bot.lease_expires_at IS NULL OR bot.lease_expires_at < NOW())
@@ -58,11 +60,24 @@ async function claimBotTurn(workerId: string, gameId?: string): Promise<ClaimedB
             (game.phase = 'play' AND game.to_move = bot.color)
             OR (
               game.phase = 'scoring'
-              AND scoring.revision = game.scoring_revision
-              AND CASE bot.color
-                    WHEN 'black' THEN scoring.black_confirmed_revision IS DISTINCT FROM scoring.revision
-                    ELSE scoring.white_confirmed_revision IS DISTINCT FROM scoring.revision
-                  END
+              AND (
+                (
+                  game.rules_profile = 'japanese-1989-gostone-v1'
+                  AND japanese_scoring.revision = game.scoring_revision
+                  AND CASE bot.color
+                        WHEN 'black' THEN japanese_scoring.black_confirmed_revision IS DISTINCT FROM japanese_scoring.revision
+                        ELSE japanese_scoring.white_confirmed_revision IS DISTINCT FROM japanese_scoring.revision
+                      END
+                )
+                OR (
+                  game.rules_profile <> 'japanese-1989-gostone-v1'
+                  AND scoring.revision = game.scoring_revision
+                  AND CASE bot.color
+                        WHEN 'black' THEN scoring.black_confirmed_revision IS DISTINCT FROM scoring.revision
+                        ELSE scoring.white_confirmed_revision IS DISTINCT FROM scoring.revision
+                      END
+                )
+              )
             )
           )
           AND (

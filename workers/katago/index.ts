@@ -11,6 +11,7 @@ import {
 } from "./bot";
 import { KataGoEngine } from "./engine";
 import { runPuzzleLoop, type PuzzleLoopState } from "./puzzles";
+import { runScoringOnce } from "./scoring";
 
 type ClaimedJob = { id: string; input: AnalysisInput; attempts: number };
 
@@ -19,6 +20,7 @@ const pollMs = Math.max(500, Number(process.env.KATAGO_POLL_INTERVAL_MS) || 2_00
 const maxVisits = Math.max(20, Number(process.env.KATAGO_MAX_VISITS) || 20);
 const engineVersion = process.env.KATAGO_VERSION || "v1.17.0";
 const modelName = process.env.KATAGO_MODEL_NAME || "b10c384h6nbttflrs";
+const configVersion = process.env.KATAGO_CONFIG_VERSION || "analysis.cfg-v1";
 const engineOptions = {
   binary: process.env.KATAGO_BINARY || "/opt/katago/katago",
   model: process.env.KATAGO_MODEL || "/opt/katago/model.bin.gz",
@@ -108,6 +110,18 @@ async function loop() {
   }
 }
 
+async function scoringLoop() {
+  while (!stopping) {
+    const job = await runScoringOnce(analysisEngine, {
+      engineVersion,
+      modelVersion: modelName,
+      configVersion,
+      maxVisits,
+    });
+    if (!job) await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+}
+
 const healthPort = Math.max(1, Number(process.env.PORT) || 8080);
 const healthServer = createServer((request, response) => {
   if (request.url !== "/health") {
@@ -166,6 +180,7 @@ publishWorkerHeartbeat({
 
 Promise.all([
   loop(),
+  scoringLoop(),
   runBotLoop(botEngine, botState, () => stopping),
   runPuzzleLoop(analysisEngine, puzzleState, () => stopping, { engineVersion, modelName }),
 ]).catch(async (error) => {

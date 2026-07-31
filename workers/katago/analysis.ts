@@ -3,6 +3,7 @@ import { buildGameAnalysis } from "@/lib/analysis/evaluate";
 import type { AnalysisInput } from "@/lib/analysis/types";
 import { query } from "@/lib/db";
 import type { KataGoEngine } from "./engine";
+import { runScoringOnce } from "./scoring";
 
 type ClaimedJob = { id: string; input: AnalysisInput; attempts: number };
 
@@ -36,8 +37,23 @@ async function claimJob(workerId: string, jobId?: string): Promise<ClaimedJob | 
 
 export async function runAnalysisOnce(
   engine: KataGoEngine,
-  options: { engineVersion: string; modelName: string; maxVisits: number; jobId?: string },
+  options: {
+    engineVersion: string;
+    modelName: string;
+    configVersion: string;
+    maxVisits: number;
+    jobId?: string;
+  },
 ): Promise<string | null> {
+  if (options.jobId) {
+    const scoring = await runScoringOnce(engine, {
+      engineVersion: options.engineVersion,
+      modelVersion: options.modelName,
+      configVersion: options.configVersion,
+      maxVisits: options.maxVisits,
+    }, options.jobId);
+    if (scoring) return scoring;
+  }
   const workerId = `analysis:${randomUUID()}`;
   const job = await claimJob(workerId, options.jobId);
   if (!job) return null;

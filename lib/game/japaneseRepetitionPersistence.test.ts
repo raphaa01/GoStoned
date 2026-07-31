@@ -30,6 +30,9 @@ test("fresh and upgraded databases share exact append-only repetition evidence",
   assert.match(migration, /BEFORE TRUNCATE ON game_japanese_repetition_claims/);
   assert.match(migration, /current_move\.is_pass/);
   assert.match(migration, /matching_claims <> 2/);
+  assert.doesNotMatch(migration, /^\s*(?:BEGIN|COMMIT)\s*;/m);
+  assert.match(migration, /SET LOCAL lock_timeout = '5s'/);
+  assert.match(migration, /SET LOCAL statement_timeout = '30s'/);
 });
 
 test("claim service binds actor, current version, repeated board, and two-party finish order", () => {

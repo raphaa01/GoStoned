@@ -15,6 +15,10 @@ import {
   hostedKataGoProviderFromEnvironment,
   localKataGoProviderFromEnvironment,
 } from "./httpProvider";
+import {
+  LocalWorkerKataGoScoringProvider,
+  modalKataGoScoringProviderFromEnvironment,
+} from "./jobProvider";
 
 export const DEFAULT_KATAGO_SCORING_VISITS = 32;
 
@@ -59,7 +63,11 @@ export function createKataGoScoringRuntime(
 ): KataGoScoringRuntime {
   const providerName = environment.KATAGO_SCORING_PROVIDER;
   let provider: KataGoScoringProvider;
-  if (providerName === "hosted-http") {
+  if (providerName === "modal-job") {
+    provider = modalKataGoScoringProviderFromEnvironment(environment);
+  } else if (providerName === "local-job") {
+    provider = new LocalWorkerKataGoScoringProvider();
+  } else if (providerName === "hosted-http") {
     provider = hostedKataGoProviderFromEnvironment(environment);
   } else if (providerName === "local-http") {
     provider = localKataGoProviderFromEnvironment(environment);
@@ -80,7 +88,13 @@ export function createKataGoScoringRuntime(
     configVersion: requiredVersion(environment, "KATAGO_CONFIG_VERSION"),
   });
   return Object.freeze({
-    client: new KataGoScoringClient({ provider, ...options.clientOptions }),
+    client: new KataGoScoringClient({
+      provider,
+      ...(providerName === "modal-job" || providerName === "local-job"
+        ? { timeoutMs: 25_000, maxRetries: 1 }
+        : {}),
+      ...options.clientOptions,
+    }),
     providerKind: provider.kind,
     engine,
     maxVisits: visits(environment.KATAGO_MAX_VISITS),

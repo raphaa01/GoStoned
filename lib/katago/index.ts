@@ -4,5 +4,6 @@ export * from "./contracts";
 export * from "./deterministicProvider";
 export * from "./errors";
 export * from "./httpProvider";
+export * from "./jobProvider";
 export * from "./response";
 export * from "./runtime";
