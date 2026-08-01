@@ -9,7 +9,7 @@ export const de = {
       openGraphDescription: "Ein ruhiger Ort, um Go, Baduk und Weiqi online zu spielen.",
     },
     play: { title: "Online spielen", description: "Wähle ein Brett und finde online einen Go-Gegner." },
-    learn: { title: "Go lernen", description: "Lerne Freiheiten, Schlagen, Passen, tote Steine und chinesische Flächenwertung für deine nächste Partie." },
+    learn: { title: "Go lernen", description: "Beginne mit sechs interaktiven Go-Lektionen über Spielziel, Brett, Zugfolge, Gebiet und effizientes Spiel." },
     puzzles: { title: "Go-Probleme", description: "Löse die tägliche KataGo-Aufgabe und weitere Go-Probleme." },
     review: { title: "Partien ansehen", description: "Nutze gespeicherte Ergebnisse und Endpositionen für eine klare Nachbetrachtung." },
     game: { title: "Laufende Partie", description: "Eine laufende Go-Partie auf GoStone." },
