@@ -22,6 +22,7 @@ type SummaryState =
 
 export function Hero() {
   const { dictionary, href, locale } = useI18n();
+  const learnHref = useAccountFeatureHref("/learn");
   const profileHref = useAccountFeatureHref("/profile");
   const reviewHref = useAccountFeatureHref("/review");
   const copy = dictionary.home;
@@ -139,7 +140,7 @@ export function Hero() {
             <span className="section-kicker">{copy.learnChapterKicker}</span>
             <h2 id="home-learn-title">{copy.learnChapterTitle}</h2>
             <p>{copy.learnChapterBody}</p>
-            <Link className="chapter-link" href={href("/learn")}>{copy.learnChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction} <ArrowRight size={17} /></Link>
           </div>
           <div className="chapter-visual chapter-visual--lesson" aria-hidden="true">
             <span className="lesson-stone lesson-stone--one" />

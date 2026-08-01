@@ -18,12 +18,13 @@ export function Navbar() {
   const { user, logout, rating } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const [open, setOpen] = useState(false);
+  const learnHref = useAccountFeatureHref("/learn");
   const reviewHref = useAccountFeatureHref("/review");
   const menuId = useId();
   const menuButton = useRef<HTMLButtonElement>(null);
   const links = [
     { destination: href("/play"), path: "/play", label: dictionary.nav.play, icon: Gamepad2 },
-    { destination: href("/learn"), path: "/learn", label: dictionary.nav.learn, icon: BookOpen },
+    { destination: learnHref, path: "/learn", label: dictionary.nav.learn, icon: BookOpen },
     { destination: reviewHref, path: "/review", label: dictionary.nav.review, icon: Search },
     { destination: href("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
     { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },

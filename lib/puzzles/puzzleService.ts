@@ -479,10 +479,14 @@ export async function attemptPuzzle(
   puzzleId: string,
   playerKey: string,
   selected: { x: number; y: number; revision: number },
+  accountAccess: boolean,
 ): Promise<PuzzleAttemptResult> {
   return withTransaction(async (client) => {
     const puzzle = await lockPuzzle(client, puzzleId, playerKey);
     if (!puzzle) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
+    if (puzzle.kind === "practice" && !accountAccess) {
+      throw new GameServiceError("Please log in first.", 401, "authentication_required");
+    }
     if (
       selected.x < 0
       || selected.y < 0

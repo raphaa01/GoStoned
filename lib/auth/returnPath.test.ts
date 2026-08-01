@@ -30,12 +30,20 @@ test("reauthentication can return to the localized play lobby", () => {
 });
 
 test("account onboarding returns only to protected account features", () => {
+  assert.equal(safeAccountReturnPath("/learn"), "/learn");
+  assert.equal(safeAccountReturnPath("/fr/learn"), "/learn");
   assert.equal(safeAccountReturnPath("/profile"), "/profile");
   assert.equal(safeAccountReturnPath("/de/profile"), "/profile");
   assert.equal(safeAccountReturnPath("/review"), "/review");
   assert.equal(safeAccountReturnPath(`/ja/review/${gameId}`), `/review/${gameId}`);
   assert.equal(safeAccountReturnPath("/play"), null);
   assert.equal(safeAccountReturnPath("/puzzles"), null);
+  assert.equal(
+    safeAccountReturnPath("/de/puzzles?mode=practice"),
+    "/puzzles?mode=practice",
+  );
+  assert.equal(safeAccountReturnPath("/puzzles?mode=daily"), null);
+  assert.equal(safeAccountReturnPath("/puzzles?mode=practice&extra=1"), null);
   assert.equal(safeAccountReturnPath("/review/not-a-uuid"), null);
   assert.equal(safeAccountReturnPath("/profile?next=//evil.example"), null);
 });
@@ -45,6 +53,10 @@ test("auth return paths and registration links stay internal and canonical", () 
   assert.equal(safeAuthReturnPath("/fr/play"), "/play");
   assert.equal(safeAuthReturnPath(`/game/${gameId}`), `/game/${gameId}`);
   assert.equal(accountRegistrationPath("/review"), "/register?returnTo=%2Freview");
+  assert.equal(
+    accountRegistrationPath("/puzzles?mode=practice"),
+    "/register?returnTo=%2Fpuzzles%3Fmode%3Dpractice",
+  );
   assert.equal(
     accountRegistrationPath(`/review/${gameId}`),
     `/register?returnTo=${encodeURIComponent(`/review/${gameId}`)}`,

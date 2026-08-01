@@ -16,10 +16,11 @@ export function DesktopHeader() {
   const router = useRouter();
   const { user, loading, logout, rating } = useAuth();
   const { dictionary, href: localizedHref, locale } = useI18n();
+  const learnHref = useAccountFeatureHref("/learn");
   const reviewHref = useAccountFeatureHref("/review");
   const items = [
     { destination: localizedHref("/play"), path: "/play", label: dictionary.nav.play },
-    { destination: localizedHref("/learn"), path: "/learn", label: dictionary.nav.learn },
+    { destination: learnHref, path: "/learn", label: dictionary.nav.learn },
     { destination: reviewHref, path: "/review", label: dictionary.nav.review },
     { destination: localizedHref("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles },
     { destination: localizedHref("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard },

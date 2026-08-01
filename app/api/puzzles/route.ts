@@ -7,7 +7,7 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
-import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { requireRequestUser, resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { readPuzzleHub } from "@/lib/puzzles/puzzleService";
 import { parsePuzzleMode } from "@/lib/puzzles/request";
 import { dispatchKataGoJob, safelyDispatch } from "@/lib/katago/dispatch";
@@ -19,7 +19,9 @@ export async function GET(request: NextRequest) {
   try {
     const mode = parsePuzzleMode(request);
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
-    const playerKey = await resolvePlayerKey(request);
+    const playerKey = mode === "practice"
+      ? (await requireRequestUser(request)).playerKey
+      : await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.puzzleRead, playerKey);
     const hub = await readPuzzleHub(playerKey, mode);

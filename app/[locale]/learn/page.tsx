@@ -1,4 +1,4 @@
-import EnglishLearnPage from "@/app/(en)/learn/page";
+import { AccountLearnPage } from "@/components/auth/AccountPages";
 import { pageMetadata } from "@/lib/i18n/metadata";
 import { prefixedLocaleOrNotFound } from "@/lib/i18n/serverLocale";
 
@@ -7,4 +7,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMetadata(prefixedLocaleOrNotFound(locale), "learn", "/learn");
 }
 
-export default EnglishLearnPage;
+export default async function LocalizedLearnPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  return <AccountLearnPage locale={prefixedLocaleOrNotFound(locale)} />;
+}
