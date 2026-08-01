@@ -377,7 +377,7 @@ body {
   gap: 9px;
 }
 
-.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__identity) {
+.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__identity):not(.sidebar-user__name) {
   background: var(--color-moss);
   border-radius: 50%;
   color: white;
@@ -2396,36 +2396,29 @@ body {
   padding: 7px 11px 7px 8px;
 }
 
-.sidebar-user > .sidebar-user__identity {
-  align-items: start;
-  background: transparent;
-  border-radius: 0;
-  display: grid;
-  gap: 1px;
-  height: auto;
-  justify-content: start;
-  min-width: 0;
-  width: auto;
+.sidebar-user--profile {
+  gap: 9px;
+  max-width: 190px;
+  padding: 7px 13px 7px 8px;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
-.sidebar-user__identity > strong {
+.sidebar-user--profile:hover,
+.sidebar-user--profile:focus-visible {
+  border-color: rgb(116 64 40 / .32);
+  box-shadow: 0 4px 12px rgb(57 38 23 / .08);
+}
+
+.sidebar-user__name {
   color: var(--color-ink);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.2;
-  max-width: 126px;
+  font-size: 13px;
+  font-weight: 470;
+  letter-spacing: -.018em;
+  line-height: 1;
+  max-width: 124px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sidebar-user__identity .rating-label--compact strong {
-  color: var(--color-moss-strong);
-  font-size: 10px;
-}
-
-.sidebar-user__identity .rating-label--compact small {
-  font-size: 9px;
 }
 
 .mobile-menu-link-copy {
@@ -2440,7 +2433,6 @@ body {
   color: var(--color-moss-strong);
 }
 
-/* Profile rating composition -------------------------------------------- */
 .profile-symbol {
   display: inline-flex;
   flex: 0 0 auto;
@@ -2761,8 +2753,8 @@ body {
 .profile-header__identity h1 {
   color: var(--color-ink);
   font-size: clamp(34px, 4vw, 48px);
-  font-weight: 540;
-  letter-spacing: -.035em;
+  font-weight: 460;
+  letter-spacing: -.04em;
   line-height: 1.04;
   margin: 10px 0 7px;
   overflow-wrap: anywhere;
@@ -3030,10 +3022,6 @@ body {
 }
 
 @media (max-width: 1120px) {
-  .sidebar-user__identity .rating-label--compact small {
-    display: none;
-  }
-
   .profile-performance__main {
     grid-template-columns: minmax(200px, .3fr) minmax(0, 1fr);
   }
