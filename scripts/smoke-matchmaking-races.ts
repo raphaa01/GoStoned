@@ -23,7 +23,7 @@ if (!isUnambiguousLocalDatabase(databaseUrl)) {
 const suffix = randomUUID();
 const rules = newGameRulesConfiguration();
 const simultaneous = [`guest:sim-a-${suffix}`, `guest:sim-b-${suffix}`];
-const repeated = `user:repeat-${suffix}`;
+const repeated = `guest:repeat-${suffix}`;
 const rapidOpponent = `guest:rapid-${suffix}`;
 const classicOpponent = `guest:classic-${suffix}`;
 const cancellationTarget = `guest:cancel-target-${suffix}`;
@@ -166,14 +166,11 @@ async function run() {
     assert.equal(simultaneousStatuses[1].status, "matched");
     assert.equal(simultaneousStatuses[0].gameId, simultaneousStatuses[1].gameId);
 
-    await query(
-      `INSERT INTO matchmaking_queue (
-         player_key, board_size, time_control, rules_profile, status, game_id
-       ) VALUES
-         ($1, 9, 'rapid', $3, 'waiting', NULL),
-         ($2, 9, 'classic', $3, 'waiting', NULL)`,
-      [rapidOpponent, classicOpponent, rules.rulesProfile],
-    );
+    const waitingOpponents = await Promise.all([
+      joinMatchmaking(rapidOpponent, 9, "rapid"),
+      joinMatchmaking(classicOpponent, 9, "classic"),
+    ]);
+    assert.deepEqual(waitingOpponents.map(({ status }) => status), ["waiting", "waiting"]);
     const repeatedResults = await Promise.all([
       joinMatchmaking(repeated, 9, "rapid"),
       joinMatchmaking(repeated, 9, "classic"),
