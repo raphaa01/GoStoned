@@ -34,3 +34,11 @@ test("leaderboard exposes freshness and a keyboard-scrollable labeled table", ()
   assert.match(component, /ref=\{resultStatusRef\}/);
   assert.doesNotMatch(component, /entry\.player_name|entry\.updated_at|entry\.highest_rating/);
 });
+
+test("leaderboard keeps the signed-in player's rating visible before eligibility", () => {
+  assert.match(component, /rating: viewerRating/);
+  assert.match(component, /className="leaderboard-viewer"/);
+  assert.match(component, /viewerRating\.displayPreference/);
+  assert.match(component, /viewerRating\.isProvisional/);
+  assert.match(component, /viewerRating\.deviation/);
+});
