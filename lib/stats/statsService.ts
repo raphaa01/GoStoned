@@ -298,7 +298,7 @@ export async function getPlayerProfileStats(playerKey: string) {
                   ELSE game_record.black_player_key = game_bot.bot_player_key END,
                 FALSE
               ) AS opponent_is_bot,
-              CASE WHEN rating_event.opponent_kind = 'calibrated_bot'
+              CASE WHEN rating_event.opponent_kind IN ('calibrated_bot','browser_bot')
                 THEN rating_event.opponent_profile_version ELSE NULL END
                 AS opponent_bot_profile_version,
               CASE

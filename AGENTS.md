@@ -11,6 +11,20 @@
 - Add no unnecessary libraries.
 - Do not perform large refactors without an explicit request.
 
+## Browser bot and Japanese scoring
+
+- Use `GOSTONE_BOT_MODEL` in `lib/bot/modelV1.ts` as the single source of truth
+  for the current local bot model and artifact hash.
+- Bot moves run in `workers/browser/gostoneBot.worker.ts`; never route normal bot
+  turns through KataGo, Modal, or another paid server worker.
+- The same model may propose life/death and neutral regions through
+  `GoStoneJapaneseSettlementProposal`, but its authority is always
+  `proposal-only`.
+- Final Japanese scoring belongs to the server-side rulebook in
+  `lib/game/japaneseScoring.ts` and requires player agreement.
+- Read `docs/browser-bot-v1.md` before changing bot moves or Japanese endgame
+  settlement.
+
 ## Automatic Git workflow
 
 These rules apply to every task that changes repository files.

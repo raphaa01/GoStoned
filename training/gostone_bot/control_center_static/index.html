@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GoStone Training Lab</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="GoStone Training Lab">
+          <span class="brand-stone" aria-hidden="true"></span>
+          <span>GoStone</span>
+          <span class="brand-subtitle">Training Lab</span>
+        </a>
+        <nav class="lab-tabs" aria-label="Training Lab Bereiche">
+          <button class="lab-tab active" data-view="training" type="button">Training</button>
+          <button class="lab-tab" data-view="arena" type="button">Testarena</button>
+        </nav>
+        <div class="local-pill"><span></span> Nur auf diesem Laptop</div>
+      </header>
+
+      <main id="training-view">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">KataGo Teacher · Japanische Regeln</p>
+            <h1>Trainiere deinen eigenen Go-Bot.</h1>
+            <p class="hero-copy">KataGo erzeugt lokal Lehrstellungen. Dein kleines Modell lernt Spielstufen, Endspiel, Ownership, lebende und tote Gruppen – ohne Codex-, Modal- oder Cloud-Kosten.</p>
+          </div>
+          <div class="contract-card">
+            <span class="contract-value">≤ 8 MiB</span>
+            <span class="contract-label">Festes Modell-Limit</span>
+            <div class="contract-rule"><span>日本</span> Nur japanische Gebietswertung · 6,5 Komi</div>
+          </div>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="panel status-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="kicker">Aktueller Lauf</p>
+                <h2 id="status-title">Bereit</h2>
+              </div>
+              <span id="status-badge" class="status-badge idle">Bereit</span>
+            </div>
+
+            <div class="progress-area">
+              <div id="progress-ring" class="progress-ring" style="--progress: 0deg">
+                <div><strong id="progress-value">0%</strong><span>gesamt</span></div>
+              </div>
+              <div class="progress-copy">
+                <strong id="phase-name">Noch nicht gestartet</strong>
+                <p id="status-message">Wähle einen Trainingsumfang und starte den lokalen Lauf.</p>
+                <div class="phase-track"><span id="phase-bar"></span></div>
+              </div>
+            </div>
+
+            <dl class="metrics">
+              <div><dt>Partien</dt><dd id="games-metric">0 / 0</dd></div>
+              <div><dt>Stellungen</dt><dd id="positions-metric">0</dd></div>
+              <div><dt>Epochen</dt><dd id="epochs-metric">0 / 0</dd></div>
+              <div><dt>Modell</dt><dd id="model-metric">Noch offen</dd></div>
+            </dl>
+
+            <div class="actions">
+              <button id="start-button" class="button primary" type="button">Training starten</button>
+              <button id="pause-button" class="button secondary" type="button" disabled>Pause</button>
+              <button id="resume-button" class="button secondary" type="button" disabled>Fortsetzen</button>
+              <button id="stop-button" class="button danger" type="button" disabled>Sicher stoppen</button>
+            </div>
+            <p class="action-note">Pause und Stopp greifen nach der aktuellen KataGo-Abfrage. Bereits gespeicherter Fortschritt bleibt erhalten.</p>
+          </article>
+
+          <article class="panel configuration-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="kicker">Trainingsumfang</p>
+                <h2>Wie lange soll der Laptop lernen?</h2>
+              </div>
+            </div>
+            <div id="preset-list" class="preset-list" aria-label="Trainingsumfang"></div>
+            <p class="training-lineage-note"><strong>Jeder echte neue Lauf baut auf der letzten erfolgreichen Version auf:</strong> neue KataGo-Partien, ausgeglichene Farben und vollständige Endspielphasen. Ob die neue Version wirklich stärker ist, entscheidest du anschließend in der Testarena.</p>
+            <label class="cpu-control" for="cpu-threads">
+              <span><strong>CPU-Kerne</strong><small>Mehr Kerne sind schneller, der Laptop wird aber wärmer.</small></span>
+              <output id="cpu-output" for="cpu-threads">6</output>
+            </label>
+            <input id="cpu-threads" type="range" min="1" max="10" value="6">
+          </article>
+
+          <article class="panel capabilities-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="kicker">Ein Modell · mehrere Aufgaben</p>
+                <h2>Was der Bot lernt</h2>
+              </div>
+            </div>
+            <div class="capability-grid">
+              <div><span class="number">01</span><strong>Sechs Stufen</strong><p>Nominale Zielprofile von 600 bis 2100 Elo aus einem Modell.</p></div>
+              <div><span class="number">02</span><strong>Endspiel & Pass</strong><p>Tiefere KataGo-Suche in späten Stellungen verhindert sinnloses Weiterspielen.</p></div>
+              <div><span class="number">03</span><strong>Leben & Tod</strong><p>Gruppen werden als lebend, tot oder bewusst unklar vorgeschlagen.</p></div>
+              <div><span class="number">04</span><strong>Japanischer Endstand</strong><p>Ownership, Gefangene, Gebiet, Seki-Hinweise und 6,5 Komi.</p></div>
+            </div>
+            <div class="agreement-note"><strong>Wichtig:</strong> Der Bot macht nur einen Vorschlag. Das endgültige Ergebnis entsteht erst, wenn beide Spieler dieselbe Steinauswahl akzeptieren.</div>
+          </article>
+
+          <article class="panel log-panel">
+            <div class="panel-heading compact">
+              <div>
+                <p class="kicker">Live-Protokoll</p>
+                <h2>Was gerade passiert</h2>
+              </div>
+              <button id="copy-path" class="text-button" type="button" disabled>Modellpfad kopieren</button>
+            </div>
+            <div id="log-output" class="log-output" role="log" aria-live="polite"><p class="log-empty">Noch keine Einträge.</p></div>
+            <p id="artifact-path" class="artifact-path"></p>
+          </article>
+        </section>
+      </main>
+
+      <main id="arena-view" hidden>
+        <section class="arena-hero">
+          <div>
+            <p class="eyebrow">Fertiges Modell · echte lokale Inferenz</p>
+            <h1>Erlebe deine Modelle Zug für Zug.</h1>
+            <p class="hero-copy">Spiele selbst gegen ein Modell oder lasse zwei Versionen live gegeneinander antreten. Die Arena berechnet immer nur den nächsten Zug, damit du jede Entscheidung auf dem Brett verfolgen kannst.</p>
+          </div>
+          <div class="contract-card arena-contract">
+            <span class="contract-value">日本</span>
+            <span class="contract-label">Japanische Regeln · 6,5 Komi</span>
+            <div class="contract-rule">Nach zwei Pässen schlägt das Modell lebende, tote und unklare Gruppen sowie einen Endstand vor.</div>
+          </div>
+        </section>
+
+        <section class="arena-layout">
+          <article class="panel arena-board-panel">
+            <div class="arena-board-heading">
+              <div>
+                <p class="kicker">Testpartie</p>
+                <h2 id="arena-title">Noch nicht gestartet</h2>
+              </div>
+              <span id="arena-turn" class="status-badge idle">Bereit</span>
+            </div>
+            <div id="arena-players" class="arena-players" hidden>
+              <div class="arena-player"><span class="mini-stone black"></span><span><small>Schwarz</small><strong id="arena-black-player">Schwarz</strong></span></div>
+              <span class="versus-mark">gegen</span>
+              <div class="arena-player white-player"><span><small>Weiß</small><strong id="arena-white-player">Weiß</strong></span><span class="mini-stone white"></span></div>
+            </div>
+            <div class="board-wrap">
+              <canvas id="arena-board" width="760" height="760" aria-label="Interaktives Go-Brett"></canvas>
+              <div id="arena-busy" class="board-busy" hidden><span></span><strong>Bot denkt …</strong></div>
+            </div>
+            <div class="arena-game-meta">
+              <span id="arena-move">Zug 0</span>
+              <span id="arena-prisoners">Gefangene: Schwarz 0 · Weiß 0</span>
+              <span>6,5 Komi</span>
+            </div>
+          </article>
+
+          <aside class="arena-sidebar">
+            <article class="panel arena-settings">
+              <div class="panel-heading compact">
+                <div><p class="kicker">Spiel einrichten</p><h2 id="arena-settings-title">Modell testen</h2></div>
+              </div>
+              <div class="arena-mode-switch" role="group" aria-label="Testmodus">
+                <button class="arena-mode active" data-arena-mode="human" type="button">Ich gegen Bot</button>
+                <button class="arena-mode" data-arena-mode="match" type="button">Modell gegen Modell</button>
+              </div>
+
+              <div id="human-arena-fields">
+                <label class="field-label" for="arena-model">Trainingsmodell</label>
+                <div class="model-row">
+                  <select id="arena-model"></select>
+                  <button id="refresh-models" class="icon-button" type="button" aria-label="Modelle neu laden">↻</button>
+                </div>
+                <label class="field-label" for="arena-color">Deine Farbe</label>
+                <select id="arena-color"><option value="black">Schwarz · erster Zug</option><option value="white">Weiß · Bot beginnt</option></select>
+              </div>
+
+              <div id="match-arena-fields" hidden>
+                <label class="field-label" for="arena-black-model">Schwarzes Modell</label>
+                <select id="arena-black-model"></select>
+                <label class="field-label" for="arena-white-model">Weißes Modell</label>
+                <select id="arena-white-model"></select>
+                <label class="field-label" for="arena-speed">Live-Tempo</label>
+                <select id="arena-speed">
+                  <option value="1600">Ruhig · 1,6 Sekunden</option>
+                  <option value="900" selected>Normal · 0,9 Sekunden</option>
+                  <option value="350">Schnell · 0,35 Sekunden</option>
+                </select>
+              </div>
+              <p id="arena-model-note" class="field-note">Nur vollständig exportierte Trainingsläufe erscheinen hier.</p>
+
+              <div class="field-grid">
+                <label><span class="field-label">Brett</span><select id="arena-size"><option value="9">9×9</option><option value="13">13×13</option><option value="19">19×19</option></select></label>
+                <label><span class="field-label">Teststufe</span><select id="arena-elo"><option value="600">600 Elo</option><option value="900">900 Elo</option><option value="1200" selected>1200 Elo</option><option value="1500">1500 Elo</option><option value="1800">1800 Elo</option><option value="2100">2100 Elo</option></select></label>
+              </div>
+              <button id="arena-start" class="button primary wide" type="button">Neue Testpartie</button>
+              <div class="arena-actions">
+                <button id="arena-pass" class="button secondary" type="button" disabled>Passen</button>
+                <button id="arena-playback" class="button secondary" type="button" hidden disabled>Pausieren</button>
+                <button id="arena-reset" class="button danger" type="button" disabled>Partie verwerfen</button>
+              </div>
+              <p id="arena-message" class="action-note">Beende das laufende Training zuerst, wenn du die CPU-Leistung vollständig für die Arena nutzen möchtest.</p>
+            </article>
+
+            <article id="arena-move-panel" class="panel arena-move-panel" hidden>
+              <div class="panel-heading compact">
+                <div><p class="kicker">Live-Zugfolge</p><h2>Partieverlauf</h2></div>
+                <span id="arena-live-dot" class="live-dot">Live</span>
+              </div>
+              <ol id="arena-move-list" class="arena-move-list" aria-live="polite"><li class="move-empty">Die Partie wartet auf den ersten Zug.</li></ol>
+            </article>
+
+            <article id="arena-result" class="panel arena-result" hidden>
+              <p class="kicker">Modellvorschlag</p>
+              <h2 id="result-title">Endstand</h2>
+              <p id="result-summary" class="result-summary"></p>
+              <dl class="score-breakdown">
+                <div><dt>Schwarz</dt><dd id="result-black">–</dd></div>
+                <div><dt>Weiß</dt><dd id="result-white">–</dd></div>
+                <div><dt>Tote Steine</dt><dd id="result-dead">–</dd></div>
+                <div><dt>Unklar</dt><dd id="result-uncertain">–</dd></div>
+              </dl>
+              <p class="agreement-note">Das ist eine KI-Einschätzung. In GoStone müssen später beide Spieler dieselben toten Gruppen bestätigen.</p>
+            </article>
+          </aside>
+        </section>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

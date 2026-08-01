@@ -50,6 +50,7 @@ import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
 import type { GamePollResponse, GameState, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
+import { BrowserBotController } from "./BrowserBotController";
 import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
@@ -293,6 +294,19 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (accepted && "game" in data) lastFullGameResponseAt.current = receivedAt;
     return accepted;
   }, [acceptGameResponse, gameId]);
+
+  const acceptBrowserBotGame = useCallback((nextGame: GameState) => {
+    const requestIdentity = identityAuthority.current.capture();
+    acceptGameResponse({ game: nextGame }, Date.now(), requestIdentity);
+  }, [acceptGameResponse]);
+
+  const reportBrowserBotError = useCallback((requestError: unknown) => {
+    if (requestError instanceof ApiRequestError && requestError.status === 409) {
+      immediateGameSync.current?.();
+      return;
+    }
+    setError(localizedApiError(dictionary, requestError, copy.unavailable));
+  }, [copy.unavailable, dictionary]);
 
   const refreshChat = useCallback(async (
     signal: AbortSignal,
@@ -1190,6 +1204,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
       </header>
 
       <main className="focused-game-layout" id="main-content" tabIndex={-1}>
+        {playerKey && (game.blackPlayerIsBot || game.whitePlayerIsBot) ? (
+          <BrowserBotController
+            game={game}
+            onError={reportBrowserBotError}
+            onGame={acceptBrowserBotGame}
+            playerKey={playerKey}
+          />
+        ) : null}
         {connectionDescription ? (
           <section className="game-connection-notice" data-state={connectionDataState}>
             <ClockStatusIcon aria-hidden="true" size={18} />

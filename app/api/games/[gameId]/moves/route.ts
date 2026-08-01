@@ -1,4 +1,4 @@
-import { after, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { noStoreJson } from "@/lib/api/responses";
 import {
   consumeEphemeralIpPolicyRateLimit,
@@ -15,7 +15,6 @@ import {
   invalidGameMutationRequest,
   readGameMutationJson,
 } from "@/lib/game/gameMutationRequest";
-import { dispatchBotTurnIfNeeded, safelyDispatch } from "@/lib/katago/dispatch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -58,7 +57,6 @@ export async function POST(
       isPass,
       expectedVersion: body.expectedVersion as number,
     });
-    after(() => safelyDispatch(() => dispatchBotTurnIfNeeded(gameId)));
     return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {
     return gameMutationRouteError(error);

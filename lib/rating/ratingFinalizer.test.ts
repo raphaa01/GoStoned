@@ -15,7 +15,7 @@ type StoredEvent = {
   player_key: string;
   outcome_kind: "win" | "loss" | "draw" | "no_result";
   algorithm_version: string;
-  opponent_kind: "registered_human" | "calibrated_bot";
+  opponent_kind: "registered_human" | "calibrated_bot" | "browser_bot";
   values: unknown[];
 };
 
@@ -74,6 +74,7 @@ class FakeRatingDatabase {
         }
         if (sql.includes("FROM game_calibrated_bot_bindings binding")) {
           return this.calibratedBot ? { rows: [{
+            opponent_kind: "calibrated_bot",
             human_player_key: blackKey,
             bot_player_key: whiteKey,
             bot_color: "white",
@@ -87,6 +88,9 @@ class FakeRatingDatabase {
             opponent_rating_deviation: 60,
             execution_complete: true,
           }], rowCount: 1 } : { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("FROM game_browser_bot_bindings binding")) {
+          return { rows: [], rowCount: 0 };
         }
         if (sql.includes("INSERT INTO player_glicko2_ratings")) {
           return { rows: [], rowCount: 0 };
@@ -111,13 +115,16 @@ class FakeRatingDatabase {
           return { rows: [{ rating_period_at: nextPeriod }], rowCount: 1 };
         }
         if (sql.includes("INSERT INTO game_glicko2_rating_events")) {
-          const botEvent = sql.includes("'calibrated_bot'");
+          const botEvent = values.length === 30;
+          const opponentKind = botEvent
+            ? values[29] as StoredEvent["opponent_kind"]
+            : "registered_human";
           this.events.push({
             sql,
             player_key: String(values[1]),
             outcome_kind: values[botEvent ? 10 : 4] as StoredEvent["outcome_kind"],
             algorithm_version: String(values[botEvent ? 28 : 21]),
-            opponent_kind: botEvent ? "calibrated_bot" : "registered_human",
+            opponent_kind: opponentKind,
             values: [...values],
           });
           return { rows: [], rowCount: 1 };

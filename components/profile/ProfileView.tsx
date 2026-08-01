@@ -290,7 +290,7 @@ export function ProfileView() {
         const label = presented.kind === "unrated" ? copy.unrated : presented.kind === "rated" ? copy.rated : signedRating(presented.value);
         return <Link className="history-game" href={href(`/game/${game.gameId}`)} key={game.gameId}>
           <span className={`history-game__result history-game__result--${game.result}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : game.result === "draw" ? copy.drawShort : copy.noResultShort}</span>
-          <div><strong>{resultLabel} {copy.versus} {game.opponentName}{game.opponentIsBot ? ` · ${copy.botBadge}` : ""}</strong><span>{formatDate(game.finishedAt, locale)} · {game.boardSize}×{game.boardSize} · {dictionary.timeControls[game.timeControl].name} · {game.gameResult ?? copy.completed}</span></div>
+          <div><strong>{resultLabel} {copy.versus} {game.opponentName}</strong><span>{formatDate(game.finishedAt, locale)} · {game.boardSize}×{game.boardSize} · {dictionary.timeControls[game.timeControl].name} · {game.gameResult ?? copy.completed}</span></div>
           <strong className={presented.kind === "change" && presented.value > 0 ? "is-positive" : presented.kind === "change" && presented.value < 0 ? "is-negative" : ""}>{label}</strong>
         </Link>;
       })}</div> : <div className="profile-history__empty">{copy.historyEmptyPrefix} {copy.historyEmptySuffix}</div>}

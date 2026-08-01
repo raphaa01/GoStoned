@@ -15,6 +15,13 @@
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:bot-local": "tsx scripts/smoke-katago-bot.ts",
+    "bot:teacher:download": "python -m training.gostone_bot.download_teacher",
+    "bot:dataset": "python -m training.gostone_bot.generate",
+    "bot:train": "python -m training.gostone_bot.train",
+    "bot:train:smoke": "python -m training.gostone_bot.smoke",
+    "bot:train:test": "python -m unittest discover -s training -t . -p test_*.py",
+    "bot:lab": "python -m training.gostone_bot.control_center",
+    "bot:lab:smoke": "python -m training.gostone_bot.control_center --no-browser",
     "test:puzzles-local": "tsx scripts/smoke-katago-puzzles.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
     "test:matchmaking-races": "tsx scripts/smoke-matchmaking-races.ts",
@@ -36,6 +43,7 @@
   "dependencies": {
     "lucide-react": "^0.468.0",
     "next": "16.2.12",
+    "onnxruntime-web": "1.27.0",
     "pg": "^8.13.1",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -46,14 +54,18 @@
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "dotenv": "^16.4.7",
     "eslint": "^9.17.0",
     "eslint-config-next": "16.2.12",
-    "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
   "overrides": {
     "postcss": "8.5.18",
     "sharp": "0.35.0"
+  },
+  "optionalDependencies": {
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3"
   }
 }

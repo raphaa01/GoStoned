@@ -9,8 +9,15 @@ const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf
 const matchmaking = readFileSync(join(process.cwd(), "lib/matchmaking/matchmakingService.ts"), "utf8");
 const worker = readFileSync(join(process.cwd(), "workers/katago/bot.ts"), "utf8");
 
-test("bootstrap schema ends with the exact calibrated-bot evidence migration", () => {
-  assert.equal(schema.slice(-migration.length), migration);
+test("bootstrap schema contains the exact calibrated-bot evidence migration", () => {
+  const normalizedSchema = schema.replaceAll("\r\n", "\n");
+  const normalizedMigration = migration.replaceAll("\r\n", "\n");
+  const offset = normalizedSchema.indexOf(normalizedMigration);
+  assert.ok(offset >= 0);
+  assert.equal(
+    normalizedSchema.slice(offset, offset + normalizedMigration.length),
+    normalizedMigration,
+  );
 });
 
 test("rated bot credit never uses mutable heuristic target rating", () => {
@@ -39,11 +46,11 @@ test("human-bot evidence has one human transition and exact execution identity",
   assert.match(migration, /No profile or activation is seeded/);
 });
 
-test("matchmaking binds only an active accepted profile and worker actions carry it", () => {
-  assert.match(matchmaking, /selectNearestCalibratedBot/);
-  assert.match(matchmaking, /activation\.action = 'activate'/);
-  assert.match(matchmaking, /INSERT INTO game_calibrated_bot_bindings/);
-  assert.match(matchmaking, /'calibrated-v1'/);
+test("normal matchmaking binds the browser model while legacy worker evidence stays auditable", () => {
+  assert.match(matchmaking, /INSERT INTO game_browser_bot_bindings/);
+  assert.match(matchmaking, /'browser-v1'/);
+  assert.match(matchmaking, /GOSTONE_BOT_MODEL\.artifactSha256/);
+  assert.doesNotMatch(matchmaking, /activeCalibratedBotProfiles/);
   assert.match(worker, /assertCalibratedExecution/);
   assert.match(worker, /INSERT INTO game_calibrated_bot_actions/);
   assert.match(worker, /bound_config_version !== identity\.configVersion/);

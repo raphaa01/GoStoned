@@ -179,12 +179,9 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       );
       await page.getByRole("button", { name: dictionary.nav.closeMenu }).click();
     }
-    await expect(page.getByText("Calibrated KataGo", { exact: false })).toBeVisible();
-    await expect(
-      page.getByRole("link", {
-        name: new RegExp(`Calibrated KataGo.*${dictionary.profile.botBadge}`),
-      }),
-    ).toBeVisible();
+    const historicalGame = page.getByRole("link").filter({ hasText: "Calibrated KataGo" });
+    await expect(historicalGame).toBeVisible();
+    await expect(historicalGame).not.toContainText(dictionary.profile.botBadge);
     await expect(page.locator(".rating-chart svg")).toBeVisible();
     await expect(page.locator(".rating-preferences-shell")).toHaveCount(0);
     await expect(page.locator(".profile-performance__disclosures")).toHaveCount(0);

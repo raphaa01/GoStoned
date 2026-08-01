@@ -4,11 +4,7 @@ import { hostname } from "node:os";
 import { buildGameAnalysis } from "@/lib/analysis/evaluate";
 import type { AnalysisInput } from "@/lib/analysis/types";
 import { closePool, query } from "@/lib/db";
-import {
-  publishWorkerHeartbeat,
-  runBotLoop,
-  type BotLoopState,
-} from "./bot";
+import { publishWorkerHeartbeat } from "./bot";
 import { KataGoEngine } from "./engine";
 import { runPuzzleLoop, type PuzzleLoopState } from "./puzzles";
 
@@ -25,10 +21,8 @@ const engineOptions = {
   config: process.env.KATAGO_CONFIG || "/opt/katago/analysis.cfg",
 };
 const analysisEngine = new KataGoEngine(engineOptions);
-const botEngine = new KataGoEngine(engineOptions);
 let stopping = false;
 let activeJob: string | null = null;
-const botState: BotLoopState = { activeGameId: null };
 const puzzleState: PuzzleLoopState = { activeJobId: null };
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -115,14 +109,13 @@ const healthServer = createServer((request, response) => {
     return;
   }
   response.setHeader("content-type", "application/json");
-  response.statusCode = analysisEngine.running && botEngine.running ? 200 : 503;
+  response.statusCode = analysisEngine.running ? 200 : 503;
   response.end(JSON.stringify({
-    ok: analysisEngine.running && botEngine.running,
+    ok: analysisEngine.running,
     service: "gostone-katago-worker",
     activeJob,
-    activeBotGame: botState.activeGameId,
     activePuzzleJob: puzzleState.activeJobId,
-    error: analysisEngine.error ?? botEngine.error,
+    error: analysisEngine.error,
   }));
 });
 healthServer.listen(healthPort, "0.0.0.0", () => {
@@ -141,7 +134,6 @@ async function shutdown() {
     ready: false,
   }).catch(() => undefined);
   analysisEngine.close();
-  botEngine.close();
   await closePool();
 }
 
@@ -152,21 +144,20 @@ publishWorkerHeartbeat({
   workerId,
   engineVersion,
   modelName,
-  ready: analysisEngine.running && botEngine.running,
+  ready: analysisEngine.running,
 }).then(() => {
   heartbeatTimer = setInterval(() => {
     void publishWorkerHeartbeat({
       workerId,
       engineVersion,
       modelName,
-      ready: analysisEngine.running && botEngine.running,
+      ready: analysisEngine.running,
     }).catch((error) => console.error("KataGo heartbeat failed:", error));
   }, 5_000);
 }).catch((error) => console.error("Initial KataGo heartbeat failed:", error));
 
 Promise.all([
   loop(),
-  runBotLoop(botEngine, botState, () => stopping),
   runPuzzleLoop(analysisEngine, puzzleState, () => stopping, { engineVersion, modelName }),
 ]).catch(async (error) => {
   console.error("KataGo worker stopped:", error);

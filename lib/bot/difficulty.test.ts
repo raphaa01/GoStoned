@@ -63,13 +63,13 @@ test("bot identities and random units are stable for a game seed", () => {
   assert.ok(deterministicUnit("game-1:4") >= 0 && deterministicUnit("game-1:4") < 1);
 });
 
-test("live games use quiet but honest computer-opponent disclosure", () => {
+test("live games present every opponent through the same player UI", () => {
   const panel = readFileSync(
     new URL("../../components/game/GamePanel.tsx", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(panel, /bot-badge/);
-  assert.match(panel, /copy\.botOpponent/);
+  assert.doesNotMatch(panel, /copy\.botOpponent/);
 });
 
 test("review and game history focus on the opponent name without bot labels", () => {
