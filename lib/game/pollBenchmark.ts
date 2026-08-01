@@ -245,26 +245,25 @@ const DEAD_STONES_READ_SQL = `
    ORDER BY y, x
 `;
 
+const RATING_GAME_READ_SQL = `
+  SELECT id,status,black_player_key,white_player_key,winner_key,
+         finish_reason,result,finished_at
+    FROM games WHERE id=$1 FOR UPDATE
+`;
+
 const RATING_HISTORY_READ_SQL = `
-  SELECT player_key
-    FROM player_rating_history
-   WHERE game_id = $1
+  SELECT player_key,outcome_kind,algorithm_version,opponent_kind
+    FROM game_glicko2_rating_events
+   WHERE game_id=$1
+   ORDER BY player_key
    FOR UPDATE
 `;
 
 const RATING_PARTICIPANTS_READ_SQL = `
-  SELECT 'user:' || id::text AS player_key,
-         1200::int AS initial_rating,
-         'account'::text AS participant_type
+  SELECT id::text AS user_id,'user:' || id::text AS player_key
     FROM users
-   WHERE 'user:' || id::text IN ($1::text, $2::text)
-   UNION ALL
-  SELECT bot_player_key AS player_key,
-         target_rating AS initial_rating,
-         'bot'::text AS participant_type
-    FROM game_bots
-   WHERE game_id = $3
-     AND bot_player_key IN ($1::text, $2::text)
+   WHERE 'user:' || id::text IN ($1::text,$2::text)
+   ORDER BY player_key
 `;
 
 const SCORING_RESUME_INSERT_SQL = `
@@ -338,6 +337,9 @@ const SQL_CASES = [
   }),
   sqlCase(DEAD_STONES_READ_SQL, {
     statement: "dead_stones_read", read: true, write: false, locking: false,
+  }),
+  sqlCase(RATING_GAME_READ_SQL, {
+    statement: "game_read", read: true, write: false, locking: true,
   }),
   sqlCase(RATING_HISTORY_READ_SQL, {
     statement: "rating_history_read", read: true, write: false, locking: true,
@@ -503,6 +505,7 @@ const TIMEOUT_SEQUENCE: readonly PollBenchmarkStatement[] = [
   "resume_events_read",
   "scoring_read",
   "timeout_game_update",
+  "game_read",
   "rating_history_read",
   "rating_participants_read",
   "transaction_commit",
@@ -593,7 +596,7 @@ export const POLL_BENCHMARK_CONTRACTS: Readonly<Record<PollBenchmarkScenario, Sc
   play_timeout_150: contract(
     { name: "play_timeout_150", positionMoves: 150, knownVersion: "current", response: "full", responseMoves: 150 },
     TIMEOUT_SEQUENCE,
-    { reads: 11, writes: 1, lockingStatements: 3, returnedRows: 304, affectedRows: 1, lockedRows: 1 },
+    { reads: 13, writes: 1, lockingStatements: 4, returnedRows: 306, affectedRows: 1, lockedRows: 2 },
   ),
   scoring_expiry_302: contract(
     { name: "scoring_expiry_302", positionMoves: 300, knownVersion: "current", response: "full", responseMoves: 302 },
