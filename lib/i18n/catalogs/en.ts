@@ -141,7 +141,7 @@ export const en = {
     socialOptions: "Social sign-in options",
     continueWithGoogle: "Continue with Google",
     continueWithApple: "Continue with Apple",
-    orContinueWithUsername: "or continue with username",
+    orContinueWithSocial: "or continue with Google or Apple",
     socialCancelled: "Google or Apple sign-in was cancelled.",
     socialUnavailable: "This sign-in option is not configured yet.",
     socialFailed: "Google or Apple sign-in could not be completed. Please try again.",

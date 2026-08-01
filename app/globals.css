@@ -2672,13 +2672,13 @@ a {
 .auth-form {
   display: grid;
   gap: 16px;
-  margin-top: 0;
+  margin-top: 24px;
 }
 
 .auth-social {
   display: grid;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .auth-social-button {
