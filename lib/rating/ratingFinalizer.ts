@@ -48,10 +48,11 @@ type ExistingEventRow = QueryResultRow & {
   player_key: string;
   outcome_kind: RatingOutcomeKind;
   algorithm_version: string;
-  opponent_kind: "registered_human" | "calibrated_bot";
+  opponent_kind: "registered_human" | "calibrated_bot" | "browser_bot";
 };
 
 type CalibratedBotBindingRow = QueryResultRow & {
+  opponent_kind: "calibrated_bot" | "browser_bot";
   human_player_key: string;
   bot_player_key: string;
   bot_color: "black" | "white";
@@ -195,7 +196,10 @@ function exactExistingEvidence(
   game: TerminalGameRow,
   terminal: ClassifiedTerminal,
 ): boolean {
-  if (events.length === 1 && events[0].opponent_kind === "calibrated_bot") {
+  if (
+    events.length === 1
+    && (events[0].opponent_kind === "calibrated_bot" || events[0].opponent_kind === "browser_bot")
+  ) {
     const color = events[0].player_key === game.black_player_key ? "black"
       : events[0].player_key === game.white_player_key ? "white" : null;
     return color !== null
@@ -220,7 +224,7 @@ function exactExistingEvidence(
  * The caller must provide its existing transaction client. This function
  * locks the game first, then both global rating rows in player-key order.
  * Bot-shaped or guest participants remain unrated until a separate immutable
- * calibrated-opponent contract exists on the game.
+ * versioned-opponent contract exists on the game.
  */
 export async function finalizeGameRatings(
   client: PoolClient,
@@ -262,8 +266,9 @@ export async function finalizeGameRatings(
     const human = registered.rows[0];
     const botKey = game.black_player_key === human.player_key
       ? game.white_player_key : game.black_player_key;
-    const binding = (await client.query<CalibratedBotBindingRow>(
-      `SELECT binding.human_player_key,binding.bot_player_key,binding.bot_color,
+    let binding = (await client.query<CalibratedBotBindingRow>(
+      `SELECT 'calibrated_bot'::text AS opponent_kind,
+              binding.human_player_key,binding.bot_player_key,binding.bot_color,
               binding.profile_id,binding.profile_contract_version,
               binding.profile_fingerprint,binding.binding_version,
               binding.configuration_key,binding.credit_mode,
@@ -322,6 +327,59 @@ export async function finalizeGameRatings(
         FOR UPDATE OF binding`,
       [gameId, human.player_key, botKey],
     )).rows[0];
+    if (!binding) {
+      binding = (await client.query<CalibratedBotBindingRow>(
+        `SELECT 'browser_bot'::text AS opponent_kind,
+                binding.human_player_key,binding.bot_player_key,binding.bot_color,
+                ('bot:gostone-browser:' || binding.model_version) AS profile_id,
+                binding.model_contract_version AS profile_contract_version,
+                ('sha256:' || binding.model_sha256) AS profile_fingerprint,
+                binding.binding_version,binding.configuration_key,binding.credit_mode,
+                binding.opponent_rating,binding.opponent_rating_deviation,
+                (
+                  NOT EXISTS (
+                    SELECT 1 FROM moves bot_move
+                     WHERE bot_move.game_id = binding.game_id
+                       AND bot_move.color = binding.bot_color
+                       AND NOT EXISTS (
+                         SELECT 1 FROM game_browser_bot_actions action
+                          WHERE action.game_id = binding.game_id
+                            AND action.move_number = bot_move.move_number
+                            AND action.action_kind = CASE WHEN bot_move.x IS NULL
+                              THEN 'pass' ELSE 'move' END
+                            AND action.x IS NOT DISTINCT FROM bot_move.x
+                            AND action.y IS NOT DISTINCT FROM bot_move.y
+                            AND action.model_contract_version = binding.model_contract_version
+                            AND action.model_version = binding.model_version
+                            AND action.model_sha256 = binding.model_sha256
+                       )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM game_browser_bot_actions action
+                     WHERE action.game_id = binding.game_id
+                       AND NOT EXISTS (
+                         SELECT 1 FROM moves bot_move
+                          WHERE bot_move.game_id = binding.game_id
+                            AND bot_move.color = binding.bot_color
+                            AND bot_move.move_number = action.move_number
+                            AND action.action_kind = CASE WHEN bot_move.x IS NULL
+                              THEN 'pass' ELSE 'move' END
+                            AND action.x IS NOT DISTINCT FROM bot_move.x
+                            AND action.y IS NOT DISTINCT FROM bot_move.y
+                       )
+                  )
+                  AND (game_record.finish_reason <> 'resignation'
+                       OR game_record.winner_key = binding.bot_player_key)
+                ) AS execution_complete
+           FROM game_browser_bot_bindings binding
+           JOIN games game_record ON game_record.id = binding.game_id
+           JOIN game_bots bot ON bot.game_id = binding.game_id
+          WHERE binding.game_id = $1 AND binding.human_player_key = $2
+            AND binding.bot_player_key = $3 AND bot.rating_mode = 'browser-v1'
+          FOR UPDATE OF binding`,
+        [gameId, human.player_key, botKey],
+      )).rows[0];
+    }
     if (!binding || !binding.execution_complete) return { rated: false, kind: "unrated" };
 
     const lockedHuman = (await client.query<GlobalRatingRow>(
@@ -359,7 +417,7 @@ export async function finalizeGameRatings(
           rating_deviation_after,volatility_before,volatility_after,rated_game_count_before,
           rated_game_count_after,last_rating_period_at_before,last_rating_period_at_after,
           algorithm_version,rating_period_at)
-       VALUES ($1,$2,$3,'calibrated_bot',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+       VALUES ($1,$2,$3,$30,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
                COALESCE((SELECT terminal.finished_at FROM games AS terminal
                           WHERE terminal.id=$1),$15::timestamptz),
                $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
@@ -381,7 +439,7 @@ export async function finalizeGameRatings(
         before.volatility, computed.volatility, before.ratedGameCount,
         computed.ratedGameCount, before.lastRatingPeriodAt,
         terminal.kind === "rated" ? period : before.lastRatingPeriodAt,
-        GLICKO2_ALGORITHM_VERSION, period,
+        GLICKO2_ALGORITHM_VERSION, period, binding.opponent_kind,
       ],
     );
     if (terminal.kind === "rated") {

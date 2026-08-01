@@ -543,7 +543,7 @@ export const en = {
     you: "You",
     chatMessage: "Chat message",
     chatUnavailable: "Chat unavailable",
-    chatPolicyUnavailable: "Chat is unavailable for this game.",
+    chatPolicyUnavailable: "This player is not accepting chat messages.",
     writeMessage: "Write a message…",
     sendMessage: "Send message",
     sendFailed: "Message could not be sent.",

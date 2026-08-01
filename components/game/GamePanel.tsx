@@ -97,7 +97,7 @@ export function GamePanel({
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
-          <span>{game.whitePlayerIsBot ? `${copy.botOpponent} · ${copy.white}` : yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
+          <span>{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
           {game.whiteRating !== null && game.whiteRating !== undefined
             ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}
@@ -144,7 +144,7 @@ export function GamePanel({
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
-          <span>{game.blackPlayerIsBot ? `${copy.botOpponent} · ${copy.black}` : yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
+          <span>{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
           {game.blackRating !== null && game.blackRating !== undefined
             ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}

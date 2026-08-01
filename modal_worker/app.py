@@ -29,7 +29,6 @@ worker_environment = {
     "DATABASE_SSL": "require",
     "DATABASE_POOL_MAX": "1",
     "KATAGO_MAX_VISITS": "160",
-    "KATAGO_BOT_MAX_VISITS": "160",
     "KATAGO_PUZZLE_MAX_VISITS": "80",
 }
 
@@ -39,22 +38,6 @@ def run_job(kind: str, target_id: str | None) -> None:
     if target_id:
         command.append(target_id)
     subprocess.run(command, cwd="/app", check=True, timeout=1_150)
-
-
-@app.function(
-    image=worker_image,
-    secrets=[modal.Secret.from_name(DATABASE_SECRET_NAME)],
-    env=worker_environment,
-    cpu=2.0,
-    memory=4096,
-    min_containers=0,
-    max_containers=2,
-    scaledown_window=10,
-    timeout=60,
-    routing_region="eu-west",
-)
-def process_bot(target_id: str | None = None) -> None:
-    run_job("bot", target_id)
 
 
 @app.function(
@@ -102,7 +85,6 @@ def dispatch(payload: dict[str, str | None]) -> dict[str, str]:
     kind = payload.get("kind")
     target_id = payload.get("targetId")
     processors = {
-        "bot": process_bot,
         "analysis": process_analysis,
         "puzzle": process_puzzle,
     }

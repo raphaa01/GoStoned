@@ -545,7 +545,7 @@ export const de = {
     you: "Du",
     chatMessage: "Chatnachricht",
     chatUnavailable: "Chat nicht verfügbar",
-    chatPolicyUnavailable: "Der Chat ist für diese Partie nicht verfügbar.",
+    chatPolicyUnavailable: "Dieser Spieler nimmt keine Chatnachrichten an.",
     writeMessage: "Nachricht schreiben…",
     sendMessage: "Nachricht senden",
     sendFailed: "Die Nachricht konnte nicht gesendet werden.",

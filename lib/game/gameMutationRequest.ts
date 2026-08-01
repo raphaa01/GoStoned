@@ -8,6 +8,7 @@ const CANONICAL_GAME_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const MAX_GAME_MUTATION_BODY_BYTES = 512;
+export const MAX_SCORING_PROPOSAL_BODY_BYTES = 16_384;
 
 export function invalidGameMutationRequest(): GameServiceError {
   return new GameServiceError(
@@ -91,6 +92,7 @@ function hasExactFields(
 export async function readGameMutationJson(
   request: NextRequest,
   acceptedFields: readonly (readonly string[])[],
+  maximumBytes = MAX_GAME_MUTATION_BODY_BYTES,
 ): Promise<Record<string, unknown>> {
   if (request.body === null) throw invalidGameMutationRequest();
 
@@ -100,7 +102,7 @@ export async function readGameMutationJson(
     if (
       !Number.isSafeInteger(declaredLength)
       || declaredLength < 1
-      || declaredLength > MAX_GAME_MUTATION_BODY_BYTES
+      || declaredLength > maximumBytes
     ) {
       throw invalidGameMutationRequest();
     }
@@ -115,7 +117,7 @@ export async function readGameMutationJson(
       const chunk = await reader.read();
       if (chunk.done) break;
       bytesRead += chunk.value.byteLength;
-      if (bytesRead > MAX_GAME_MUTATION_BODY_BYTES) {
+      if (bytesRead > maximumBytes) {
         await reader.cancel();
         throw invalidGameMutationRequest();
       }
