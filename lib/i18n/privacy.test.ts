@@ -19,10 +19,15 @@ test("privacy copy is complete for every supported locale", () => {
       section.title.length > 0
       && section.paragraphs.length + section.items.length > 0
     )), locale);
-    assert.equal(copy.cookies.rows.length, 3, locale);
+    assert.equal(copy.cookies.rows.length, 4, locale);
     assert.deepEqual(
       copy.cookies.rows.map(({ name }) => name),
-      ["gostoned_session", "gostone_guest_session", "gostone_locale"],
+      [
+        "gostoned_session",
+        "gostone_guest_session",
+        "gostone_oauth_google / gostone_oauth_apple",
+        "gostone_locale",
+      ],
       locale,
     );
     assert.deepEqual(
@@ -55,4 +60,8 @@ test("privacy policy discloses only the currently implemented storage technologi
     [...paragraphs, ...items].join(" ")
   )).join(" "), /Article 22 GDPR/);
   assert.match(english.processors.transfer, /Standard Contractual Clauses/);
+  assert.match(
+    english.sections.flatMap(({ paragraphs }) => paragraphs).join(" "),
+    /do not store provider access or refresh tokens/,
+  );
 });

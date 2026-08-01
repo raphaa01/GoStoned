@@ -138,6 +138,13 @@ export const en = {
     login: "Log in",
     haveAccount: "Already have an account?",
     newToGoStone: "New to GoStone?",
+    socialOptions: "Social sign-in options",
+    continueWithGoogle: "Continue with Google",
+    continueWithApple: "Continue with Apple",
+    orContinueWithUsername: "or continue with username",
+    socialCancelled: "Google or Apple sign-in was cancelled.",
+    socialUnavailable: "This sign-in option is not configured yet.",
+    socialFailed: "Google or Apple sign-in could not be completed. Please try again.",
     errors: {
       invalid_request: "The request could not be read. Please try again.",
       request_rejected: "This authentication request was blocked. Please try again.",

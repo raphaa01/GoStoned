@@ -17,7 +17,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <AppShell>
       <div className="auth-page">
-        <AuthForm mode="login" reauthenticate={Boolean(returnTo)} returnTo={returnTo} />
+        <AuthForm
+          mode="login"
+          oauthError={typeof parameters.oauthError === "string" ? parameters.oauthError : null}
+          reauthenticate={Boolean(returnTo)}
+          returnTo={returnTo}
+        />
       </div>
     </AppShell>
   );

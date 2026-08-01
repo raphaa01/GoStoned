@@ -45,6 +45,7 @@ export const RATE_LIMIT_POLICIES = {
   loginAccountSustained: { scope: "login-account-sustained", limit: 10, windowMinutes: 60 },
   loginAccountRecovery: { scope: "login-account-recovery", limit: 1, windowMinutes: 5 },
   loginAddress: { scope: "login-address", limit: 120, windowMinutes: 15 },
+  oauthCallbackAddress: { scope: "oauth-callback-address", limit: 30, windowMinutes: 15 },
   registerTarget: { scope: "register-target", limit: 3, windowMinutes: 60 },
   registerAddress: { scope: "register-address", limit: 30, windowMinutes: 60 },
   protectedIdentityLookup: {

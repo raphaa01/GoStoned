@@ -1256,6 +1256,26 @@ body {
   box-shadow: 0 0 0 3px var(--color-moss-soft);
 }
 
+.auth-social-button {
+  background: var(--color-canvas-deep);
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+
+.auth-social-button:hover {
+  background: #e4ded3;
+  border-color: var(--color-line-strong);
+}
+
+.auth-divider {
+  color: var(--color-text-muted);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  background: var(--color-line);
+}
+
 .input-wrap input,
 .chat-form input,
 .scoring-dispute-picker select {

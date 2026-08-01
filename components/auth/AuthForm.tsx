@@ -20,13 +20,14 @@ type FormError = {
 
 type AuthFormProps = {
   mode: "login" | "register";
+  oauthError?: string | null;
   reauthenticate?: boolean;
   returnTo?: string | null;
 };
 
-export function AuthForm({ mode, reauthenticate = false, returnTo = null }: AuthFormProps) {
+export function AuthForm({ mode, oauthError = null, reauthenticate = false, returnTo = null }: AuthFormProps) {
   const { user, refresh } = useAuth();
-  const { dictionary, href } = useI18n();
+  const { dictionary, href, locale } = useI18n();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +39,12 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
   const errorId = useId();
   const usernameInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
+
+  function socialHref(provider: "google" | "apple") {
+    const parameters = new URLSearchParams({ mode, locale });
+    if (returnTo) parameters.set("returnTo", returnTo);
+    return `/api/auth/oauth/${provider}?${parameters.toString()}`;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -96,6 +103,13 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
   }
 
   const registering = mode === "register";
+  const oauthErrorMessage = oauthError === "access_denied"
+    ? dictionary.auth.socialCancelled
+    : oauthError === "provider_unavailable"
+      ? dictionary.auth.socialUnavailable
+      : oauthError
+        ? dictionary.auth.socialFailed
+        : null;
   return (
     <section className="auth-card">
       <span className="section-kicker">{registering ? dictionary.auth.newPlayer : dictionary.auth.welcomeBack}</span>
@@ -105,6 +119,21 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
           ? dictionary.auth.createDescription
           : dictionary.auth.loginDescription}
       </p>
+
+      <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
+        <a className="auth-social-button" href={socialHref("google")}>
+          <GoogleIcon />
+          <span>{dictionary.auth.continueWithGoogle}</span>
+        </a>
+        <a className="auth-social-button" href={socialHref("apple")}>
+          <AppleIcon />
+          <span>{dictionary.auth.continueWithApple}</span>
+        </a>
+      </div>
+
+      {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
+
+      <div className="auth-divider"><span>{dictionary.auth.orContinueWithUsername}</span></div>
 
       <form className="auth-form" onSubmit={submit}>
         <label>
@@ -211,5 +240,24 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
         </Link>
       </p>
     </section>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="auth-provider-icon" viewBox="0 0 24 24">
+      <path d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-2 3.02v2.53h3.25c1.9-1.75 2.97-4.33 2.97-7.39Z" fill="#4285F4" />
+      <path d="M12 22c2.7 0 4.98-.9 6.63-2.38l-3.25-2.53c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.77-5.61-4.14H3.03v2.61A10 10 0 0 0 12 22Z" fill="#34A853" />
+      <path d="M6.39 13.91A6.02 6.02 0 0 1 6.07 12c0-.66.11-1.31.32-1.91V7.48H3.03A10 10 0 0 0 2 12c0 1.61.39 3.14 1.03 4.52l3.36-2.61Z" fill="#FBBC05" />
+      <path d="M12 5.95c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.97 5.48l3.36 2.61C7.18 7.72 9.39 5.95 12 5.95Z" fill="#EA4335" />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg aria-hidden="true" className="auth-provider-icon" viewBox="0 0 24 24">
+      <path d="M17.05 12.54c-.02-2.22 1.81-3.3 1.89-3.35a4.06 4.06 0 0 0-3.2-1.73c-1.35-.14-2.66.81-3.35.81-.7 0-1.76-.8-2.91-.77a4.24 4.24 0 0 0-3.57 2.18c-1.55 2.68-.4 6.62 1.09 8.79.74 1.06 1.6 2.25 2.74 2.21 1.11-.05 1.53-.71 2.87-.71 1.33 0 1.72.71 2.88.68 1.2-.02 1.95-1.06 2.66-2.13a8.76 8.76 0 0 0 1.22-2.48 3.84 3.84 0 0 1-2.32-3.5ZM14.86 6.03a3.89 3.89 0 0 0 .89-2.81 3.95 3.95 0 0 0-2.56 1.34 3.7 3.7 0 0 0-.91 2.71 3.26 3.26 0 0 0 2.58-1.24Z" fill="currentColor" />
+    </svg>
   );
 }
