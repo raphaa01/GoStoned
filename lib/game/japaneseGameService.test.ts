@@ -364,7 +364,7 @@ async function withProtocol<T>(store: Store, action: () => Promise<T>): Promise<
         Object.assign(store.game, {
           phase: "play", to_move: values[1], consecutive_passes: 0,
           scoring_revision: Number(store.game.scoring_revision) + 1,
-          turn_started_at: values[2], updated_at: values[2],
+          turn_started_at: values[2], updated_at: values[3],
           version: Number(store.game.version) + 1,
         });
         return result([store.game]);
@@ -921,5 +921,6 @@ test("all eligible Japanese terminal transitions invoke the idempotent rating le
 test("Japanese move clocks bind timestamp columns through separate PostgreSQL parameters", () => {
   const source = readFileSync(join(process.cwd(), "lib/game/japaneseGameService.ts"), "utf8");
   assert.match(source, /turn_started_at=\$8, updated_at=\$9/);
+  assert.match(source, /turn_started_at=\$3,updated_at=\$4/);
   assert.match(source, /\.\.\.clockAssignments,\s+now,\s+now,/);
 });

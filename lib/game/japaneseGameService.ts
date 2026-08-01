@@ -1528,9 +1528,9 @@ export async function resumeJapanesePlay(
     const now = new Date();
     const game = await client.query<JapaneseGameRow>(
       `UPDATE games SET phase='play',to_move=$2,consecutive_passes=0,
-          scoring_revision=scoring_revision+1,turn_started_at=$3,updated_at=$3,
+          scoring_revision=scoring_revision+1,turn_started_at=$3,updated_at=$4,
           version=version+1 WHERE id=$1 RETURNING *`,
-      [gameId, resumedToMove, now],
+      [gameId, resumedToMove, now, now],
     );
     await client.query("DELETE FROM game_japanese_scoring_state WHERE game_id=$1", [gameId]);
     const next = await loadJapaneseGame(client, gameId, playerKey, false);
