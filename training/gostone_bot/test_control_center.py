@@ -53,6 +53,9 @@ class ControlCenterTests(unittest.TestCase):
         self.assertIn("calc(100dvh - 306px)", styles)
         self.assertIn("orientation: landscape", styles)
         self.assertIn('classList.toggle("arena-view-active"', script)
+        self.assertIn('const showBlockingOverlay = busy && arenaMode === "human";', script)
+        self.assertIn('$("#arena-busy").hidden = !showBlockingOverlay;', script)
+        self.assertNotIn('`${turn} computing`', script)
         self.assertIn("settlement_evaluator:", script)
 
     def test_current_process_is_detected_without_signaling_it(self) -> None:

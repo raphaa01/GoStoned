@@ -333,7 +333,7 @@ function renderArena(state) {
   badge.textContent = state.finished
     ? "Finished"
     : modelMatch
-      ? matchPlaying ? `${turn} computing` : "Paused"
+      ? matchPlaying ? "Live" : "Paused"
       : humanTurn(state) ? "Your move" : "AI to move";
   $("#arena-move").textContent = `Move ${state.move_number} · ${turn} to move`;
   $("#arena-prisoners").textContent = `Prisoners: Black ${state.black_prisoners} · White ${state.white_prisoners}`;
@@ -380,13 +380,15 @@ function renderArena(state) {
 
 function setArenaBusy(busy) {
   arenaBusy = busy;
-  $("#arena-busy").hidden = !busy;
+  const showBlockingOverlay = busy && arenaMode === "human";
+  $("#arena-busy").hidden = !showBlockingOverlay;
+  $(".arena-board-panel").setAttribute("aria-busy", String(busy));
   const hasSelection = arenaMode === "human"
     ? Boolean($("#arena-model").value)
     : Boolean($("#arena-black-model").value && $("#arena-white-model").value);
   $("#arena-start").disabled = busy || !hasSelection;
   $("#arena-pass").disabled = busy || !humanTurn(arenaState);
-  $("#arena-playback").disabled = busy || arenaMode !== "match" || !arenaState || arenaState.finished;
+  $("#arena-playback").disabled = arenaMode !== "match" || !arenaState || arenaState.finished;
 }
 
 async function arenaRequest(payload) {
@@ -457,6 +459,8 @@ function resetArena() {
   $("#arena-title").textContent = "Not started";
   $("#arena-turn").textContent = "Ready";
   $("#arena-turn").className = "status-badge idle";
+  $("#arena-move").textContent = "Move 0";
+  $("#arena-prisoners").textContent = "Prisoners: Black 0 · White 0";
   $("#arena-message").textContent = "Select an AI model and start a new test game.";
   drawArenaBoard();
 }
