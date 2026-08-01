@@ -181,12 +181,12 @@ export function ProfileView() {
       <section className="profile-statistics">
         <div className="profile-statistics__heading"><div><span className="section-kicker">{copy.globalPerformance}</span><h2>{copy.ratingOverTime}</h2></div><div className="profile-period">{copy.last30Days}</div></div>
         <div className="profile-metrics">
-          <article><Activity size={18} /><span>{copy.currentRating}</span><strong>{Math.round(rating.rating)}</strong></article>
-          <article><Trophy size={18} /><span>{copy.personalBest}</span><strong>{Math.round(rating.highestRating)}</strong></article>
+          <article><Activity size={18} /><span>{copy.currentRating}</span><RatingLabel rating={rating.rating} preference={preferences.displayPreference} locale={locale} /></article>
+          <article><Trophy size={18} /><span>{copy.personalBest}</span><RatingLabel rating={rating.highestRating} preference={preferences.displayPreference} locale={locale} /></article>
           <article>{change > 0 ? <ArrowUpRight size={18} /> : change < 0 ? <ArrowDownRight size={18} /> : <Minus size={18} />}<span>{copy.ratingChange}</span><strong className={change > 0 ? "is-positive" : change < 0 ? "is-negative" : ""}>{signedRating(change)}</strong></article>
           <article><CalendarDays size={18} /><span>{copy.recentForm}</span><div className="recent-form" aria-label={copy.recentFormLabel}>{recentForm.length ? recentForm.map((game) => <i className={`result-dot result-dot--${game.result}`} key={game.gameId}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : game.result === "draw" ? copy.drawShort : copy.noResultShort}</i>) : <strong>—</strong>}</div></article>
         </div>
-        <RatingHistoryChart currentRating={rating.rating} history={history} />
+        <RatingHistoryChart currentRating={rating.rating} history={history} preference={preferences.displayPreference} />
       </section>
     </> : null}
 

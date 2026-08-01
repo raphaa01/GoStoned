@@ -25,7 +25,21 @@ type ClaimedBot = {
   temperature: number;
   scheduled_game_version: number;
   game_version: number;
+  rating_mode: "unrated" | "calibrated-v1";
+  profile_id: string | null;
+  profile_fingerprint: string | null;
+  bound_engine_family: string | null;
+  bound_engine_version: string | null;
+  bound_model_version: string | null;
+  bound_config_version: string | null;
 };
+
+type BotWorkerIdentity = Readonly<{
+  engineFamily: string;
+  engineVersion: string;
+  modelVersion: string;
+  configVersion: string;
+}>;
 
 export type BotLoopState = { activeGameId: string | null };
 
@@ -47,9 +61,15 @@ function inputForGame(game: GameState): AnalysisInput {
 async function claimBotTurn(workerId: string, gameId?: string): Promise<ClaimedBot | null> {
   const result = await query<ClaimedBot>(
     `WITH candidate AS (
-       SELECT bot.game_id, game.version AS game_version
+       SELECT bot.game_id, game.version AS game_version,
+              binding.profile_id,binding.profile_fingerprint,
+              binding.engine_family AS bound_engine_family,
+              binding.engine_version AS bound_engine_version,
+              binding.model_version AS bound_model_version,
+              binding.config_version AS bound_config_version
          FROM game_bots bot
          JOIN games game ON game.id = bot.game_id
+         LEFT JOIN game_calibrated_bot_bindings binding ON binding.game_id = bot.game_id
          LEFT JOIN game_scoring_state scoring ON scoring.game_id = game.id
          LEFT JOIN game_japanese_scoring_state japanese_scoring
            ON japanese_scoring.game_id = game.id
@@ -96,7 +116,10 @@ async function claimBotTurn(workerId: string, gameId?: string): Promise<ClaimedB
       WHERE bot.game_id = candidate.game_id
       RETURNING bot.game_id, bot.bot_player_key, bot.color, bot.target_rating,
                 bot.visits_per_turn, bot.candidate_limit, bot.temperature,
-                bot.scheduled_game_version, candidate.game_version`,
+                bot.scheduled_game_version, candidate.game_version,bot.rating_mode,
+                candidate.profile_id,candidate.profile_fingerprint,
+                candidate.bound_engine_family,candidate.bound_engine_version,
+                candidate.bound_model_version,candidate.bound_config_version`,
     [workerId, gameId ?? null],
   );
   return result.rows[0] ?? null;
@@ -128,8 +151,51 @@ async function failBot(bot: ClaimedBot, error: unknown) {
   console.error(`Bot move for ${bot.game_id} failed:`, message);
 }
 
-async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: number) {
+function assertCalibratedExecution(bot: ClaimedBot, identity: BotWorkerIdentity): void {
+  if (bot.rating_mode !== "calibrated-v1") return;
+  if (
+    !bot.profile_id
+    || !bot.profile_fingerprint
+    || bot.bound_engine_family !== identity.engineFamily
+    || bot.bound_engine_version !== identity.engineVersion
+    || bot.bound_model_version !== identity.modelVersion
+    || bot.bound_config_version !== identity.configVersion
+  ) throw new Error("The calibrated bot binding does not match this worker execution identity.");
+}
+
+async function recordCalibratedAction(
+  bot: ClaimedBot,
+  requestIdentity: string,
+  move: ReturnType<typeof fromGtpCoordinate>,
+  moveNumber: number,
+  identity: BotWorkerIdentity,
+): Promise<void> {
+  if (bot.rating_mode !== "calibrated-v1") return;
+  assertCalibratedExecution(bot, identity);
+  await query(
+    `INSERT INTO game_calibrated_bot_actions (
+       game_id,action_sequence,request_identity,action_kind,move_number,x,y,
+       profile_id,profile_fingerprint,engine_version,model_version,config_version,
+       worker_id,completed_at
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+     ON CONFLICT (game_id,request_identity) DO NOTHING`,
+    [
+      bot.game_id, moveNumber, requestIdentity, move.isPass ? "pass" : "move",
+      moveNumber, move.isPass ? null : move.x, move.isPass ? null : move.y,
+      bot.profile_id, bot.profile_fingerprint, identity.engineVersion,
+      identity.modelVersion, identity.configVersion, botWorkerId,
+    ],
+  );
+}
+
+async function playBotTurn(
+  engine: KataGoEngine,
+  bot: ClaimedBot,
+  visitCap: number,
+  identity: BotWorkerIdentity,
+) {
   const startedAt = performance.now();
+  assertCalibratedExecution(bot, identity);
   const game = await getGameState(bot.game_id, bot.bot_player_key);
   if (game.status !== "active") return;
   if (game.phase === "scoring" && game.scoring) {
@@ -149,8 +215,9 @@ async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: numb
     deterministicUnit(`${bot.game_id}:${game.version}:think`),
   );
 
+  const requestIdentity = `bot:${bot.game_id}:${game.version}:${randomUUID()}`;
   const result = await engine.analyzeCurrent(
-    `bot:${bot.game_id}:${game.version}:${randomUUID()}`,
+    requestIdentity,
     inputForGame(game),
     Math.max(1, Math.min(bot.visits_per_turn, visitCap)),
     {
@@ -169,13 +236,28 @@ async function playBotTurn(engine: KataGoEngine, bot: ClaimedBot, visitCap: numb
   if (remainingThinkMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, remainingThinkMs));
   }
-  await submitMove(game.id, bot.bot_player_key, {
-    ...fromGtpCoordinate(game.boardSize, selected.move),
+  const move = fromGtpCoordinate(game.boardSize, selected.move);
+  const updated = await submitMove(game.id, bot.bot_player_key, {
+    ...move,
     expectedVersion: game.version,
   });
+  const persistedMove = updated.moves.at(-1);
+  if (!persistedMove || persistedMove.moveNumber !== game.moveCount + 1) {
+    throw new Error("The calibrated bot move was not returned as the next persisted action.");
+  }
+  await recordCalibratedAction(bot, requestIdentity, move, persistedMove.moveNumber, identity);
 }
 
 const botWorkerId = `bot:${randomUUID()}`;
+
+function botWorkerIdentity(): BotWorkerIdentity {
+  return {
+    engineFamily: process.env.KATAGO_ENGINE_FAMILY || "KataGo",
+    engineVersion: process.env.KATAGO_VERSION || "v1.17.0",
+    modelVersion: process.env.KATAGO_MODEL_NAME || "b10c384h6nbttflrs",
+    configVersion: process.env.KATAGO_CONFIG_VERSION || "analysis.cfg-v1",
+  };
+}
 
 export async function runBotLoop(
   engine: KataGoEngine,
@@ -184,6 +266,7 @@ export async function runBotLoop(
 ) {
   const pollMs = Math.max(250, Number(process.env.KATAGO_BOT_POLL_INTERVAL_MS) || 500);
   const visitCap = Math.max(1, Number(process.env.KATAGO_BOT_MAX_VISITS) || 160);
+  const identity = botWorkerIdentity();
   while (!shouldStop()) {
     const bot = await claimBotTurn(botWorkerId);
     if (!bot) {
@@ -192,7 +275,7 @@ export async function runBotLoop(
     }
     state.activeGameId = bot.game_id;
     try {
-      await playBotTurn(engine, bot, visitCap);
+      await playBotTurn(engine, bot, visitCap, identity);
       await releaseBot(bot);
     } catch (error) {
       await failBot(bot, error);
@@ -204,10 +287,11 @@ export async function runBotLoop(
 
 export async function runBotOnce(engine: KataGoEngine, gameId?: string): Promise<string | null> {
   const visitCap = Math.max(1, Number(process.env.KATAGO_BOT_MAX_VISITS) || 160);
+  const identity = botWorkerIdentity();
   const bot = await claimBotTurn(botWorkerId, gameId);
   if (!bot) return null;
   try {
-    await playBotTurn(engine, bot, visitCap);
+    await playBotTurn(engine, bot, visitCap, identity);
     await releaseBot(bot);
   } catch (error) {
     await failBot(bot, error);

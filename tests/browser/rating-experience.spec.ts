@@ -84,8 +84,32 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
             startingStrengthEstimate: "known",
             knownRank: "12k",
           },
-          history: [],
-          recentGames: [],
+          history: [{
+            id: "rated-game-1:user",
+            gameId: "rated-game-1",
+            boardSize: 19,
+            ratingBefore: 1600,
+            ratingAfter: 1642.4,
+            ratingChange: 42.4,
+            result: "win",
+            recordedAt: "2026-07-30T12:00:00.000Z",
+          }],
+          recentGames: [{
+            gameId: "rated-game-1",
+            boardSize: 19,
+            timeControl: "rapid",
+            opponentName: "Calibrated KataGo",
+            opponentIsBot: true,
+            opponentBotProfileVersion: "calibrated-bot-profile-v1",
+            result: "win",
+            gameResult: "B+R",
+            ratingBefore: 1600,
+            ratingAfter: 1642.4,
+            ratingChange: 42.4,
+            rated: true,
+            finishedAt: "2026-07-30T12:00:00.000Z",
+            moveCount: 81,
+          }],
         });
         return;
       }
@@ -146,6 +170,13 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/profile`);
     await expect(page.getByText(dictionary.profile.globalRating, { exact: true })).toBeVisible();
     await expect(page.getByText(dictionary.profile.botCalibrationNotice, { exact: true })).toBeVisible();
+    await expect(page.getByText("Calibrated KataGo", { exact: false })).toBeVisible();
+    await expect(
+      page.getByRole("link", {
+        name: new RegExp(`Calibrated KataGo.*${dictionary.profile.botBadge}`),
+      }),
+    ).toBeVisible();
+    await expect(page.locator(".rating-chart svg")).toBeVisible();
     await page.getByLabel(dictionary.profile.displayPreference).selectOption("rank-primary");
     await page.getByLabel(dictionary.profile.botPreference).selectOption("calibrated-rated-after-wait");
     await page.getByRole("button", { name: dictionary.profile.savePreferences }).click();
@@ -154,6 +185,9 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       displayPreference: "rank-primary",
       botMatchPreference: "calibrated-rated-after-wait",
     });
+    await expect(page.locator(".profile-metrics .rating-label").first()).toContainText(
+      locale === "de" ? "8. Kyu" : "8 kyu",
+    );
     await assertNoHorizontalOverflow(page);
   });
 }

@@ -50,6 +50,8 @@ test("global state and paired evidence retain the complete versioned Glicko-2 tr
   assert.match(migration, /BEFORE UPDATE OR DELETE ON game_glicko2_rating_events/);
   assert.match(migration, /DEFERRABLE INITIALLY DEFERRED/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /GRANT SELECT,INSERT,UPDATE ON player_glicko2_ratings TO gostone_app/);
+  assert.match(migration, /CREATE POLICY gostone_app_server_insert ON game_glicko2_rating_events/);
 });
 
 test("no-result and opponent boundaries are explicit and fail closed", () => {

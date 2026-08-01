@@ -9,7 +9,7 @@ async function withPool<T>(pool: Pool, action: () => Promise<T>): Promise<T> {
   try { return await action(); } finally { globalThis.goStonedDbPool = previous; }
 }
 
-test("leaderboard is global, established, human-only, and uncertainty-aware", async () => {
+test("leaderboard is global, established, opponent-filterable, and uncertainty-aware", async () => {
   let statement = "";
   let values: readonly unknown[] = [];
   const observedAt = new Date("2026-07-28T10:00:00.000Z");
@@ -19,14 +19,25 @@ test("leaderboard is global, established, human-only, and uncertainty-aware", as
   } } as unknown as Pool;
   const snapshot = await withPool(pool, () => getLeaderboard(500));
   assert.match(statement, /FROM player_glicko2_ratings rating JOIN users account/);
-  assert.match(statement, /FROM game_glicko2_rating_events GROUP BY player_key/);
-  assert.doesNotMatch(statement, /opponent_kind = 'registered_human'/);
+  assert.match(statement, /FROM game_glicko2_rating_events WHERE \$2::text = 'all-rated' OR opponent_kind = 'registered_human' GROUP BY player_key/);
   assert.match(statement, /rating\.rated_game_count >= 10/);
   assert.match(statement, /rating\.rated_game_count = totals\.games/);
   assert.match(statement, /ORDER BY rating DESC, rating_deviation ASC, games DESC, player_key ASC/);
   assert.doesNotMatch(statement, /player_stats|player_rating_history|game_bots|board_size/);
-  assert.deepEqual(values, [100]);
+  assert.deepEqual(values, [100, "all-rated"]);
   assert.equal(snapshot.observedAt, observedAt);
+  assert.equal(snapshot.opponentScope, "all-rated");
+});
+
+test("human-only leaderboard statistics exclude calibrated-bot opponents", async () => {
+  let values: readonly unknown[] = [];
+  const pool = { async query(_sql: string, parameters: readonly unknown[]) {
+    values = parameters;
+    return { rows: [{ observed_at: new Date(), entries: [] }], rowCount: 1 };
+  } } as unknown as Pool;
+  const snapshot = await withPool(pool, () => getLeaderboard(50, "human-only"));
+  assert.deepEqual(values, [50, "human-only"]);
+  assert.equal(snapshot.opponentScope, "human-only");
 });
 
 test("profile reads the global ledger, preferences, and bot disclosure", async () => {

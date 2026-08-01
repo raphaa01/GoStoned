@@ -3774,6 +3774,25 @@ REVOKE ALL ON game_glicko2_rating_events FROM PUBLIC;
 
 DO $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT,INSERT,UPDATE ON player_glicko2_ratings TO gostone_app;
+    GRANT SELECT,INSERT ON game_glicko2_rating_events TO gostone_app;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='player_glicko2_ratings' AND policyname='gostone_app_server_access') THEN
+      CREATE POLICY gostone_app_server_access ON player_glicko2_ratings
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='game_glicko2_rating_events' AND policyname='gostone_app_server_read') THEN
+      CREATE POLICY gostone_app_server_read ON game_glicko2_rating_events
+        FOR SELECT TO gostone_app USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='game_glicko2_rating_events' AND policyname='gostone_app_server_insert') THEN
+      CREATE POLICY gostone_app_server_insert ON game_glicko2_rating_events
+        FOR INSERT TO gostone_app WITH CHECK (true);
+    END IF;
+  END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON player_glicko2_ratings, game_glicko2_rating_events FROM anon;
     REVOKE ALL ON FUNCTION public.guard_glicko2_rating_event_mutation(),
@@ -4247,11 +4266,13 @@ BEGIN
     OR queue_row.board_size <> game_row.board_size
     OR queue_row.time_control <> game_row.time_control
     OR queue_row.rules_snapshot <> game_row.rules
-    OR queue_row.rules_profile_snapshot <> game_row.rules_profile
+    OR queue_row.rules_profile <> game_row.rules_profile
     OR queue_row.scoring_method_snapshot <> game_row.scoring_method
     OR queue_row.komi_snapshot <> game_row.komi
     OR queue_row.handicap_snapshot <> game_row.handicap
     OR profile_row.profile_id IS NULL OR activation_row.action <> 'activate'
+    OR bot_row.target_rating IS DISTINCT FROM
+       ROUND(profile_row.fixed_rating)::INT
     OR EXISTS (SELECT 1 FROM public.calibrated_bot_profile_activation_events later
                 WHERE later.profile_id = NEW.profile_id AND later.activation_id > NEW.activation_id)
     OR profile_row.profile_contract_version IS DISTINCT FROM NEW.profile_contract_version
@@ -4314,7 +4335,11 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.game_calibrated_bot_bindings binding WHERE binding.game_id = OLD.game_id)
     AND (NEW.bot_player_key IS DISTINCT FROM OLD.bot_player_key
       OR NEW.color IS DISTINCT FROM OLD.color
-      OR NEW.rating_mode IS DISTINCT FROM OLD.rating_mode)
+      OR NEW.rating_mode IS DISTINCT FROM OLD.rating_mode
+      OR NEW.target_rating IS DISTINCT FROM OLD.target_rating
+      OR NEW.visits_per_turn IS DISTINCT FROM OLD.visits_per_turn
+      OR NEW.candidate_limit IS DISTINCT FROM OLD.candidate_limit
+      OR NEW.temperature IS DISTINCT FROM OLD.temperature)
   THEN RAISE EXCEPTION 'A calibrated game cannot change its bound bot identity or rating mode.' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;

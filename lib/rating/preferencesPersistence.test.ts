@@ -6,6 +6,7 @@ import test from "node:test";
 const migration = readFileSync(join(process.cwd(), "db/migrations/027_rating_preferences_and_match_pools.sql"), "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
+const matchmaking = readFileSync(join(process.cwd(), "lib/matchmaking/matchmakingService.ts"), "utf8");
 
 test("bootstrap schema contains the exact preferences and adaptive-pool migration", () => {
   const offset = schema.indexOf(migration);
@@ -34,4 +35,12 @@ test("adaptive queue snapshots identity, rules, rating provenance, and preferenc
   assert.match(migration, /match_pool = 'registered-rated'[\s\S]*player_key LIKE 'user:%'/);
   assert.match(preflight, /idx_matchmaking_adaptive_waiting/);
   assert.match(preflight, /player_initial_rating_claims/);
+});
+
+test("polling preserves queue age and prefilters eligible candidates before the lock cap", () => {
+  assert.match(matchmaking, /preserveWaitingSince: true/);
+  assert.match(matchmaking, /statement_timestamp\(\) AS evaluation_now/);
+  const eligibility = matchmaking.indexOf("ABS(q.rating_snapshot - $7::numeric)");
+  const limit = matchmaking.indexOf("LIMIT 8", eligibility);
+  assert.ok(eligibility >= 0 && limit > eligibility);
 });

@@ -159,10 +159,12 @@ function samePositions(left: readonly Position[], right: readonly Position[]): b
 function enterScoring(
   game: GameState,
   status: "pending" | "ready" | "unavailable" = "ready",
-  options: { expired?: boolean; finalResolution?: boolean } = {},
+  options: { expired?: boolean; resumptionsUsed?: number } = {},
 ): GameState {
   const deadStones = status === "ready" ? positions(WHITE_GROUP) : [];
   const revision = game.scoringRevision + 1;
+  const resumptionsUsed = options.resumptionsUsed ?? 0;
+  const finalResolution = resumptionsUsed >= 3;
   return {
     ...game,
     consecutivePasses: 2,
@@ -184,9 +186,9 @@ function enterScoring(
         : "2099-01-01T00:10:00.000Z",
       proposalHash: "japanese-browser-suggestion",
       neutralRegionSeeds: [],
-      resumptionsUsed: options.finalResolution ? 2 : 1,
-      resumptionsRemaining: options.finalResolution ? 0 : 1,
-      finalResolution: options.finalResolution ?? false,
+      resumptionsUsed,
+      resumptionsRemaining: Math.max(0, 3 - resumptionsUsed),
+      finalResolution,
       blackParticipated: false,
       whiteParticipated: false,
       canUndo: false,
@@ -210,10 +212,10 @@ function gameForScenario(scenario: JapaneseScenario): GameState {
   if (scenario === "scoring-pending") return enterScoring(game, "pending");
   if (scenario === "scoring-unavailable") return enterScoring(game, "unavailable");
   if (scenario === "scoring-final") {
-    return enterScoring(game, "ready", { finalResolution: true });
+    return enterScoring(game, "ready", { resumptionsUsed: 3 });
   }
   if (scenario === "scoring-expired") {
-    return enterScoring(game, "ready", { expired: true, finalResolution: true });
+    return enterScoring(game, "ready", { expired: true, resumptionsUsed: 3 });
   }
   return enterScoring(game);
 }
@@ -252,6 +254,7 @@ async function installJapaneseHarness(
   let readCount = 0;
   let sgfRequestCount = 0;
   let deadlineOutcome: DeadlineOutcome = "adjudication";
+  let resumptionCount = initialScenario === "scoring-final" || initialScenario === "scoring-expired" ? 3 : 0;
   let proposalHistory: Position[][] = [];
   const diagnostics: string[] = [];
   const contractErrors: string[] = [];
@@ -313,7 +316,9 @@ async function installJapaneseHarness(
       turn: color === "black" ? "white" : "black",
       version: game.version + 1,
     };
-    if (game.consecutivePasses === 2) game = enterScoring(game, "ready");
+    if (game.consecutivePasses === 2) {
+      game = enterScoring(game, "ready", { resumptionsUsed: resumptionCount });
+    }
     tickClock();
   };
 
@@ -363,6 +368,7 @@ async function installJapaneseHarness(
     resetBodies,
     resetScenario(scenario) {
       game = gameForScenario(scenario);
+      resumptionCount = scenario === "scoring-final" || scenario === "scoring-expired" ? 3 : 0;
       proposalHistory = [];
       clockTick += 10;
       tickClock();
@@ -612,6 +618,7 @@ async function installJapaneseHarness(
       ) {
         contractErrors.push(`${requestName(request)} sent ${JSON.stringify(body)}`);
       } else {
+        resumptionCount += 1;
         game = {
           ...game,
           phase: "play",
@@ -777,6 +784,40 @@ test("Japanese final phase and unavailable suggestion fail closed", async ({ pag
   await expect(page.getByText(en.game.suggestionUnavailable, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: en.game.resetToSuggestion, exact: true })).toBeDisabled();
   await expect(page.getByRole("gridcell", { name: /Mark the black group at C17 as dead/ }).first()).toBeEnabled();
+  await expectCleanHarness(harness);
+});
+
+test("three Japanese scoring resumptions lead to the final resolution phase", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "Representative maximum-resumption coverage.");
+  const harness = await installJapaneseHarness(page);
+
+  await page.goto(`/game/${GAME_ID}`);
+  await page.getByRole("button", { name: en.game.pass, exact: true }).click();
+  harness.opponentPass();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+  for (let resumption = 1; resumption <= 3; resumption += 1) {
+    await page.getByRole("button", { name: en.game.resumePlay, exact: true }).click();
+    await expect.poll(() => harness.resumeBodies.length).toBe(resumption);
+    await expect(page.locator(".japanese-scoring-controls")).toHaveCount(0);
+
+    harness.opponentPass();
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await page.getByRole("button", { name: en.game.pass, exact: true }).click();
+
+    if (resumption < 3) {
+      await expect(page.getByRole("button", { name: en.game.resumePlay, exact: true })).toBeEnabled();
+      await expect(page.getByText(en.game.finalResolutionTitle, { exact: true })).toHaveCount(0);
+    }
+  }
+
+  expect(harness.resumeBodies).toEqual([
+    { expectedRevision: 1 },
+    { expectedRevision: 3 },
+    { expectedRevision: 5 },
+  ]);
+  await expect(page.getByText(en.game.finalResolutionTitle, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: en.game.resumePlay, exact: true })).toBeDisabled();
   await expectCleanHarness(harness);
 });
 

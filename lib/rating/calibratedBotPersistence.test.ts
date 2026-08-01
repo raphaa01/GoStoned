@@ -6,6 +6,8 @@ import test from "node:test";
 const migration = readFileSync(join(process.cwd(), "db/migrations/028_calibrated_bot_rating_evidence.sql"), "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
+const matchmaking = readFileSync(join(process.cwd(), "lib/matchmaking/matchmakingService.ts"), "utf8");
+const worker = readFileSync(join(process.cwd(), "workers/katago/bot.ts"), "utf8");
 
 test("bootstrap schema ends with the exact calibrated-bot evidence migration", () => {
   assert.equal(schema.slice(-migration.length), migration);
@@ -21,6 +23,7 @@ test("rated bot credit never uses mutable heuristic target rating", () => {
   assert.doesNotMatch(migration, /target_rating[^\n]*(?:opponent_rating|fixed_rating)/);
   assert.doesNotMatch(migration, /INSERT INTO calibrated_bot_profiles/);
   assert.doesNotMatch(migration, /INSERT INTO calibrated_bot_profile_activation_events/);
+  assert.doesNotMatch(migration, /rules_profile_snapshot/);
 });
 
 test("human-bot evidence has one human transition and exact execution identity", () => {
@@ -34,4 +37,14 @@ test("human-bot evidence has one human transition and exact execution identity",
   assert.match(preflight, /idx_calibrated_bot_action_move_once/);
   assert.match(preflight, /validate_calibrated_bot_action_insert/);
   assert.match(migration, /No profile or activation is seeded/);
+});
+
+test("matchmaking binds only an active accepted profile and worker actions carry it", () => {
+  assert.match(matchmaking, /selectNearestCalibratedBot/);
+  assert.match(matchmaking, /activation\.action = 'activate'/);
+  assert.match(matchmaking, /INSERT INTO game_calibrated_bot_bindings/);
+  assert.match(matchmaking, /'calibrated-v1'/);
+  assert.match(worker, /assertCalibratedExecution/);
+  assert.match(worker, /INSERT INTO game_calibrated_bot_actions/);
+  assert.match(worker, /bound_config_version !== identity\.configVersion/);
 });
