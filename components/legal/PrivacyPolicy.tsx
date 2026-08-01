@@ -47,7 +47,6 @@ export function PrivacyPolicy({ locale }: { locale: Locale }) {
                   </a>
                 </p>
               ) : null}
-              {!legal.configured ? <p className="legal-warning privacy-config-warning">{copy.controller.unavailable}</p> : null}
             </div>
           </section>
 

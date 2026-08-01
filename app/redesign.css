@@ -1439,15 +1439,6 @@ body {
   margin-top: 4px;
 }
 
-.privacy-config-warning {
-  background: rgb(210 167 93 / .12);
-  border: 1px solid rgb(210 167 93 / .32);
-  border-radius: var(--radius-sm);
-  color: var(--color-ink-soft) !important;
-  margin-top: 20px !important;
-  padding: 12px 14px;
-}
-
 .privacy-copy > p + p,
 .privacy-copy > .privacy-table-wrap + p,
 .privacy-copy > .privacy-processors + p {

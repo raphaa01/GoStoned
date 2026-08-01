@@ -126,7 +126,7 @@ test("Vercel previews show only confirmed data without becoming configured", () 
     assert.equal(notice.configured, false);
     assert.equal(notice.preview, true);
     assert.equal(notice.name, "GoStone");
-    assert.deepEqual(notice.partners, ["Felix Neuber"]);
+    assert.deepEqual(notice.partners, ["Felix Neuber", "Raphael Krüger"]);
     assert.equal(notice.entityDetails, null);
     assert.equal(notice.representedBy, null);
     assert.equal(notice.street, "");
