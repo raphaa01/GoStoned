@@ -119,7 +119,7 @@ export function AuthForm({
         ? dictionary.auth.socialFailed
         : null;
   const socialOptions = configuredOAuthProviders.length ? (
-    <div className={`auth-social${registering ? " auth-social--register" : ""}`} aria-label={dictionary.auth.socialOptions}>
+    <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
       {configuredOAuthProviders.includes("google") ? (
         <a className="auth-social-button" href={socialHref("google")}>
           <GoogleIcon />
@@ -144,15 +144,7 @@ export function AuthForm({
           : dictionary.auth.loginDescription}
       </p>
 
-      {registering && socialOptions ? (
-        <>
-          {socialOptions}
-          {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
-          <div className="auth-divider"><span>{dictionary.auth.orContinueWithUsername}</span></div>
-        </>
-      ) : null}
-
-      <form className={`auth-form${registering && socialOptions ? " auth-form--social-first" : ""}`} onSubmit={submit}>
+      <form className="auth-form" onSubmit={submit}>
         <label>
           <span>{dictionary.auth.username}</span>
           <span className="input-wrap">
@@ -204,6 +196,22 @@ export function AuthForm({
           </span>
         </label>
 
+        {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
+        <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
+          {busy ? <LoaderCircle className="spin" size={19} /> : null}
+          {busy
+            ? registering ? dictionary.auth.creating : dictionary.auth.loggingIn
+            : registering ? dictionary.auth.createAccount : dictionary.auth.login}
+        </button>
+
+        {registering && socialOptions ? (
+          <>
+            <div className="auth-divider auth-divider--register"><span>{dictionary.auth.orContinueWithSocial}</span></div>
+            {socialOptions}
+            {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
+          </>
+        ) : null}
+
         {registering ? (
           <details className="auth-strength">
             <summary>{dictionary.auth.startingStrength}</summary>
@@ -242,14 +250,6 @@ export function AuthForm({
             </div>
           </details>
         ) : null}
-
-        {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
-        <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
-          {busy ? <LoaderCircle className="spin" size={19} /> : null}
-          {busy
-            ? registering ? dictionary.auth.creating : dictionary.auth.loggingIn
-            : registering ? dictionary.auth.createAccount : dictionary.auth.login}
-        </button>
       </form>
 
       {!registering && socialOptions ? (
