@@ -1,5 +1,6 @@
 import { AuthForm } from "@/components/auth/AuthForm";
 import { AppShell } from "@/components/layout/AppShell";
+import { configuredOAuthProviders } from "@/lib/auth/oauth";
 import { safeReauthenticationReturnPath } from "@/lib/auth/returnPath";
 import { pageMetadata } from "@/lib/i18n/metadata";
 
@@ -18,6 +19,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <AppShell>
       <div className="auth-page">
         <AuthForm
+          configuredOAuthProviders={configuredOAuthProviders()}
           mode="login"
           oauthError={typeof parameters.oauthError === "string" ? parameters.oauthError : null}
           reauthenticate={Boolean(returnTo)}
