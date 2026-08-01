@@ -619,7 +619,7 @@ export const POLL_BENCHMARK_CONTRACTS: Readonly<Record<PollBenchmarkScenario, Sc
   play_timeout_150: contract(
     { name: "play_timeout_150", positionMoves: 150, knownVersion: "current", response: "full", responseMoves: 150 },
     TIMEOUT_SEQUENCE,
-    { reads: 13, writes: 1, lockingStatements: 4, returnedRows: 306, affectedRows: 1, lockedRows: 2 },
+    { reads: 12, writes: 1, lockingStatements: 4, returnedRows: 305, affectedRows: 1, lockedRows: 2 },
   ),
   scoring_expiry_302: contract(
     { name: "scoring_expiry_302", positionMoves: 300, knownVersion: "current", response: "full", responseMoves: 302 },
