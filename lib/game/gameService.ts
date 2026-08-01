@@ -58,6 +58,7 @@ type GameRow = {
   white_player_name: string;
   black_player_is_bot: boolean;
   white_player_is_bot: boolean;
+  bot_target_rating: number | null;
   winner_key: string | null;
   rated: boolean;
   status: "active" | "finished";
@@ -792,6 +793,7 @@ async function loadGame(
             ) AS white_player_name,
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+            game_bot.target_rating AS bot_target_rating,
             CASE
               WHEN g.status = 'finished' THEN (
                 SELECT COUNT(DISTINCT history.player_key) = 2
@@ -1204,6 +1206,7 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerName: game.white_player_name,
     blackPlayerIsBot: game.black_player_is_bot,
     whitePlayerIsBot: game.white_player_is_bot,
+    botTargetRating: game.bot_target_rating ?? undefined,
     winnerKey: game.winner_key,
     rated: game.rated,
     status: game.status,
@@ -1256,6 +1259,7 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
       white_player_name: loaded.game.white_player_name,
       black_player_is_bot: loaded.game.black_player_is_bot,
       white_player_is_bot: loaded.game.white_player_is_bot,
+      bot_target_rating: loaded.game.bot_target_rating,
       rated: loaded.game.rated,
     },
   };

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import type { Pool } from "pg";
+import { POST as submitBotMove } from "@/app/api/games/[gameId]/bot-move/route";
 import { POST as submitMove } from "@/app/api/games/[gameId]/moves/route";
 import { POST as resignGame } from "@/app/api/games/[gameId]/resign/route";
 import { POST as confirmScore } from "@/app/api/games/[gameId]/scoring/confirm/route";
@@ -61,6 +62,12 @@ const mutations: Array<{
     handler: resumePlay,
     body: JSON.stringify({ expectedRevision: 2, claim: "dead", x: 2, y: 3 }),
   },
+  {
+    name: "verified local bot move",
+    path: "bot-move",
+    handler: submitBotMove,
+    body: JSON.stringify({ action: "move", x: 2, y: 3, expectedVersion: 0 }),
+  },
 ];
 
 class RequestBoundaryPool {
@@ -95,6 +102,16 @@ class RequestBoundaryPool {
           window_started_at: new Date(),
           blocked_until: null,
           retry_after_seconds: 60,
+        }],
+        rowCount: 1,
+      };
+    }
+    if (normalized.includes("FROM game_bots")) {
+      return {
+        rows: [{
+          bot_player_key: "bot:44444444-4444-4444-8444-444444444444",
+          color: "black",
+          target_rating: 1_200,
         }],
         rowCount: 1,
       };
@@ -327,6 +344,7 @@ test("valid game mutation payloads pass route semantics and reach the service bo
     { name: "dead-stone edit", mutation: mutations[3], body: mutations[3].body },
     { name: "scoring resume", mutation: mutations[4], body: mutations[4].body },
     { name: "bodyless resignation", mutation: mutations[1], body: null },
+    { name: "verified local bot move", mutation: mutations[5], body: mutations[5].body },
   ];
 
   for (const valid of validCases) {

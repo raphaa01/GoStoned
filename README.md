@@ -393,43 +393,37 @@ Aufträge atomar, spricht über KataGos offizielle zeilenbasierte JSON-Analysis-
 mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL.
 Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
 
-Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
-ein Spieler zehn Sekunden lang keinen echten Gegner findet und entweder ein
-lokaler Worker gesund ist oder der geschützte Modal-Aufruf konfiguriert wurde,
-erstellt PostgreSQL atomar eine Bot-Partie. Für
-registrierte Konten ist sie gewertet; Gäste bleiben ohne dauerhaftes Rating.
-Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt einen
-normalen Anzeigenamen. Während der laufenden Partie bleibt der Computergegner
-dezent erkennbar; Spielverlauf und Review konzentrieren sich anschließend auf
-Gegnername, Ergebnis und Zugqualität. Der Chat ist für Bot-Partien deaktiviert.
+### Kostenloser lokaler Bot-Fallback
 
-Vor jedem Bot-Zug wird neu ein Ziel zwischen drei und neun Sekunden bestimmt.
-Der Bot nutzt einen getrennten, hoch priorisierten KataGo-Prozess und verwertet
-bei langen Suchen einen Zwischenstand, sodass der Zug inklusive technischer
-Reserve innerhalb von zehn Sekunden übermittelt werden kann. Der Chat behält
-dabei sein normales Layout, zeigt aber neutral an,
-dass er für diese Partie nicht verfügbar ist, und deaktiviert die Eingabe.
+Wenn ein Spieler zehn Sekunden lang keinen echten Gegner findet, erstellt
+PostgreSQL atomar eine Bot-Partie. Dafür muss kein KataGo-Worker verfügbar sein.
+Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt einen normalen
+Anzeigenamen; sein Chat ist neutral deaktiviert.
 
-Die Zielstärke wird beim Match aus der Wertung des Spielers für die gewählte
-Brettgröße übernommen; Gäste starten bei 1200. Niedrigere Stufen wählen
-variabler aus mehreren legalen KataGo-Kandidaten, höhere Stufen durchsuchen mehr
-Stellungen und bleiben näher am besten Zug. `KATAGO_BOT_MAX_VISITS` begrenzt die
-Rechenzeit pro Zug auf dem jeweiligen Worker. Auf einem GPU-Server kann dieses
-Limit höher als auf einem Laptop gesetzt werden, ohne Website- oder
-Datenbankcode zu ändern.
+Der Browser lädt den kleinen Bot-Code erst in der Partie dynamisch nach und führt
+ihn in einem Web Worker aus. Er benötigt weder Modell-Datei noch Storage, WebGPU,
+KataGo oder einen externen Rechenserver. Fünf Stufen von `novice` bis `strongest`
+entstehen aus demselben legalitätsbewussten Bewertungsalgorithmus: niedrigere
+Stufen haben mehr Zugauswahl und Rauschen, höhere Stufen bevorzugen Gefangennahmen,
+Freiheiten, Verbindungen und sichere Formen konsequenter. Die Zielstärke folgt dem
+Brettgrößen-Rating des Spielers; Gäste verwenden 1200 als neutrale Ausgangsstärke.
 
-Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
+Jeder Zug dauert reproduzierbar zwischen drei und neun Sekunden. Der Browser
+sendet nur seinen Vorschlag. Die API berechnet den erwarteten Zug unabhängig noch
+einmal und verwirft manipulierte Vorschläge, bevor die vorhandene serverseitige
+Go-Engine Legalität, Ko, Uhr und Speicherung prüft. So kann ein veränderter Client
+keine leichteren Bot-Züge einschleusen und Rating farmen.
 
-1. lokal: PostgreSQL, Website und KataGo-Worker laufen auf demselben Laptop;
-2. Vercel + externer Worker: Vercel nutzt Supabase und ein externer Linux-Server
-   startet nur den KataGo-Container mit derselben `DATABASE_URL`;
-3. mehrere Worker: identische Container teilen sich die Warteschlange sicher
-   über `FOR UPDATE SKIP LOCKED`.
+Bot-Partien registrierter Konten sind genau wie Account-gegen-Account-Partien
+gewertet: beide Teilnehmer erhalten Statistik- und Rating-Historie für die
+jeweilige Brettgröße. Gäste bleiben wie bei normalen Gastpartien ungewertet. Die
+Bot-Berechnung verursacht keine Modal-, GPU- oder Storage-Kosten; es fallen nur
+die ohnehin nötigen Vercel-API- und PostgreSQL-Anfragen einer Live-Partie an.
 
 ### Modal: nur bei Bedarf, kein bezahlter Leerlauf
 
 Die Produktionsintegration verwendet keine dauerhaft laufende Modal-Instanz.
-Vercel sendet nach einer Bot-, Analyse- oder Puzzle-Anfrage einen authentifizierten
+Vercel sendet nach einer Analyse- oder Puzzle-Anfrage einen authentifizierten
 Auftrag an eine kleine Dispatcher-Funktion. Diese startet genau einen begrenzten
 KataGo-Datenbankauftrag. Alle Funktionen haben `min_containers=0`, feste
 Parallelitätsgrenzen und fahren nach kurzer Leerlaufzeit wieder auf null herunter.
@@ -466,18 +460,16 @@ Besuche pro Stellung, damit ein Review auf einem Laptop testbar bleibt. Mehr
 Besuche erhöhen Qualität und Laufzeit; für einen externen stärkeren Server sind
 beispielsweise 200 bis 500 Besuche sinnvoll.
 
-Der vollständige lokale Bot-Test benötigt den laufenden Next.js-Server und den
-gesunden Worker. Er verweigert jede nicht eindeutig lokale Datenbank:
+Der lokale Bot selbst benötigt nur PostgreSQL und Next.js:
 
 ```powershell
-$env:GOSTONE_SMOKE_DATABASE_NAME="gostoned"
-$env:GOSTONE_SMOKE_DATABASE_ROLE="postgres"
-npm run test:bot-local
+docker compose up -d postgres
+npm run db:migrate
+npm run dev
 ```
 
-Der Test wartet tatsächlich zehn Sekunden, erstellt eine Gastpartie, prüft die
-sichtbare Bot-Identität, spielt einen menschlichen Zug, wartet auf KataGos
-Antwort und beendet die Testpartie anschließend sauber.
+Nach zehn Sekunden erfolgloser Suche wird im geöffneten Spieltab der Web Worker
+gestartet. Für Review und Puzzles wird KataGo weiterhin separat benötigt.
 
 ### Daily Puzzle und weitere Go-Probleme
 
@@ -503,7 +495,7 @@ Halbzüge lang sein. Zukünftige Züge bleiben dabei serverseitig verborgen; das
 Frontend erhält nur den bereits gespielten Teil. Gast- und Accountfortschritt
 werden in `puzzle_attempts` gespeichert.
 
-Lokal startet derselbe `katago`-Container Analyse, Bot und Puzzle-Erzeugung. Die
+Lokal startet derselbe `katago`-Container Analyse und Puzzle-Erzeugung. Die
 CPU-Voreinstellung `KATAGO_PUZZLE_MAX_VISITS=8` hält die Generierung auf einem
 Laptop überschaubar. Ein externer GPU-Worker darf diesen Wert ohne Änderung an
 Website, API oder Datenbankschema erhöhen. Zum vollständigen lokalen Test:
@@ -529,7 +521,6 @@ export KATAGO_DATABASE_URL='postgresql://...supabase-session-url...'
 export KATAGO_DATABASE_SSL=require
 export KATAGO_DATABASE_POOL_MAX=2
 export KATAGO_MAX_VISITS=500
-export KATAGO_BOT_MAX_VISITS=800
 docker compose up -d --build katago
 ```
 
@@ -540,12 +531,11 @@ Health-Endpunkt sollte extern nur hinter Firewall oder VPN erreichbar sein.
 
 ### Parallel zum Design weiterarbeiten
 
-Analyse und Bot-Fallback liegen gemeinsam im Branch
-`codex/katago-bot-fallback`. Wenn sich `main` durch Designarbeit weiterentwickelt,
-wird zuerst der neue Stand geholt und dann dieser Branch darauf rebased.
-Engine-Kernlogik liegt in `lib/analysis/`, `lib/bot/` und `workers/katago/`, der
-Container in `docker/katago/` und die UI in `components/review/`. So bleiben
-Konflikte klein und klar.
+Analyse, lokaler Bot und Puzzles sind technisch getrennt. Die modellfreie
+Bot-Kernlogik liegt in `lib/bot/localBot.ts`, der Browser-Adapter daneben und die
+serverseitige Prüfung in `lib/bot/localBotService.ts`. KataGo-Code bleibt in
+`lib/analysis/` und `workers/katago/`; Designänderungen an Navigation oder Brett
+berühren den Bot-Algorithmus daher normalerweise nicht.
 
 Die Puzzle-Erweiterung liegt darauf aufbauend getrennt im Branch
 `codex/katago-puzzles`. Datenbankmigration, Worker, API und UI sind klar in
@@ -558,10 +548,11 @@ werden.
 ## KataGo auf Modal
 
 Der produktive KataGo-Worker wird im isolierten Modal-Environment `GoStone`
-betrieben. `modal_worker/app.py` baut das vorhandene Docker-Image, startet den
-Node/KataGo-Worker als einzelnen dauerhaft warmen Modal Server und stellt dessen
-`/health`-Endpunkt bereit. Das Datenbankpasswort liegt ausschließlich im Modal
-Secret `gostone-database`; es wird weder in das Image noch in Git geschrieben.
+betrieben. `modal_worker/app.py` baut das vorhandene Docker-Image und startet nur
+für einen Analyse- oder Puzzle-Auftrag eine begrenzte Funktion mit
+`min_containers=0`. Bot-Züge werden dort ausdrücklich nicht angenommen. Das
+Datenbankpasswort liegt ausschließlich im Modal Secret `gostone-database`; es
+wird weder in das Image noch in Git geschrieben.
 
 Der manuelle Workflow `.github/workflows/modal-worker.yml` validiert die
 Konfiguration oder deployed sie nach Modal. Eine automatische Deployment-

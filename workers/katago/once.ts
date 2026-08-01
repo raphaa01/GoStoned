@@ -1,6 +1,5 @@
 import { closePool } from "@/lib/db";
 import { runAnalysisOnce } from "./analysis";
-import { runBotOnce } from "./bot";
 import { KataGoEngine } from "./engine";
 import { runPuzzleOnce } from "./puzzles";
 
@@ -17,9 +16,6 @@ const engine = new KataGoEngine({
 async function main() {
   let processed: string | null;
   switch (kind) {
-    case "bot":
-      processed = await runBotOnce(engine, targetId);
-      break;
     case "analysis":
       processed = await runAnalysisOnce(engine, {
         engineVersion,
@@ -32,7 +28,7 @@ async function main() {
       processed = await runPuzzleOnce(engine, { engineVersion, modelName, jobId: targetId });
       break;
     default:
-      throw new Error("Usage: worker:katago:once <bot|analysis|puzzle> [target-id]");
+      throw new Error("Usage: worker:katago:once <analysis|puzzle> [target-id]");
   }
   console.log(JSON.stringify({ ok: true, kind, processed }));
 }

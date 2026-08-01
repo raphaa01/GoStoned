@@ -88,6 +88,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [blockError, setBlockError] = useState<string | null>(null);
   const [blockAnnouncement, setBlockAnnouncement] = useState("");
   const [blockReadNonce, setBlockReadNonce] = useState(0);
+  const [localBotRetryNonce, setLocalBotRetryNonce] = useState(0);
   const [moveOperationLatch] = useState(createOperationLatch);
   const lastMessageId = useRef(0);
   const chatTerminal = useRef(false);
@@ -108,6 +109,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const boardStatus = useRef<HTMLDivElement>(null);
   const recoveryAction = useRef<HTMLButtonElement>(null);
   const blockActionRef = useRef<HTMLButtonElement>(null);
+  const localBotRequestKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (identityChanged || connectionState.kind === "session_expired") {
@@ -169,6 +171,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setBlockReconciling(false);
     setBlockError(null);
     setBlockAnnouncement("");
+    localBotRequestKey.current = null;
     setConfirmation(null);
     setShowResult(false);
     setGameAnnouncement("");
@@ -666,6 +669,143 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && game.phase === "scoring"
     && game.scoring,
   ) && gameInteractionAllowed && !busy;
+  const botColor: Stone | null = game?.blackPlayerIsBot
+    ? "black"
+    : game?.whitePlayerIsBot
+      ? "white"
+      : null;
+  const botNeedsScoreConfirmation = Boolean(
+    game?.status === "active"
+    && game.phase === "scoring"
+    && game.scoring
+    && botColor
+    && !(botColor === "black"
+      ? game.scoring.blackConfirmed
+      : game.scoring.whiteConfirmed),
+  );
+  const localBotActionKey = game
+    && botColor
+    && game.botTargetRating !== undefined
+    && game.status === "active"
+    && ((game.phase === "play" && game.turn === botColor) || botNeedsScoreConfirmation)
+      ? `${game.id}:${game.version}:${game.phase}:${botColor}`
+      : null;
+
+  useEffect(() => {
+    if (
+      !localBotActionKey
+      || !playerKey
+      || !connectionAllowsMutations(connectionStateRef.current)
+      || localBotRequestKey.current === localBotActionKey
+    ) {
+      return;
+    }
+    const snapshot = acceptedGame.current;
+    if (!snapshot || snapshot.id !== gameId || snapshot.status !== "active") return;
+    const expectedPlayerKey = playerKey;
+    const requestIdentity = identityAuthority.current.capture();
+    const controller = new AbortController();
+    let retryTimer: number | undefined;
+    localBotRequestKey.current = localBotActionKey;
+
+    void (async () => {
+      try {
+        const actionStartedAt = Date.now();
+        let body: Record<string, unknown>;
+        if (snapshot.phase === "play") {
+          const localBot = await import("@/lib/bot/browserClient");
+          const move = await localBot.calculateLocalBotMove(
+            {
+              game: snapshot,
+              targetRating: snapshot.botTargetRating ?? 1_200,
+            },
+            controller.signal,
+          );
+          const remainingThinkMs = Math.max(
+            0,
+            localBot.localBotThinkDelayMs(snapshot.id, snapshot.version)
+              - (Date.now() - actionStartedAt),
+          );
+          await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(resolve, remainingThinkMs);
+            controller.signal.addEventListener("abort", () => {
+              window.clearTimeout(timer);
+              reject(new DOMException("Local bot cancelled.", "AbortError"));
+            }, { once: true });
+          });
+          body = { action: "move", expectedVersion: snapshot.version, ...move };
+        } else {
+          await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(resolve, 750);
+            controller.signal.addEventListener("abort", () => {
+              window.clearTimeout(timer);
+              reject(new DOMException("Local bot cancelled.", "AbortError"));
+            }, { once: true });
+          });
+          body = { action: "confirm-score", expectedVersion: snapshot.version };
+        }
+
+        if (
+          controller.signal.aborted
+          || !identityAuthority.current.isCurrent(requestIdentity)
+          || acceptedGame.current?.version !== snapshot.version
+        ) {
+          return;
+        }
+        const response = await fetch(`/api/games/${snapshot.id}/bot-move`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [EXPECTED_PLAYER_HEADER]: expectedPlayerKey,
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+        });
+        const data = await readApi<{ actor: string; game: GameState }>(response);
+        if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+        assertResponseActor(data.actor, expectedPlayerKey);
+        acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
+      } catch (requestError) {
+        if (
+          controller.signal.aborted
+          || !identityAuthority.current.isCurrent(requestIdentity)
+          || isTerminalConnection(connectionStateRef.current)
+        ) {
+          return;
+        }
+        if (
+          requestError instanceof ApiRequestError
+          && requestError.code === "identity_changed"
+        ) {
+          recoverChangedIdentity();
+          return;
+        }
+        localBotRequestKey.current = null;
+        immediateGameSync.current?.(false);
+        retryTimer = window.setTimeout(
+          () => setLocalBotRetryNonce((nonce) => nonce + 1),
+          1_500,
+        );
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (localBotRequestKey.current === localBotActionKey) {
+        localBotRequestKey.current = null;
+      }
+    };
+  }, [
+    acceptGameResponse,
+    connectionState.kind,
+    gameId,
+    identityKey,
+    localBotActionKey,
+    localBotRetryNonce,
+    playerKey,
+    recoverChangedIdentity,
+  ]);
 
   function reconcileAfterOperation(requestError: unknown) {
     if (

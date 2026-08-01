@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import type { Pool } from "pg";
+import { POST as submitBotMove } from "@/app/api/games/[gameId]/bot-move/route";
 import { POST as sendChat } from "@/app/api/games/[gameId]/chat/route";
 import { POST as submitMove } from "@/app/api/games/[gameId]/moves/route";
 import { POST as resign } from "@/app/api/games/[gameId]/resign/route";
@@ -21,6 +22,7 @@ type MutationHandler = (
 ) => Promise<Response>;
 
 const mutations: Array<{ name: string; path: string; handler: MutationHandler }> = [
+  { name: "verified local bot move", path: "bot-move", handler: submitBotMove },
   { name: "move", path: "moves", handler: submitMove },
   { name: "chat send", path: "chat", handler: sendChat },
   { name: "dead-stone edit", path: "scoring/dead-stones", handler: markDead },

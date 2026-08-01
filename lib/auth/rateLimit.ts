@@ -115,6 +115,18 @@ export const RATE_LIMIT_POLICIES = {
     windowMinutes: 1 / 6,
   },
   move: { scope: "game-move", limit: 30, ipLimit: 300, windowMinutes: 1 },
+  localBotMoveBurst: {
+    scope: "local-bot-move-burst",
+    limit: 6,
+    ipLimit: 60,
+    windowMinutes: 1 / 6,
+  },
+  localBotMove: {
+    scope: "local-bot-move",
+    limit: 30,
+    ipLimit: 300,
+    windowMinutes: 1,
+  },
   scoringEditBurst: {
     scope: "game-scoring-edit-burst",
     limit: 6,
