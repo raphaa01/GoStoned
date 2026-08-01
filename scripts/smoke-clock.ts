@@ -78,6 +78,16 @@ async function run() {
   const gameId = matched.matchmaking.gameId;
   assert.equal(matched.matchmaking.timeControl, "blitz");
 
+  const started = await readJson<{ game: { version: number } }>(
+    await fetch(`${baseUrl}/api/games/${gameId}`, {
+      cache: "no-store",
+      headers: {
+        Cookie: black.cookie,
+        [EXPECTED_PLAYER_HEADER]: black.playerKey,
+      },
+    }),
+  );
+
   await query(
     `UPDATE games
         SET black_time_remaining_ms = 0,
@@ -88,7 +98,7 @@ async function run() {
     [gameId],
   );
 
-  const finished = await readJson<{
+  const finished = await post<{
     game: {
       status: string;
       result: string;
@@ -96,18 +106,11 @@ async function run() {
       rated: boolean;
       clock: { black: { periodsRemaining: number } };
     };
-  }>(
-    await fetch(
-      `${baseUrl}/api/games/${gameId}`,
-      {
-        cache: "no-store",
-        headers: {
-          Cookie: black.cookie,
-          [EXPECTED_PLAYER_HEADER]: black.playerKey,
-        },
-      },
-    ),
-  );
+  }>(`/api/games/${gameId}/moves`, {
+    x: 0,
+    y: 0,
+    expectedVersion: started.game.version,
+  }, black.cookie, black.playerKey);
 
   assert.equal(finished.game.status, "finished");
   assert.equal(finished.game.result, "W+T");
