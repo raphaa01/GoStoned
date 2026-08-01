@@ -32,7 +32,6 @@ export type PrivacyCopy = {
     representedBy: string;
     address: string;
     contact: string;
-    unavailable: string;
   };
   sections: Array<{
     title: string;
@@ -139,15 +138,6 @@ const controller = {
   representedBy: text("Represented by", "Vertreten durch", "Représenté par", "Representado por", "代表人", "代表者", "대표자"),
   address: text("Address", "Anschrift", "Adresse", "Dirección", "地址", "住所", "주소"),
   contact: text("Privacy contact", "Datenschutzkontakt", "Contact vie privée", "Contacto de privacidad", "隐私联系邮箱", "プライバシー窓口", "개인정보 문의"),
-  unavailable: text(
-    "The controller details must be configured before publication.",
-    "Die Angaben zum Verantwortlichen müssen vor der Veröffentlichung konfiguriert werden.",
-    "Les coordonnées du responsable doivent être configurées avant publication.",
-    "Los datos del responsable deben configurarse antes de la publicación.",
-    "发布前必须配置数据控制者信息。",
-    "公開前に管理者情報を設定する必要があります。",
-    "공개 전에 개인정보처리자 정보를 설정해야 합니다.",
-  ),
 };
 
 const sections: LocalizedSection[] = [
@@ -503,7 +493,6 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
       representedBy: localize(locale, controller.representedBy),
       address: localize(locale, controller.address),
       contact: localize(locale, controller.contact),
-      unavailable: localize(locale, controller.unavailable),
     },
     sections: sections.map((section) => ({
       title: localize(locale, section.title),
