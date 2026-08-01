@@ -454,7 +454,7 @@ export async function joinMatchmaking(
       rating: number;
       rating_deviation: number;
       algorithm_version: string;
-      rating_updated_at: Date;
+      rating_updated_at: string;
       preference_revision: number;
       display_preference: RatingDisplayPreference;
       bot_match_preference: BotMatchPreference;
@@ -463,7 +463,7 @@ export async function joinMatchmaking(
       `SELECT rating.rating::double precision AS rating,
               rating.rating_deviation::double precision AS rating_deviation,
               rating.algorithm_version,
-              rating.updated_at AS rating_updated_at,
+              rating.updated_at::text AS rating_updated_at,
               preference.preference_revision,
               preference.display_preference,
               preference.bot_match_preference,
