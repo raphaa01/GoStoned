@@ -82,11 +82,11 @@ class ControlGate:
             if self.stop_flag.exists():
                 raise StopRequested()
             if not announced:
-                self.journal.update(status="paused", message="Training pausiert – Fortschritt ist gespeichert.")
+                self.journal.update(status="paused", message="Training paused — progress has been saved.")
                 announced = True
             time.sleep(1)
         if announced:
-            self.journal.update(status="running", message="Training wird fortgesetzt.")
+            self.journal.update(status="running", message="Training resumed.")
 
 
 def process_is_alive(pid: int | None) -> bool:

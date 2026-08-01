@@ -39,6 +39,19 @@ class ControlCenterTests(unittest.TestCase):
             self.assertNotIn("https://", content)
             self.assertNotIn("http://", content)
 
+    def test_ai_arena_is_english_compact_and_has_selectable_scoring(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        styles = (STATIC_DIR / "styles.css").read_text(encoding="utf-8")
+        script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('<html lang="en">', html)
+        self.assertIn("AI vs AI", html)
+        self.assertIn('id="arena-settlement-evaluator"', html)
+        self.assertNotIn("Bot", html)
+        self.assertIn(".arena-match-mode", styles)
+        self.assertIn("calc(100vh - 280px)", styles)
+        self.assertIn("settlement_evaluator:", script)
+
     def test_current_process_is_detected_without_signaling_it(self) -> None:
         self.assertTrue(process_is_alive(os.getpid()))
 
@@ -101,7 +114,7 @@ class ControlCenterTests(unittest.TestCase):
             self.assertEqual(config["base_model_version"], 4)
             self.assertEqual(config["base_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
             self.assertNotEqual(config["seed"], 20260801)
-            self.assertEqual(started["preset_name"], "GoStone Bot v5")
+            self.assertEqual(started["preset_name"], "GoStone AI v5")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ def run(run_dir: Path) -> None:
     )
     try:
         gate.checkpoint()
-        journal.event("KataGo-Lehrermodell wird geprüft.")
+        journal.event("Verifying the KataGo teacher model.")
         human_model = download_teacher()
         journal.update(phase_progress=1.0, overall_progress=_overall("setup", 1.0))
 
@@ -69,9 +69,9 @@ def run(run_dir: Path) -> None:
         completed_games = len(existing)
         positions = _count_positions(data_dir)
         journal.event(
-            f"Datenerzeugung startet bei Partie {completed_games + 1} von {preset.games}."
+            f"Dataset generation starts at game {completed_games + 1} of {preset.games}."
             if completed_games < preset.games
-            else "Datensatz ist bereits vollständig; Training wird fortgesetzt."
+            else "The dataset is complete; model training will resume."
         )
         journal.update(phase="data", positions=positions)
         with KataGoTeacher(human_model=human_model) as teacher:
@@ -93,7 +93,7 @@ def run(run_dir: Path) -> None:
                         current_board_size=size,
                         current_visits=visits,
                         positions=positions + position,
-                        message=f"KataGo bewertet {size}×{size}, Stellung {position}.",
+                        message=f"KataGo is evaluating {size}×{size} position {position}.",
                     )
 
                 try:
@@ -125,19 +125,19 @@ def run(run_dir: Path) -> None:
                 )
                 positions += game.positions
                 journal.event(
-                    f"Partie {game_index + 1}/{preset.games} gespeichert: "
-                    f"{game.positions} Trainingsstellungen."
+                    f"Game {game_index + 1}/{preset.games} saved: "
+                    f"{game.positions} training positions."
                 )
                 journal.update(completed_games=game_index + 1, positions=positions)
 
         gate.checkpoint()
-        journal.event(f"Modelltraining startet mit {positions} Stellungen.")
+        journal.event(f"AI training starts with {positions} positions.")
         base_checkpoint_raw = config.get("base_model_checkpoint")
         base_checkpoint = Path(base_checkpoint_raw) if isinstance(base_checkpoint_raw, str) else None
         if base_checkpoint is not None:
             journal.event(
-                f"{config.get('display_name', 'Neues Modell')} lernt auf "
-                f"GoStone Bot v{config.get('base_model_version')} weiter."
+                f"{config.get('display_name', 'New AI model')} continues learning from "
+                f"GoStone AI v{config.get('base_model_version')}."
             )
 
         def on_epoch(epoch: int, total: int, metrics: dict[str, float]) -> None:
@@ -149,7 +149,7 @@ def run(run_dir: Path) -> None:
                 overall_progress=_overall("training", fraction),
                 completed_epochs=epoch,
                 metrics=metrics,
-                message=f"Epoche {epoch}/{total} abgeschlossen.",
+                message=f"Epoch {epoch}/{total} completed.",
             )
 
         journal.update(phase="training", phase_progress=0.0, overall_progress=_overall("training", 0.0))
@@ -169,7 +169,7 @@ def run(run_dir: Path) -> None:
             resume=True,
         )
         journal.update(phase="export", phase_progress=1.0, overall_progress=_overall("export", 1.0))
-        journal.event("ONNX-Modell wurde exportiert und strukturell geprüft.")
+        journal.event("The ONNX model was exported and structurally verified.")
         gate.checkpoint()
         metadata_path = artifact_dir / "gostone-japanese-v1.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -190,25 +190,25 @@ def run(run_dir: Path) -> None:
             artifact=str(model_path.resolve()),
             artifact_bytes=model_path.stat().st_size,
             metadata=str(metadata_path.resolve()),
-            message="Training abgeschlossen. Modell und Metadaten sind bereit.",
+            message="Training completed. The AI model and metadata are ready.",
         )
-        journal.event("Training erfolgreich abgeschlossen.")
+        journal.event("Training completed successfully.")
     except StopRequested:
         journal.update(
             status="stopped",
             pid=None,
-            message="Sicher gestoppt. Gespeicherte Partien und Epochen bleiben erhalten.",
+            message="Stopped safely. Saved games and epochs are preserved.",
         )
-        journal.event("Training wurde sicher gestoppt.", "warning")
+        journal.event("Training stopped safely.", "warning")
     except BaseException as error:
         journal.update(
             status="failed",
             pid=None,
             error=str(error),
             traceback=traceback.format_exc(limit=20),
-            message=f"Training fehlgeschlagen: {error}",
+            message=f"Training failed: {error}",
         )
-        journal.event(f"Training fehlgeschlagen: {error}", "error")
+        journal.event(f"Training failed: {error}", "error")
         raise
     finally:
         if journal.state.get("status") not in ("running", "paused"):

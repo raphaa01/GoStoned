@@ -58,7 +58,7 @@ class ArenaTests(unittest.TestCase):
                 output.truncate(MAX_MODEL_BYTES + 1)
             models = ModelCatalog(root).artifacts()
             self.assertEqual([model.id for model in models], ["test-run"])
-            self.assertTrue(models[0].label.startswith("GoStone Bot v1 · "))
+            self.assertTrue(models[0].label.startswith("GoStone AI v1 · "))
             self.assertEqual(models[0].model_version, 1)
 
     def test_versioned_and_technical_models_have_product_names(self) -> None:
@@ -67,8 +67,8 @@ class ArenaTests(unittest.TestCase):
             create_artifact(root, "real", model_version=7)
             create_artifact(root, "smoke", preset_id="smoke")
             models = {model.id: model for model in ModelCatalog(root).artifacts()}
-            self.assertTrue(models["smoke"].label.startswith("GoStone Techniktest · "))
-            self.assertTrue(models["real"].label.startswith("GoStone Bot v7 · "))
+            self.assertTrue(models["smoke"].label.startswith("GoStone AI Technical Test · "))
+            self.assertTrue(models["real"].label.startswith("GoStone AI v7 · "))
             self.assertTrue(models["smoke"].technical_test)
 
     def test_player_can_start_and_make_a_legal_move_against_the_model(self) -> None:
@@ -97,7 +97,7 @@ class ArenaTests(unittest.TestCase):
             self.assertIsNotNone(state["proposal"])
             proposal = state["proposal"]
             self.assertEqual(proposal["score"]["white_total"], 6.5)
-            self.assertIn("beide Spieler", proposal["notice"])
+            self.assertIn("both players", proposal["notice"])
 
     def test_two_models_advance_exactly_one_visible_move_per_request(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -105,12 +105,13 @@ class ArenaTests(unittest.TestCase):
             create_artifact(root, "model-one", model_version=1)
             create_artifact(root, "model-two", model_version=2)
             service = ArenaService(root)
-            state = service.start_match("model-one", "model-two", 9, 1200)
+            state = service.start_match("model-one", "model-two", 9, 1200, "white")
 
             self.assertEqual(state["mode"], "model_match")
             self.assertEqual(state["move_number"], 0)
             self.assertEqual(state["black_model_id"], "model-one")
             self.assertEqual(state["white_model_id"], "model-two")
+            self.assertEqual(state["settlement_evaluator"], "white")
 
             first = service.next_match_move(str(state["session_id"]))
             self.assertEqual(first["move_number"], 1)
@@ -133,7 +134,7 @@ class ArenaTests(unittest.TestCase):
             create_artifact(root, "model-two", model_version=2)
             service = ArenaService(root)
             service._bot_move = lambda _session, _model_id=None: "pass"  # type: ignore[method-assign]
-            state = service.start_match("model-one", "model-two", 9, 1500)
+            state = service.start_match("model-one", "model-two", 9, 1500, "white")
 
             first = service.next_match_move(str(state["session_id"]))
             self.assertFalse(first["finished"])
@@ -143,7 +144,23 @@ class ArenaTests(unittest.TestCase):
             self.assertEqual(final["finished_reason"], "two_passes")
             self.assertEqual([move["move"] for move in final["moves"]], ["pass", "pass"])
             self.assertIsNotNone(final["proposal"])
-            self.assertIn("beider Testmodelle", final["proposal"]["notice"])
+            self.assertEqual(final["proposal"]["evaluator_model_id"], "model-two")
+            self.assertEqual(final["proposal"]["evaluator_color"], "white")
+            self.assertIn("GoStone AI v2", final["proposal"]["notice"])
+
+    def test_model_match_can_use_black_ai_for_japanese_scoring(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_artifact(root, "model-one", model_version=1)
+            create_artifact(root, "model-two", model_version=2)
+            service = ArenaService(root)
+            service._bot_move = lambda _session, _model_id=None: "pass"  # type: ignore[method-assign]
+            state = service.start_match("model-one", "model-two", 9, 1500, "black")
+            service.next_match_move(str(state["session_id"]))
+            final = service.next_match_move(str(state["session_id"]))
+
+            self.assertEqual(final["proposal"]["evaluator_model_id"], "model-one")
+            self.assertEqual(final["proposal"]["evaluator_color"], "black")
 
 
 if __name__ == "__main__":
