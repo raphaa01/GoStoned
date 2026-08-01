@@ -187,9 +187,8 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       locale === "de" ? "8. Kyu" : "8 kyu",
     );
     if ((page.viewportSize()?.width ?? 0) > 840) {
-      await expect(page.locator(".sidebar-user .rating-label")).toContainText(
-        locale === "de" ? "8. Kyu" : "8 kyu",
-      );
+      await expect(page.locator(".sidebar-user__name")).toHaveText(USER.displayName);
+      await expect(page.locator(".sidebar-user .rating-label")).toHaveCount(0);
     } else {
       await page.getByRole("button", { name: dictionary.nav.openMenu }).click();
       await expect(page.locator(".mobile-menu .rating-label")).toContainText(
