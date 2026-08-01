@@ -22,6 +22,10 @@ let selectedPreset = "short";
 let lastArtifact = "";
 let arenaState = null;
 let arenaBusy = false;
+let arenaMode = "human";
+let arenaModels = [];
+let matchTimer = null;
+let matchPlaying = false;
 const arenaCanvas = $("#arena-board");
 const arenaContext = arenaCanvas.getContext("2d");
 const gtpColumns = "ABCDEFGHJKLMNOPQRST";
@@ -152,6 +156,11 @@ $("#copy-path").addEventListener("click", async () => {
 });
 
 function switchView(view) {
+  if (view !== "arena" && matchPlaying) {
+    matchPlaying = false;
+    clearMatchTimer();
+    if (arenaState?.mode === "model_match") renderArena(arenaState);
+  }
   document.querySelectorAll(".lab-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
   $("#training-view").hidden = view !== "training";
   $("#arena-view").hidden = view !== "arena";
@@ -163,20 +172,25 @@ document.querySelectorAll(".lab-tab").forEach((tab) => {
 });
 
 async function loadArenaModels() {
-  const select = $("#arena-model");
-  const previous = select.value;
-  const models = await api("/api/arena/models");
-  select.replaceChildren();
-  for (const model of models) {
-    const option = document.createElement("option");
-    option.value = model.id;
-    option.textContent = `${model.label} · ${model.onnx_mib.toFixed(2)} MiB`;
-    select.append(option);
-  }
-  if (models.some((model) => model.id === previous)) select.value = previous;
-  $("#arena-start").disabled = models.length === 0;
-  $("#arena-model-note").textContent = models.length
-    ? `${models.length} fertige${models.length === 1 ? "s" : ""} Modell${models.length === 1 ? "" : "e"} gefunden.`
+  const selects = [$("#arena-model"), $("#arena-black-model"), $("#arena-white-model")];
+  const previous = selects.map((select) => select.value);
+  arenaModels = await api("/api/arena/models");
+  selects.forEach((select, selectIndex) => {
+    select.replaceChildren();
+    for (const model of arenaModels) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.label} · ${model.onnx_mib.toFixed(2)} MiB`;
+      select.append(option);
+    }
+    if (arenaModels.some((model) => model.id === previous[selectIndex])) {
+      select.value = previous[selectIndex];
+    }
+  });
+  if (!previous[2] && arenaModels.length > 1) $("#arena-white-model").selectedIndex = 1;
+  $("#arena-start").disabled = arenaModels.length === 0;
+  $("#arena-model-note").textContent = arenaModels.length
+    ? `${arenaModels.length} fertige${arenaModels.length === 1 ? "s" : ""} Modell${arenaModels.length === 1 ? "" : "e"} gefunden. Dasselbe Modell darf für einen Kontrolllauf auf beiden Seiten spielen.`
     : "Noch kein fertiges Modell. Warte, bis ein Trainingslauf vollständig abgeschlossen ist.";
 }
 
@@ -248,30 +262,94 @@ function drawArenaBoard() {
 }
 
 function humanTurn(state) {
-  return state && state.to_move === state.human_color && !state.finished;
+  return state && state.mode === "human" && state.to_move === state.human_color && !state.finished;
+}
+
+function formatArenaMove(move) {
+  return !move || move.toLowerCase() === "pass" ? "Pass" : move.toUpperCase();
+}
+
+function renderMoveHistory(state) {
+  const panel = $("#arena-move-panel");
+  const list = $("#arena-move-list");
+  panel.hidden = !state;
+  list.replaceChildren();
+  if (!state?.moves?.length) {
+    const empty = document.createElement("li");
+    empty.className = "move-empty";
+    empty.textContent = "Die Partie wartet auf den ersten Zug.";
+    list.append(empty);
+    return;
+  }
+  for (const entry of state.moves) {
+    const item = document.createElement("li");
+    item.className = `arena-move-entry ${entry.color}`;
+    const number = document.createElement("span");
+    number.className = "move-number";
+    number.textContent = String(entry.number);
+    const stone = document.createElement("span");
+    stone.className = `mini-stone ${entry.color}`;
+    const label = document.createElement("span");
+    label.className = "move-label";
+    label.textContent = entry.label;
+    const coordinate = document.createElement("strong");
+    coordinate.textContent = formatArenaMove(entry.move);
+    item.append(number, stone, label, coordinate);
+    list.append(item);
+  }
+  list.scrollTop = list.scrollHeight;
 }
 
 function renderArena(state) {
   arenaState = state;
   drawArenaBoard();
+  const modelMatch = state.mode === "model_match";
   const human = state.human_color === "black" ? "Schwarz" : "Weiß";
   const turn = state.to_move === "black" ? "Schwarz" : "Weiß";
-  $("#arena-title").textContent = `${state.board_size}×${state.board_size} · Du spielst ${human}`;
+  $("#arena-title").textContent = modelMatch
+    ? `${state.board_size}×${state.board_size} · Modellvergleich`
+    : `${state.board_size}×${state.board_size} · Du spielst ${human}`;
+  $("#arena-players").hidden = false;
+  $("#arena-black-player").textContent = state.black_label;
+  $("#arena-white-player").textContent = state.white_label;
   const badge = $("#arena-turn");
-  badge.className = `status-badge ${state.finished ? "completed" : "running"}`;
-  badge.textContent = state.finished ? "Beendet" : humanTurn(state) ? "Dein Zug" : "Bot am Zug";
+  badge.className = `status-badge ${state.finished ? "completed" : modelMatch && !matchPlaying ? "paused" : "running"}`;
+  badge.textContent = state.finished
+    ? "Beendet"
+    : modelMatch
+      ? matchPlaying ? `${turn} rechnet` : "Pausiert"
+      : humanTurn(state) ? "Dein Zug" : "Bot am Zug";
   $("#arena-move").textContent = `Zug ${state.move_number} · ${turn} am Zug`;
   $("#arena-prisoners").textContent = `Gefangene: Schwarz ${state.black_prisoners} · Weiß ${state.white_prisoners}`;
   $("#arena-pass").disabled = arenaBusy || !humanTurn(state);
   $("#arena-reset").disabled = false;
-  $("#arena-message").textContent = state.finished
-    ? "Zwei aufeinanderfolgende Pässe: Der Modellvorschlag ist eingeblendet."
-    : state.bot_move ? `Der Bot spielte ${state.bot_move}. Du bist am Zug.` : "Klicke auf einen freien Schnittpunkt.";
+  $("#arena-playback").disabled = !modelMatch || state.finished || arenaBusy;
+  $("#arena-playback").textContent = matchPlaying ? "Pausieren" : "Weiter abspielen";
+  const last = state.moves.at(-1);
+  if (state.finished) {
+    $("#arena-message").textContent = state.finished_reason === "move_limit"
+      ? "Das Sicherheitslimit wurde erreicht. Der gemeinsame Endstandsvorschlag ist eingeblendet."
+      : "Zwei aufeinanderfolgende Pässe: Der Endstandsvorschlag ist eingeblendet.";
+  } else if (modelMatch) {
+    $("#arena-message").textContent = last
+      ? `${last.label} spielte ${formatArenaMove(last.move)}. ${turn} ist als Nächstes am Zug.`
+      : "Die Live-Partie ist bereit. Schwarz beginnt gleich.";
+  } else {
+    $("#arena-message").textContent = state.bot_move
+      ? `Der Bot spielte ${formatArenaMove(state.bot_move)}. Du bist am Zug.`
+      : "Klicke auf einen freien Schnittpunkt.";
+  }
+  renderMoveHistory(state);
+  const live = $("#arena-live-dot");
+  live.className = `live-dot ${state.finished ? "finished" : matchPlaying ? "playing" : "paused"}`;
+  live.textContent = state.finished ? "Beendet" : matchPlaying ? "Live" : "Pausiert";
   const result = $("#arena-result");
   result.hidden = !state.proposal;
   if (state.proposal) {
     const score = state.proposal.score;
-    const winner = score.winner === "black" ? "Schwarz" : score.winner === "white" ? "Weiß" : "Jigo";
+    const winner = score.winner === "black"
+      ? (modelMatch ? state.black_label : "Schwarz")
+      : score.winner === "white" ? (modelMatch ? state.white_label : "Weiß") : "Jigo";
     $("#result-title").textContent = winner === "Jigo" ? "Unentschieden" : `${winner} gewinnt`;
     $("#result-summary").textContent = winner === "Jigo" ? "Vorgeschlagener Gleichstand" : `Vorgeschlagener Vorsprung: ${score.margin.toFixed(1)} Punkte`;
     $("#result-black").textContent = `${score.black_total.toFixed(1)} (${score.black_territory} Gebiet + ${score.black_prisoners} Gefangene)`;
@@ -284,8 +362,12 @@ function renderArena(state) {
 function setArenaBusy(busy) {
   arenaBusy = busy;
   $("#arena-busy").hidden = !busy;
-  $("#arena-start").disabled = busy || !$("#arena-model").value;
+  const hasSelection = arenaMode === "human"
+    ? Boolean($("#arena-model").value)
+    : Boolean($("#arena-black-model").value && $("#arena-white-model").value);
+  $("#arena-start").disabled = busy || !hasSelection;
   $("#arena-pass").disabled = busy || !humanTurn(arenaState);
+  $("#arena-playback").disabled = busy || arenaMode !== "match" || !arenaState || arenaState.finished;
 }
 
 async function arenaRequest(payload) {
@@ -311,36 +393,112 @@ arenaCanvas.addEventListener("click", (event) => {
   arenaRequest({ session_id: arenaState.session_id, x, y });
 });
 
-$("#arena-start").addEventListener("click", async () => {
+function clearMatchTimer() {
+  if (matchTimer !== null) window.clearTimeout(matchTimer);
+  matchTimer = null;
+}
+
+function scheduleMatchMove(delay = Number($("#arena-speed").value)) {
+  clearMatchTimer();
+  if (!matchPlaying || !arenaState || arenaState.mode !== "model_match" || arenaState.finished) return;
+  matchTimer = window.setTimeout(advanceMatch, delay);
+}
+
+async function advanceMatch() {
+  if (!matchPlaying || !arenaState || arenaState.finished || arenaBusy) return;
   setArenaBusy(true);
   try {
-    const state = await api("/api/arena/start", {
+    const state = await api("/api/arena/match/next", {
       method: "POST",
-      body: JSON.stringify({
-        model_id: $("#arena-model").value,
-        board_size: Number($("#arena-size").value),
-        elo: Number($("#arena-elo").value),
-        human_color: $("#arena-color").value,
-      }),
+      body: JSON.stringify({ session_id: arenaState.session_id }),
     });
+    if (state.finished) matchPlaying = false;
     renderArena(state);
   } catch (error) {
+    matchPlaying = false;
     toast(error.message);
+    if (arenaState) renderArena(arenaState);
   } finally {
     setArenaBusy(false);
+    scheduleMatchMove();
   }
-});
-$("#arena-pass").addEventListener("click", () => arenaRequest({ session_id: arenaState.session_id, pass: true }));
-$("#arena-reset").addEventListener("click", () => {
+}
+
+function resetArena() {
+  clearMatchTimer();
+  matchPlaying = false;
   arenaState = null;
   $("#arena-result").hidden = true;
+  $("#arena-move-panel").hidden = true;
+  $("#arena-players").hidden = true;
   $("#arena-pass").disabled = true;
+  $("#arena-playback").disabled = true;
   $("#arena-reset").disabled = true;
   $("#arena-title").textContent = "Noch nicht gestartet";
   $("#arena-turn").textContent = "Bereit";
   $("#arena-turn").className = "status-badge idle";
   $("#arena-message").textContent = "Wähle ein Modell und starte eine neue Testpartie.";
   drawArenaBoard();
+}
+
+function setArenaMode(mode) {
+  if (!['human', 'match'].includes(mode)) return;
+  resetArena();
+  arenaMode = mode;
+  document.querySelectorAll(".arena-mode").forEach((button) => {
+    button.classList.toggle("active", button.dataset.arenaMode === mode);
+  });
+  $("#human-arena-fields").hidden = mode !== "human";
+  $("#match-arena-fields").hidden = mode !== "match";
+  $("#arena-pass").hidden = mode !== "human";
+  $("#arena-playback").hidden = mode !== "match";
+  $("#arena-settings-title").textContent = mode === "human" ? "Modell testen" : "Versionen vergleichen";
+  $("#arena-start").textContent = mode === "human" ? "Neue Testpartie" : "Live-Vergleich starten";
+  setArenaBusy(false);
+}
+
+$("#arena-start").addEventListener("click", async () => {
+  clearMatchTimer();
+  setArenaBusy(true);
+  try {
+    const common = {
+      board_size: Number($("#arena-size").value),
+      elo: Number($("#arena-elo").value),
+    };
+    const isMatch = arenaMode === "match";
+    const state = await api(isMatch ? "/api/arena/match/start" : "/api/arena/start", {
+      method: "POST",
+      body: JSON.stringify(isMatch ? {
+        ...common,
+        black_model_id: $("#arena-black-model").value,
+        white_model_id: $("#arena-white-model").value,
+      } : {
+        ...common,
+        model_id: $("#arena-model").value,
+        human_color: $("#arena-color").value,
+      }),
+    });
+    matchPlaying = isMatch;
+    renderArena(state);
+    if (isMatch) scheduleMatchMove(500);
+  } catch (error) {
+    matchPlaying = false;
+    toast(error.message);
+  } finally {
+    setArenaBusy(false);
+  }
+});
+$("#arena-pass").addEventListener("click", () => arenaRequest({ session_id: arenaState.session_id, pass: true }));
+$("#arena-playback").addEventListener("click", () => {
+  if (!arenaState || arenaState.finished) return;
+  matchPlaying = !matchPlaying;
+  renderArena(arenaState);
+  if (matchPlaying) scheduleMatchMove(200);
+  else clearMatchTimer();
+});
+$("#arena-reset").addEventListener("click", resetArena);
+document.querySelectorAll(".arena-mode").forEach((button) => {
+  button.addEventListener("click", () => setArenaMode(button.dataset.arenaMode));
 });
 $("#refresh-models").addEventListener("click", () => loadArenaModels().catch((error) => toast(error.message)));
 $("#arena-size").addEventListener("change", () => { if (!arenaState) drawArenaBoard(); });

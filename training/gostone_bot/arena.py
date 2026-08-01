@@ -129,8 +129,14 @@ class ArenaSession:
     strength: float
     human_color: int
     history: list[np.ndarray]
+    mode: str = "human"
+    black_model_id: str | None = None
+    white_model_id: str | None = None
+    black_label: str = "Schwarz"
+    white_label: str = "Weiß"
     moves: list[str] = field(default_factory=list)
     finished: bool = False
+    finished_reason: str | None = None
     proposal: dict[str, object] | None = None
     created_at: float = field(default_factory=time.time)
 
@@ -184,9 +190,15 @@ class ArenaService:
         session.history.append(candidate.stones.copy())
         session.moves.append(move)
         session.finished = candidate.consecutive_passes >= 2
+        if session.finished:
+            session.finished_reason = "two_passes"
 
-    def _inference(self, session: ArenaSession) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        artifact = self.catalog.resolve(session.model_id)
+    def _inference(
+        self,
+        session: ArenaSession,
+        model_id: str | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        artifact = self.catalog.resolve(model_id or session.model_id)
         model = self._load_model(artifact)
         features = torch.from_numpy(session.board.features(session.strength, JAPANESE_KOMI)).unsqueeze(0)
         with torch.inference_mode():
@@ -197,8 +209,8 @@ class ArenaService:
             survival[0].cpu().numpy(),
         )
 
-    def _bot_move(self, session: ArenaSession) -> str:
-        policy, _, _ = self._inference(session)
+    def _bot_move(self, session: ArenaSession, model_id: str | None = None) -> str:
+        policy, _, _ = self._inference(session, model_id)
         legal: list[tuple[str, int]] = []
         for y in range(session.board.size):
             for x in range(session.board.size):
@@ -246,21 +258,64 @@ class ArenaService:
             "notice": "Modellvorschlag – für ein echtes Ergebnis müssen beide Spieler dieselbe Auswahl bestätigen.",
         }
 
+    def _settle_match(self, session: ArenaSession) -> None:
+        if session.black_model_id is None or session.white_model_id is None:
+            raise ValueError("Der Modellvergleich ist unvollständig.")
+        _, black_ownership, black_survival = self._inference(session, session.black_model_id)
+        _, white_ownership, white_survival = self._inference(session, session.white_model_id)
+        proposal = propose_settlement(
+            session.board.stones,
+            survival_logits=(black_survival + white_survival) / 2,
+            ownership=(black_ownership + white_ownership) / 2,
+            captured_white_by_black=session.board.captured_white_by_black,
+            captured_black_by_white=session.board.captured_black_by_white,
+            komi=JAPANESE_KOMI,
+        )
+        session.proposal = {
+            "groups": [asdict(group) for group in proposal.groups],
+            "dead_stones": proposal.dead_stones,
+            "uncertain_stones": proposal.uncertain_stones,
+            "neutral_region_seeds": proposal.neutral_region_seeds,
+            "score": proposal.score.as_dict(),
+            "notice": "Gemeinsamer Endstandsvorschlag aus den Bewertungen beider Testmodelle.",
+        }
+
     def _public(self, session: ArenaSession, bot_move: str | None = None) -> dict[str, object]:
+        move_history = []
+        for index, move in enumerate(session.moves):
+            color = "black" if index % 2 == 0 else "white"
+            move_history.append(
+                {
+                    "number": index + 1,
+                    "color": color,
+                    "move": move,
+                    "model_id": session.black_model_id if color == "black" else session.white_model_id,
+                    "label": session.black_label if color == "black" else session.white_label,
+                }
+            )
         return {
             "session_id": session.id,
+            "mode": session.mode,
             "model_id": session.model_id,
+            "black_model_id": session.black_model_id,
+            "white_model_id": session.white_model_id,
+            "black_label": session.black_label,
+            "white_label": session.white_label,
             "board_size": session.board.size,
             "board": session.board.stones.tolist(),
             "to_move": "black" if session.board.to_move == 1 else "white",
-            "human_color": "black" if session.human_color == 1 else "white",
+            "human_color": (
+                "black" if session.human_color == 1 else "white"
+            ) if session.mode == "human" else None,
             "move_number": session.board.move_number,
+            "moves": move_history,
             "consecutive_passes": session.board.consecutive_passes,
             "black_prisoners": session.board.captured_white_by_black,
             "white_prisoners": session.board.captured_black_by_white,
             "last_move": session.moves[-1] if session.moves else None,
             "bot_move": bot_move,
             "finished": session.finished,
+            "finished_reason": session.finished_reason,
             "proposal": session.proposal,
             "rules": "japanese",
             "komi": JAPANESE_KOMI,
@@ -291,6 +346,10 @@ class ArenaService:
                 strength=(elo - SUPPORTED_ELOS[0]) / (SUPPORTED_ELOS[-1] - SUPPORTED_ELOS[0]),
                 human_color=1 if human_color == "black" else -1,
                 history=[board.stones.copy()],
+                black_model_id=model_id if human_color == "white" else None,
+                white_model_id=model_id if human_color == "black" else None,
+                black_label=artifact.label if human_color == "white" else "Du",
+                white_label=artifact.label if human_color == "black" else "Du",
             )
             self._sessions[session.id] = session
             if len(self._sessions) > 8:
@@ -318,6 +377,63 @@ class ArenaService:
             if session.finished:
                 self._settle(session)
             return self._public(session, bot_move)
+
+    def start_match(
+        self,
+        black_model_id: str,
+        white_model_id: str,
+        board_size: int,
+        elo: int,
+    ) -> dict[str, object]:
+        with self._lock:
+            black_artifact = self.catalog.resolve(black_model_id)
+            white_artifact = self.catalog.resolve(white_model_id)
+            self._load_model(black_artifact)
+            self._load_model(white_artifact)
+            if board_size not in (9, 13, 19):
+                raise ValueError("Bitte 9×9, 13×13 oder 19×19 auswählen.")
+            if elo not in SUPPORTED_ELOS:
+                raise ValueError("Diese Teststufe wird nicht unterstützt.")
+            board = BoardState(board_size)
+            session = ArenaSession(
+                id=secrets.token_urlsafe(18),
+                model_id=black_model_id,
+                board=board,
+                elo=elo,
+                strength=(elo - SUPPORTED_ELOS[0]) / (SUPPORTED_ELOS[-1] - SUPPORTED_ELOS[0]),
+                human_color=0,
+                history=[board.stones.copy()],
+                mode="model_match",
+                black_model_id=black_model_id,
+                white_model_id=white_model_id,
+                black_label=black_artifact.label,
+                white_label=white_artifact.label,
+            )
+            self._sessions[session.id] = session
+            if len(self._sessions) > 8:
+                oldest = min(self._sessions.values(), key=lambda item: item.created_at)
+                if oldest.id != session.id:
+                    self._sessions.pop(oldest.id, None)
+            return self._public(session)
+
+    def next_match_move(self, session_id: str) -> dict[str, object]:
+        with self._lock:
+            session = self._get(session_id)
+            if session.mode != "model_match":
+                raise ValueError("Diese Partie ist kein Modellvergleich.")
+            if session.finished:
+                raise ValueError("Der Modellvergleich ist bereits beendet.")
+            model_id = session.black_model_id if session.board.to_move == 1 else session.white_model_id
+            if model_id is None:
+                raise ValueError("Für die aktuelle Farbe fehlt ein Modell.")
+            move = self._bot_move(session, model_id)
+            self._commit_move(session, move)
+            if not session.finished and len(session.moves) >= session.board.size * session.board.size * 2:
+                session.finished = True
+                session.finished_reason = "move_limit"
+            if session.finished:
+                self._settle_match(session)
+            return self._public(session, move)
 
     def move_point(self, session_id: str, x: int, y: int) -> dict[str, object]:
         with self._lock:

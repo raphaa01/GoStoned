@@ -99,6 +99,52 @@ class ArenaTests(unittest.TestCase):
             self.assertEqual(proposal["score"]["white_total"], 6.5)
             self.assertIn("beide Spieler", proposal["notice"])
 
+    def test_two_models_advance_exactly_one_visible_move_per_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_artifact(root, "model-one", model_version=1)
+            create_artifact(root, "model-two", model_version=2)
+            service = ArenaService(root)
+            state = service.start_match("model-one", "model-two", 9, 1200)
+
+            self.assertEqual(state["mode"], "model_match")
+            self.assertEqual(state["move_number"], 0)
+            self.assertEqual(state["black_model_id"], "model-one")
+            self.assertEqual(state["white_model_id"], "model-two")
+
+            first = service.next_match_move(str(state["session_id"]))
+            self.assertEqual(first["move_number"], 1)
+            self.assertEqual(first["to_move"], "white")
+            self.assertEqual(len(first["moves"]), 1)
+            self.assertEqual(first["moves"][0]["color"], "black")
+            self.assertEqual(first["moves"][0]["model_id"], "model-one")
+
+            second = service.next_match_move(str(state["session_id"]))
+            self.assertEqual(second["move_number"], 2)
+            self.assertEqual(second["to_move"], "black")
+            self.assertEqual(len(second["moves"]), 2)
+            self.assertEqual(second["moves"][1]["color"], "white")
+            self.assertEqual(second["moves"][1]["model_id"], "model-two")
+
+    def test_model_match_settles_after_two_visible_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_artifact(root, "model-one", model_version=1)
+            create_artifact(root, "model-two", model_version=2)
+            service = ArenaService(root)
+            service._bot_move = lambda _session, _model_id=None: "pass"  # type: ignore[method-assign]
+            state = service.start_match("model-one", "model-two", 9, 1500)
+
+            first = service.next_match_move(str(state["session_id"]))
+            self.assertFalse(first["finished"])
+            final = service.next_match_move(str(state["session_id"]))
+
+            self.assertTrue(final["finished"])
+            self.assertEqual(final["finished_reason"], "two_passes")
+            self.assertEqual([move["move"] for move in final["moves"]], ["pass", "pass"])
+            self.assertIsNotNone(final["proposal"])
+            self.assertIn("beider Testmodelle", final["proposal"]["notice"])
+
 
 if __name__ == "__main__":
     unittest.main()

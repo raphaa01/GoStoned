@@ -31,6 +31,21 @@ must apply the same Japanese scorer on the server after both players agree on th
 dead groups. The six Elo labels are nominal training inputs until a calibration
 league has measured their real strength.
 
+## Compare two model versions live
+
+1. Open **Testarena** and choose **Modell gegen Modell**.
+2. Select the black and white checkpoints, board size, shared Elo profile, and
+   playback speed.
+3. Press **Live-Vergleich starten**.
+4. Watch each move appear on the board and in the complete move list. Use
+   **Pausieren** and **Weiter abspielen** whenever you want to inspect a position.
+
+The browser requests exactly one locally calculated move at a time. A match is
+therefore never simulated invisibly before its result appears. Colors should be
+swapped in a second game when comparing model strength. Two passes trigger a
+Japanese settlement proposal based on the averaged ownership and survival
+outputs of both models. A safety limit ends pathological games that never pass.
+
 The browser may be closed while training. Keep the small command window open if
 you want to reopen the page easily. The actual runner is a separate local process;
 it does not consume Codex, Modal, Vercel, or Supabase resources.

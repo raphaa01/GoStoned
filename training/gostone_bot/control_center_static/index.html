@@ -122,8 +122,8 @@
         <section class="arena-hero">
           <div>
             <p class="eyebrow">Fertiges Modell · echte lokale Inferenz</p>
-            <h1>Spiel gegen deinen neuen Bot.</h1>
-            <p class="hero-copy">Wähle ein abgeschlossenes Training, Brettgröße und Teststufe. Jeder Zug wird direkt mit dem erzeugten Modell auf diesem Laptop berechnet.</p>
+            <h1>Erlebe deine Modelle Zug für Zug.</h1>
+            <p class="hero-copy">Spiele selbst gegen ein Modell oder lasse zwei Versionen live gegeneinander antreten. Die Arena berechnet immer nur den nächsten Zug, damit du jede Entscheidung auf dem Brett verfolgen kannst.</p>
           </div>
           <div class="contract-card arena-contract">
             <span class="contract-value">日本</span>
@@ -141,6 +141,11 @@
               </div>
               <span id="arena-turn" class="status-badge idle">Bereit</span>
             </div>
+            <div id="arena-players" class="arena-players" hidden>
+              <div class="arena-player"><span class="mini-stone black"></span><span><small>Schwarz</small><strong id="arena-black-player">Schwarz</strong></span></div>
+              <span class="versus-mark">gegen</span>
+              <div class="arena-player white-player"><span><small>Weiß</small><strong id="arena-white-player">Weiß</strong></span><span class="mini-stone white"></span></div>
+            </div>
             <div class="board-wrap">
               <canvas id="arena-board" width="760" height="760" aria-label="Interaktives Go-Brett"></canvas>
               <div id="arena-busy" class="board-busy" hidden><span></span><strong>Bot denkt …</strong></div>
@@ -155,12 +160,34 @@
           <aside class="arena-sidebar">
             <article class="panel arena-settings">
               <div class="panel-heading compact">
-                <div><p class="kicker">Spiel einrichten</p><h2>Modell testen</h2></div>
+                <div><p class="kicker">Spiel einrichten</p><h2 id="arena-settings-title">Modell testen</h2></div>
               </div>
-              <label class="field-label" for="arena-model">Trainingsmodell</label>
-              <div class="model-row">
-                <select id="arena-model"></select>
-                <button id="refresh-models" class="icon-button" type="button" aria-label="Modelle neu laden">↻</button>
+              <div class="arena-mode-switch" role="group" aria-label="Testmodus">
+                <button class="arena-mode active" data-arena-mode="human" type="button">Ich gegen Bot</button>
+                <button class="arena-mode" data-arena-mode="match" type="button">Modell gegen Modell</button>
+              </div>
+
+              <div id="human-arena-fields">
+                <label class="field-label" for="arena-model">Trainingsmodell</label>
+                <div class="model-row">
+                  <select id="arena-model"></select>
+                  <button id="refresh-models" class="icon-button" type="button" aria-label="Modelle neu laden">↻</button>
+                </div>
+                <label class="field-label" for="arena-color">Deine Farbe</label>
+                <select id="arena-color"><option value="black">Schwarz · erster Zug</option><option value="white">Weiß · Bot beginnt</option></select>
+              </div>
+
+              <div id="match-arena-fields" hidden>
+                <label class="field-label" for="arena-black-model">Schwarzes Modell</label>
+                <select id="arena-black-model"></select>
+                <label class="field-label" for="arena-white-model">Weißes Modell</label>
+                <select id="arena-white-model"></select>
+                <label class="field-label" for="arena-speed">Live-Tempo</label>
+                <select id="arena-speed">
+                  <option value="1600">Ruhig · 1,6 Sekunden</option>
+                  <option value="900" selected>Normal · 0,9 Sekunden</option>
+                  <option value="350">Schnell · 0,35 Sekunden</option>
+                </select>
               </div>
               <p id="arena-model-note" class="field-note">Nur vollständig exportierte Trainingsläufe erscheinen hier.</p>
 
@@ -168,14 +195,21 @@
                 <label><span class="field-label">Brett</span><select id="arena-size"><option value="9">9×9</option><option value="13">13×13</option><option value="19">19×19</option></select></label>
                 <label><span class="field-label">Teststufe</span><select id="arena-elo"><option value="600">600 Elo</option><option value="900">900 Elo</option><option value="1200" selected>1200 Elo</option><option value="1500">1500 Elo</option><option value="1800">1800 Elo</option><option value="2100">2100 Elo</option></select></label>
               </div>
-              <label class="field-label" for="arena-color">Deine Farbe</label>
-              <select id="arena-color"><option value="black">Schwarz · erster Zug</option><option value="white">Weiß · Bot beginnt</option></select>
               <button id="arena-start" class="button primary wide" type="button">Neue Testpartie</button>
               <div class="arena-actions">
                 <button id="arena-pass" class="button secondary" type="button" disabled>Passen</button>
+                <button id="arena-playback" class="button secondary" type="button" hidden disabled>Pausieren</button>
                 <button id="arena-reset" class="button danger" type="button" disabled>Partie verwerfen</button>
               </div>
               <p id="arena-message" class="action-note">Beende das laufende Training zuerst, wenn du die CPU-Leistung vollständig für die Arena nutzen möchtest.</p>
+            </article>
+
+            <article id="arena-move-panel" class="panel arena-move-panel" hidden>
+              <div class="panel-heading compact">
+                <div><p class="kicker">Live-Zugfolge</p><h2>Partieverlauf</h2></div>
+                <span id="arena-live-dot" class="live-dot">Live</span>
+              </div>
+              <ol id="arena-move-list" class="arena-move-list" aria-live="polite"><li class="move-empty">Die Partie wartet auf den ersten Zug.</li></ol>
             </article>
 
             <article id="arena-result" class="panel arena-result" hidden>

@@ -319,6 +319,19 @@ class ControlHandler(BaseHTTPRequestHandler):
                     int(body["elo"]),
                     str(body["human_color"]),
                 )
+            elif path == "/api/arena/match/start":
+                if set(body) != {"black_model_id", "white_model_id", "board_size", "elo"}:
+                    raise ValueError("Vergleichsparameter sind unvollständig oder unbekannt.")
+                result = self.arena.start_match(
+                    str(body["black_model_id"]),
+                    str(body["white_model_id"]),
+                    int(body["board_size"]),
+                    int(body["elo"]),
+                )
+            elif path == "/api/arena/match/next":
+                if set(body) != {"session_id"}:
+                    raise ValueError("Für den nächsten Zug wird nur die Testpartie benötigt.")
+                result = self.arena.next_match_move(str(body["session_id"]))
             elif path == "/api/arena/move":
                 if set(body) not in ({"session_id", "x", "y"}, {"session_id", "pass"}):
                     raise ValueError("Arena-Zugparameter sind unvollständig oder unbekannt.")
