@@ -3924,6 +3924,20 @@ a {
   gap: 0.15rem;
 }
 
+.rating-label__primary {
+  align-items: baseline;
+  display: inline-flex;
+}
+
+.rating-label__provisional {
+  color: var(--muted);
+  font-size: 0.62em;
+  font-weight: 700;
+  line-height: 1;
+  margin-inline-start: 0.16em;
+  text-decoration: none;
+}
+
 .rating-label small,
 .leaderboard-rating-detail {
   display: block;

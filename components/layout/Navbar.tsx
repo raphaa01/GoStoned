@@ -100,8 +100,10 @@ export function Navbar() {
               <span className="mobile-menu-link-copy">{label}</span>
               {path === "/profile" && rating ? (
                 <RatingLabel
+                  isProvisional={rating.isProvisional}
                   locale={locale}
                   preference={rating.displayPreference}
+                  provisionalLabel={dictionary.profile.provisional}
                   rating={rating.value}
                   variant="compact"
                 />

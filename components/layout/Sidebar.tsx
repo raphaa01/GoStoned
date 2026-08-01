@@ -64,8 +64,10 @@ export function DesktopHeader() {
                 <strong>{user.displayName}</strong>
                 {rating ? (
                   <RatingLabel
+                    isProvisional={rating.isProvisional}
                     locale={locale}
                     preference={rating.displayPreference}
+                    provisionalLabel={dictionary.profile.provisional}
                     rating={rating.value}
                     variant="compact"
                   />

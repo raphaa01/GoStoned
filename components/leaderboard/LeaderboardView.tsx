@@ -129,8 +129,10 @@ export function LeaderboardView() {
             </span>
             <span className="leaderboard-viewer__rating">
               <RatingLabel
+                isProvisional={viewerRating.isProvisional}
                 locale={locale}
                 preference={viewerRating.displayPreference}
+                provisionalLabel={dictionary.profile.provisional}
                 rating={viewerRating.value}
                 variant="compact"
               />

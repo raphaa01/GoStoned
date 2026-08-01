@@ -142,8 +142,10 @@ export function ProfileView() {
           <span className="profile-header__rating">
             <span>{copy.currentRating}</span>
             <RatingLabel
+              isProvisional={rating.isProvisional}
               locale={locale}
               preference={preferences.displayPreference}
+              provisionalLabel={copy.provisional}
               rating={rating.rating}
               variant="compact"
             />
@@ -160,12 +162,14 @@ export function ProfileView() {
           <article className="profile-rating-band">
             <span className="profile-rating-band__eyebrow"><Activity aria-hidden="true" size={16} /> {copy.globalRating}</span>
             <RatingLabel
+              isProvisional={rating.isProvisional}
               locale={locale}
               preference={preferences.displayPreference}
+              provisionalLabel={copy.provisional}
               rating={rating.rating}
               variant="hero"
             />
-            <p>{rating.isProvisional ? copy.provisional : copy.established} · {rating.ratedGameCount} {copy.games}</p>
+            <p>{rating.ratedGameCount} {copy.games}</p>
             <strong className={change > 0 ? "is-positive" : change < 0 ? "is-negative" : ""}>
               {signedRating(change)} <small>{copy.last30Days}</small>
             </strong>
