@@ -132,7 +132,7 @@ function contractMeasurement(name: PollBenchmarkScenario): PollMeasurement {
     locking: false,
   }));
   const lockingIndexes = name === "play_timeout_150"
-    ? [11, 14, 16]
+    ? [11, 14, 16, 17]
     : name === "scoring_expiry_302"
       ? [12, 15]
       : [];
