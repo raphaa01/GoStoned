@@ -363,7 +363,7 @@ a {
   justify-content: flex-start;
 }
 
-.sidebar-user > span {
+.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__name) {
   align-items: center;
   background: var(--green-dark);
   border-radius: 6px;
