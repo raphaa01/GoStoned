@@ -54,8 +54,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const result = analysis?.result ?? null;
   const current = result?.moves[selectedMove - 1] ?? null;
   const board = useMemo(() => game ? replayMoves(game.boardSize, game.moves.slice(0, selectedMove)) : null, [game, selectedMove]);
-  if (loading) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
-  if (!user) return <div className={styles.reviewStatus}><p>{copy.savedGameSignIn}</p><Link className="button button--primary" href={href("/login")}>{copy.login}</Link></div>;
+  if (loading || !user) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
   if (error && !game) return <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>;
   if (!game || !board) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
 

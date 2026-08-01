@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
@@ -17,15 +18,16 @@ export function Navbar() {
   const { user, logout, rating } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const [open, setOpen] = useState(false);
+  const reviewHref = useAccountFeatureHref("/review");
   const menuId = useId();
   const menuButton = useRef<HTMLButtonElement>(null);
   const links = [
-    { href: "/play", label: dictionary.nav.play, icon: Gamepad2 },
-    { href: "/learn", label: dictionary.nav.learn, icon: BookOpen },
-    { href: "/review", label: dictionary.nav.review, icon: Search },
-    { href: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
-    { href: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
-    { href: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
+    { destination: href("/play"), path: "/play", label: dictionary.nav.play, icon: Gamepad2 },
+    { destination: href("/learn"), path: "/learn", label: dictionary.nav.learn, icon: BookOpen },
+    { destination: reviewHref, path: "/review", label: dictionary.nav.review, icon: Search },
+    { destination: href("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
+    { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
+    { destination: href(user ? "/profile" : "/login"), path: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
   ];
 
   useEffect(() => {
@@ -89,10 +91,10 @@ export function Navbar() {
         hidden={!open}
         id={menuId}
       >
-          {links.map(({ href: path, label, icon: Icon }) => (
+          {links.map(({ destination, path, label, icon: Icon }) => (
             <Link
               className={isRouteActive(pathname, path) ? "is-active" : ""}
-              href={href(path)}
+              href={destination}
               key={path}
               onClick={() => setOpen(false)}
               aria-current={isRouteActive(pathname, path) ? "page" : undefined}

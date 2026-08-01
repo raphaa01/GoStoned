@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { safeGameReturnPath, safeReauthenticationReturnPath } from "./returnPath";
+import {
+  accountRegistrationPath,
+  safeAccountReturnPath,
+  safeAuthReturnPath,
+  safeGameReturnPath,
+  safeReauthenticationReturnPath,
+} from "./returnPath";
 
 const gameId = "11111111-1111-4111-8111-111111111111";
 
@@ -21,6 +27,29 @@ test("reauthentication can return to the localized play lobby", () => {
   assert.equal(safeReauthenticationReturnPath(`/game/${gameId}`), `/game/${gameId}`);
   assert.equal(safeReauthenticationReturnPath("/profile"), null);
   assert.equal(safeReauthenticationReturnPath("/play?next=/profile"), null);
+});
+
+test("account onboarding returns only to protected account features", () => {
+  assert.equal(safeAccountReturnPath("/profile"), "/profile");
+  assert.equal(safeAccountReturnPath("/de/profile"), "/profile");
+  assert.equal(safeAccountReturnPath("/review"), "/review");
+  assert.equal(safeAccountReturnPath(`/ja/review/${gameId}`), `/review/${gameId}`);
+  assert.equal(safeAccountReturnPath("/play"), null);
+  assert.equal(safeAccountReturnPath("/puzzles"), null);
+  assert.equal(safeAccountReturnPath("/review/not-a-uuid"), null);
+  assert.equal(safeAccountReturnPath("/profile?next=//evil.example"), null);
+});
+
+test("auth return paths and registration links stay internal and canonical", () => {
+  assert.equal(safeAuthReturnPath("/de/profile"), "/profile");
+  assert.equal(safeAuthReturnPath("/fr/play"), "/play");
+  assert.equal(safeAuthReturnPath(`/game/${gameId}`), `/game/${gameId}`);
+  assert.equal(accountRegistrationPath("/review"), "/register?returnTo=%2Freview");
+  assert.equal(
+    accountRegistrationPath(`/review/${gameId}`),
+    `/register?returnTo=${encodeURIComponent(`/review/${gameId}`)}`,
+  );
+  assert.equal(accountRegistrationPath("https://evil.example/profile"), "/register");
 });
 
 test("reauthentication rejects external, ambiguous, and unrelated paths", () => {

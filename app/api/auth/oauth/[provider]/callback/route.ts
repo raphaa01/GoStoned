@@ -12,7 +12,7 @@ import {
   RATE_LIMIT_POLICIES,
   RateLimitError,
 } from "@/lib/auth/rateLimit";
-import { safeReauthenticationReturnPath } from "@/lib/auth/returnPath";
+import { safeAuthReturnPath } from "@/lib/auth/returnPath";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 import { localizePathname } from "@/lib/i18n/routing";
@@ -38,10 +38,16 @@ function appOrigin(): string {
   }
 }
 
-function pageUrl(mode: OAuthMode, locale: Locale, error?: string): URL {
+function pageUrl(
+  mode: OAuthMode,
+  locale: Locale,
+  error?: string,
+  returnTo?: string | null,
+): URL {
   const path = localizePathname(mode === "register" ? "/register" : "/login", locale);
   const url = new URL(path, appOrigin());
   if (error) url.searchParams.set("oauthError", error);
+  if (returnTo) url.searchParams.set("returnTo", returnTo);
   return url;
 }
 
@@ -171,7 +177,11 @@ async function callback(
   );
   const mode = transaction?.mode ?? "login";
   const locale = transaction && isLocale(transaction.locale) ? transaction.locale : DEFAULT_LOCALE;
-  const errorPage = (code: string) => callbackRedirect(provider, pageUrl(mode, locale, code));
+  const returnTo = safeAuthReturnPath(transaction?.returnTo ?? undefined);
+  const errorPage = (code: string) => callbackRedirect(
+    provider,
+    pageUrl(mode, locale, code, returnTo),
+  );
 
   if (!transaction || !parameters.state || parameters.state !== transaction.state) {
     return errorPage("oauth_failed");
@@ -190,8 +200,7 @@ async function callback(
       provider === "apple" ? parameters.user : null,
     );
     const login = await signInWithOAuthIdentity(identity);
-    const safeReturnTo = safeReauthenticationReturnPath(transaction.returnTo ?? undefined);
-    const logicalDestination = safeReturnTo ?? (mode === "register" ? "/profile" : "/play");
+    const logicalDestination = returnTo ?? (mode === "register" ? "/profile" : "/play");
     const destination = new URL(localizePathname(logicalDestination, locale), appOrigin());
     return callbackRedirect(provider, destination, login.token);
   } catch (error) {

@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { getPreviewPlayerCount } from "@/lib/stats/playerCountPreview";
 
@@ -21,6 +22,8 @@ type SummaryState =
 
 export function Hero() {
   const { dictionary, href, locale } = useI18n();
+  const profileHref = useAccountFeatureHref("/profile");
+  const reviewHref = useAccountFeatureHref("/review");
   const copy = dictionary.home;
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: "loading" });
   const [requestKey, setRequestKey] = useState(0);
@@ -176,7 +179,7 @@ export function Hero() {
             <span className="section-kicker">{copy.reviewChapterKicker}</span>
             <h2 id="home-review-title">{copy.reviewChapterTitle}</h2>
             <p>{copy.reviewChapterBody}</p>
-            <Link className="chapter-link" href={href("/review")}>{copy.reviewChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={reviewHref}>{copy.reviewChapterAction} <ArrowRight size={17} /></Link>
           </div>
         </section>
 
@@ -187,7 +190,7 @@ export function Hero() {
               <h2 id="home-progress-title">{copy.progressChapterTitle}</h2>
               <p>{copy.progressChapterBody}</p>
             </div>
-            <Link href={href("/profile")}>{copy.progressChapterAction} <ArrowRight size={17} /></Link>
+            <Link href={profileHref}>{copy.progressChapterAction} <ArrowRight size={17} /></Link>
           </div>
 
           <div className="platform-metrics">
