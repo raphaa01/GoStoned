@@ -386,7 +386,10 @@ function setArenaBusy(busy) {
   const hasSelection = arenaMode === "human"
     ? Boolean($("#arena-model").value)
     : Boolean($("#arena-black-model").value && $("#arena-white-model").value);
-  $("#arena-start").disabled = busy || !hasSelection;
+  const activeModelMatch = arenaMode === "match" && Boolean(arenaState && !arenaState.finished);
+  const startingModelMatch = arenaMode === "match" && busy && !arenaState;
+  $("#arena-start").disabled = !hasSelection
+    || (arenaMode === "human" ? busy : activeModelMatch || startingModelMatch);
   $("#arena-pass").disabled = busy || !humanTurn(arenaState);
   $("#arena-playback").disabled = arenaMode !== "match" || !arenaState || arenaState.finished;
 }

@@ -55,6 +55,7 @@ class ControlCenterTests(unittest.TestCase):
         self.assertIn('classList.toggle("arena-view-active"', script)
         self.assertIn('const showBlockingOverlay = busy && arenaMode === "human";', script)
         self.assertIn('$("#arena-busy").hidden = !showBlockingOverlay;', script)
+        self.assertIn('const activeModelMatch = arenaMode === "match"', script)
         self.assertNotIn('`${turn} computing`', script)
         self.assertIn("settlement_evaluator:", script)
 
