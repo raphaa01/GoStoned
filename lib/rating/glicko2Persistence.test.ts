@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-const migrationPath = join(process.cwd(), "db/migrations/026_global_glicko2_persistence.sql");
+const migrationPath = join(process.cwd(), "db/migrations/027_global_glicko2_persistence.sql");
 const migration = readFileSync(migrationPath, "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");

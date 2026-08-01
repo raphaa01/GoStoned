@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-const migration = readFileSync(join(process.cwd(), "db/migrations/027_rating_preferences_and_match_pools.sql"), "utf8");
+const migration = readFileSync(join(process.cwd(), "db/migrations/028_rating_preferences_and_match_pools.sql"), "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
 const matchmaking = readFileSync(join(process.cwd(), "lib/matchmaking/matchmakingService.ts"), "utf8");

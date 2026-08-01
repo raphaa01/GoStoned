@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const migration = read("db/migrations/029_katago_scoring_jobs.sql");
+const migration = read("db/migrations/026_katago_scoring_jobs.sql");
 const schema = read("db/schema.sql");
 const preflight = read("scripts/check-mvp.ts");
 const worker = read("workers/katago/scoring.ts");
