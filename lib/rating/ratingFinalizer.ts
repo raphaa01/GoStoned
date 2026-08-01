@@ -381,7 +381,17 @@ export async function finalizeGameRatings(
           rated_game_count_after,last_rating_period_at_before,last_rating_period_at_after,
           algorithm_version,rating_period_at)
        VALUES ($1,$2,$3,'calibrated_bot',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-               $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
+               COALESCE((SELECT terminal.finished_at FROM games AS terminal
+                          WHERE terminal.id=$1),$15::timestamptz),
+               $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
+               COALESCE((SELECT state.last_rating_period_at
+                           FROM player_glicko2_ratings AS state
+                          WHERE state.player_key=$2),$26::timestamptz),
+               CASE WHEN $11::text='no_result' THEN
+                 COALESCE((SELECT state.last_rating_period_at
+                             FROM player_glicko2_ratings AS state
+                            WHERE state.player_key=$2),$26::timestamptz)
+               ELSE $27::timestamptz END,$28,$29)`,
       [
         game.id, before.playerKey, binding.bot_player_key,
         binding.profile_contract_version, binding.profile_id, binding.profile_fingerprint,
@@ -501,8 +511,18 @@ export async function finalizeGameRatings(
           volatility_before,volatility_after,rated_game_count_before,
           rated_game_count_after,last_rating_period_at_before,
           last_rating_period_at_after,algorithm_version,rating_period_at)
-       VALUES ($1,$2,$3,'registered_human',$4,$5,$6,$7,$8,$9,$10,$11,$12,
-               $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+       VALUES ($1,$2,$3,'registered_human',$4,$5,$6,$7,$8,
+               COALESCE((SELECT terminal.finished_at FROM games AS terminal
+                          WHERE terminal.id=$1),$9::timestamptz),
+               $10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+               COALESCE((SELECT state.last_rating_period_at
+                           FROM player_glicko2_ratings AS state
+                          WHERE state.player_key=$2),$20::timestamptz),
+               CASE WHEN $5::text='no_result' THEN
+                 COALESCE((SELECT state.last_rating_period_at
+                             FROM player_glicko2_ratings AS state
+                            WHERE state.player_key=$2),$20::timestamptz)
+               ELSE $21::timestamptz END,$22,$23)`,
       [
         game.id,
         player.before.playerKey,
