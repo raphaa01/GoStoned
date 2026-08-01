@@ -19,6 +19,15 @@ if (!databaseUrl || !isUnambiguousLocalDatabase(databaseUrl)) {
 
 type ApiBody = { ok: boolean; error?: string; [key: string]: unknown };
 
+function assertNear(actual: number, expected: number, tolerance = 1e-6): void {
+  assert.ok(
+    Number.isFinite(actual)
+      && Number.isFinite(expected)
+      && Math.abs(actual - expected) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`,
+  );
+}
+
 async function request(
   path: string,
   init?: RequestInit,
@@ -292,7 +301,7 @@ async function run() {
   assert.equal(secondRating.algorithmVersion, "glicko2-v1-tau-0.5");
   assert.ok(secondRating.rating > 1200);
   assert.equal(secondRating.ratingDeviation, firstRating.ratingDeviation);
-  assert.equal(secondRating.ratingChange30Days, secondRating.rating - 1200);
+  assertNear(secondRating.ratingChange30Days, secondRating.rating - 1200);
   assert.equal(secondGameHistory?.result, "win");
   assert.equal(secondGameHistory?.ratingBefore, 1200);
   assert.equal(secondGameHistory?.ratingAfter, secondRating.rating);
