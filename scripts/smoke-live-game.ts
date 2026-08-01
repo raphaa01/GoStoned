@@ -317,36 +317,42 @@ async function run() {
     game: { phase: string; turn: string; scoring: null };
   }>(`/api/games/${gameId}/scoring/resume`, {
     expectedRevision: challengedProposal.game.scoring.revision,
-    claim: "alive",
-    x: 3,
-    y: 2,
   }, white.cookie, white.playerKey);
   assert.equal(resumed.game.phase, "play");
   assert.equal(resumed.game.turn, "black");
   assert.equal(resumed.game.scoring, null);
 
   const resumeEvents = await query<{
+    resumption_number: number;
     scoring_revision: number;
-    resume_claim: string;
-    requested_by_color: string | null;
-    disputed_x: number | null;
-    disputed_y: number | null;
-    resumed_to_move: string;
+    stopped_move_number: number;
+    requested_by_color: string;
+    rules: string;
+    rules_profile: string;
+    scoring_method: string;
+    komi: string;
+    handicap: number;
+    board_hash_bound: boolean;
   }>(
-    `SELECT scoring_revision, resume_claim, requested_by_color,
-            disputed_x, disputed_y, resumed_to_move
-       FROM game_scoring_resume_events
+    `SELECT resumption_number, scoring_revision, stopped_move_number,
+            requested_by_color, rules, rules_profile, scoring_method,
+            komi::text, handicap, LENGTH(stopped_board_hash) > 0 AS board_hash_bound
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1
-      ORDER BY scoring_revision`,
+      ORDER BY resumption_number`,
     [gameId],
   );
   assert.deepEqual(resumeEvents.rows, [{
+    resumption_number: 1,
     scoring_revision: challengedProposal.game.scoring.revision,
-    resume_claim: "alive",
+    stopped_move_number: 4,
     requested_by_color: "white",
-    disputed_x: 3,
-    disputed_y: 2,
-    resumed_to_move: "black",
+    rules: "japanese",
+    rules_profile: "japanese-1989-gostone-v1",
+    scoring_method: "territory",
+    komi: "6.5",
+    handicap: 0,
+    board_hash_bound: true,
   }]);
 
   await postMove(gameId, { x: 4, y: 2 }, black.cookie, black.playerKey);
@@ -358,7 +364,7 @@ async function run() {
   assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
   const retainedResumeEvidence = await query<{ event_count: number }>(
     `SELECT COUNT(*)::int AS event_count
-       FROM game_scoring_resume_events
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1`,
     [gameId],
   );
@@ -398,48 +404,45 @@ async function run() {
       lastResume: {
         claim: string;
         requestedBy: string;
-        disputedStone: { x: number; y: number };
+        disputedStone: { x: number; y: number } | null;
       };
     };
   }>(`/api/games/${gameId}/scoring/resume`, {
     expectedRevision: secondProposal.game.scoring.revision,
-    claim: "dead",
-    x: 3,
-    y: 2,
   }, black.cookie, black.playerKey);
   assert.equal(secondResumed.game.phase, "play");
-  assert.equal(secondResumed.game.turn, "black");
+  assert.equal(secondResumed.game.turn, "white");
   assert.equal(secondResumed.game.scoring, null);
   assert.deepEqual(secondResumed.game.lastResume, {
-    claim: "dead",
+    claim: "resume",
     requestedBy: "black",
-    disputedStone: { x: 3, y: 2 },
+    disputedStone: null,
   });
 
   const repeatedResumeEvents = await query<{
+    resumption_number: number;
     scoring_revision: number;
-    resume_claim: string;
-    requested_by_color: string | null;
-    resumed_to_move: string;
+    stopped_move_number: number;
+    requested_by_color: string;
   }>(
-    `SELECT scoring_revision, resume_claim, requested_by_color, resumed_to_move
-       FROM game_scoring_resume_events
+    `SELECT resumption_number, scoring_revision, stopped_move_number, requested_by_color
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1
-      ORDER BY scoring_revision`,
+      ORDER BY resumption_number`,
     [gameId],
   );
   assert.deepEqual(repeatedResumeEvents.rows, [
     {
+      resumption_number: 1,
       scoring_revision: challengedProposal.game.scoring.revision,
-      resume_claim: "alive",
+      stopped_move_number: 4,
       requested_by_color: "white",
-      resumed_to_move: "black",
     },
     {
+      resumption_number: 2,
       scoring_revision: secondProposal.game.scoring.revision,
-      resume_claim: "dead",
+      stopped_move_number: 7,
       requested_by_color: "black",
-      resumed_to_move: "black",
     },
   ]);
 
@@ -448,15 +451,15 @@ async function run() {
       lastResume: {
         claim: string;
         requestedBy: string;
-        disputedStone: { x: number; y: number };
+        disputedStone: { x: number; y: number } | null;
       };
       resumeEvents?: unknown;
     };
   }>(`/api/games/${gameId}`, undefined, white.cookie, white.playerKey);
   assert.deepEqual(latestOnly.game.lastResume, {
-    claim: "dead",
+    claim: "resume",
     requestedBy: "black",
-    disputedStone: { x: 3, y: 2 },
+    disputedStone: null,
   });
   assert.equal("resumeEvents" in latestOnly.game, false);
 
@@ -464,11 +467,11 @@ async function run() {
   // decisions that intentionally fill one actor's complete burst allowance.
   await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
-  await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
-  await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
+  await postMove(gameId, { x: 5, y: 2 }, white.cookie, white.playerKey);
+  await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
   const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
-  }>(gameId, { isPass: true }, black.cookie, black.playerKey);
+  }>(gameId, { isPass: true }, white.cookie, white.playerKey);
   assert.equal(finalScoring.game.phase, "scoring");
 
   const firstConfirmation = await post<{
