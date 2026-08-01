@@ -309,11 +309,10 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
     padding: 6px 0;
   }
   .arena-view-active .arena-board-panel { padding: 8px; }
-  .arena-view-active .arena-board-heading { margin-bottom: 4px; }
-  .arena-view-active .arena-board-heading .kicker { display: none; }
+  .arena-view-active .arena-board-heading { display: none; }
   .arena-view-active .arena-players { margin-bottom: 4px; padding: 5px 8px; }
   .arena-view-active .board-wrap {
-    width: min(100%, calc(100dvh - 116px));
+    width: min(100%, calc(100dvh - 150px));
     border-width: 4px;
   }
   .arena-view-active .arena-game-meta { padding-top: 4px; font-size: 8px; }
@@ -357,7 +356,7 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
   .arena-view-active .mini-stone { width: 13px; height: 13px; }
   .arena-view-active .arena-player strong { font-size: 9px; }
   .arena-view-active .board-wrap {
-    width: min(calc(100vw - 28px), calc(100dvh - 306px), 680px);
+    width: min(calc(100vw - 28px), calc(100dvh - 374px), 680px);
     border-width: 4px;
   }
   .arena-view-active .arena-game-meta { padding-top: 3px; gap: 3px 8px; font-size: 8px; }
@@ -389,10 +388,77 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
   .arena-view-active .result-summary { margin: 4px 0; font-size: 10px; }
   .arena-view-active .score-breakdown div { padding: 4px 5px; }
   .arena-view-active:has(#arena-move-panel:not([hidden])) .board-wrap {
-    width: min(calc(100vw - 28px), calc(100dvh - 374px), 680px);
+    width: min(calc(100vw - 28px), calc(100dvh - 442px), 680px);
   }
   .arena-view-active.arena-finished .board-wrap {
-    width: min(calc(100vw - 28px), calc(100dvh - 478px), 680px);
+    width: min(calc(100vw - 28px), calc(100dvh - 548px), 680px);
+  }
+}
+
+/* When browser chrome, zoom, or a very short window leaves less vertical room
+   than the compact arena needs, keep every board edge reachable instead of
+   shrinking a flex item while its square board overflows behind the sidebar. */
+@media (max-width: 920px) and (orientation: portrait) and (max-height: 520px) {
+  .arena-view-active {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .arena-view-active .shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .arena-view-active #arena-view,
+  .arena-view-active .arena-layout {
+    flex: none;
+    overflow: visible;
+  }
+  .arena-view-active .arena-layout {
+    grid-template-rows: auto auto;
+  }
+  .arena-view-active .arena-board-panel,
+  .arena-view-active .arena-sidebar {
+    height: auto;
+    overflow: visible;
+  }
+  .arena-view-active .board-wrap,
+  .arena-view-active:has(#arena-move-panel:not([hidden])) .board-wrap,
+  .arena-view-active.arena-finished .board-wrap {
+    width: min(calc(100vw - 28px), max(180px, calc(100dvh - 180px)), 420px);
+    flex: none;
+  }
+}
+
+@media (max-width: 920px) and (orientation: landscape) and (max-height: 260px) {
+  .arena-view-active {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .arena-view-active .shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .arena-view-active #arena-view,
+  .arena-view-active .arena-layout {
+    flex: none;
+    overflow: visible;
+  }
+  .arena-view-active .arena-board-panel,
+  .arena-view-active .arena-sidebar {
+    height: auto;
+    overflow: visible;
+  }
+  .arena-view-active .arena-sidebar {
+    grid-template-rows: auto auto auto;
+  }
+  .arena-view-active .board-wrap {
+    width: min(100%, max(180px, calc(100dvh - 116px)));
+    flex: none;
   }
 }
 
