@@ -20,6 +20,11 @@ const statusLabels = {
 let presets = [];
 let selectedPreset = "short";
 let lastArtifact = "";
+let arenaState = null;
+let arenaBusy = false;
+const arenaCanvas = $("#arena-board");
+const arenaContext = arenaCanvas.getContext("2d");
+const gtpColumns = "ABCDEFGHJKLMNOPQRST";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -146,9 +151,204 @@ $("#copy-path").addEventListener("click", async () => {
   toast("Modellpfad kopiert.");
 });
 
+function switchView(view) {
+  document.querySelectorAll(".lab-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
+  $("#training-view").hidden = view !== "training";
+  $("#arena-view").hidden = view !== "arena";
+  if (view === "arena") drawArenaBoard();
+}
+
+document.querySelectorAll(".lab-tab").forEach((tab) => {
+  tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+async function loadArenaModels() {
+  const select = $("#arena-model");
+  const previous = select.value;
+  const models = await api("/api/arena/models");
+  select.replaceChildren();
+  for (const model of models) {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.textContent = `${model.label} · ${model.onnx_mib.toFixed(2)} MiB`;
+    select.append(option);
+  }
+  if (models.some((model) => model.id === previous)) select.value = previous;
+  $("#arena-start").disabled = models.length === 0;
+  $("#arena-model-note").textContent = models.length
+    ? `${models.length} fertige${models.length === 1 ? "s" : ""} Modell${models.length === 1 ? "" : "e"} gefunden.`
+    : "Noch kein fertiges Modell. Warte, bis ein Trainingslauf vollständig abgeschlossen ist.";
+}
+
+function arenaGeometry(size) {
+  const padding = 46;
+  return { padding, spacing: (arenaCanvas.width - padding * 2) / (size - 1) };
+}
+
+function parseGtp(move, size) {
+  if (!move || move.toLowerCase() === "pass") return null;
+  const x = gtpColumns.indexOf(move[0].toUpperCase());
+  const row = Number(move.slice(1));
+  return x < 0 || !Number.isInteger(row) ? null : { x, y: size - row };
+}
+
+function starPoints(size) {
+  if (size === 9) return [2, 4, 6].flatMap((x) => [2, 4, 6].map((y) => [x, y]));
+  if (size === 13) return [3, 6, 9].flatMap((x) => [3, 6, 9].map((y) => [x, y]));
+  return [3, 9, 15].flatMap((x) => [3, 9, 15].map((y) => [x, y]));
+}
+
+function drawArenaBoard() {
+  const size = arenaState?.board_size || Number($("#arena-size").value) || 9;
+  const board = arenaState?.board || Array.from({ length: size }, () => Array(size).fill(0));
+  const { padding, spacing } = arenaGeometry(size);
+  const ctx = arenaContext;
+  ctx.clearRect(0, 0, arenaCanvas.width, arenaCanvas.height);
+  const wood = ctx.createLinearGradient(0, 0, arenaCanvas.width, arenaCanvas.height);
+  wood.addColorStop(0, "#e4bc63");
+  wood.addColorStop(1, "#c9963e");
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, 0, arenaCanvas.width, arenaCanvas.height);
+  ctx.strokeStyle = "#49301b";
+  ctx.lineWidth = Math.max(1.25, 4.2 - size * 0.13);
+  for (let index = 0; index < size; index += 1) {
+    const position = padding + index * spacing;
+    ctx.beginPath(); ctx.moveTo(padding, position); ctx.lineTo(arenaCanvas.width - padding, position); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(position, padding); ctx.lineTo(position, arenaCanvas.height - padding); ctx.stroke();
+  }
+  ctx.fillStyle = "#49301b";
+  for (const [x, y] of starPoints(size)) {
+    ctx.beginPath(); ctx.arc(padding + x * spacing, padding + y * spacing, Math.max(4, spacing * .085), 0, Math.PI * 2); ctx.fill();
+  }
+  const last = parseGtp(arenaState?.last_move, size);
+  const dead = new Set((arenaState?.proposal?.dead_stones || []).map(([x, y]) => `${x}:${y}`));
+  const uncertain = new Set((arenaState?.proposal?.uncertain_stones || []).map(([x, y]) => `${x}:${y}`));
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const color = board[y][x];
+      if (!color) continue;
+      const cx = padding + x * spacing;
+      const cy = padding + y * spacing;
+      const radius = spacing * .47;
+      const stone = ctx.createRadialGradient(cx - radius * .3, cy - radius * .35, radius * .08, cx, cy, radius);
+      if (color === 1) { stone.addColorStop(0, "#565656"); stone.addColorStop(.45, "#171717"); stone.addColorStop(1, "#020202"); }
+      else { stone.addColorStop(0, "#ffffff"); stone.addColorStop(.62, "#ededE8"); stone.addColorStop(1, "#b8b8b1"); }
+      ctx.fillStyle = stone; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = color === 1 ? "#000" : "#aaa"; ctx.lineWidth = 1.5; ctx.stroke();
+      if (last?.x === x && last?.y === y) {
+        ctx.fillStyle = color === 1 ? "#dfe1d8" : "#222"; ctx.beginPath(); ctx.arc(cx, cy, radius * .18, 0, Math.PI * 2); ctx.fill();
+      }
+      const key = `${x}:${y}`;
+      if (dead.has(key) || uncertain.has(key)) {
+        ctx.strokeStyle = dead.has(key) ? "#e25f50" : "#f0bd52"; ctx.lineWidth = Math.max(4, spacing * .08);
+        ctx.beginPath(); ctx.arc(cx, cy, radius * .72, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+  }
+}
+
+function humanTurn(state) {
+  return state && state.to_move === state.human_color && !state.finished;
+}
+
+function renderArena(state) {
+  arenaState = state;
+  drawArenaBoard();
+  const human = state.human_color === "black" ? "Schwarz" : "Weiß";
+  const turn = state.to_move === "black" ? "Schwarz" : "Weiß";
+  $("#arena-title").textContent = `${state.board_size}×${state.board_size} · Du spielst ${human}`;
+  const badge = $("#arena-turn");
+  badge.className = `status-badge ${state.finished ? "completed" : "running"}`;
+  badge.textContent = state.finished ? "Beendet" : humanTurn(state) ? "Dein Zug" : "Bot am Zug";
+  $("#arena-move").textContent = `Zug ${state.move_number} · ${turn} am Zug`;
+  $("#arena-prisoners").textContent = `Gefangene: Schwarz ${state.black_prisoners} · Weiß ${state.white_prisoners}`;
+  $("#arena-pass").disabled = arenaBusy || !humanTurn(state);
+  $("#arena-reset").disabled = false;
+  $("#arena-message").textContent = state.finished
+    ? "Zwei aufeinanderfolgende Pässe: Der Modellvorschlag ist eingeblendet."
+    : state.bot_move ? `Der Bot spielte ${state.bot_move}. Du bist am Zug.` : "Klicke auf einen freien Schnittpunkt.";
+  const result = $("#arena-result");
+  result.hidden = !state.proposal;
+  if (state.proposal) {
+    const score = state.proposal.score;
+    const winner = score.winner === "black" ? "Schwarz" : score.winner === "white" ? "Weiß" : "Jigo";
+    $("#result-title").textContent = winner === "Jigo" ? "Unentschieden" : `${winner} gewinnt`;
+    $("#result-summary").textContent = winner === "Jigo" ? "Vorgeschlagener Gleichstand" : `Vorgeschlagener Vorsprung: ${score.margin.toFixed(1)} Punkte`;
+    $("#result-black").textContent = `${score.black_total.toFixed(1)} (${score.black_territory} Gebiet + ${score.black_prisoners} Gefangene)`;
+    $("#result-white").textContent = `${score.white_total.toFixed(1)} (${score.white_territory} Gebiet + ${score.white_prisoners} Gefangene + 6,5 Komi)`;
+    $("#result-dead").textContent = String(state.proposal.dead_stones.length);
+    $("#result-uncertain").textContent = String(state.proposal.uncertain_stones.length);
+  }
+}
+
+function setArenaBusy(busy) {
+  arenaBusy = busy;
+  $("#arena-busy").hidden = !busy;
+  $("#arena-start").disabled = busy || !$("#arena-model").value;
+  $("#arena-pass").disabled = busy || !humanTurn(arenaState);
+}
+
+async function arenaRequest(payload) {
+  setArenaBusy(true);
+  try {
+    renderArena(await api("/api/arena/move", { method: "POST", body: JSON.stringify(payload) }));
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    setArenaBusy(false);
+  }
+}
+
+arenaCanvas.addEventListener("click", (event) => {
+  if (arenaBusy || !humanTurn(arenaState)) return;
+  const rect = arenaCanvas.getBoundingClientRect();
+  const scaleX = arenaCanvas.width / rect.width;
+  const scaleY = arenaCanvas.height / rect.height;
+  const { padding, spacing } = arenaGeometry(arenaState.board_size);
+  const x = Math.round(((event.clientX - rect.left) * scaleX - padding) / spacing);
+  const y = Math.round(((event.clientY - rect.top) * scaleY - padding) / spacing);
+  if (x < 0 || y < 0 || x >= arenaState.board_size || y >= arenaState.board_size) return;
+  arenaRequest({ session_id: arenaState.session_id, x, y });
+});
+
+$("#arena-start").addEventListener("click", async () => {
+  setArenaBusy(true);
+  try {
+    const state = await api("/api/arena/start", {
+      method: "POST",
+      body: JSON.stringify({
+        model_id: $("#arena-model").value,
+        board_size: Number($("#arena-size").value),
+        elo: Number($("#arena-elo").value),
+        human_color: $("#arena-color").value,
+      }),
+    });
+    renderArena(state);
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    setArenaBusy(false);
+  }
+});
+$("#arena-pass").addEventListener("click", () => arenaRequest({ session_id: arenaState.session_id, pass: true }));
+$("#arena-reset").addEventListener("click", () => {
+  arenaState = null;
+  $("#arena-result").hidden = true;
+  $("#arena-pass").disabled = true;
+  $("#arena-reset").disabled = true;
+  $("#arena-title").textContent = "Noch nicht gestartet";
+  $("#arena-turn").textContent = "Bereit";
+  $("#arena-turn").className = "status-badge idle";
+  $("#arena-message").textContent = "Wähle ein Modell und starte eine neue Testpartie.";
+  drawArenaBoard();
+});
+$("#refresh-models").addEventListener("click", () => loadArenaModels().catch((error) => toast(error.message)));
+$("#arena-size").addEventListener("change", () => { if (!arenaState) drawArenaBoard(); });
+
 async function initialize() {
-  presets = await api("/api/presets");
+  [presets] = await Promise.all([api("/api/presets"), loadArenaModels()]);
   renderPresets();
+  drawArenaBoard();
   await refresh();
   window.setInterval(refresh, 1500);
 }

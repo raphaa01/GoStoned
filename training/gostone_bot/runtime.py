@@ -4,6 +4,7 @@ import json
 import os
 import time
 import ctypes
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +17,23 @@ class StopRequested(Exception):
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp"
+    )
+    try:
+        temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        for attempt in range(12):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 11:
+                    raise
+                # Windows can briefly lock the destination while another
+                # process completes its own atomic replacement.
+                time.sleep(0.005 * (attempt + 1))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_json(path: Path, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -39,6 +54,9 @@ class RunJournal:
         self.state = load_json(self.state_path)
 
     def update(self, **changes: Any) -> None:
+        # The runner and the local control page are separate processes. Reload
+        # before every write so a control action cannot restore stale progress.
+        self.state = load_json(self.state_path, self.state)
         self.state.update(changes, updated_at=time.time())
         atomic_json(self.state_path, self.state)
 

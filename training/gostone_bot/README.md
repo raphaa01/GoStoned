@@ -11,6 +11,26 @@ checkpoints, run state, and generated browser models are ignored by Git.
 3. The local control center opens at `http://127.0.0.1:4173`.
 4. Choose a preset and CPU limit, then press **Training starten**.
 
+## Test a finished model
+
+1. Let the training reach **Fertig**.
+2. Restart the Training Lab once if it was already open while these arena files
+   were installed.
+3. Open the **Testarena** tab.
+4. Select the finished model, board size, nominal Elo profile, and your color.
+5. Press **Neue Testpartie** and play directly on the board.
+
+The arena runs the generated PyTorch checkpoint locally. It filters occupied
+points, suicide, and Japanese simple-ko repetitions before committing a move. Two
+consecutive passes end the test game. The model then marks proposed dead groups
+with red rings, uncertain groups with amber rings, and displays territory,
+prisoners, komi, winner, and margin.
+
+The proposal is intentionally not an authoritative result. Production GoStone
+must apply the same Japanese scorer on the server after both players agree on the
+dead groups. The six Elo labels are nominal training inputs until a calibration
+league has measured their real strength.
+
 The browser may be closed while training. Keep the small command window open if
 you want to reopen the page easily. The actual runner is a separate local process;
 it does not consume Codex, Modal, Vercel, or Supabase resources.

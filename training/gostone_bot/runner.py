@@ -55,6 +55,8 @@ def run(run_dir: Path) -> None:
         target_epochs=preset.epochs,
         completed_epochs=int(journal.state.get("completed_epochs", 0)),
         model_limit_bytes=MAX_MODEL_BYTES,
+        error=None,
+        traceback=None,
     )
     try:
         gate.checkpoint()

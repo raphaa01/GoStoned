@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .arena import ArenaService
 from .presets import PRESETS, resolve_preset
 from .runtime import RunJournal, atomic_json, load_json, process_is_alive
 from .teacher import default_cache_dir, repository_root
@@ -89,6 +90,17 @@ class RunManager:
                     message="Der Trainingsprozess wurde unerwartet beendet. Fortsetzen ist möglich.",
                 )
                 state = journal.state
+            if (run_dir / "stop.flag").exists() and state.get("status") in ACTIVE_STATUSES:
+                state = {
+                    **state,
+                    "status": "stopping",
+                    "message": "Sicherer Stopp angefordert; aktueller Arbeitsschritt wird gespeichert.",
+                }
+            elif (run_dir / "pause.flag").exists() and state.get("status") in {"running", "starting"}:
+                state = {
+                    **state,
+                    "message": "Pause angefordert; aktuelle KataGo-Abfrage wird beendet.",
+                }
             return {**state, "run_dir": str(run_dir.resolve())}
 
     def start(self, preset_id: str, cpu_threads: int) -> dict[str, object]:
@@ -138,7 +150,6 @@ class RunManager:
             if run_dir is None or state.get("status") not in {"running", "starting"}:
                 raise RuntimeError("Nur ein laufendes Training kann pausiert werden.")
             (run_dir / "pause.flag").touch()
-            RunJournal(run_dir).update(message="Pause angefordert; aktuelle KataGo-Abfrage wird beendet.")
             return self.status()
 
     def resume(self) -> dict[str, object]:
@@ -162,10 +173,6 @@ class RunManager:
             if run_dir is None or state.get("status") not in ACTIVE_STATUSES:
                 raise RuntimeError("Es läuft kein Training, das gestoppt werden kann.")
             (run_dir / "stop.flag").touch()
-            RunJournal(run_dir).update(
-                status="stopping",
-                message="Sicherer Stopp angefordert; aktueller Arbeitsschritt wird gespeichert.",
-            )
             return self.status()
 
     def logs(self, limit: int = 200) -> list[dict[str, object]]:
@@ -193,6 +200,10 @@ class ControlHandler(BaseHTTPRequestHandler):
     @property
     def manager(self) -> RunManager:
         return self.server.manager  # type: ignore[attr-defined]
+
+    @property
+    def arena(self) -> ArenaService:
+        return self.server.arena  # type: ignore[attr-defined]
 
     def log_message(self, format: str, *args: object) -> None:
         return
@@ -239,6 +250,8 @@ class ControlHandler(BaseHTTPRequestHandler):
             self._json([preset.to_public_dict() for preset in PRESETS.values()])
         elif path == "/api/logs":
             self._json(self.manager.logs())
+        elif path == "/api/arena/models":
+            self._json(self.arena.models())
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -274,11 +287,34 @@ class ControlHandler(BaseHTTPRequestHandler):
                 if body:
                     raise ValueError("Stop akzeptiert keine Parameter.")
                 result = self.manager.stop()
+            elif path == "/api/arena/start":
+                if set(body) != {"model_id", "board_size", "elo", "human_color"}:
+                    raise ValueError("Arena-Startparameter sind unvollständig oder unbekannt.")
+                result = self.arena.start(
+                    str(body["model_id"]),
+                    int(body["board_size"]),
+                    int(body["elo"]),
+                    str(body["human_color"]),
+                )
+            elif path == "/api/arena/move":
+                if set(body) not in ({"session_id", "x", "y"}, {"session_id", "pass"}):
+                    raise ValueError("Arena-Zugparameter sind unvollständig oder unbekannt.")
+                if "pass" in body:
+                    if body["pass"] is not True:
+                        raise ValueError("Pass muss ausdrücklich bestätigt werden.")
+                    move = "pass"
+                    result = self.arena.move(str(body["session_id"]), move)
+                else:
+                    result = self.arena.move_point(
+                        str(body["session_id"]),
+                        int(body["x"]),
+                        int(body["y"]),
+                    )
             else:
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
             self._json(result)
-        except (ValueError, RuntimeError, json.JSONDecodeError) as error:
+        except (TypeError, ValueError, RuntimeError, json.JSONDecodeError) as error:
             self._json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
 
 
@@ -288,6 +324,7 @@ class ControlServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], manager: RunManager):
         super().__init__(address, ControlHandler)
         self.manager = manager
+        self.arena = ArenaService(manager.runs_dir)
 
 
 def parse_args() -> argparse.Namespace:
