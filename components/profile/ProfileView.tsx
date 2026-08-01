@@ -18,7 +18,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingHistoryChart } from "@/components/profile/RatingHistoryChart";
-import { RatingDetails } from "@/components/rating/RatingDetails";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { readApi } from "@/lib/client/api";
 import type { Locale } from "@/lib/i18n/config";
@@ -27,8 +26,6 @@ import {
   DEFAULT_PROFILE_AVATAR_STYLE,
   type ProfileAvatarStyle,
 } from "@/lib/profileAvatar";
-import type { BotMatchPreference } from "@/lib/rating/preferences";
-import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 import type {
   GlobalRatingSummary,
   PublicRatingPreferences,
@@ -58,7 +55,7 @@ function formatDate(value: string, locale: Locale) {
 }
 
 export function ProfileView() {
-  const { user, loading, refresh, refreshRating } = useAuth();
+  const { user, loading, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.profile;
   const [rating, setRating] = useState<GlobalRatingSummary | null>(null);
@@ -66,8 +63,6 @@ export function ProfileView() {
   const [history, setHistory] = useState<RatingHistoryEntry[]>([]);
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<ProfileAvatarStyle>(DEFAULT_PROFILE_AVATAR_STYLE);
@@ -120,31 +115,6 @@ export function ProfileView() {
       });
     return () => controller.abort();
   }, [copy.loadFailed, dictionary, user]);
-
-  const savePreferences = async () => {
-    if (!preferences || saving) return;
-    setSaving(true);
-    setSaveStatus(null);
-    try {
-      const response = await fetch("/api/profile/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayPreference: preferences.displayPreference,
-          botMatchPreference: preferences.botMatchPreference,
-        }),
-      });
-      const body = await readApi<{ preferences: Pick<PublicRatingPreferences,
-        "displayPreference" | "botMatchPreference" | "preferenceRevision"> }>(response);
-      setPreferences((current) => current ? { ...current, ...body.preferences } : current);
-      void refreshRating().catch(() => undefined);
-      setSaveStatus(copy.preferencesSaved);
-    } catch (requestError) {
-      setSaveStatus(localizedApiError(dictionary, requestError, copy.preferencesFailed));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const saveAvatar = async () => {
     if (!user || avatarSaving || selectedAvatarStyle === user.avatarStyle) return;
@@ -205,19 +175,12 @@ export function ProfileView() {
         <ProfileAvatar size="lg" style={user.avatarStyle} />
         <span aria-hidden="true" className="profile-avatar-trigger__edit"><Pencil size={12} strokeWidth={2.2} /></span>
       </button>
-      <div className="profile-header__identity"><span className="section-kicker">{copy.playerProfile}</span><h1>{user.displayName}</h1><p>@{user.username}</p></div>
+      <div className="profile-header__identity">
+        <span className="section-kicker">{copy.playerProfile}</span>
+        <h1>{user.displayName}</h1>
+        <p>@{user.username}</p>
+      </div>
       <div className="profile-header__actions">
-        {rating && preferences ? (
-          <span className="profile-header__rating">
-            <span>{copy.currentRating}</span>
-            <RatingLabel
-              locale={locale}
-              preference={preferences.displayPreference}
-              rating={rating.rating}
-              variant="compact"
-            />
-          </span>
-        ) : null}
         <Link className="button button--primary" href={href("/play")}><Gamepad2 size={18} /> {copy.play}</Link>
       </div>
     </header>
@@ -294,7 +257,7 @@ export function ProfileView() {
               rating={rating.rating}
               variant="hero"
             />
-            <p>{rating.isProvisional ? copy.provisional : copy.established} · {rating.ratedGameCount} {copy.games}</p>
+            <p>{rating.ratedGameCount} {copy.games}</p>
             <strong className={change > 0 ? "is-positive" : change < 0 ? "is-negative" : ""}>
               {signedRating(change)} <small>{copy.last30Days}</small>
             </strong>
@@ -311,40 +274,6 @@ export function ProfileView() {
           <article><Trophy size={18} /><span>{copy.personalBest}</span><RatingLabel rating={rating.highestRating} preference={preferences.displayPreference} locale={locale} /></article>
           <article>{change > 0 ? <ArrowUpRight size={18} /> : change < 0 ? <ArrowDownRight size={18} /> : <Minus size={18} />}<span>{copy.ratingChange}</span><strong className={change > 0 ? "is-positive" : change < 0 ? "is-negative" : ""}>{signedRating(change)}</strong></article>
           <article><CalendarDays size={18} /><span>{copy.recentForm}</span><div className="recent-form" aria-label={copy.recentFormLabel}>{recentForm.length ? recentForm.map((game) => <i className={`result-dot result-dot--${game.result}`} key={game.gameId}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : game.result === "draw" ? copy.drawShort : copy.noResultShort}</i>) : <strong>—</strong>}</div></article>
-        </div>
-        <div className="profile-performance__disclosures">
-          <RatingDetails
-            labels={{
-              algorithm: copy.ratingAlgorithm,
-              ratingDeviation: copy.ratingDeviation,
-              ratedGames: copy.ratedGames,
-              volatility: copy.ratingVolatility,
-            }}
-            rating={rating}
-            summary={copy.ratingDetails}
-          />
-          <details className="rating-preferences-shell">
-            <summary>{copy.ratingPreferences}</summary>
-            <fieldset className="rating-preferences">
-              <legend className="sr-only">{copy.ratingPreferences}</legend>
-              <label>{copy.displayPreference}
-                <select value={preferences.displayPreference} onChange={(event) => setPreferences({ ...preferences, displayPreference: event.target.value as RatingDisplayPreference })}>
-                  <option value="both">{copy.displayBoth}</option>
-                  <option value="rank-primary">{copy.displayRank}</option>
-                  <option value="rating-primary">{copy.displayNumber}</option>
-                </select>
-              </label>
-              <label>{copy.botPreference}
-                <select value={preferences.botMatchPreference} onChange={(event) => setPreferences({ ...preferences, botMatchPreference: event.target.value as BotMatchPreference })}>
-                  <option value="never">{copy.botNever}</option>
-                  <option value="calibrated-rated-after-wait">{copy.botCalibrated}</option>
-                </select>
-              </label>
-              <p>{copy.botCalibrationNotice}</p>
-              <button className="button button--secondary" disabled={saving} onClick={() => void savePreferences()} type="button">{saving ? copy.saving : copy.savePreferences}</button>
-              <span aria-live="polite" role="status">{saveStatus}</span>
-            </fieldset>
-          </details>
         </div>
       </section>
     </> : null}

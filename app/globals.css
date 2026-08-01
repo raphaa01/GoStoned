@@ -291,29 +291,6 @@ a {
   margin: 0;
 }
 
-.legal-warning {
-  align-items: flex-start;
-  background: rgba(210, 167, 93, 0.12);
-  border: 1px solid rgba(210, 167, 93, 0.3);
-  border-radius: 9px;
-  color: #efc982;
-  display: flex;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 15px;
-}
-
-.legal-warning svg {
-  flex: 0 0 auto;
-}
-
-.legal-warning p {
-  color: #d4b98d;
-  font-size: 12px;
-  line-height: 1.55;
-  margin: 3px 0 0;
-}
-
 .legal-card {
   background: var(--panel);
   border: 1px solid var(--line);

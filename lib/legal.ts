@@ -66,7 +66,7 @@ export function getLegalNotice(): LegalNotice {
     partners: configuredPartners.length > 0
       ? configuredPartners
       : preview
-        ? ["Felix Neuber"]
+        ? ["Felix Neuber", "Raphael Krüger"]
         : [],
     representedBy,
     street: street ?? "",
