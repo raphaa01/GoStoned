@@ -118,6 +118,10 @@ export function AuthForm({
       : oauthError
         ? dictionary.auth.socialFailed
         : null;
+  const alternateMode = registering ? "login" : "register";
+  const alternateHref = returnTo
+    ? `/${alternateMode}?returnTo=${encodeURIComponent(returnTo)}`
+    : `/${alternateMode}`;
   const socialOptions = configuredOAuthProviders.length ? (
     <div className={`auth-social${registering ? " auth-social--register" : ""}`} aria-label={dictionary.auth.socialOptions}>
       {configuredOAuthProviders.includes("google") ? (
@@ -265,7 +269,7 @@ export function AuthForm({
 
       <p className="auth-switch">
         {registering ? dictionary.auth.haveAccount : dictionary.auth.newToGoStone}{" "}
-        <Link href={href(registering ? "/login" : "/register")}>
+        <Link href={href(alternateHref)}>
           {registering ? dictionary.auth.login : dictionary.auth.createAccount}
         </Link>
       </p>

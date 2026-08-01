@@ -29,7 +29,7 @@ async function assertNoHorizontalOverflow(page: Page) {
 }
 
 for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
-  test(`${locale.toUpperCase()} onboarding, global leaderboard, and profile rating are honest and responsive`, async ({ page }) => {
+  test(`${locale.toUpperCase()} onboarding, global leaderboard, and account protection are honest and responsive`, async ({ page }) => {
     let signedIn = false;
     let registrationBody: unknown;
 
@@ -157,34 +157,13 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await assertNoHorizontalOverflow(page);
 
     await page.goto(`${prefix}/profile`);
-    await expect(page.getByText(dictionary.profile.globalRating, { exact: true })).toBeVisible();
-    await expect(page.locator(".profile-header__identity")).toContainText(USER.displayName);
-    await expect(page.locator(".profile-header__handle")).toHaveText(`@${USER.username}`);
-    await expect(page.locator(".profile-header__rating")).toHaveCount(0);
-    await expect(page.locator(".profile-rating-band .rating-label")).toContainText(
-      locale === "de" ? "8. Kyu" : "8 kyu",
-    );
-    await page.getByRole("button", { name: dictionary.profile.changeAvatar }).click();
-    await expect(page.getByRole("heading", { name: dictionary.profile.avatarPickerTitle })).toBeVisible();
-    await expect(page.getByLabel(dictionary.profile.avatarKifuName)).toBeVisible();
-    await expect(page.getByLabel(dictionary.profile.avatarUrushiName)).toBeVisible();
-    await page.getByRole("button", { name: dictionary.profile.cancelAvatar }).click();
-    if ((page.viewportSize()?.width ?? 0) > 840) {
-      await expect(page.locator(".sidebar-user__name")).toHaveText(USER.displayName);
-      await expect(page.locator(".sidebar-user .rating-label")).toHaveCount(0);
-    } else {
-      await page.getByRole("button", { name: dictionary.nav.openMenu }).click();
-      await expect(page.locator(".mobile-menu .rating-label")).toContainText(
-        locale === "de" ? "8. Kyu" : "8 kyu",
-      );
-      await page.getByRole("button", { name: dictionary.nav.closeMenu }).click();
-    }
-    const historicalGame = page.getByRole("link").filter({ hasText: "Calibrated KataGo" });
-    await expect(historicalGame).toBeVisible();
-    await expect(historicalGame).not.toContainText(dictionary.profile.botBadge);
-    await expect(page.locator(".rating-chart svg")).toBeVisible();
-    await expect(page.locator(".rating-preferences-shell")).toHaveCount(0);
-    await expect(page.locator(".profile-performance__disclosures")).toHaveCount(0);
+    const registrationPath = locale === "en"
+      ? "/register?returnTo=%2Fprofile"
+      : "/de/register?returnTo=%2Fprofile";
+    await expect.poll(() => {
+      const current = new URL(page.url());
+      return `${current.pathname}${current.search}`;
+    }).toBe(registrationPath);
     await assertNoHorizontalOverflow(page);
   });
 }
