@@ -1,12 +1,13 @@
 "use client";
 
-import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, UserRound, X } from "lucide-react";
+import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { isRouteActive } from "@/lib/i18n/routing";
 
@@ -24,7 +25,7 @@ export function Navbar() {
     { href: "/review", label: dictionary.nav.review, icon: Search },
     { href: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
     { href: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
-    { href: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: user ? UserRound : LogIn },
+    { href: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
   ];
 
   useEffect(() => {
@@ -96,7 +97,9 @@ export function Navbar() {
               onClick={() => setOpen(false)}
               aria-current={isRouteActive(pathname, path) ? "page" : undefined}
             >
-              <Icon size={18} />
+              {path === "/profile" && user
+                ? <ProfileAvatar size="xs" style={user.avatarStyle} />
+                : <Icon size={18} />}
               <span className="mobile-menu-link-copy">{label}</span>
               {path === "/profile" && rating ? (
                 <RatingLabel

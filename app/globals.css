@@ -2892,6 +2892,35 @@ a {
   margin: 12px 3px 0;
 }
 
+.leaderboard-viewer {
+  align-items: center;
+  background: color-mix(in srgb, var(--green) 7%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--green) 22%, var(--line));
+  border-radius: 14px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 16px 3px 2px;
+  padding: 12px 14px;
+}
+
+.leaderboard-viewer__identity,
+.leaderboard-viewer__rating {
+  display: grid;
+  gap: 2px;
+}
+
+.leaderboard-viewer__identity small,
+.leaderboard-viewer__rating > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.leaderboard-viewer__rating {
+  justify-items: end;
+  text-align: right;
+}
+
 .leaderboard-snapshot {
   color: var(--muted-2);
 }

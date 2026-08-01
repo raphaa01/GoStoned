@@ -73,7 +73,7 @@ export async function registerAccount(
       `WITH account AS (
          INSERT INTO users (username, password_hash, display_name)
          VALUES ($1, $2, $1)
-         RETURNING id, username, display_name
+         RETURNING id, username, display_name, avatar_style
        ), preference AS (
          INSERT INTO player_rating_preferences
            (user_id,display_preference,bot_match_preference,handicap_preference,
@@ -93,7 +93,7 @@ export async function registerAccount(
          SELECT user_id,$3,$4,rating,rating_deviation,$5,created_at
            FROM rating_state
        )
-       SELECT id,username,display_name FROM account`,
+       SELECT id,username,display_name,avatar_style FROM account`,
       [
         username,
         passwordHash,
@@ -122,7 +122,7 @@ export async function authenticateAccount(
   password: string,
 ): Promise<AuthUser> {
   const result = await query<LoginRow>(
-    `SELECT id, username, display_name, password_hash
+    `SELECT id, username, display_name, avatar_style, password_hash
        FROM users
       WHERE LOWER(username) = LOWER($1)
       LIMIT 1`,

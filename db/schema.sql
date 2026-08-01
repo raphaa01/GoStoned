@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT,
   display_name TEXT,
+  avatar_style TEXT NOT NULL DEFAULT 'kifu-classic'
+    CHECK (avatar_style IN ('kifu-classic', 'urushi-mon')),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
