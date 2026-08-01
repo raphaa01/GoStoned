@@ -39,6 +39,6 @@ test("leaderboard keeps the signed-in player's rating visible before eligibility
   assert.match(component, /rating: viewerRating/);
   assert.match(component, /className="leaderboard-viewer"/);
   assert.match(component, /viewerRating\.displayPreference/);
-  assert.match(component, /viewerRating\.isProvisional/);
-  assert.match(component, /viewerRating\.deviation/);
+  assert.doesNotMatch(component, /viewerRating\.isProvisional/);
+  assert.doesNotMatch(component, /viewerRating\.deviation/);
 });

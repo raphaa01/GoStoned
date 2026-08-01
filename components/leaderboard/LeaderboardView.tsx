@@ -134,11 +134,6 @@ export function LeaderboardView() {
                 rating={viewerRating.value}
                 variant="compact"
               />
-              <small>
-                {viewerRating.isProvisional
-                  ? dictionary.profile.provisional
-                  : dictionary.profile.established} · ±{Math.round(viewerRating.deviation)}
-              </small>
             </span>
           </aside>
         ) : null}
