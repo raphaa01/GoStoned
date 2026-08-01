@@ -125,7 +125,7 @@ test("social usernames are stable, valid, bounded, and provider-specific", () =>
 test("the canonical schema and numbered migration protect social identities", async () => {
   const [schema, migration] = await Promise.all([
     readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"),
-    readFile(new URL("../../db/migrations/026_social_auth_identities.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../db/migrations/027_social_auth_identities.sql", import.meta.url), "utf8"),
   ]);
   for (const source of [schema, migration]) {
     assert.match(source, /CREATE TABLE(?: IF NOT EXISTS)? auth_identities/);
