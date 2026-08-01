@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,24 +14,24 @@
           <span>GoStone</span>
           <span class="brand-subtitle">Training Lab</span>
         </a>
-        <nav class="lab-tabs" aria-label="Training Lab Bereiche">
+        <nav class="lab-tabs" aria-label="Training Lab sections">
           <button class="lab-tab active" data-view="training" type="button">Training</button>
-          <button class="lab-tab" data-view="arena" type="button">Testarena</button>
+          <button class="lab-tab" data-view="arena" type="button">AI Arena</button>
         </nav>
-        <div class="local-pill"><span></span> Nur auf diesem Laptop</div>
+        <div class="local-pill"><span></span> Local compute only</div>
       </header>
 
       <main id="training-view">
         <section class="hero">
           <div>
-            <p class="eyebrow">KataGo Teacher · Japanische Regeln</p>
-            <h1>Trainiere deinen eigenen Go-Bot.</h1>
-            <p class="hero-copy">KataGo erzeugt lokal Lehrstellungen. Dein kleines Modell lernt Spielstufen, Endspiel, Ownership, lebende und tote Gruppen – ohne Codex-, Modal- oder Cloud-Kosten.</p>
+            <p class="eyebrow">KataGo teacher · Japanese rules</p>
+            <h1>Train your own Go AI.</h1>
+            <p class="hero-copy">KataGo generates teaching positions locally. Your compact model learns playing strength, endgame judgment, ownership, and group survival without Codex, Modal, or cloud compute.</p>
           </div>
           <div class="contract-card">
             <span class="contract-value">≤ 8 MiB</span>
-            <span class="contract-label">Festes Modell-Limit</span>
-            <div class="contract-rule"><span>日本</span> Nur japanische Gebietswertung · 6,5 Komi</div>
+            <span class="contract-label">Fixed model budget</span>
+            <div class="contract-rule"><span>日本</span> Japanese territory scoring only · 6.5 komi</div>
           </div>
         </section>
 
@@ -39,50 +39,50 @@
           <article class="panel status-panel">
             <div class="panel-heading">
               <div>
-                <p class="kicker">Aktueller Lauf</p>
-                <h2 id="status-title">Bereit</h2>
+                <p class="kicker">Current run</p>
+                <h2 id="status-title">Ready</h2>
               </div>
-              <span id="status-badge" class="status-badge idle">Bereit</span>
+              <span id="status-badge" class="status-badge idle">Ready</span>
             </div>
 
             <div class="progress-area">
               <div id="progress-ring" class="progress-ring" style="--progress: 0deg">
-                <div><strong id="progress-value">0%</strong><span>gesamt</span></div>
+                <div><strong id="progress-value">0%</strong><span>overall</span></div>
               </div>
               <div class="progress-copy">
-                <strong id="phase-name">Noch nicht gestartet</strong>
-                <p id="status-message">Wähle einen Trainingsumfang und starte den lokalen Lauf.</p>
+                <strong id="phase-name">Not started</strong>
+                <p id="status-message">Choose a training scope and start the local run.</p>
                 <div class="phase-track"><span id="phase-bar"></span></div>
               </div>
             </div>
 
             <dl class="metrics">
-              <div><dt>Partien</dt><dd id="games-metric">0 / 0</dd></div>
-              <div><dt>Stellungen</dt><dd id="positions-metric">0</dd></div>
-              <div><dt>Epochen</dt><dd id="epochs-metric">0 / 0</dd></div>
-              <div><dt>Modell</dt><dd id="model-metric">Noch offen</dd></div>
+              <div><dt>Games</dt><dd id="games-metric">0 / 0</dd></div>
+              <div><dt>Positions</dt><dd id="positions-metric">0</dd></div>
+              <div><dt>Epochs</dt><dd id="epochs-metric">0 / 0</dd></div>
+              <div><dt>Model</dt><dd id="model-metric">Pending</dd></div>
             </dl>
 
             <div class="actions">
-              <button id="start-button" class="button primary" type="button">Training starten</button>
+              <button id="start-button" class="button primary" type="button">Start training</button>
               <button id="pause-button" class="button secondary" type="button" disabled>Pause</button>
-              <button id="resume-button" class="button secondary" type="button" disabled>Fortsetzen</button>
-              <button id="stop-button" class="button danger" type="button" disabled>Sicher stoppen</button>
+              <button id="resume-button" class="button secondary" type="button" disabled>Resume</button>
+              <button id="stop-button" class="button danger" type="button" disabled>Stop safely</button>
             </div>
-            <p class="action-note">Pause und Stopp greifen nach der aktuellen KataGo-Abfrage. Bereits gespeicherter Fortschritt bleibt erhalten.</p>
+            <p class="action-note">Pause and stop take effect after the current KataGo query. Saved progress is preserved.</p>
           </article>
 
           <article class="panel configuration-panel">
             <div class="panel-heading">
               <div>
-                <p class="kicker">Trainingsumfang</p>
-                <h2>Wie lange soll der Laptop lernen?</h2>
+                <p class="kicker">Training scope</p>
+                <h2>How long should this laptop learn?</h2>
               </div>
             </div>
-            <div id="preset-list" class="preset-list" aria-label="Trainingsumfang"></div>
-            <p class="training-lineage-note"><strong>Jeder echte neue Lauf baut auf der letzten erfolgreichen Version auf:</strong> neue KataGo-Partien, ausgeglichene Farben und vollständige Endspielphasen. Ob die neue Version wirklich stärker ist, entscheidest du anschließend in der Testarena.</p>
+            <div id="preset-list" class="preset-list" aria-label="Training scope"></div>
+            <p class="training-lineage-note"><strong>Every real run continues from the latest successful version:</strong> new KataGo games, balanced colors, and complete endgame phases. Use the AI Arena to verify whether the new version is actually stronger.</p>
             <label class="cpu-control" for="cpu-threads">
-              <span><strong>CPU-Kerne</strong><small>Mehr Kerne sind schneller, der Laptop wird aber wärmer.</small></span>
+              <span><strong>CPU threads</strong><small>More threads run faster but make the laptop warmer.</small></span>
               <output id="cpu-output" for="cpu-threads">6</output>
             </label>
             <input id="cpu-threads" type="range" min="1" max="10" value="6">
@@ -91,28 +91,28 @@
           <article class="panel capabilities-panel">
             <div class="panel-heading">
               <div>
-                <p class="kicker">Ein Modell · mehrere Aufgaben</p>
-                <h2>Was der Bot lernt</h2>
+                <p class="kicker">One model · multiple tasks</p>
+                <h2>What the AI learns</h2>
               </div>
             </div>
             <div class="capability-grid">
-              <div><span class="number">01</span><strong>Sechs Stufen</strong><p>Nominale Zielprofile von 600 bis 2100 Elo aus einem Modell.</p></div>
-              <div><span class="number">02</span><strong>Endspiel & Pass</strong><p>Tiefere KataGo-Suche in späten Stellungen verhindert sinnloses Weiterspielen.</p></div>
-              <div><span class="number">03</span><strong>Leben & Tod</strong><p>Gruppen werden als lebend, tot oder bewusst unklar vorgeschlagen.</p></div>
-              <div><span class="number">04</span><strong>Japanischer Endstand</strong><p>Ownership, Gefangene, Gebiet, Seki-Hinweise und 6,5 Komi.</p></div>
+              <div><span class="number">01</span><strong>Six strengths</strong><p>Nominal target profiles from 600 to 2100 Elo from one model.</p></div>
+              <div><span class="number">02</span><strong>Endgame & pass</strong><p>Deeper late-game searches discourage pointless moves inside settled territory.</p></div>
+              <div><span class="number">03</span><strong>Life & death</strong><p>Groups are proposed as alive, dead, or deliberately uncertain.</p></div>
+              <div><span class="number">04</span><strong>Japanese score</strong><p>Ownership, prisoners, territory, seki hints, and 6.5 komi.</p></div>
             </div>
-            <div class="agreement-note"><strong>Wichtig:</strong> Der Bot macht nur einen Vorschlag. Das endgültige Ergebnis entsteht erst, wenn beide Spieler dieselbe Steinauswahl akzeptieren.</div>
+            <div class="agreement-note"><strong>Important:</strong> The AI makes a proposal. An official result still requires both players to accept the same dead groups.</div>
           </article>
 
           <article class="panel log-panel">
             <div class="panel-heading compact">
               <div>
-                <p class="kicker">Live-Protokoll</p>
-                <h2>Was gerade passiert</h2>
+                <p class="kicker">Live log</p>
+                <h2>What is happening</h2>
               </div>
-              <button id="copy-path" class="text-button" type="button" disabled>Modellpfad kopieren</button>
+              <button id="copy-path" class="text-button" type="button" disabled>Copy model path</button>
             </div>
-            <div id="log-output" class="log-output" role="log" aria-live="polite"><p class="log-empty">Noch keine Einträge.</p></div>
+            <div id="log-output" class="log-output" role="log" aria-live="polite"><p class="log-empty">No entries yet.</p></div>
             <p id="artifact-path" class="artifact-path"></p>
           </article>
         </section>
@@ -121,14 +121,14 @@
       <main id="arena-view" hidden>
         <section class="arena-hero">
           <div>
-            <p class="eyebrow">Fertiges Modell · echte lokale Inferenz</p>
-            <h1>Erlebe deine Modelle Zug für Zug.</h1>
-            <p class="hero-copy">Spiele selbst gegen ein Modell oder lasse zwei Versionen live gegeneinander antreten. Die Arena berechnet immer nur den nächsten Zug, damit du jede Entscheidung auf dem Brett verfolgen kannst.</p>
+            <p class="eyebrow">Local inference · live instrumentation</p>
+            <h1>AI Match Lab</h1>
+            <p class="hero-copy">Play against one AI or run two versions live, one visible move at a time. Built for clean screen recording and model comparison.</p>
           </div>
           <div class="contract-card arena-contract">
             <span class="contract-value">日本</span>
-            <span class="contract-label">Japanische Regeln · 6,5 Komi</span>
-            <div class="contract-rule">Nach zwei Pässen schlägt das Modell lebende, tote und unklare Gruppen sowie einen Endstand vor.</div>
+            <span class="contract-label">Japanese rules · 6.5 komi</span>
+            <div class="contract-rule">After two passes, your selected scoring AI proposes dead groups and the final score.</div>
           </div>
         </section>
 
@@ -136,93 +136,92 @@
           <article class="panel arena-board-panel">
             <div class="arena-board-heading">
               <div>
-                <p class="kicker">Testpartie</p>
-                <h2 id="arena-title">Noch nicht gestartet</h2>
+                <p class="kicker">Live simulation</p>
+                <h2 id="arena-title">Not started</h2>
               </div>
-              <span id="arena-turn" class="status-badge idle">Bereit</span>
+              <span id="arena-turn" class="status-badge idle">Ready</span>
             </div>
             <div id="arena-players" class="arena-players" hidden>
-              <div class="arena-player"><span class="mini-stone black"></span><span><small>Schwarz</small><strong id="arena-black-player">Schwarz</strong></span></div>
-              <span class="versus-mark">gegen</span>
-              <div class="arena-player white-player"><span><small>Weiß</small><strong id="arena-white-player">Weiß</strong></span><span class="mini-stone white"></span></div>
+              <div class="arena-player"><span class="mini-stone black"></span><span><small>Black AI</small><strong id="arena-black-player">Black</strong></span></div>
+              <span class="versus-mark">VS</span>
+              <div class="arena-player white-player"><span><small>White AI</small><strong id="arena-white-player">White</strong></span><span class="mini-stone white"></span></div>
             </div>
             <div class="board-wrap">
-              <canvas id="arena-board" width="760" height="760" aria-label="Interaktives Go-Brett"></canvas>
-              <div id="arena-busy" class="board-busy" hidden><span></span><strong>Bot denkt …</strong></div>
+              <canvas id="arena-board" width="760" height="760" aria-label="Interactive Go board"></canvas>
+              <div id="arena-busy" class="board-busy" hidden><span></span><strong>AI computing …</strong></div>
             </div>
             <div class="arena-game-meta">
-              <span id="arena-move">Zug 0</span>
-              <span id="arena-prisoners">Gefangene: Schwarz 0 · Weiß 0</span>
-              <span>6,5 Komi</span>
+              <span id="arena-move">Move 0</span>
+              <span id="arena-prisoners">Prisoners: Black 0 · White 0</span>
+              <span>6.5 komi</span>
             </div>
           </article>
 
           <aside class="arena-sidebar">
             <article class="panel arena-settings">
               <div class="panel-heading compact">
-                <div><p class="kicker">Spiel einrichten</p><h2 id="arena-settings-title">Modell testen</h2></div>
+                <div><p class="kicker">Match control</p><h2 id="arena-settings-title">Test an AI</h2></div>
               </div>
-              <div class="arena-mode-switch" role="group" aria-label="Testmodus">
-                <button class="arena-mode active" data-arena-mode="human" type="button">Ich gegen Bot</button>
-                <button class="arena-mode" data-arena-mode="match" type="button">Modell gegen Modell</button>
+              <div class="arena-mode-switch" role="group" aria-label="Arena mode">
+                <button class="arena-mode active" data-arena-mode="human" type="button">Human vs AI</button>
+                <button class="arena-mode" data-arena-mode="match" type="button">AI vs AI</button>
               </div>
 
               <div id="human-arena-fields">
-                <label class="field-label" for="arena-model">Trainingsmodell</label>
+                <label class="field-label" for="arena-model">AI model</label>
                 <div class="model-row">
                   <select id="arena-model"></select>
-                  <button id="refresh-models" class="icon-button" type="button" aria-label="Modelle neu laden">↻</button>
+                  <button id="refresh-models" class="icon-button" type="button" aria-label="Refresh AI models">↻</button>
                 </div>
-                <label class="field-label" for="arena-color">Deine Farbe</label>
-                <select id="arena-color"><option value="black">Schwarz · erster Zug</option><option value="white">Weiß · Bot beginnt</option></select>
+                <label class="field-label" for="arena-color">Your color</label>
+                <select id="arena-color"><option value="black">Black · first move</option><option value="white">White · AI starts</option></select>
               </div>
 
-              <div id="match-arena-fields" hidden>
-                <label class="field-label" for="arena-black-model">Schwarzes Modell</label>
-                <select id="arena-black-model"></select>
-                <label class="field-label" for="arena-white-model">Weißes Modell</label>
-                <select id="arena-white-model"></select>
-                <label class="field-label" for="arena-speed">Live-Tempo</label>
-                <select id="arena-speed">
-                  <option value="1600">Ruhig · 1,6 Sekunden</option>
-                  <option value="900" selected>Normal · 0,9 Sekunden</option>
-                  <option value="350">Schnell · 0,35 Sekunden</option>
-                </select>
+              <div id="match-arena-fields" class="match-field-grid" hidden>
+                <label><span class="field-label">Black AI</span><select id="arena-black-model"></select></label>
+                <label><span class="field-label">White AI</span><select id="arena-white-model"></select></label>
+                <label><span class="field-label">Scoring AI</span><select id="arena-settlement-evaluator"><option value="black">Black AI</option><option value="white">White AI</option></select></label>
+                <label><span class="field-label">Playback</span><select id="arena-speed">
+                  <option value="1600">Studio · 1.6 s</option>
+                  <option value="900" selected>Live · 0.9 s</option>
+                  <option value="350">Fast · 0.35 s</option>
+                </select></label>
               </div>
-              <p id="arena-model-note" class="field-note">Nur vollständig exportierte Trainingsläufe erscheinen hier.</p>
+              <p id="arena-model-note" class="field-note">Only completed and verified AI exports appear here.</p>
 
               <div class="field-grid">
-                <label><span class="field-label">Brett</span><select id="arena-size"><option value="9">9×9</option><option value="13">13×13</option><option value="19">19×19</option></select></label>
-                <label><span class="field-label">Teststufe</span><select id="arena-elo"><option value="600">600 Elo</option><option value="900">900 Elo</option><option value="1200" selected>1200 Elo</option><option value="1500">1500 Elo</option><option value="1800">1800 Elo</option><option value="2100">2100 Elo</option></select></label>
+                <label><span class="field-label">Board</span><select id="arena-size"><option value="9">9×9</option><option value="13">13×13</option><option value="19">19×19</option></select></label>
+                <label><span class="field-label">Strength</span><select id="arena-elo"><option value="600">600 Elo</option><option value="900">900 Elo</option><option value="1200" selected>1200 Elo</option><option value="1500">1500 Elo</option><option value="1800">1800 Elo</option><option value="2100">2100 Elo</option></select></label>
               </div>
-              <button id="arena-start" class="button primary wide" type="button">Neue Testpartie</button>
+              <button id="arena-start" class="button primary wide" type="button">Start test game</button>
               <div class="arena-actions">
-                <button id="arena-pass" class="button secondary" type="button" disabled>Passen</button>
-                <button id="arena-playback" class="button secondary" type="button" hidden disabled>Pausieren</button>
-                <button id="arena-reset" class="button danger" type="button" disabled>Partie verwerfen</button>
+                <button id="arena-pass" class="button secondary" type="button" disabled>Pass</button>
+                <button id="arena-playback" class="button secondary" type="button" hidden disabled>Pause</button>
+                <button id="arena-reset" class="button danger" type="button" disabled>Reset</button>
               </div>
-              <p id="arena-message" class="action-note">Beende das laufende Training zuerst, wenn du die CPU-Leistung vollständig für die Arena nutzen möchtest.</p>
+              <p id="arena-message" class="action-note">Training may continue in the background; pause it only if the arena needs more CPU.</p>
             </article>
 
             <article id="arena-move-panel" class="panel arena-move-panel" hidden>
               <div class="panel-heading compact">
-                <div><p class="kicker">Live-Zugfolge</p><h2>Partieverlauf</h2></div>
+                <div><p class="kicker">Move stream</p><h2>Live telemetry</h2></div>
                 <span id="arena-live-dot" class="live-dot">Live</span>
               </div>
-              <ol id="arena-move-list" class="arena-move-list" aria-live="polite"><li class="move-empty">Die Partie wartet auf den ersten Zug.</li></ol>
+              <ol id="arena-move-list" class="arena-move-list" aria-live="polite"><li class="move-empty">Waiting for the first move.</li></ol>
             </article>
 
             <article id="arena-result" class="panel arena-result" hidden>
-              <p class="kicker">Modellvorschlag</p>
-              <h2 id="result-title">Endstand</h2>
+              <p class="kicker">Japanese score proposal</p>
+              <h2 id="result-title">Final score</h2>
+              <p id="result-evaluator" class="result-evaluator"></p>
               <p id="result-summary" class="result-summary"></p>
               <dl class="score-breakdown">
-                <div><dt>Schwarz</dt><dd id="result-black">–</dd></div>
-                <div><dt>Weiß</dt><dd id="result-white">–</dd></div>
-                <div><dt>Tote Steine</dt><dd id="result-dead">–</dd></div>
-                <div><dt>Unklar</dt><dd id="result-uncertain">–</dd></div>
+                <div><dt>Black</dt><dd id="result-black">–</dd></div>
+                <div><dt>White</dt><dd id="result-white">–</dd></div>
+                <div><dt>Dead stones</dt><dd id="result-dead">–</dd></div>
+                <div><dt>Uncertain</dt><dd id="result-uncertain">–</dd></div>
               </dl>
-              <p class="agreement-note">Das ist eine KI-Einschätzung. In GoStone müssen später beide Spieler dieselben toten Gruppen bestätigen.</p>
+              <p class="agreement-note">AI evaluation only. GoStone still requires both players to confirm the same dead groups.</p>
             </article>
           </aside>
         </section>

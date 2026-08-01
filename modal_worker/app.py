@@ -50,9 +50,8 @@ def run_job(kind: str, target_id: str | None) -> None:
     max_containers=1,
     scaledown_window=10,
     timeout=1_200,
-    routing_region="eu-west",
 )
-def process_analysis(target_id: str | None = None) -> None:
+def process_analysis_on_demand(target_id: str | None = None) -> None:
     run_job("analysis", target_id)
 
 
@@ -66,9 +65,8 @@ def process_analysis(target_id: str | None = None) -> None:
     max_containers=1,
     scaledown_window=10,
     timeout=300,
-    routing_region="eu-west",
 )
-def process_puzzle(target_id: str | None = None) -> None:
+def process_puzzle_on_demand(target_id: str | None = None) -> None:
     run_job("puzzle", target_id)
 
 
@@ -85,8 +83,8 @@ def dispatch(payload: dict[str, str | None]) -> dict[str, str]:
     kind = payload.get("kind")
     target_id = payload.get("targetId")
     processors = {
-        "analysis": process_analysis,
-        "puzzle": process_puzzle,
+        "analysis": process_analysis_on_demand,
+        "puzzle": process_puzzle_on_demand,
     }
     if kind not in processors:
         from fastapi import HTTPException

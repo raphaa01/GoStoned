@@ -6,6 +6,8 @@ import { GameServiceError } from "@/lib/game/gameService";
 import type { Board, BoardSize, Stone } from "@/lib/game/types";
 import { SUPPORTED_LOCALES, type LocalizedText } from "@/lib/i18n/config";
 import {
+  PUZZLE_CATEGORIES,
+  PUZZLE_KYU_LADDER,
   PUZZLES_PER_CATEGORY,
   type PuzzleAttemptResult,
   type PuzzleCategory,
@@ -194,6 +196,72 @@ export async function readPuzzleHub(
     puzzles: result.rows.map(view),
     expectedPerCategory: PUZZLES_PER_CATEGORY,
   };
+}
+
+export async function reservePuzzleGenerationDispatch(mode: PuzzleKind): Promise<string | null> {
+  return withTransaction(async (client) => {
+    if (mode === "daily") {
+      await client.query(
+        `INSERT INTO puzzle_generation_jobs (kind, target_date, board_size)
+         VALUES ('daily', CURRENT_DATE, 9)
+         ON CONFLICT (target_date) WHERE kind = 'daily' DO NOTHING`,
+      );
+    } else {
+      const categories: PuzzleCategory[] = [];
+      const ranks: number[] = [];
+      const orders: number[] = [];
+      for (const category of PUZZLE_CATEGORIES) {
+        for (let index = 0; index < PUZZLES_PER_CATEGORY; index += 1) {
+          categories.push(category);
+          ranks.push(PUZZLE_KYU_LADDER[index] ?? 15);
+          orders.push(index + 1);
+        }
+      }
+      await client.query(
+        `INSERT INTO puzzle_generation_jobs (
+           kind, board_size, category, rank_kyu, collection_order
+         )
+         SELECT 'practice', 13, catalog.category, catalog.rank_kyu, catalog.collection_order
+           FROM UNNEST($1::text[], $2::int[], $3::int[])
+             AS catalog(category, rank_kyu, collection_order)
+         ON CONFLICT (category, collection_order)
+           WHERE kind = 'practice' AND category IS NOT NULL
+         DO NOTHING`,
+        [categories, ranks, orders],
+      );
+    }
+
+    const reserved = await client.query<{ id: string }>(
+      `WITH candidate AS (
+         SELECT id
+           FROM puzzle_generation_jobs
+          WHERE kind = $1
+            AND status = 'queued'
+            AND attempts < 3
+            AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+          ORDER BY CASE kind WHEN 'daily' THEN 0 ELSE 1 END,
+                   collection_order NULLS FIRST, category NULLS FIRST, created_at, id
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+       )
+       UPDATE puzzle_generation_jobs job
+          SET lease_expires_at = NOW() + INTERVAL '15 minutes', updated_at = NOW()
+         FROM candidate
+        WHERE job.id = candidate.id
+       RETURNING job.id`,
+      [mode],
+    );
+    return reserved.rows[0]?.id ?? null;
+  });
+}
+
+export async function releasePuzzleGenerationDispatch(jobId: string): Promise<void> {
+  await query(
+    `UPDATE puzzle_generation_jobs
+        SET lease_expires_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND status = 'queued'`,
+    [jobId],
+  );
 }
 
 async function lockPuzzle(

@@ -28,6 +28,28 @@ def main() -> None:
     require("min_containers=0", APP_SOURCE, "Every function must be allowed to scale to zero.")
     forbid("min_containers=1", APP_SOURCE, "A paid warm baseline is forbidden.")
     require("max_containers=1", APP_SOURCE, "Expensive analysis concurrency must be capped.")
+    require(
+        "def process_analysis_on_demand",
+        APP_SOURCE,
+        "Analysis compute must use a fresh non-regional function identity that supports spawn().",
+    )
+    require(
+        "def process_puzzle_on_demand",
+        APP_SOURCE,
+        "Puzzle compute must use a fresh non-regional function identity that supports spawn().",
+    )
+    analysis_decorator = APP_SOURCE.split("def process_analysis_on_demand", 1)[0].rsplit("@app.function(", 1)[-1]
+    puzzle_decorator = APP_SOURCE.split("def process_puzzle_on_demand", 1)[0].rsplit("@app.function(", 1)[-1]
+    forbid(
+        "routing_region=",
+        analysis_decorator,
+        "Spawned analysis compute cannot use Modal regional input routing.",
+    )
+    forbid(
+        "routing_region=",
+        puzzle_decorator,
+        "Spawned puzzle compute cannot use Modal regional input routing.",
+    )
     require("modal.Secret.from_name(DATABASE_SECRET_NAME)", APP_SOURCE, "Database access must use a named Secret.")
     require('"worker:katago:once"', APP_SOURCE, "Modal must run bounded one-shot jobs.")
     require('"DATABASE_SSL": "require"', APP_SOURCE, "Production PostgreSQL must require TLS.")

@@ -8,6 +8,7 @@ const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_
 const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curated_puzzle_board_guard.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
+const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
 
 test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   for (const source of [schema, migration]) {
@@ -32,4 +33,13 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
     schema.replaceAll("\r\n", "\n").includes(boardGuardMigration.replaceAll("\r\n", "\n")),
     "Canonical schema must contain migration 022 exactly.",
   );
+});
+
+test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {
+  assert.match(service, /reservePuzzleGenerationDispatch/);
+  assert.match(service, /lease_expires_at = NOW\(\) \+ INTERVAL '15 minutes'/);
+  assert.match(service, /FOR UPDATE SKIP LOCKED/);
+  assert.match(service, /releasePuzzleGenerationDispatch/);
+  assert.match(route, /dispatchKataGoJob\("puzzle", targetId\)/);
+  assert.doesNotMatch(route, /dispatchKataGoJob\("puzzle"\)\)/);
 });

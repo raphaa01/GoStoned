@@ -151,9 +151,11 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
 .icon-button { color: var(--green-bright); background: #30302c; border: 1px solid #45453f; border-radius: 7px; cursor: pointer; font-size: 19px; }
 .field-note { color: var(--muted); font-size: 10px; line-height: 1.45; margin: 7px 0 0; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.match-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 9px; }
 .button.wide { width: 100%; margin-top: 18px; }
 .arena-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .arena-result h2 { margin: 0; }
+.result-evaluator { margin: 6px 0 0; color: var(--green-bright); font: 700 10px ui-monospace, SFMono-Regular, Consolas, monospace; text-transform: uppercase; letter-spacing: .06em; }
 .arena-move-panel { padding-bottom: 18px; }
 .live-dot { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 780; text-transform: uppercase; letter-spacing: .08em; }
 .live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #6a6a64; }
@@ -175,6 +177,118 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
 .score-breakdown div { background: var(--panel-raised); padding: 12px; }
 .score-breakdown dt { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .score-breakdown dd { margin: 5px 0 0; font-weight: 760; }
+
+/* Recording-oriented AI match workspace. The board and every live control fit
+   inside a common laptop viewport without changing the Lab server port. */
+.arena-match-mode {
+  background-color: #0b0e11;
+  overflow: hidden;
+  background-image:
+    linear-gradient(rgba(129, 182, 76, .025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(129, 182, 76, .025) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.arena-match-mode .shell { width: min(1480px, calc(100% - 24px)); padding-bottom: 0; }
+.arena-match-mode .topbar { height: 58px; }
+.arena-match-mode .arena-hero {
+  display: block;
+  padding: 14px 2px 12px;
+  border-bottom: 1px solid #263039;
+}
+.arena-match-mode .arena-hero h1 {
+  font: 760 27px/1.05 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: -.045em;
+}
+.arena-match-mode .arena-hero .eyebrow { margin-bottom: 5px; color: #85d9b0; }
+.arena-match-mode .arena-hero .hero-copy,
+.arena-match-mode .arena-contract { display: none; }
+.arena-match-mode .arena-layout {
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 12px;
+  height: calc(100vh - 118px);
+  min-height: 560px;
+  padding: 12px 0;
+  overflow: hidden;
+}
+.arena-match-mode .panel {
+  border-color: #303943;
+  border-radius: 8px;
+  background: #12171b;
+  box-shadow: 0 16px 40px #0004;
+}
+.arena-match-mode .kicker,
+.arena-match-mode .field-label,
+.arena-match-mode .arena-game-meta,
+.arena-match-mode .status-badge {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.arena-match-mode .arena-board-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  overflow: hidden;
+}
+.arena-match-mode .arena-board-heading { margin-bottom: 8px; }
+.arena-match-mode .arena-board-heading h2 { font: 720 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-match-mode .arena-players { margin: 0 0 8px; padding: 8px 11px; border-radius: 5px; background: #0c1013; }
+.arena-match-mode .arena-player strong { font: 700 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-match-mode .board-wrap {
+  width: min(100%, calc(100vh - 280px), 680px);
+  flex: 0 1 auto;
+  border-width: 6px;
+  border-radius: 4px;
+  box-shadow: 0 12px 30px #0006;
+}
+.arena-match-mode .arena-game-meta { padding-top: 8px; color: #89949d; }
+.arena-match-mode .arena-sidebar {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  gap: 10px;
+  overflow: hidden;
+}
+.arena-match-mode .arena-settings { padding: 13px; }
+.arena-match-mode .arena-settings .panel-heading { margin-bottom: 9px; }
+.arena-match-mode .arena-settings h2 { font: 720 15px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-match-mode .arena-mode { padding: 7px 6px; }
+.arena-match-mode .field-label { margin: 7px 0 4px; font-size: 9px; color: #8e9ba5; text-transform: uppercase; letter-spacing: .06em; }
+.arena-match-mode select { padding: 7px 8px; border-radius: 4px; background: #1b2228; border-color: #394650; font-size: 10px; }
+.arena-match-mode .field-note,
+.arena-match-mode .arena-settings .action-note { display: none; }
+.arena-match-mode .button.wide { margin-top: 9px; padding: 9px 12px; }
+.arena-match-mode .arena-actions { margin-top: 6px; }
+.arena-match-mode .arena-actions .button { padding: 8px 10px; }
+.arena-match-mode .arena-move-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 13px;
+  overflow: hidden;
+}
+.arena-match-mode .arena-move-panel .panel-heading { margin-bottom: 7px; }
+.arena-match-mode .arena-move-panel h2 { font: 720 14px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-match-mode .arena-move-list { max-height: none; min-height: 0; flex: 1; }
+.arena-match-mode .arena-move-entry { min-height: 29px; grid-template-columns: 22px 14px minmax(0, 1fr) auto; }
+.arena-match-mode .arena-result { padding: 13px; }
+.arena-match-mode .arena-result .kicker { margin-bottom: 6px; }
+.arena-match-mode .arena-result h2 { font: 760 17px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-match-mode .result-summary { margin: 8px 0; font-size: 13px; }
+.arena-match-mode .score-breakdown div { padding: 7px 9px; }
+.arena-match-mode .score-breakdown dd { margin-top: 3px; font-size: 10px; }
+.arena-match-mode .arena-result .agreement-note { display: none; }
+.arena-match-mode.arena-finished .arena-sidebar { grid-template-rows: auto minmax(90px, .65fr) auto; }
+
+@media (max-width: 920px) {
+  .arena-match-mode { overflow: auto; }
+  .arena-match-mode .shell { width: min(100% - 20px, 1240px); padding-bottom: 40px; }
+  .arena-match-mode .arena-layout { height: auto; min-height: 0; grid-template-columns: 1fr; overflow: visible; }
+  .arena-match-mode .arena-board-panel { height: auto; }
+  .arena-match-mode .board-wrap { width: min(100%, 680px); }
+  .arena-match-mode .arena-sidebar { height: auto; overflow: visible; grid-template-columns: 1fr; grid-template-rows: none; }
+  .arena-match-mode .arena-move-list { max-height: 260px; }
+}
 
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; gap: 24px; padding-top: 50px; }

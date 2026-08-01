@@ -68,7 +68,7 @@ class RunManager:
             start_new_session=start_new_session,
         )
         journal = RunJournal(run_dir)
-        journal.update(status="starting", pid=process.pid, message="Trainingsprozess startet.")
+        journal.update(status="starting", pid=process.pid, message="Training process is starting.")
         return process.pid
 
     def status(self) -> dict[str, object]:
@@ -79,7 +79,7 @@ class RunManager:
                     "status": "idle",
                     "phase": "idle",
                     "overall_progress": 0.0,
-                    "message": "Bereit für ein neues lokales Training.",
+                    "message": "Ready for a new local training run.",
                 }
             state = load_json(run_dir / "state.json", {"status": "idle"})
             pid = state.get("pid")
@@ -88,19 +88,19 @@ class RunManager:
                 journal.update(
                     status="failed",
                     pid=None,
-                    message="Der Trainingsprozess wurde unerwartet beendet. Fortsetzen ist möglich.",
+                    message="The training process stopped unexpectedly. The run can be resumed.",
                 )
                 state = journal.state
             if (run_dir / "stop.flag").exists() and state.get("status") in ACTIVE_STATUSES:
                 state = {
                     **state,
                     "status": "stopping",
-                    "message": "Sicherer Stopp angefordert; aktueller Arbeitsschritt wird gespeichert.",
+                    "message": "Safe stop requested; the current step will be saved.",
                 }
             elif (run_dir / "pause.flag").exists() and state.get("status") in {"running", "starting"}:
                 state = {
                     **state,
-                    "message": "Pause angefordert; aktuelle KataGo-Abfrage wird beendet.",
+                    "message": "Pause requested; the current KataGo query will finish first.",
                 }
             return {**state, "run_dir": str(run_dir.resolve())}
 
@@ -108,7 +108,7 @@ class RunManager:
         with self._lock:
             current = self.status()
             if current.get("status") in ACTIVE_STATUSES:
-                raise RuntimeError("Es läuft bereits ein Training.")
+                raise RuntimeError("A training run is already active.")
             preset, threads = resolve_preset(preset_id, cpu_threads)
             real_models = [
                 artifact
@@ -118,11 +118,11 @@ class RunManager:
             model_version = None
             base_model = None
             base_model_version = None
-            display_name = "GoStone Techniktest"
+            display_name = "GoStone AI Technical Test"
             training_seed = 20260801
             if preset.id != "smoke":
                 model_version = max((artifact.model_version or 0 for artifact in real_models), default=0) + 1
-                display_name = f"GoStone Bot v{model_version}"
+                display_name = f"GoStone AI v{model_version}"
                 training_seed = secrets.randbelow(2_000_000_000) + 1
                 if real_models:
                     newest = max(real_models, key=lambda artifact: artifact.created_at)
@@ -159,7 +159,7 @@ class RunManager:
                 preset_id=preset.id,
                 preset_name=display_name,
                 cpu_threads=threads,
-                message="Lokales Training wird vorbereitet.",
+                message="Preparing the local training run.",
                 started_at=time.time(),
             )
             atomic_json(self.current_path, {"run_dir": str(run_dir.resolve())})
@@ -171,7 +171,7 @@ class RunManager:
             run_dir = self._current_dir()
             state = self.status()
             if run_dir is None or state.get("status") not in {"running", "starting"}:
-                raise RuntimeError("Nur ein laufendes Training kann pausiert werden.")
+                raise RuntimeError("Only an active training run can be paused.")
             (run_dir / "pause.flag").touch()
             return self.status()
 
@@ -179,14 +179,14 @@ class RunManager:
         with self._lock:
             run_dir = self._current_dir()
             if run_dir is None:
-                raise RuntimeError("Es gibt keinen Trainingslauf zum Fortsetzen.")
+                raise RuntimeError("There is no training run to resume.")
             state = self.status()
             (run_dir / "pause.flag").unlink(missing_ok=True)
             if state.get("status") in {"stopped", "failed"}:
                 (run_dir / "stop.flag").unlink(missing_ok=True)
                 self._launch(run_dir)
             elif state.get("status") != "paused":
-                raise RuntimeError("Dieser Trainingslauf kann gerade nicht fortgesetzt werden.")
+                raise RuntimeError("This training run cannot be resumed right now.")
             return self.status()
 
     def stop(self) -> dict[str, object]:
@@ -194,7 +194,7 @@ class RunManager:
             run_dir = self._current_dir()
             state = self.status()
             if run_dir is None or state.get("status") not in ACTIVE_STATUSES:
-                raise RuntimeError("Es läuft kein Training, das gestoppt werden kann.")
+                raise RuntimeError("There is no active training run to stop.")
             (run_dir / "stop.flag").touch()
             return self.status()
 
@@ -280,13 +280,13 @@ class ControlHandler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict[str, object]:
         if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
-            raise ValueError("Anfrage muss JSON verwenden.")
+            raise ValueError("Request must use JSON.")
         length = int(self.headers.get("Content-Length", "0"))
         if length < 0 or length > 4096:
-            raise ValueError("Anfrage ist zu groß.")
+            raise ValueError("Request is too large.")
         value = json.loads(self.rfile.read(length) or b"{}")
         if not isinstance(value, dict):
-            raise ValueError("Ungültige Anfrage.")
+            raise ValueError("Invalid request.")
         return value
 
     def do_POST(self) -> None:
@@ -296,23 +296,23 @@ class ControlHandler(BaseHTTPRequestHandler):
             if path == "/api/start":
                 allowed = {"preset_id", "cpu_threads"}
                 if set(body) != allowed:
-                    raise ValueError("Startparameter sind unvollständig oder unbekannt.")
+                    raise ValueError("Training parameters are incomplete or unknown.")
                 result = self.manager.start(str(body["preset_id"]), int(body["cpu_threads"]))
             elif path == "/api/pause":
                 if body:
-                    raise ValueError("Pause akzeptiert keine Parameter.")
+                    raise ValueError("Pause does not accept parameters.")
                 result = self.manager.pause()
             elif path == "/api/resume":
                 if body:
-                    raise ValueError("Fortsetzen akzeptiert keine Parameter.")
+                    raise ValueError("Resume does not accept parameters.")
                 result = self.manager.resume()
             elif path == "/api/stop":
                 if body:
-                    raise ValueError("Stop akzeptiert keine Parameter.")
+                    raise ValueError("Stop does not accept parameters.")
                 result = self.manager.stop()
             elif path == "/api/arena/start":
                 if set(body) != {"model_id", "board_size", "elo", "human_color"}:
-                    raise ValueError("Arena-Startparameter sind unvollständig oder unbekannt.")
+                    raise ValueError("Arena parameters are incomplete or unknown.")
                 result = self.arena.start(
                     str(body["model_id"]),
                     int(body["board_size"]),
@@ -320,24 +320,25 @@ class ControlHandler(BaseHTTPRequestHandler):
                     str(body["human_color"]),
                 )
             elif path == "/api/arena/match/start":
-                if set(body) != {"black_model_id", "white_model_id", "board_size", "elo"}:
-                    raise ValueError("Vergleichsparameter sind unvollständig oder unbekannt.")
+                if set(body) != {"black_model_id", "white_model_id", "board_size", "elo", "settlement_evaluator"}:
+                    raise ValueError("AI match parameters are incomplete or unknown.")
                 result = self.arena.start_match(
                     str(body["black_model_id"]),
                     str(body["white_model_id"]),
                     int(body["board_size"]),
                     int(body["elo"]),
+                    str(body["settlement_evaluator"]),
                 )
             elif path == "/api/arena/match/next":
                 if set(body) != {"session_id"}:
-                    raise ValueError("Für den nächsten Zug wird nur die Testpartie benötigt.")
+                    raise ValueError("Only the session ID is required for the next AI move.")
                 result = self.arena.next_match_move(str(body["session_id"]))
             elif path == "/api/arena/move":
                 if set(body) not in ({"session_id", "x", "y"}, {"session_id", "pass"}):
-                    raise ValueError("Arena-Zugparameter sind unvollständig oder unbekannt.")
+                    raise ValueError("Arena move parameters are incomplete or unknown.")
                 if "pass" in body:
                     if body["pass"] is not True:
-                        raise ValueError("Pass muss ausdrücklich bestätigt werden.")
+                        raise ValueError("Pass must be explicitly confirmed.")
                     move = "pass"
                     result = self.arena.move(str(body["session_id"]), move)
                 else:
@@ -375,13 +376,13 @@ if __name__ == "__main__":
     manager = RunManager(default_cache_dir() / "control-center")
     server = ControlServer((HOST, arguments.port), manager)
     url = f"http://{HOST}:{arguments.port}"
-    print(f"GoStone Training Lab läuft auf {url}")
-    print("Dieses Fenster kann minimiert werden. Mit Strg+C wird nur die Bedienseite beendet.")
+    print(f"GoStone Training Lab is running at {url}")
+    print("This window can be minimized. Ctrl+C closes only the control page.")
     if not arguments.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
-        print("\nTraining Lab wurde geschlossen. Ein laufender Trainingsprozess arbeitet weiter.")
+        print("\nTraining Lab closed. Any active training process continues in the background.")
     finally:
         server.server_close()

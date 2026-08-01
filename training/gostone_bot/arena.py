@@ -109,7 +109,7 @@ class ModelCatalog:
                 used_versions.add(version)
                 next_legacy_version += 1
             date = time.strftime("%d.%m.%Y %H:%M", time.localtime(float(item["created_at"])))
-            label = f"GoStone Techniktest · {date}" if item["technical_test"] else f"GoStone Bot v{version} · {date}"
+            label = f"GoStone AI Technical Test · {date}" if item["technical_test"] else f"GoStone AI v{version} · {date}"
             result.append(ModelArtifact(**{**item, "model_version": version, "label": label}))
         return sorted(result, key=lambda artifact: artifact.created_at, reverse=True)
 
@@ -117,7 +117,7 @@ class ModelCatalog:
         for artifact in self.artifacts():
             if secrets.compare_digest(artifact.id, model_id):
                 return artifact
-        raise ValueError("Dieses fertige Modell wurde nicht gefunden.")
+        raise ValueError("This completed AI model could not be found.")
 
 
 @dataclass
@@ -132,8 +132,9 @@ class ArenaSession:
     mode: str = "human"
     black_model_id: str | None = None
     white_model_id: str | None = None
-    black_label: str = "Schwarz"
-    white_label: str = "Weiß"
+    settlement_evaluator: str | None = None
+    black_label: str = "Black"
+    white_label: str = "White"
     moves: list[str] = field(default_factory=list)
     finished: bool = False
     finished_reason: str | None = None
@@ -159,10 +160,10 @@ class ArenaService:
         raw_config = saved.get("config")
         state_dict = saved.get("state_dict")
         if not isinstance(raw_config, dict) or not isinstance(state_dict, dict):
-            raise ValueError("Der Modell-Checkpoint ist unvollständig.")
+            raise ValueError("The AI checkpoint is incomplete.")
         allowed = {"channels", "blocks", "input_planes", "board_size"}
         if set(raw_config) != allowed:
-            raise ValueError("Der Modell-Checkpoint verwendet eine unbekannte Architektur.")
+            raise ValueError("The AI checkpoint uses an unknown architecture.")
         config = StudentConfig(**{key: int(raw_config[key]) for key in allowed})
         model = GoStoneStudent(config)
         model.load_state_dict(state_dict, strict=True)
@@ -185,7 +186,7 @@ class ArenaService:
     def _commit_move(self, session: ArenaSession, move: str) -> None:
         candidate = self._try_move(session, move)
         if candidate is None:
-            raise ValueError("Dieser Zug ist nach japanischen Regeln nicht erlaubt.")
+            raise ValueError("This move is not legal under Japanese rules.")
         session.board = candidate
         session.history.append(candidate.stones.copy())
         session.moves.append(move)
@@ -255,18 +256,26 @@ class ArenaService:
             "uncertain_stones": proposal.uncertain_stones,
             "neutral_region_seeds": proposal.neutral_region_seeds,
             "score": proposal.score.as_dict(),
-            "notice": "Modellvorschlag – für ein echtes Ergebnis müssen beide Spieler dieselbe Auswahl bestätigen.",
+            "evaluator_model_id": session.model_id,
+            "evaluator_label": session.black_label if session.human_color == -1 else session.white_label,
+            "notice": "AI score proposal — both players must confirm the same groups for an official result.",
         }
 
     def _settle_match(self, session: ArenaSession) -> None:
         if session.black_model_id is None or session.white_model_id is None:
-            raise ValueError("Der Modellvergleich ist unvollständig.")
-        _, black_ownership, black_survival = self._inference(session, session.black_model_id)
-        _, white_ownership, white_survival = self._inference(session, session.white_model_id)
+            raise ValueError("The AI match is incomplete.")
+        evaluator_color = session.settlement_evaluator
+        if evaluator_color not in {"black", "white"}:
+            raise ValueError("The scoring AI is not configured.")
+        evaluator_model_id = (
+            session.black_model_id if evaluator_color == "black" else session.white_model_id
+        )
+        evaluator_label = session.black_label if evaluator_color == "black" else session.white_label
+        _, ownership, survival = self._inference(session, evaluator_model_id)
         proposal = propose_settlement(
             session.board.stones,
-            survival_logits=(black_survival + white_survival) / 2,
-            ownership=(black_ownership + white_ownership) / 2,
+            survival_logits=survival,
+            ownership=ownership,
             captured_white_by_black=session.board.captured_white_by_black,
             captured_black_by_white=session.board.captured_black_by_white,
             komi=JAPANESE_KOMI,
@@ -277,7 +286,10 @@ class ArenaService:
             "uncertain_stones": proposal.uncertain_stones,
             "neutral_region_seeds": proposal.neutral_region_seeds,
             "score": proposal.score.as_dict(),
-            "notice": "Gemeinsamer Endstandsvorschlag aus den Bewertungen beider Testmodelle.",
+            "evaluator_model_id": evaluator_model_id,
+            "evaluator_label": evaluator_label,
+            "evaluator_color": evaluator_color,
+            "notice": f"Japanese score proposal evaluated by {evaluator_label}.",
         }
 
     def _public(self, session: ArenaSession, bot_move: str | None = None) -> dict[str, object]:
@@ -299,6 +311,7 @@ class ArenaService:
             "model_id": session.model_id,
             "black_model_id": session.black_model_id,
             "white_model_id": session.white_model_id,
+            "settlement_evaluator": session.settlement_evaluator,
             "black_label": session.black_label,
             "white_label": session.white_label,
             "board_size": session.board.size,
@@ -324,7 +337,7 @@ class ArenaService:
     def _get(self, session_id: str) -> ArenaSession:
         session = self._sessions.get(session_id)
         if session is None:
-            raise ValueError("Diese Testpartie existiert nicht mehr.")
+            raise ValueError("This test game no longer exists.")
         return session
 
     def start(self, model_id: str, board_size: int, elo: int, human_color: str) -> dict[str, object]:
@@ -332,11 +345,11 @@ class ArenaService:
             artifact = self.catalog.resolve(model_id)
             self._load_model(artifact)
             if board_size not in (9, 13, 19):
-                raise ValueError("Bitte 9×9, 13×13 oder 19×19 auswählen.")
+                raise ValueError("Select a 9×9, 13×13, or 19×19 board.")
             if elo not in SUPPORTED_ELOS:
-                raise ValueError("Diese Teststufe wird nicht unterstützt.")
+                raise ValueError("This AI strength is not supported.")
             if human_color not in {"black", "white"}:
-                raise ValueError("Bitte Schwarz oder Weiß auswählen.")
+                raise ValueError("Select Black or White.")
             board = BoardState(board_size)
             session = ArenaSession(
                 id=secrets.token_urlsafe(18),
@@ -348,8 +361,8 @@ class ArenaService:
                 history=[board.stones.copy()],
                 black_model_id=model_id if human_color == "white" else None,
                 white_model_id=model_id if human_color == "black" else None,
-                black_label=artifact.label if human_color == "white" else "Du",
-                white_label=artifact.label if human_color == "black" else "Du",
+                black_label=artifact.label if human_color == "white" else "You",
+                white_label=artifact.label if human_color == "black" else "You",
             )
             self._sessions[session.id] = session
             if len(self._sessions) > 8:
@@ -366,9 +379,9 @@ class ArenaService:
         with self._lock:
             session = self._get(session_id)
             if session.finished:
-                raise ValueError("Die Testpartie ist bereits beendet.")
+                raise ValueError("This test game has already finished.")
             if session.board.to_move != session.human_color:
-                raise ValueError("Der Bot ist gerade am Zug.")
+                raise ValueError("The AI is currently thinking.")
             self._commit_move(session, move)
             bot_move = None
             if not session.finished:
@@ -384,6 +397,7 @@ class ArenaService:
         white_model_id: str,
         board_size: int,
         elo: int,
+        settlement_evaluator: str,
     ) -> dict[str, object]:
         with self._lock:
             black_artifact = self.catalog.resolve(black_model_id)
@@ -391,9 +405,11 @@ class ArenaService:
             self._load_model(black_artifact)
             self._load_model(white_artifact)
             if board_size not in (9, 13, 19):
-                raise ValueError("Bitte 9×9, 13×13 oder 19×19 auswählen.")
+                raise ValueError("Select a 9×9, 13×13, or 19×19 board.")
             if elo not in SUPPORTED_ELOS:
-                raise ValueError("Diese Teststufe wird nicht unterstützt.")
+                raise ValueError("This AI strength is not supported.")
+            if settlement_evaluator not in {"black", "white"}:
+                raise ValueError("Select Black AI or White AI for final scoring.")
             board = BoardState(board_size)
             session = ArenaSession(
                 id=secrets.token_urlsafe(18),
@@ -406,6 +422,7 @@ class ArenaService:
                 mode="model_match",
                 black_model_id=black_model_id,
                 white_model_id=white_model_id,
+                settlement_evaluator=settlement_evaluator,
                 black_label=black_artifact.label,
                 white_label=white_artifact.label,
             )
@@ -420,12 +437,12 @@ class ArenaService:
         with self._lock:
             session = self._get(session_id)
             if session.mode != "model_match":
-                raise ValueError("Diese Partie ist kein Modellvergleich.")
+                raise ValueError("This game is not an AI-vs-AI match.")
             if session.finished:
-                raise ValueError("Der Modellvergleich ist bereits beendet.")
+                raise ValueError("The AI-vs-AI match has already finished.")
             model_id = session.black_model_id if session.board.to_move == 1 else session.white_model_id
             if model_id is None:
-                raise ValueError("Für die aktuelle Farbe fehlt ein Modell.")
+                raise ValueError("The side to move has no AI model assigned.")
             move = self._bot_move(session, model_id)
             self._commit_move(session, move)
             if not session.finished and len(session.moves) >= session.board.size * session.board.size * 2:
