@@ -48,8 +48,11 @@ class ControlCenterTests(unittest.TestCase):
         self.assertIn("AI vs AI", html)
         self.assertIn('id="arena-settlement-evaluator"', html)
         self.assertNotIn("Bot", html)
-        self.assertIn(".arena-match-mode", styles)
-        self.assertIn("calc(100vh - 280px)", styles)
+        self.assertIn(".arena-view-active", styles)
+        self.assertIn("height: 100dvh", styles)
+        self.assertIn("calc(100dvh - 306px)", styles)
+        self.assertIn("orientation: landscape", styles)
+        self.assertIn('classList.toggle("arena-view-active"', script)
         self.assertIn("settlement_evaluator:", script)
 
     def test_current_process_is_detected_without_signaling_it(self) -> None:

@@ -164,6 +164,7 @@ function switchView(view) {
   document.querySelectorAll(".lab-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
   $("#training-view").hidden = view !== "training";
   $("#arena-view").hidden = view !== "arena";
+  document.body.classList.toggle("arena-view-active", view === "arena");
   if (view === "arena") drawArenaBoard();
 }
 
