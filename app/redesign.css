@@ -2405,19 +2405,29 @@ body {
   padding: 7px 11px 7px 8px;
 }
 
-.sidebar-user--symbol {
-  gap: 0;
-  justify-content: center;
-  max-width: 44px;
-  padding: 7px;
+.sidebar-user--profile {
+  gap: 9px;
+  max-width: 190px;
+  padding: 7px 13px 7px 8px;
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
-  width: 44px;
 }
 
-.sidebar-user--symbol:hover,
-.sidebar-user--symbol:focus-visible {
+.sidebar-user--profile:hover,
+.sidebar-user--profile:focus-visible {
   border-color: rgb(116 64 40 / .32);
   box-shadow: 0 4px 12px rgb(57 38 23 / .08);
+}
+
+.sidebar-user__name {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 470;
+  letter-spacing: -.018em;
+  line-height: 1;
+  max-width: 124px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-menu-link-copy {

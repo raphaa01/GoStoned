@@ -60,10 +60,11 @@ export function DesktopHeader() {
           <>
             <Link
               aria-label={dictionary.nav.profile}
-              className="sidebar-user sidebar-user--symbol"
+              className="sidebar-user sidebar-user--profile"
               href={localizedHref("/profile")}
             >
               <ProfileAvatar size="sm" style={user.avatarStyle} />
+              <span className="sidebar-user__name">{user.displayName}</span>
             </Link>
             <button aria-label={dictionary.nav.logout} className="sidebar-login sidebar-login--icon" onClick={signOut} type="button">
               <LogOut size={17} />
