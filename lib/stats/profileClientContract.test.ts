@@ -10,10 +10,16 @@ const component = readFileSync(
 test("profile keeps a clear identity, performance, and history hierarchy", () => {
   assert.match(component, /className="profile-avatar-trigger"/);
   assert.match(component, /<ProfileAvatar size="lg"/);
+  assert.match(component, /className="profile-header__primary"/);
   assert.match(component, /className="profile-header__identity"/);
   assert.match(component, /className="profile-performance"/);
   assert.match(component, /<RatingHistoryChart/);
   assert.match(component, /className="profile-history"/);
+});
+
+test("profile shows the account handle only when it differs from the display name", () => {
+  assert.match(component, /const hasDistinctHandle =/);
+  assert.match(component, /hasDistinctHandle \? <p className="profile-header__handle">/);
 });
 
 test("profile omits technical rating details and editable rating preferences", () => {
