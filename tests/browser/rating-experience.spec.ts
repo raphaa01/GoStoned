@@ -33,6 +33,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     let signedIn = false;
     let registrationBody: unknown;
     let preferenceBody: unknown;
+    let ratingDisplayPreference = "both";
 
     await page.route("**/api/**", async (route) => {
       const request = route.request();
@@ -113,8 +114,21 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
         });
         return;
       }
+      if (pathname === "/api/profile/rating") {
+        await fulfillJson(route, {
+          ok: true,
+          rating: {
+            value: 1642.4,
+            deviation: 58.2,
+            isProvisional: false,
+            displayPreference: ratingDisplayPreference,
+          },
+        });
+        return;
+      }
       if (pathname === "/api/profile/preferences" && request.method() === "PATCH") {
         preferenceBody = request.postDataJSON();
+        ratingDisplayPreference = "rank-primary";
         await fulfillJson(route, {
           ok: true,
           preferences: {
@@ -169,7 +183,20 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
 
     await page.goto(`${prefix}/profile`);
     await expect(page.getByText(dictionary.profile.globalRating, { exact: true })).toBeVisible();
-    await expect(page.getByText(dictionary.profile.botCalibrationNotice, { exact: true })).toBeVisible();
+    await expect(page.locator(".profile-header__rating .rating-label")).toContainText(
+      locale === "de" ? "8. Kyu" : "8 kyu",
+    );
+    if ((page.viewportSize()?.width ?? 0) > 840) {
+      await expect(page.locator(".sidebar-user .rating-label")).toContainText(
+        locale === "de" ? "8. Kyu" : "8 kyu",
+      );
+    } else {
+      await page.getByRole("button", { name: dictionary.nav.openMenu }).click();
+      await expect(page.locator(".mobile-menu .rating-label")).toContainText(
+        locale === "de" ? "8. Kyu" : "8 kyu",
+      );
+      await page.getByRole("button", { name: dictionary.nav.closeMenu }).click();
+    }
     await expect(page.getByText("Calibrated KataGo", { exact: false })).toBeVisible();
     await expect(
       page.getByRole("link", {
@@ -177,6 +204,8 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       }),
     ).toBeVisible();
     await expect(page.locator(".rating-chart svg")).toBeVisible();
+    await page.locator(".rating-preferences-shell > summary").click();
+    await expect(page.getByText(dictionary.profile.botCalibrationNotice, { exact: true })).toBeVisible();
     await page.getByLabel(dictionary.profile.displayPreference).selectOption("rank-primary");
     await page.getByLabel(dictionary.profile.botPreference).selectOption("calibrated-rated-after-wait");
     await page.getByRole("button", { name: dictionary.profile.savePreferences }).click();
@@ -185,7 +214,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       displayPreference: "rank-primary",
       botMatchPreference: "calibrated-rated-after-wait",
     });
-    await expect(page.locator(".profile-metrics .rating-label").first()).toContainText(
+    await expect(page.locator(".profile-rating-band .rating-label")).toContainText(
       locale === "de" ? "8. Kyu" : "8 kyu",
     );
     await assertNoHorizontalOverflow(page);

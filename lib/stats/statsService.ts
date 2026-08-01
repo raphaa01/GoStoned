@@ -12,6 +12,13 @@ export type LeaderboardSnapshot = {
 
 export type LeaderboardOpponentScope = "all-rated" | "human-only";
 
+export type CurrentRatingIdentity = {
+  value: number;
+  deviation: number;
+  isProvisional: boolean;
+  displayPreference: RatingDisplayPreference;
+};
+
 export type GlobalRatingSummary = {
   rating: number;
   ratingDeviation: number;
@@ -79,6 +86,13 @@ type GlobalRatingRow = {
   known_rank: string | null;
 };
 
+type CurrentRatingIdentityRow = {
+  rating: number;
+  rating_deviation: number;
+  is_provisional: boolean;
+  display_preference: RatingDisplayPreference;
+};
+
 type RatingHistoryRow = {
   id: string;
   game_id: string;
@@ -111,6 +125,31 @@ type LeaderboardSnapshotRow = {
   entries: LeaderboardEntry[];
   observed_at: Date;
 };
+
+export async function getCurrentRatingIdentity(
+  playerKey: string,
+): Promise<CurrentRatingIdentity | null> {
+  const result = await query<CurrentRatingIdentityRow>(
+    `SELECT rating.rating::double precision AS rating,
+            rating.rating_deviation::double precision AS rating_deviation,
+            rating.is_provisional,
+            preference.display_preference
+       FROM player_glicko2_ratings rating
+       JOIN player_rating_preferences preference
+         ON preference.user_id = rating.user_id
+      WHERE rating.player_key = $1
+      LIMIT 1`,
+    [playerKey],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    value: row.rating,
+    deviation: row.rating_deviation,
+    isProvisional: row.is_provisional,
+    displayPreference: row.display_preference,
+  };
+}
 
 export async function getLeaderboard(
   limit = 50,
