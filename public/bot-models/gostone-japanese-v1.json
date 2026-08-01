@@ -1,0 +1,32 @@
+{
+  "contractVersion": "gostone-browser-bot-v1",
+  "model": "GoStoneJapaneseStudent",
+  "version": "v1",
+  "artifact": "gostone-japanese-v1.onnx",
+  "sha256": "bacd6e1cdb783278aadce51b1b6db8ab4848512a723d00a5f69de94ecc151a08",
+  "bytes": 6776540,
+  "rules": "japanese",
+  "komi": 6.5,
+  "input": {
+    "name": "features",
+    "shape": [1, 12, 19, 19],
+    "strengthPlane": 7,
+    "strengthRange": [0, 1],
+    "nominalRatingRange": [600, 2100]
+  },
+  "outputs": {
+    "policy": "policy_logits",
+    "value": "value",
+    "score": "score",
+    "ownership": "ownership",
+    "survival": "survival_logits"
+  },
+  "settlement": {
+    "contractVersion": "gostone-japanese-settlement-v1",
+    "authority": "proposal-only",
+    "deadThreshold": 0.25,
+    "aliveThreshold": 0.75,
+    "neutralOwnershipThreshold": 0.35
+  },
+  "calibration": "Nominal strength targets require a completed calibration league before ratings are published."
+}

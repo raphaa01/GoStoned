@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { botDifficultyForRating } from "@/lib/bot/difficulty";
-import { deterministicUnit } from "@/lib/bot/identity";
+import { botDisplayName, deterministicUnit } from "@/lib/bot/identity";
+import { botStrengthForRating, GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import { query, withTransaction } from "@/lib/db";
 import {
   DEFAULT_MATCH_RULES,
@@ -24,6 +25,7 @@ import type { BotMatchPreference } from "@/lib/rating/preferences";
 import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 import {
   selectNearestCalibratedBot,
+  botConfigurationKey,
   type BotCalibrationEvidence,
   type BotGameConfiguration,
   type BotProfileCandidate,
@@ -108,6 +110,94 @@ type CancellationOptions = {
 
 const CALIBRATED_BOT_FALLBACK_SECONDS = 10;
 const MATCH_RULES_VERSION = DEFAULT_MATCH_RULES.rulesProfile;
+
+async function matchWaitingPlayerWithBrowserBot(
+  client: PoolClient,
+  requester: QueueRow,
+  configuration: BotGameConfiguration,
+): Promise<MatchmakingStatus> {
+  const rules = newGameRulesConfiguration();
+  if (
+    requester.rules_snapshot !== rules.ruleset
+    || requester.rules_profile !== rules.rulesProfile
+    || requester.scoring_method_snapshot !== rules.scoringMethod
+    || Number(requester.komi_snapshot) !== rules.komi
+    || requester.handicap_snapshot !== rules.handicap
+  ) throw new Error("The queued rules snapshot changed before browser bot matching.");
+  const timeControl = getTimeControl(requester.time_control);
+  const targetRating = Math.max(600, Math.min(2_100, Math.round(Number(requester.rating_snapshot))));
+  const targetDeviation = Math.max(
+    80,
+    Math.min(350, Math.round(Number(requester.rating_deviation_snapshot))),
+  );
+  const identitySeed = `${requester.player_key}:${requester.created_at.toISOString()}:${GOSTONE_BOT_MODEL.modelVersion}`;
+  const botPlayerKey = `bot:${randomUUID()}`;
+  const botIsBlack = deterministicUnit(`${identitySeed}:color`) < 0.5;
+  const blackPlayerKey = botIsBlack ? botPlayerKey : requester.player_key;
+  const whitePlayerKey = botIsBlack ? requester.player_key : botPlayerKey;
+  const gameResult = await client.query<{ id: string }>(
+    `INSERT INTO games (
+       board_size,black_player_key,white_player_key,time_control,
+       rules,rules_profile,scoring_method,komi,handicap,phase,to_move,
+       main_time_seconds,byo_yomi_periods,byo_yomi_seconds,
+       black_time_remaining_ms,white_time_remaining_ms,
+       black_periods_remaining,white_periods_remaining,turn_started_at
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,'play',$10,
+       $11,$12,$13,$14,$14,$12,$12,NOW()
+     ) RETURNING id`,
+    [
+      requester.board_size, blackPlayerKey, whitePlayerKey, requester.time_control,
+      rules.ruleset, rules.rulesProfile, rules.scoringMethod, rules.komi, rules.handicap,
+      rules.policy.initialTurn, timeControl.mainTimeSeconds,
+      timeControl.byoYomiPeriods, timeControl.byoYomiSeconds,
+      timeControl.mainTimeSeconds * 1_000,
+    ],
+  );
+  const gameId = gameResult.rows[0]?.id;
+  if (!gameId) throw new Error("The browser bot game was not created.");
+  const difficulty = botDifficultyForRating(targetRating);
+  await client.query(
+    `INSERT INTO game_bots (
+       game_id,bot_player_key,display_name,color,target_rating,
+       visits_per_turn,candidate_limit,temperature,rating_mode
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'browser-v1')`,
+    [
+      gameId, botPlayerKey, botDisplayName(identitySeed), botIsBlack ? "black" : "white",
+      targetRating, difficulty.visitsPerTurn, difficulty.candidateLimit, difficulty.temperature,
+    ],
+  );
+  const publication = await client.query(
+    `UPDATE matchmaking_queue
+        SET status='matched',game_id=$1,updated_at=NOW()
+      WHERE player_key=$2 AND status='waiting' AND game_id IS NULL
+        AND matchmaking_policy_version=$3 AND match_pool='registered-rated'`,
+    [gameId, requester.player_key, ADAPTIVE_MATCH_POLICY_VERSION],
+  );
+  if (publication.rowCount !== 1) {
+    throw new Error("Matchmaking changed before the browser bot game could be published.");
+  }
+  await client.query(
+    `INSERT INTO game_browser_bot_bindings (
+       game_id,bot_player_key,bot_color,human_player_key,model_contract_version,
+       model_version,model_sha256,binding_version,configuration_key,
+       opponent_rating,opponent_rating_deviation,strength_value,credit_mode,bound_game_version
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,'browser-bot-binding-v1',$8,$9,$10,$11,
+               'fixed-versioned-profile',0)`,
+    [
+      gameId, botPlayerKey, botIsBlack ? "black" : "white", requester.player_key,
+      GOSTONE_BOT_MODEL.contractVersion, GOSTONE_BOT_MODEL.modelVersion,
+      GOSTONE_BOT_MODEL.artifactSha256, botConfigurationKey(configuration),
+      targetRating, targetDeviation, botStrengthForRating(targetRating),
+    ],
+  );
+  return {
+    status: "matched",
+    gameId,
+    boardSize: requester.board_size,
+    timeControl: requester.time_control,
+  };
+}
 
 function newGameRulesConfiguration() {
   return resolveRulesConfiguration(DEFAULT_MATCH_RULES);
@@ -218,53 +308,6 @@ function calibratedBotCandidate(row: ActiveBotProfileRow): BotProfileCandidate {
   return { profile, evidence };
 }
 
-async function activeCalibratedBotProfiles(
-  client: PoolClient,
-  configuration: BotGameConfiguration,
-): Promise<ActiveBotProfileRow[]> {
-  const result = await client.query<ActiveBotProfileRow>(
-    `SELECT profile.*,
-            activation.activation_id,
-            COALESCE((
-              SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
-                'configurationKey', configured.configuration_key,
-                'boardSize', configured.board_size,
-                'timeControl', configured.time_control,
-                'rulesProfile', configured.rules_profile,
-                'rulesVersion', configured.rules_version,
-                'komi', configured.komi,
-                'handicap', configured.handicap,
-                'games', configured.calibration_games
-              ) ORDER BY configured.configuration_key)
-                FROM calibrated_bot_profile_configurations configured
-               WHERE configured.profile_id = profile.profile_id
-            ), '[]'::jsonb) AS configurations
-       FROM calibrated_bot_profiles profile
-       JOIN LATERAL (
-         SELECT event.activation_id,event.action
-           FROM calibrated_bot_profile_activation_events event
-          WHERE event.profile_id = profile.profile_id
-          ORDER BY event.activation_id DESC
-          LIMIT 1
-       ) activation ON activation.action = 'activate'
-      WHERE CHAR_LENGTH(profile.transparent_name) BETWEEN 2 AND 40
-        AND EXISTS (
-          SELECT 1 FROM calibrated_bot_profile_configurations requested
-           WHERE requested.profile_id = profile.profile_id
-             AND requested.board_size = $1 AND requested.time_control = $2
-             AND requested.rules_profile = $3 AND requested.rules_version = $4
-             AND requested.komi = $5 AND requested.handicap = $6
-        )
-      ORDER BY profile.profile_id`,
-    [
-      configuration.boardSize, configuration.timeControl,
-      configuration.rulesProfile, configuration.rulesVersion,
-      configuration.komi, configuration.handicap,
-    ],
-  );
-  return result.rows;
-}
-
 async function matchWaitingPlayerWithCalibratedBot(
   client: PoolClient,
   requester: QueueRow,
@@ -275,7 +318,6 @@ async function matchWaitingPlayerWithCalibratedBot(
     !allowOnDemandBot
     || requester.status !== "waiting"
     || requester.match_pool !== "registered-rated"
-    || requester.bot_match_preference !== "calibrated-rated-after-wait"
     || requester.rating_snapshot === null
     || requester.rating_snapshot === undefined
     || requester.rating_deviation_snapshot === null
@@ -293,12 +335,14 @@ async function matchWaitingPlayerWithCalibratedBot(
     komi: Number(requester.komi_snapshot ?? DEFAULT_MATCH_RULES.komi),
     handicap: requester.handicap_snapshot ?? DEFAULT_MATCH_RULES.handicap,
   };
-  const rows = await activeCalibratedBotProfiles(client, configuration);
+  // The paid/server KataGo profile path is deliberately bypassed. Normal bot
+  // matches always bind the versioned browser-local GoStone model.
+  const rows: ActiveBotProfileRow[] = [];
   const selection = selectNearestCalibratedBot({
     globalRating: Number(requester.rating_snapshot),
     ratingDeviation: Number(requester.rating_deviation_snapshot),
   }, configuration, rows.map(calibratedBotCandidate), requester.handicap_preference ?? "even-only");
-  if (!selection) return null;
+  if (!selection) return matchWaitingPlayerWithBrowserBot(client, requester, configuration);
   const selectedRow = rows.find(({ profile_id }) => profile_id === selection.profile.profileId);
   if (!selectedRow) throw new Error("The selected calibrated bot profile disappeared.");
 

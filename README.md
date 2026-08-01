@@ -393,43 +393,32 @@ Aufträge atomar, spricht über KataGos offizielle zeilenbasierte JSON-Analysis-
 mit der Engine und speichert das versionsgebundene Ergebnis wieder in PostgreSQL.
 Frontend und API kennen weder den KataGo-Prozess noch einen lokalen Docker-Host.
 
-Der gleiche Worker stellt außerdem den automatischen Bot-Fallback bereit. Wenn
-ein Spieler zehn Sekunden lang keinen echten Gegner findet und entweder ein
-lokaler Worker gesund ist oder der geschützte Modal-Aufruf konfiguriert wurde,
-erstellt PostgreSQL atomar eine Bot-Partie. Für
-registrierte Konten ist sie gewertet; Gäste bleiben ohne dauerhaftes Rating.
-Echte wartende Spieler werden immer zuerst gematcht. Der Bot trägt einen
-normalen Anzeigenamen. Während der laufenden Partie bleibt der Computergegner
-dezent erkennbar; Spielverlauf und Review konzentrieren sich anschließend auf
-Gegnername, Ergebnis und Zugqualität. Der Chat ist für Bot-Partien deaktiviert.
+Botpartien verwenden nicht mehr den KataGo-Worker. Nach zehn Sekunden ohne
+echten Gegner erstellt PostgreSQL die Partie; anschließend lädt der Browser
+einmalig das versionierte Modell `public/bot-models/gostone-japanese-v1.onnx`
+und berechnet die Botzüge in einem Web Worker. Der Server erhält nur den
+vorgeschlagenen Zug, prüft ihn mit derselben autoritativen Regelengine wie einen
+Spielerzug und speichert ihn. Es gibt deshalb keine Modal-, GPU- oder
+KataGo-Anfrage pro Botzug. Modell und ONNX-WASM-Runtime werden unter Vercel mit
+langem Cache ausgeliefert und erst bei einer Botpartie geladen.
 
-Vor jedem Bot-Zug wird neu ein Ziel zwischen drei und neun Sekunden bestimmt.
-Der Bot nutzt einen getrennten, hoch priorisierten KataGo-Prozess und verwertet
-bei langen Suchen einen Zwischenstand, sodass der Zug inklusive technischer
-Reserve innerhalb von zehn Sekunden übermittelt werden kann. Der Chat behält
-dabei sein normales Layout, zeigt aber neutral an,
-dass er für diese Partie nicht verfügbar ist, und deaktiviert die Eingabe.
+Die Zielstärke kommt aus dem festen Ratingprofil des Gegners. Das Modell nutzt
+dafür seinen Strength-Eingabekanal und eine je nach Zielrating unterschiedlich
+strenge Zugauswahl. Die sichtbare Denkzeit liegt normalerweise zwischen drei
+und neun Sekunden. Nach zwei Pässen verwendet derselbe Worker die Ownership-
+und Survival-Ausgaben für einen Vorschlag zu lebenden, toten und unsicheren
+Gruppen. Dieser Vorschlag ist nie autoritativ: Serverregeln und die Zustimmung
+beider Spieler bestimmen den Endstand.
 
-Die Zielstärke wird beim Match aus der Wertung des Spielers für die gewählte
-Brettgröße übernommen; Gäste starten bei 1200. Niedrigere Stufen wählen
-variabler aus mehreren legalen KataGo-Kandidaten, höhere Stufen durchsuchen mehr
-Stellungen und bleiben näher am besten Zug. `KATAGO_BOT_MAX_VISITS` begrenzt die
-Rechenzeit pro Zug auf dem jeweiligen Worker. Auf einem GPU-Server kann dieses
-Limit höher als auf einem Laptop gesetzt werden, ohne Website- oder
-Datenbankcode zu ändern.
-
-Dadurch funktionieren drei Betriebsarten ohne Änderungen am Website-Code:
-
-1. lokal: PostgreSQL, Website und KataGo-Worker laufen auf demselben Laptop;
-2. Vercel + externer Worker: Vercel nutzt Supabase und ein externer Linux-Server
-   startet nur den KataGo-Container mit derselben `DATABASE_URL`;
-3. mehrere Worker: identische Container teilen sich die Warteschlange sicher
-   über `FOR UPDATE SKIP LOCKED`.
+Der verbindliche Integrationsvertrag für Bot und japanische Wertung steht in
+`docs/browser-bot-v1.md`. Vollständige Partieanalysen und die serverseitige
+Puzzle-Erzeugung bleiben getrennte KataGo-Aufgaben und können lokal per Docker
+oder bei Bedarf extern ausgeführt werden.
 
 ### Modal: nur bei Bedarf, kein bezahlter Leerlauf
 
 Die Produktionsintegration verwendet keine dauerhaft laufende Modal-Instanz.
-Vercel sendet nach einer Bot-, Analyse- oder Puzzle-Anfrage einen authentifizierten
+Vercel sendet nach einer Analyse- oder Puzzle-Anfrage einen authentifizierten
 Auftrag an eine kleine Dispatcher-Funktion. Diese startet genau einen begrenzten
 KataGo-Datenbankauftrag. Alle Funktionen haben `min_containers=0`, feste
 Parallelitätsgrenzen und fahren nach kurzer Leerlaufzeit wieder auf null herunter.
@@ -529,7 +518,6 @@ export KATAGO_DATABASE_URL='postgresql://...supabase-session-url...'
 export KATAGO_DATABASE_SSL=require
 export KATAGO_DATABASE_POOL_MAX=2
 export KATAGO_MAX_VISITS=500
-export KATAGO_BOT_MAX_VISITS=800
 docker compose up -d --build katago
 ```
 

@@ -38,3 +38,8 @@ __pycache__/
 *.py[cod]
 .venv/
 .modal.toml
+
+# Local bot training data, teacher models, and generated artifacts
+/.cache/
+/training/gostone_bot/data/
+/training/gostone_bot/artifacts/

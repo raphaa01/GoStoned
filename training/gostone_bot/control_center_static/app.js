@@ -1,0 +1,514 @@
+const $ = (selector) => document.querySelector(selector);
+const phaseLabels = {
+  idle: "Noch nicht gestartet",
+  setup: "Vorbereitung",
+  data: "KataGo erzeugt Lehrstellungen",
+  training: "Student-Modell lernt",
+  export: "ONNX-Export",
+  validation: "Abschlussprüfung",
+};
+const statusLabels = {
+  idle: "Bereit",
+  starting: "Startet",
+  running: "Läuft",
+  paused: "Pausiert",
+  stopping: "Stoppt sicher",
+  stopped: "Gestoppt",
+  completed: "Fertig",
+  failed: "Fehler",
+};
+let presets = [];
+let selectedPreset = "short";
+let lastArtifact = "";
+let arenaState = null;
+let arenaBusy = false;
+let arenaMode = "human";
+let arenaModels = [];
+let matchTimer = null;
+let matchPlaying = false;
+const arenaCanvas = $("#arena-board");
+const arenaContext = arenaCanvas.getContext("2d");
+const gtpColumns = "ABCDEFGHJKLMNOPQRST";
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    cache: "no-store",
+  });
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error || "Lokale Anfrage fehlgeschlagen.");
+  return value;
+}
+
+function toast(message) {
+  const element = $("#toast");
+  element.textContent = message;
+  element.classList.add("show");
+  window.setTimeout(() => element.classList.remove("show"), 2600);
+}
+
+function renderPresets() {
+  const list = $("#preset-list");
+  list.replaceChildren();
+  for (const preset of presets) {
+    const label = document.createElement("label");
+    label.className = `preset${preset.id === selectedPreset ? " selected" : ""}`;
+    label.innerHTML = `
+      <input type="radio" name="preset" value="${preset.id}" ${preset.id === selectedPreset ? "checked" : ""}>
+      <span><strong>${preset.name}</strong><p>${preset.description}</p></span>
+      <span class="preset-meta"><span>${preset.estimated_duration}</span><small>${preset.quality}</small></span>`;
+    label.querySelector("input").addEventListener("change", () => {
+      selectedPreset = preset.id;
+      renderPresets();
+    });
+    list.append(label);
+  }
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat("de-DE").format(Number(value || 0));
+}
+
+function renderStatus(state) {
+  const status = state.status || "idle";
+  const progress = Math.max(0, Math.min(1, Number(state.overall_progress || 0)));
+  const phaseProgress = Math.max(0, Math.min(1, Number(state.phase_progress || 0)));
+  $("#status-title").textContent = state.preset_name || (status === "idle" ? "Bereit" : "Lokales Training");
+  const badge = $("#status-badge");
+  badge.className = `status-badge ${status}`;
+  badge.textContent = statusLabels[status] || status;
+  $("#progress-ring").style.setProperty("--progress", `${progress * 360}deg`);
+  $("#progress-value").textContent = `${Math.round(progress * 100)}%`;
+  $("#phase-name").textContent = phaseLabels[state.phase] || state.phase || phaseLabels.idle;
+  $("#status-message").textContent = state.message || "Bereit.";
+  $("#phase-bar").style.width = `${phaseProgress * 100}%`;
+  $("#games-metric").textContent = `${formatNumber(state.completed_games)} / ${formatNumber(state.target_games)}`;
+  $("#positions-metric").textContent = formatNumber(state.positions);
+  $("#epochs-metric").textContent = `${formatNumber(state.completed_epochs)} / ${formatNumber(state.target_epochs)}`;
+  $("#model-metric").textContent = state.artifact_bytes
+    ? `${(state.artifact_bytes / 1024 / 1024).toFixed(2)} MiB`
+    : "Noch offen";
+  const active = ["starting", "running", "paused", "stopping"].includes(status);
+  $("#start-button").disabled = active;
+  $("#pause-button").disabled = !["starting", "running"].includes(status);
+  $("#resume-button").disabled = !["paused", "stopped", "failed"].includes(status);
+  $("#stop-button").disabled = !active;
+  document.querySelectorAll(".preset input, #cpu-threads").forEach((input) => { input.disabled = active; });
+  lastArtifact = state.artifact || "";
+  $("#copy-path").disabled = !lastArtifact;
+  $("#artifact-path").textContent = lastArtifact ? `Modell: ${lastArtifact}` : "";
+}
+
+function renderLogs(logs) {
+  const output = $("#log-output");
+  if (!logs.length) {
+    output.innerHTML = '<p class="log-empty">Noch keine Einträge.</p>';
+    return;
+  }
+  output.replaceChildren();
+  for (const log of logs) {
+    const line = document.createElement("p");
+    line.className = `log-line ${log.level || "info"}`;
+    const time = new Date(Number(log.time) * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const timeElement = document.createElement("time");
+    timeElement.textContent = time;
+    const message = document.createElement("span");
+    message.textContent = log.message;
+    line.append(timeElement, message);
+    output.append(line);
+  }
+  output.scrollTop = output.scrollHeight;
+}
+
+async function refresh() {
+  try {
+    const [status, logs] = await Promise.all([api("/api/status"), api("/api/logs")]);
+    renderStatus(status);
+    renderLogs(logs);
+  } catch (error) {
+    $("#status-message").textContent = error.message;
+  }
+}
+
+async function action(path, body = {}) {
+  try {
+    const result = await api(path, { method: "POST", body: JSON.stringify(body) });
+    renderStatus(result);
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+$("#start-button").addEventListener("click", () => action("/api/start", {
+  preset_id: selectedPreset,
+  cpu_threads: Number($("#cpu-threads").value),
+}));
+$("#pause-button").addEventListener("click", () => action("/api/pause"));
+$("#resume-button").addEventListener("click", () => action("/api/resume"));
+$("#stop-button").addEventListener("click", () => action("/api/stop"));
+$("#cpu-threads").addEventListener("input", (event) => { $("#cpu-output").value = event.target.value; });
+$("#copy-path").addEventListener("click", async () => {
+  if (!lastArtifact) return;
+  await navigator.clipboard.writeText(lastArtifact);
+  toast("Modellpfad kopiert.");
+});
+
+function switchView(view) {
+  if (view !== "arena" && matchPlaying) {
+    matchPlaying = false;
+    clearMatchTimer();
+    if (arenaState?.mode === "model_match") renderArena(arenaState);
+  }
+  document.querySelectorAll(".lab-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
+  $("#training-view").hidden = view !== "training";
+  $("#arena-view").hidden = view !== "arena";
+  if (view === "arena") drawArenaBoard();
+}
+
+document.querySelectorAll(".lab-tab").forEach((tab) => {
+  tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+async function loadArenaModels() {
+  const selects = [$("#arena-model"), $("#arena-black-model"), $("#arena-white-model")];
+  const previous = selects.map((select) => select.value);
+  arenaModels = await api("/api/arena/models");
+  selects.forEach((select, selectIndex) => {
+    select.replaceChildren();
+    for (const model of arenaModels) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.label} · ${model.onnx_mib.toFixed(2)} MiB`;
+      select.append(option);
+    }
+    if (arenaModels.some((model) => model.id === previous[selectIndex])) {
+      select.value = previous[selectIndex];
+    }
+  });
+  if (!previous[2] && arenaModels.length > 1) $("#arena-white-model").selectedIndex = 1;
+  $("#arena-start").disabled = arenaModels.length === 0;
+  $("#arena-model-note").textContent = arenaModels.length
+    ? `${arenaModels.length} fertige${arenaModels.length === 1 ? "s" : ""} Modell${arenaModels.length === 1 ? "" : "e"} gefunden. Dasselbe Modell darf für einen Kontrolllauf auf beiden Seiten spielen.`
+    : "Noch kein fertiges Modell. Warte, bis ein Trainingslauf vollständig abgeschlossen ist.";
+}
+
+function arenaGeometry(size) {
+  const padding = 46;
+  return { padding, spacing: (arenaCanvas.width - padding * 2) / (size - 1) };
+}
+
+function parseGtp(move, size) {
+  if (!move || move.toLowerCase() === "pass") return null;
+  const x = gtpColumns.indexOf(move[0].toUpperCase());
+  const row = Number(move.slice(1));
+  return x < 0 || !Number.isInteger(row) ? null : { x, y: size - row };
+}
+
+function starPoints(size) {
+  if (size === 9) return [2, 4, 6].flatMap((x) => [2, 4, 6].map((y) => [x, y]));
+  if (size === 13) return [3, 6, 9].flatMap((x) => [3, 6, 9].map((y) => [x, y]));
+  return [3, 9, 15].flatMap((x) => [3, 9, 15].map((y) => [x, y]));
+}
+
+function drawArenaBoard() {
+  const size = arenaState?.board_size || Number($("#arena-size").value) || 9;
+  const board = arenaState?.board || Array.from({ length: size }, () => Array(size).fill(0));
+  const { padding, spacing } = arenaGeometry(size);
+  const ctx = arenaContext;
+  ctx.clearRect(0, 0, arenaCanvas.width, arenaCanvas.height);
+  const wood = ctx.createLinearGradient(0, 0, arenaCanvas.width, arenaCanvas.height);
+  wood.addColorStop(0, "#e4bc63");
+  wood.addColorStop(1, "#c9963e");
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, 0, arenaCanvas.width, arenaCanvas.height);
+  ctx.strokeStyle = "#49301b";
+  ctx.lineWidth = Math.max(1.25, 4.2 - size * 0.13);
+  for (let index = 0; index < size; index += 1) {
+    const position = padding + index * spacing;
+    ctx.beginPath(); ctx.moveTo(padding, position); ctx.lineTo(arenaCanvas.width - padding, position); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(position, padding); ctx.lineTo(position, arenaCanvas.height - padding); ctx.stroke();
+  }
+  ctx.fillStyle = "#49301b";
+  for (const [x, y] of starPoints(size)) {
+    ctx.beginPath(); ctx.arc(padding + x * spacing, padding + y * spacing, Math.max(4, spacing * .085), 0, Math.PI * 2); ctx.fill();
+  }
+  const last = parseGtp(arenaState?.last_move, size);
+  const dead = new Set((arenaState?.proposal?.dead_stones || []).map(([x, y]) => `${x}:${y}`));
+  const uncertain = new Set((arenaState?.proposal?.uncertain_stones || []).map(([x, y]) => `${x}:${y}`));
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const color = board[y][x];
+      if (!color) continue;
+      const cx = padding + x * spacing;
+      const cy = padding + y * spacing;
+      const radius = spacing * .47;
+      const stone = ctx.createRadialGradient(cx - radius * .3, cy - radius * .35, radius * .08, cx, cy, radius);
+      if (color === 1) { stone.addColorStop(0, "#565656"); stone.addColorStop(.45, "#171717"); stone.addColorStop(1, "#020202"); }
+      else { stone.addColorStop(0, "#ffffff"); stone.addColorStop(.62, "#ededE8"); stone.addColorStop(1, "#b8b8b1"); }
+      ctx.fillStyle = stone; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = color === 1 ? "#000" : "#aaa"; ctx.lineWidth = 1.5; ctx.stroke();
+      if (last?.x === x && last?.y === y) {
+        ctx.fillStyle = color === 1 ? "#dfe1d8" : "#222"; ctx.beginPath(); ctx.arc(cx, cy, radius * .18, 0, Math.PI * 2); ctx.fill();
+      }
+      const key = `${x}:${y}`;
+      if (dead.has(key) || uncertain.has(key)) {
+        ctx.strokeStyle = dead.has(key) ? "#e25f50" : "#f0bd52"; ctx.lineWidth = Math.max(4, spacing * .08);
+        ctx.beginPath(); ctx.arc(cx, cy, radius * .72, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+  }
+}
+
+function humanTurn(state) {
+  return state && state.mode === "human" && state.to_move === state.human_color && !state.finished;
+}
+
+function formatArenaMove(move) {
+  return !move || move.toLowerCase() === "pass" ? "Pass" : move.toUpperCase();
+}
+
+function renderMoveHistory(state) {
+  const panel = $("#arena-move-panel");
+  const list = $("#arena-move-list");
+  panel.hidden = !state;
+  list.replaceChildren();
+  if (!state?.moves?.length) {
+    const empty = document.createElement("li");
+    empty.className = "move-empty";
+    empty.textContent = "Die Partie wartet auf den ersten Zug.";
+    list.append(empty);
+    return;
+  }
+  for (const entry of state.moves) {
+    const item = document.createElement("li");
+    item.className = `arena-move-entry ${entry.color}`;
+    const number = document.createElement("span");
+    number.className = "move-number";
+    number.textContent = String(entry.number);
+    const stone = document.createElement("span");
+    stone.className = `mini-stone ${entry.color}`;
+    const label = document.createElement("span");
+    label.className = "move-label";
+    label.textContent = entry.label;
+    const coordinate = document.createElement("strong");
+    coordinate.textContent = formatArenaMove(entry.move);
+    item.append(number, stone, label, coordinate);
+    list.append(item);
+  }
+  list.scrollTop = list.scrollHeight;
+}
+
+function renderArena(state) {
+  arenaState = state;
+  drawArenaBoard();
+  const modelMatch = state.mode === "model_match";
+  const human = state.human_color === "black" ? "Schwarz" : "Weiß";
+  const turn = state.to_move === "black" ? "Schwarz" : "Weiß";
+  $("#arena-title").textContent = modelMatch
+    ? `${state.board_size}×${state.board_size} · Modellvergleich`
+    : `${state.board_size}×${state.board_size} · Du spielst ${human}`;
+  $("#arena-players").hidden = false;
+  $("#arena-black-player").textContent = state.black_label;
+  $("#arena-white-player").textContent = state.white_label;
+  const badge = $("#arena-turn");
+  badge.className = `status-badge ${state.finished ? "completed" : modelMatch && !matchPlaying ? "paused" : "running"}`;
+  badge.textContent = state.finished
+    ? "Beendet"
+    : modelMatch
+      ? matchPlaying ? `${turn} rechnet` : "Pausiert"
+      : humanTurn(state) ? "Dein Zug" : "Bot am Zug";
+  $("#arena-move").textContent = `Zug ${state.move_number} · ${turn} am Zug`;
+  $("#arena-prisoners").textContent = `Gefangene: Schwarz ${state.black_prisoners} · Weiß ${state.white_prisoners}`;
+  $("#arena-pass").disabled = arenaBusy || !humanTurn(state);
+  $("#arena-reset").disabled = false;
+  $("#arena-playback").disabled = !modelMatch || state.finished || arenaBusy;
+  $("#arena-playback").textContent = matchPlaying ? "Pausieren" : "Weiter abspielen";
+  const last = state.moves.at(-1);
+  if (state.finished) {
+    $("#arena-message").textContent = state.finished_reason === "move_limit"
+      ? "Das Sicherheitslimit wurde erreicht. Der gemeinsame Endstandsvorschlag ist eingeblendet."
+      : "Zwei aufeinanderfolgende Pässe: Der Endstandsvorschlag ist eingeblendet.";
+  } else if (modelMatch) {
+    $("#arena-message").textContent = last
+      ? `${last.label} spielte ${formatArenaMove(last.move)}. ${turn} ist als Nächstes am Zug.`
+      : "Die Live-Partie ist bereit. Schwarz beginnt gleich.";
+  } else {
+    $("#arena-message").textContent = state.bot_move
+      ? `Der Bot spielte ${formatArenaMove(state.bot_move)}. Du bist am Zug.`
+      : "Klicke auf einen freien Schnittpunkt.";
+  }
+  renderMoveHistory(state);
+  const live = $("#arena-live-dot");
+  live.className = `live-dot ${state.finished ? "finished" : matchPlaying ? "playing" : "paused"}`;
+  live.textContent = state.finished ? "Beendet" : matchPlaying ? "Live" : "Pausiert";
+  const result = $("#arena-result");
+  result.hidden = !state.proposal;
+  if (state.proposal) {
+    const score = state.proposal.score;
+    const winner = score.winner === "black"
+      ? (modelMatch ? state.black_label : "Schwarz")
+      : score.winner === "white" ? (modelMatch ? state.white_label : "Weiß") : "Jigo";
+    $("#result-title").textContent = winner === "Jigo" ? "Unentschieden" : `${winner} gewinnt`;
+    $("#result-summary").textContent = winner === "Jigo" ? "Vorgeschlagener Gleichstand" : `Vorgeschlagener Vorsprung: ${score.margin.toFixed(1)} Punkte`;
+    $("#result-black").textContent = `${score.black_total.toFixed(1)} (${score.black_territory} Gebiet + ${score.black_prisoners} Gefangene)`;
+    $("#result-white").textContent = `${score.white_total.toFixed(1)} (${score.white_territory} Gebiet + ${score.white_prisoners} Gefangene + 6,5 Komi)`;
+    $("#result-dead").textContent = String(state.proposal.dead_stones.length);
+    $("#result-uncertain").textContent = String(state.proposal.uncertain_stones.length);
+  }
+}
+
+function setArenaBusy(busy) {
+  arenaBusy = busy;
+  $("#arena-busy").hidden = !busy;
+  const hasSelection = arenaMode === "human"
+    ? Boolean($("#arena-model").value)
+    : Boolean($("#arena-black-model").value && $("#arena-white-model").value);
+  $("#arena-start").disabled = busy || !hasSelection;
+  $("#arena-pass").disabled = busy || !humanTurn(arenaState);
+  $("#arena-playback").disabled = busy || arenaMode !== "match" || !arenaState || arenaState.finished;
+}
+
+async function arenaRequest(payload) {
+  setArenaBusy(true);
+  try {
+    renderArena(await api("/api/arena/move", { method: "POST", body: JSON.stringify(payload) }));
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    setArenaBusy(false);
+  }
+}
+
+arenaCanvas.addEventListener("click", (event) => {
+  if (arenaBusy || !humanTurn(arenaState)) return;
+  const rect = arenaCanvas.getBoundingClientRect();
+  const scaleX = arenaCanvas.width / rect.width;
+  const scaleY = arenaCanvas.height / rect.height;
+  const { padding, spacing } = arenaGeometry(arenaState.board_size);
+  const x = Math.round(((event.clientX - rect.left) * scaleX - padding) / spacing);
+  const y = Math.round(((event.clientY - rect.top) * scaleY - padding) / spacing);
+  if (x < 0 || y < 0 || x >= arenaState.board_size || y >= arenaState.board_size) return;
+  arenaRequest({ session_id: arenaState.session_id, x, y });
+});
+
+function clearMatchTimer() {
+  if (matchTimer !== null) window.clearTimeout(matchTimer);
+  matchTimer = null;
+}
+
+function scheduleMatchMove(delay = Number($("#arena-speed").value)) {
+  clearMatchTimer();
+  if (!matchPlaying || !arenaState || arenaState.mode !== "model_match" || arenaState.finished) return;
+  matchTimer = window.setTimeout(advanceMatch, delay);
+}
+
+async function advanceMatch() {
+  if (!matchPlaying || !arenaState || arenaState.finished || arenaBusy) return;
+  setArenaBusy(true);
+  try {
+    const state = await api("/api/arena/match/next", {
+      method: "POST",
+      body: JSON.stringify({ session_id: arenaState.session_id }),
+    });
+    if (state.finished) matchPlaying = false;
+    renderArena(state);
+  } catch (error) {
+    matchPlaying = false;
+    toast(error.message);
+    if (arenaState) renderArena(arenaState);
+  } finally {
+    setArenaBusy(false);
+    scheduleMatchMove();
+  }
+}
+
+function resetArena() {
+  clearMatchTimer();
+  matchPlaying = false;
+  arenaState = null;
+  $("#arena-result").hidden = true;
+  $("#arena-move-panel").hidden = true;
+  $("#arena-players").hidden = true;
+  $("#arena-pass").disabled = true;
+  $("#arena-playback").disabled = true;
+  $("#arena-reset").disabled = true;
+  $("#arena-title").textContent = "Noch nicht gestartet";
+  $("#arena-turn").textContent = "Bereit";
+  $("#arena-turn").className = "status-badge idle";
+  $("#arena-message").textContent = "Wähle ein Modell und starte eine neue Testpartie.";
+  drawArenaBoard();
+}
+
+function setArenaMode(mode) {
+  if (!['human', 'match'].includes(mode)) return;
+  resetArena();
+  arenaMode = mode;
+  document.querySelectorAll(".arena-mode").forEach((button) => {
+    button.classList.toggle("active", button.dataset.arenaMode === mode);
+  });
+  $("#human-arena-fields").hidden = mode !== "human";
+  $("#match-arena-fields").hidden = mode !== "match";
+  $("#arena-pass").hidden = mode !== "human";
+  $("#arena-playback").hidden = mode !== "match";
+  $("#arena-settings-title").textContent = mode === "human" ? "Modell testen" : "Versionen vergleichen";
+  $("#arena-start").textContent = mode === "human" ? "Neue Testpartie" : "Live-Vergleich starten";
+  setArenaBusy(false);
+}
+
+$("#arena-start").addEventListener("click", async () => {
+  clearMatchTimer();
+  setArenaBusy(true);
+  try {
+    const common = {
+      board_size: Number($("#arena-size").value),
+      elo: Number($("#arena-elo").value),
+    };
+    const isMatch = arenaMode === "match";
+    const state = await api(isMatch ? "/api/arena/match/start" : "/api/arena/start", {
+      method: "POST",
+      body: JSON.stringify(isMatch ? {
+        ...common,
+        black_model_id: $("#arena-black-model").value,
+        white_model_id: $("#arena-white-model").value,
+      } : {
+        ...common,
+        model_id: $("#arena-model").value,
+        human_color: $("#arena-color").value,
+      }),
+    });
+    matchPlaying = isMatch;
+    renderArena(state);
+    if (isMatch) scheduleMatchMove(500);
+  } catch (error) {
+    matchPlaying = false;
+    toast(error.message);
+  } finally {
+    setArenaBusy(false);
+  }
+});
+$("#arena-pass").addEventListener("click", () => arenaRequest({ session_id: arenaState.session_id, pass: true }));
+$("#arena-playback").addEventListener("click", () => {
+  if (!arenaState || arenaState.finished) return;
+  matchPlaying = !matchPlaying;
+  renderArena(arenaState);
+  if (matchPlaying) scheduleMatchMove(200);
+  else clearMatchTimer();
+});
+$("#arena-reset").addEventListener("click", resetArena);
+document.querySelectorAll(".arena-mode").forEach((button) => {
+  button.addEventListener("click", () => setArenaMode(button.dataset.arenaMode));
+});
+$("#refresh-models").addEventListener("click", () => loadArenaModels().catch((error) => toast(error.message)));
+$("#arena-size").addEventListener("change", () => { if (!arenaState) drawArenaBoard(); });
+
+async function initialize() {
+  [presets] = await Promise.all([api("/api/presets"), loadArenaModels()]);
+  renderPresets();
+  drawArenaBoard();
+  await refresh();
+  window.setInterval(refresh, 1500);
+}
+
+initialize().catch((error) => toast(error.message));

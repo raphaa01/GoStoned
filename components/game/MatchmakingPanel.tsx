@@ -131,9 +131,6 @@ export function MatchmakingPanel({
             {queueDetails?.pool === "registered-rated" || identityKind === "account"
               ? copy.registeredRatedPool
               : copy.guestUnratedPool}
-            {queueDetails?.botMatchPreference === "calibrated-rated-after-wait"
-                ? ` ${copy.calibratedBotFallbackPending}`
-                : ` ${copy.noBotFallback}`}
           </p>
           {queueDetails?.pool === "registered-rated" && queueDetails.rating !== null
             && queueDetails.rating !== undefined ? (

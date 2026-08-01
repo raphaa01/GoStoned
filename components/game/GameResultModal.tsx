@@ -93,7 +93,7 @@ export function GameResultModal({
           <div className={game.winnerKey === game.blackPlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--black" />
             <span>
-              <strong>{game.blackPlayerName}{game.blackPlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
+              <strong>{game.blackPlayerName}</strong>
               <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
               {game.blackRating !== null && game.blackRating !== undefined
                 ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
@@ -104,7 +104,7 @@ export function GameResultModal({
           <div className={game.winnerKey === game.whitePlayerKey ? "is-winner" : ""}>
             <span className="player-stone player-stone--white" />
             <span>
-              <strong>{game.whitePlayerName}{game.whitePlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
+              <strong>{game.whitePlayerName}</strong>
               <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
               {game.whiteRating !== null && game.whiteRating !== undefined
                 ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />

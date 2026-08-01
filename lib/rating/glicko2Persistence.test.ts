@@ -9,9 +9,14 @@ const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
 
 test("bootstrap schema contains the exact numbered global-rating migration", () => {
-  const offset = schema.indexOf(migration);
+  const normalizedSchema = schema.replaceAll("\r\n", "\n");
+  const normalizedMigration = migration.replaceAll("\r\n", "\n");
+  const offset = normalizedSchema.indexOf(normalizedMigration);
   assert.ok(offset >= 0);
-  assert.equal(schema.slice(offset, offset + migration.length), migration);
+  assert.equal(
+    normalizedSchema.slice(offset, offset + normalizedMigration.length),
+    normalizedMigration,
+  );
 });
 
 test("legacy multi-board state selects one deterministic latest row without rewriting history", () => {

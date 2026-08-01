@@ -6,7 +6,7 @@ const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "ut
 const migration = readFileSync(new URL("../../db/migrations/018_katago_bot_games.sql", import.meta.url), "utf8");
 const matchmaking = readFileSync(new URL("../matchmaking/matchmakingService.ts", import.meta.url), "utf8");
 
-test("bot infrastructure retains identity while rated matchmaking requires calibrated binding", () => {
+test("bot infrastructure retains identity while rated matchmaking binds browser model evidence", () => {
   for (const source of [schema, migration]) {
     assert.match(source, /CREATE TABLE IF NOT EXISTS katago_workers/);
     assert.match(source, /CREATE TABLE IF NOT EXISTS game_bots/);
@@ -15,9 +15,9 @@ test("bot infrastructure retains identity while rated matchmaking requires calib
     assert.match(source, /ALTER TABLE game_bots ENABLE ROW LEVEL SECURITY/);
   }
   assert.match(matchmaking, /INSERT INTO game_bots/);
-  assert.match(matchmaking, /activation\.action = 'activate'/);
-  assert.match(matchmaking, /INSERT INTO game_calibrated_bot_bindings/);
-  assert.match(matchmaking, /'calibrated-v1'/);
+  assert.match(matchmaking, /INSERT INTO game_browser_bot_bindings/);
+  assert.match(matchmaking, /'browser-v1'/);
+  assert.match(matchmaking, /GOSTONE_BOT_MODEL\.artifactSha256/);
   assert.doesNotMatch(matchmaking, /unrated-after-wait/);
   assert.match(matchmaking, /status = 'matched', game_id = \$1/);
   assert.ok(

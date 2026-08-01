@@ -107,6 +107,6 @@ test("profile reads the global ledger, preferences, and bot disclosure", async (
   const recentSql = statements.find((sql) => sql.includes("FROM games game_record"));
   assert.ok(recentSql);
   assert.match(recentSql, /LEFT JOIN game_glicko2_rating_events rating_event/);
-  assert.match(recentSql, /rating_event\.opponent_kind = 'calibrated_bot'/);
+  assert.match(recentSql, /rating_event\.opponent_kind IN \('calibrated_bot','browser_bot'\)/);
   assert.doesNotMatch(recentSql, /player_rating_history/);
 });

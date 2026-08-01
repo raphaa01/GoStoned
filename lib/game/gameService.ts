@@ -790,14 +790,18 @@ async function loadGame(
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
             CASE WHEN g.black_player_key = game_bot.bot_player_key
-              THEN calibrated_binding.opponent_rating ELSE black_rating.rating END AS black_rating,
+              THEN COALESCE(calibrated_binding.opponent_rating,browser_binding.opponent_rating)
+              ELSE black_rating.rating END AS black_rating,
             CASE WHEN g.black_player_key = game_bot.bot_player_key
-              THEN calibrated_binding.opponent_rating_deviation
+              THEN COALESCE(calibrated_binding.opponent_rating_deviation,
+                            browser_binding.opponent_rating_deviation)
               ELSE black_rating.rating_deviation END AS black_rating_deviation,
             CASE WHEN g.white_player_key = game_bot.bot_player_key
-              THEN calibrated_binding.opponent_rating ELSE white_rating.rating END AS white_rating,
+              THEN COALESCE(calibrated_binding.opponent_rating,browser_binding.opponent_rating)
+              ELSE white_rating.rating END AS white_rating,
             CASE WHEN g.white_player_key = game_bot.bot_player_key
-              THEN calibrated_binding.opponent_rating_deviation
+              THEN COALESCE(calibrated_binding.opponent_rating_deviation,
+                            browser_binding.opponent_rating_deviation)
               ELSE white_rating.rating_deviation END AS white_rating_deviation,
             (viewer_event.rating_after - viewer_event.rating_before) AS viewer_rating_change,
             viewer_preference.display_preference AS rating_display_preference,
@@ -805,7 +809,7 @@ async function loadGame(
               WHEN g.status = 'finished' THEN (
                 SELECT COALESCE(
                   (COUNT(*) = 2 AND BOOL_AND(event.opponent_kind = 'registered_human'))
-                  OR (COUNT(*) = 1 AND BOOL_AND(event.opponent_kind = 'calibrated_bot')),
+                  OR (COUNT(*) = 1 AND BOOL_AND(event.opponent_kind IN ('calibrated_bot','browser_bot'))),
                   FALSE
                 ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
               )
@@ -814,9 +818,15 @@ async function loadGame(
                   (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                   OR (
                     game_bot.game_id IS NOT NULL
-                    AND game_bot.rating_mode = 'calibrated-v1'
-                    AND EXISTS (SELECT 1 FROM game_calibrated_bot_bindings binding
-                                 WHERE binding.game_id = g.id)
+                    AND (
+                      (game_bot.rating_mode = 'calibrated-v1'
+                        AND EXISTS (SELECT 1 FROM game_calibrated_bot_bindings binding
+                                     WHERE binding.game_id = g.id))
+                      OR
+                      (game_bot.rating_mode = 'browser-v1'
+                        AND EXISTS (SELECT 1 FROM game_browser_bot_bindings binding
+                                     WHERE binding.game_id = g.id))
+                    )
                     AND (
                       (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
                       OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
@@ -831,6 +841,7 @@ async function loadGame(
          ON g.white_player_key = 'user:' || white_user.id::text
        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
        LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
+       LEFT JOIN game_browser_bot_bindings browser_binding ON browser_binding.game_id = g.id
        LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
        LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
        LEFT JOIN game_glicko2_rating_events viewer_event
@@ -1537,6 +1548,15 @@ export async function submitMove(
   gameId: string,
   playerKey: string,
   move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
+  options: Readonly<{
+    executionAudit?: Readonly<{
+      requestIdentity: string;
+      modelContractVersion: string;
+      modelVersion: string;
+      modelSha256: string;
+      workerId: string;
+    }>;
+  }> = {},
 ): Promise<GameState> {
   return withTransaction(async (client) => {
     const loaded = await loadGame(client, gameId, playerKey, true);
@@ -1610,6 +1630,34 @@ export async function submitMove(
       [game.id, nextMoveNumber, color, isPass ? null : move.x, isPass ? null : move.y, isPass, nextHash],
     );
     moveRows.push(inserted.rows[0]);
+    if (options.executionAudit) {
+      if (!playerKey.startsWith("bot:")) {
+        throw new GameServiceError(
+          "Only a bound bot move may carry execution evidence.",
+          400,
+          "invalid_game_mutation_request",
+        );
+      }
+      const audit = options.executionAudit;
+      await client.query(
+        `INSERT INTO game_browser_bot_actions (
+           game_id,action_sequence,request_identity,action_kind,move_number,x,y,
+           model_contract_version,model_version,model_sha256,worker_id,completed_at
+         ) VALUES ($1,$2,$3,$4,$2,$5,$6,$7,$8,$9,$10,NOW())`,
+        [
+          game.id,
+          nextMoveNumber,
+          audit.requestIdentity,
+          isPass ? "pass" : "move",
+          isPass ? null : move.x,
+          isPass ? null : move.y,
+          audit.modelContractVersion,
+          audit.modelVersion,
+          audit.modelSha256,
+          audit.workerId,
+        ],
+      );
+    }
     loaded.board = nextBoard;
     loaded.positionHistory = Object.freeze([...positionHistory, nextHash]);
     const previousPasses = effectiveConsecutivePasses(
