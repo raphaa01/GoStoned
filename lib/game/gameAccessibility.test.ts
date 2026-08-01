@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { en } from "@/lib/i18n/catalogs/en";
 import { createEmptyBoard } from "./goEngine";
-import { describeGameChange } from "./gameAccessibility";
+import { describeGameChange, localizedGameResult } from "./gameAccessibility";
 import type { GameState } from "./types";
 
 function game(overrides: Partial<GameState> = {}): GameState {
@@ -226,5 +226,90 @@ test("announces a clock phase change without making the ticking clock live", () 
   assert.equal(
     describeGameChange(previous, next, en.game),
     "Black entered byo-yomi with 3 periods remaining.",
+  );
+});
+
+test("announces Japanese scoring, proposal revisions, and suggestion readiness", () => {
+  const board = createEmptyBoard(9);
+  board[2][2] = "black";
+  const scoring = {
+    revision: 1,
+    boardHash: "hash",
+    stoppedMoveNumber: 2,
+    deadStones: [] as Array<{ x: number; y: number }>,
+    blackConfirmed: false,
+    whiteConfirmed: false,
+    preview: {
+      black: 0,
+      white: 6.5,
+      blackStones: 1,
+      whiteStones: 0,
+      blackTerritory: 0,
+      whiteTerritory: 0,
+      neutralPoints: 80,
+      territoryExcludedByAgreement: 0,
+      blackPrisoners: 0,
+      whitePrisoners: 0,
+      winner: "white" as const,
+      margin: 6.5,
+      result: "W+6.5",
+    },
+    finalizedAt: null,
+    expiresAt: "2026-08-01T00:05:00.000Z",
+    finalResolution: false,
+    suggestion: {
+      status: "pending" as const,
+      transparentRole: "suggestion" as const,
+      providerKind: null,
+      engineVersion: null,
+      modelVersion: null,
+      configVersion: null,
+      confidencePolicyVersion: null,
+    },
+  };
+  const japanese = {
+    ruleset: "japanese" as const,
+    rulesProfile: "japanese-1989-gostone-v1" as const,
+    scoringMethod: "territory" as const,
+    komi: 6.5,
+  };
+  const before = game({ board, ...japanese });
+  const started = game({ board, ...japanese, phase: "scoring", scoring });
+  assert.equal(
+    describeGameChange(before, started, en.game),
+    en.game.japaneseScoringStartedAnnouncement,
+  );
+
+  const revised = game({
+    board,
+    ...japanese,
+    phase: "scoring",
+    scoring: { ...scoring, revision: 2, deadStones: [{ x: 2, y: 2 }] },
+  });
+  assert.equal(
+    describeGameChange(started, revised, en.game),
+    "Scoring proposal revision 2. Review the marked groups before confirming. The black group at C7 was marked dead (1 stone).",
+  );
+
+  const ready = game({
+    board,
+    ...japanese,
+    phase: "scoring",
+    scoring: {
+      ...scoring,
+      suggestion: { ...scoring.suggestion, status: "ready" as const },
+    },
+  });
+  assert.equal(
+    describeGameChange(started, ready, en.game),
+    en.game.suggestionReadyAnnouncement,
+  );
+});
+
+test("localizes Japanese no-result and scoring abandonment outcomes", () => {
+  assert.equal(localizedGameResult("Void", en.game), en.game.noResult);
+  assert.equal(
+    localizedGameResult("B+F", en.game),
+    `Black ${en.game.winsAbandonment}`,
   );
 });

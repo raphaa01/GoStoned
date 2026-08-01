@@ -15,6 +15,7 @@ type AnalysisQueryOptions = {
   priority?: number;
   reportDuringSearchEvery?: number;
   timeoutMs?: number;
+  includeOwnership?: boolean;
 };
 
 function finite(value: unknown, fallback = 0): number {
@@ -27,6 +28,14 @@ function parseTurn(value: Record<string, unknown>): KataGoTurnResult {
     throw new Error("KataGo returned an invalid root position.");
   }
   const infos = Array.isArray(value.moveInfos) ? value.moveInfos : [];
+  const ownership = value.ownership;
+  if (
+    ownership !== undefined
+    && (!Array.isArray(ownership)
+      || ownership.some((point) => typeof point !== "number" || !Number.isFinite(point)))
+  ) {
+    throw new Error("KataGo returned invalid ownership evidence.");
+  }
   return {
     turnNumber: finite(value.turnNumber, -1),
     rootInfo: {
@@ -47,6 +56,7 @@ function parseTurn(value: Record<string, unknown>): KataGoTurnResult {
         pv: Array.isArray(move.pv) ? move.pv.filter((item): item is string => typeof item === "string") : [],
       };
     }),
+    ...(ownership === undefined ? {} : { ownership: ownership as number[] }),
   };
 }
 
@@ -188,6 +198,7 @@ export class KataGoEngine {
         maxVisits,
         analysisPVLen: 12,
         includePolicy: true,
+        ...(options.includeOwnership === true ? { includeOwnership: true } : {}),
         ...(options.priority === undefined ? {} : { priority: options.priority }),
         ...(options.reportDuringSearchEvery === undefined
           ? {}

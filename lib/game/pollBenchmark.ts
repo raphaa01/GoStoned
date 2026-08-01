@@ -2,6 +2,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 import { isProxy } from "node:util/types";
 
 export const POLL_BENCHMARK_STATEMENTS = [
+  "rules_profile_read",
   "participant_read",
   "read_only_begin",
   "transaction_begin",
@@ -165,6 +166,8 @@ const PARTICIPANT_READ_SQL = `
    WHERE id = $1
 `;
 
+const RULES_PROFILE_READ_SQL = "SELECT rules_profile FROM games WHERE id = $1";
+
 const GAME_READ_SQL = `
   SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
          g.status, g.phase, g.to_move, g.consecutive_passes, g.scoring_revision,
@@ -306,6 +309,9 @@ function sqlCase(sql: string, metadata: QueryMetadata): readonly [string, QueryM
 }
 
 const SQL_CASES = [
+  sqlCase(RULES_PROFILE_READ_SQL, {
+    statement: "rules_profile_read", read: true, write: false, locking: false,
+  }),
   sqlCase(PARTICIPANT_READ_SQL, {
     statement: "participant_read", read: true, write: false, locking: false,
   }),
@@ -478,6 +484,7 @@ function countsFor(sequence: readonly PollBenchmarkStatement[]) {
 }
 
 const PLAY_SEQUENCE: readonly PollBenchmarkStatement[] = [
+  "rules_profile_read",
   "participant_read",
   "read_only_begin",
   "statement_timeout",
@@ -551,10 +558,10 @@ function contract(
 }
 
 const PLAY_TOTALS = (moveCount: number) => ({
-  reads: 5,
+  reads: 6,
   writes: 0,
   lockingStatements: 0,
-  returnedRows: moveCount + 2,
+  returnedRows: moveCount + 3,
   affectedRows: 0,
   lockedRows: 0,
 });
@@ -588,17 +595,17 @@ export const POLL_BENCHMARK_CONTRACTS: Readonly<Record<PollBenchmarkScenario, Sc
   scoring_current_302: contract(
     { name: "scoring_current_302", positionMoves: 300, knownVersion: "current", response: "heartbeat", responseMoves: null },
     SCORING_SEQUENCE,
-    { reads: 6, writes: 0, lockingStatements: 0, returnedRows: 305, affectedRows: 0, lockedRows: 0 },
+    { reads: 7, writes: 0, lockingStatements: 0, returnedRows: 306, affectedRows: 0, lockedRows: 0 },
   ),
   play_timeout_150: contract(
     { name: "play_timeout_150", positionMoves: 150, knownVersion: "current", response: "full", responseMoves: 150 },
     TIMEOUT_SEQUENCE,
-    { reads: 11, writes: 1, lockingStatements: 3, returnedRows: 304, affectedRows: 1, lockedRows: 1 },
+    { reads: 12, writes: 1, lockingStatements: 3, returnedRows: 305, affectedRows: 1, lockedRows: 1 },
   ),
   scoring_expiry_302: contract(
     { name: "scoring_expiry_302", positionMoves: 300, knownVersion: "current", response: "full", responseMoves: 302 },
     EXPIRY_SEQUENCE,
-    { reads: 11, writes: 3, lockingStatements: 2, returnedRows: 610, affectedRows: 3, lockedRows: 2 },
+    { reads: 12, writes: 3, lockingStatements: 2, returnedRows: 611, affectedRows: 3, lockedRows: 2 },
   ),
 });
 

@@ -16,11 +16,13 @@ export function localizedGameResult(
   copy: Dictionary["game"],
 ): string {
   if (!result) return copy.ended;
+  if (result === "Void") return copy.noResult;
   const [winner, detail] = result.split("+");
   if (winner !== "B" && winner !== "W") return result;
   const color = winner === "B" ? copy.black : copy.white;
   if (detail === "R") return `${color} ${copy.winsResignation}`;
   if (detail === "T") return `${color} ${copy.winsTime}`;
+  if (detail === "F") return `${color} ${copy.winsAbandonment}`;
   return `${color} ${copy.winsPoints} ${detail} ${copy.points}`;
 }
 
@@ -53,7 +55,14 @@ export function describeGameChange(
   }
 
   if (previous.phase !== next.phase) {
-    if (next.phase === "scoring") return copy.scoringStartedAnnouncement;
+    if (next.phase === "scoring") {
+      if (next.rulesProfile === "japanese-1989-gostone-v1") {
+        return next.scoring?.finalResolution
+          ? copy.finalScoringStartedAnnouncement
+          : copy.japaneseScoringStartedAnnouncement;
+      }
+      return copy.scoringStartedAnnouncement;
+    }
     const resumed = next.lastResume?.claim === "deadline"
       ? copy.scoringExpired
       : copy.disputeResumed;
@@ -112,13 +121,31 @@ export function describeGameChange(
       (previous.scoring.blackConfirmed && !next.scoring.blackConfirmed)
       || (previous.scoring.whiteConfirmed && !next.scoring.whiteConfirmed);
     const skippedRevisions = next.scoring.revision > previous.scoring.revision + 1;
+    const japaneseRevision = next.rulesProfile === "japanese-1989-gostone-v1"
+      ? formatBoardLabel(copy.scoringRevisionAnnouncement, {
+          revision: next.scoring.revision,
+        })
+      : "";
     if (announcements.length > 0 || skippedRevisions || confirmationsCleared) {
       return joinBoardLabels(
         skippedRevisions && copy.multipleScoringChangesAnnouncement,
+        japaneseRevision,
         ...announcements,
         confirmationsCleared && copy.confirmationsClearedAnnouncement,
       );
     }
+    if (japaneseRevision) return japaneseRevision;
+  }
+
+  if (
+    previous.scoring?.suggestion?.status !== next.scoring?.suggestion?.status
+    && next.rulesProfile === "japanese-1989-gostone-v1"
+  ) {
+    return next.scoring?.suggestion?.status === "ready"
+      ? copy.suggestionReadyAnnouncement
+      : next.scoring?.suggestion?.status === "pending"
+        ? null
+        : copy.suggestionUnavailableAnnouncement;
   }
 
   if (previous.scoring && next.scoring) {

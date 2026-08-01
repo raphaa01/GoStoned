@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const es = {
   "metadata": {
@@ -185,6 +185,7 @@ export const es = {
     "skipToContent": "Saltar al contenido principal"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "Demasiadas solicitudes. Por favor, espere e inténtelo de nuevo.",
     "internal_error": "El servicio no está disponible temporalmente.",
     "guest_session_failed": "No se pudo preparar una sesión de invitado segura.",
@@ -250,14 +251,18 @@ export const es = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "Chino"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "puntuación inmediata heredada",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "área"
     },
     "komi": "komi",
@@ -389,6 +394,7 @@ export const es = {
     "recordBody": "Las jugadas son verificadas por el servidor, y los juegos completados conservan su resultado. Los juegos acordados por puntuación también conservan ese acuerdo de puntuación. Estos hechos son el punto de partida para tu propia revisión; GoStone no presenta un juicio de motor inventado como análisis."
   },
   "game": {
+    ...en.game,
     "loadFailed": "No se pudo cargar el juego.",
     "moveFailed": "La jugada falló.",
     "resignFailed": "No se pudo rendir.",

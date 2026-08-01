@@ -1,13 +1,24 @@
 "use client";
 
-import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
+import {
+  Check,
+  CircleDot,
+  Flag,
+  Play,
+  Repeat2,
+  RotateCcw,
+  SkipForward,
+  Undo2,
+} from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
+import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { PlayerClock } from "./PlayerClock";
+import { ScoringDecisionCountdown } from "./ScoringDecisionCountdown";
 
 function deadStoneCounts(game: GameState) {
   return (game.scoring?.deadStones ?? []).reduce(
@@ -27,9 +38,14 @@ type GamePanelProps = {
   clockObservedAt: number | null;
   interactionDisabled: boolean;
   onPass: () => void;
+  onClaimRepetition?: () => void;
   onResign: () => void;
   onConfirmScore: () => void;
+  onResetScoring: () => void;
+  onResolveDeadline: () => void;
+  onResumeJapanesePlay: () => void;
   onResumePlay: (claim: "dead" | "alive", disputedStone: Position) => void;
+  onUndoScoring: () => void;
   onLeave: () => void;
 };
 
@@ -40,9 +56,14 @@ export function GamePanel({
   clockObservedAt,
   interactionDisabled,
   onPass,
+  onClaimRepetition,
   onResign,
   onConfirmScore,
+  onResetScoring,
+  onResolveDeadline,
+  onResumeJapanesePlay,
   onResumePlay,
+  onUndoScoring,
   onLeave,
 }: GamePanelProps) {
   const { dictionary } = useI18n();
@@ -63,6 +84,15 @@ export function GamePanel({
   );
   const scoring = game.phase === "scoring" ? game.scoring : null;
   const activeScoring = game.status === "active" ? scoring : null;
+  const japanesePreview = activeScoring
+    && game.rulesProfile === "japanese-1989-gostone-v1"
+    && game.ruleset === "japanese"
+    && game.scoringMethod === "territory"
+    && "blackPrisoners" in activeScoring.preview
+    ? activeScoring.preview
+    : null;
+  const japaneseScoring = japanesePreview ? activeScoring : null;
+  const scoringControlsDisabled = controlsDisabled;
   const disputeGroups = groupMarkedDeadStones(game.board, game.scoring?.deadStones ?? []);
   const selectedGroup = disputeGroups.find(({ key }) => key === selectedGroupKey)
     ?? disputeGroups[0]
@@ -75,7 +105,9 @@ export function GamePanel({
       : false;
   const resultText =
     game.status === "finished"
-      ? !yourColor
+      ? game.finishReason === "japanese_no_result"
+        ? `${copy.gameOver} · ${copy.noResult}`
+        : !yourColor
         ? `${copy.gameOver} · ${game.result}`
         : game.winnerKey === playerKey
         ? `${copy.youWon} · ${game.result}`
@@ -146,7 +178,132 @@ export function GamePanel({
         />
       </div>
 
-      {activeScoring ? (
+      {japaneseScoring && japanesePreview ? (
+        <div className="scoring-controls japanese-scoring-controls">
+          <section aria-labelledby="japanese-scoring-guide" className="japanese-scoring-guide">
+            <strong id="japanese-scoring-guide">{copy.japaneseScoringTitle}</strong>
+            <ol>
+              <li><b>1</b><span>{copy.japaneseScoringStepMark}</span></li>
+              <li><b>2</b><span>{copy.japaneseScoringStepReview}</span></li>
+              <li><b>3</b><span>{copy.japaneseScoringStepConfirm}</span></li>
+            </ol>
+          </section>
+
+          <div className="japanese-suggestion" data-status={japaneseScoring.suggestion?.status ?? "unavailable"}>
+            <strong>{copy.computerSuggestion}</strong>
+            <span>
+              {japaneseScoring.suggestion?.status === "pending"
+                ? copy.suggestionPending
+                : japaneseScoring.suggestion?.status === "ready"
+                  ? copy.suggestionReady
+                  : japaneseScoring.suggestion?.status === "low_confidence"
+                    ? copy.suggestionLowConfidence
+                    : japaneseScoring.suggestion?.status === "invalid"
+                      ? copy.suggestionInvalid
+                      : copy.suggestionUnavailable}
+            </span>
+          </div>
+
+          <div className="scoring-preview" aria-label={copy.provisionalJapaneseScore}>
+            <span><small>{copy.black}</small><strong>{japanesePreview.black}</strong></span>
+            <span><small>{copy.white}</small><strong>{japanesePreview.white}</strong></span>
+          </div>
+          <strong className="japanese-provisional-result">
+            {localizedGameResult(japanesePreview.result, copy)}
+          </strong>
+
+          <ScoringDecisionCountdown
+            actionLabel={copy.resolveDeadline}
+            clock={game.clock}
+            deadlineKey={`${game.id}:${japaneseScoring.revision}:${japaneseScoring.expiresAt}`}
+            disabled={controlsDisabled}
+            expiredLabel={copy.decisionDeadlineReached}
+            expiresAt={japaneseScoring.expiresAt}
+            label={copy.decisionTimeRemaining}
+            onExpired={onResolveDeadline}
+          />
+
+          <div className="scoring-revision-feedback">
+            <span>{copy.scoringRevision} <strong>{japaneseScoring.revision}</strong></span>
+            <span>
+              {copy.yourConfirmation}: <strong>{youConfirmed ? copy.confirmed : copy.notConfirmed}</strong>
+            </span>
+            <span>
+              {copy.opponentConfirmation}: <strong>{(yourColor === "black" ? japaneseScoring.whiteConfirmed : japaneseScoring.blackConfirmed) ? copy.confirmed : copy.notConfirmed}</strong>
+            </span>
+          </div>
+
+          <details className="japanese-score-breakdown">
+            <summary>{copy.territoryScoringBreakdown}</summary>
+            <div aria-label={copy.scoreBreakdown}>
+              <span>
+                {copy.black}: {japanesePreview.blackTerritory} {copy.territory.toLocaleLowerCase()}
+                {" + "}{japanesePreview.blackPrisoners} {copy.prisoners}
+              </span>
+              <span>
+                {copy.white}: {japanesePreview.whiteTerritory} {copy.territory.toLocaleLowerCase()}
+                {" + "}{japanesePreview.whitePrisoners} {copy.prisoners}
+                {" + "}{game.komi} {dictionary.rules.komi}
+              </span>
+              <span>
+                {copy.dame}: {japanesePreview.neutralPoints}
+                {" · "}{copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+              </span>
+              <span>{rulesSummary}</span>
+            </div>
+          </details>
+
+          {japaneseScoring.finalResolution ? (
+            <div className="final-resolution-note" role="note">
+              <strong>{copy.finalResolutionTitle}</strong>
+              <span>{copy.finalResolutionDescription}</span>
+            </div>
+          ) : (
+            <p className="resumption-note">
+              {copy.resumptionsRemaining}: <strong>{japaneseScoring.resumptionsRemaining ?? 0}</strong>.
+              {" "}{copy.resumeOpponentMovesFirst}
+            </p>
+          )}
+
+          <div className="game-actions scoring-actions japanese-scoring-actions">
+            <button
+              disabled={scoringControlsDisabled || Boolean(youConfirmed)}
+              onClick={onConfirmScore}
+              type="button"
+            >
+              <Check size={18} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
+            </button>
+            <button
+              disabled={scoringControlsDisabled || japaneseScoring.canUndo !== true}
+              onClick={onUndoScoring}
+              type="button"
+            >
+              <Undo2 size={18} /> {copy.undoScoringChange}
+            </button>
+            <button
+              disabled={
+                scoringControlsDisabled
+                || japaneseScoring.canResetToSuggestion !== true
+                || japaneseScoring.suggestion?.status !== "ready"
+              }
+              onClick={onResetScoring}
+              type="button"
+            >
+              <RotateCcw size={18} /> {copy.resetToSuggestion}
+            </button>
+            <button
+              disabled={scoringControlsDisabled || japaneseScoring.finalResolution === true}
+              onClick={onResumeJapanesePlay}
+              type="button"
+            >
+              <Play size={18} /> {copy.resumePlay}
+            </button>
+            <button disabled={controlsDisabled} onClick={onResign} type="button">
+              <Flag size={18} /> {copy.resign}
+            </button>
+          </div>
+        </div>
+      ) : activeScoring ? (
         <div className="scoring-controls">
           <div className="scoring-preview" aria-label={copy.provisionalScore}>
             <span><small>{copy.black}</small><strong>{activeScoring.preview.black}</strong></span>
@@ -221,31 +378,72 @@ export function GamePanel({
           </div>
         </div>
       ) : game.status === "active" ? (
-        <div className="game-actions">
-          <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
-            <SkipForward size={18} /> {copy.pass}
-          </button>
-          <button disabled={controlsDisabled} onClick={onResign} type="button">
-            <Flag size={18} /> {copy.resign}
-          </button>
-        </div>
+        <>
+          {game.repetition?.eligible ? (
+            <div className="repetition-claim" role="note">
+              <strong>{copy.repetitionDetected}</strong>
+              <span>{copy.repetitionExplanation}</span>
+              <span>
+                {copy.repetitionClaims}: {game.repetition.blackClaimed ? copy.black : "—"}
+                {" · "}{game.repetition.whiteClaimed ? copy.white : "—"}
+              </span>
+            </div>
+          ) : null}
+          <div className="game-actions">
+            <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
+              <SkipForward size={18} /> {copy.pass}
+            </button>
+            {game.repetition?.eligible ? (
+              <button
+                disabled={controlsDisabled || (yourColor === "black"
+                  ? game.repetition.blackClaimed
+                  : game.repetition.whiteClaimed)}
+                onClick={onClaimRepetition}
+                type="button"
+              >
+                <Repeat2 size={18} /> {copy.claimNoResult}
+              </button>
+            ) : null}
+            <button disabled={controlsDisabled} onClick={onResign} type="button">
+              <Flag size={18} /> {copy.resign}
+            </button>
+          </div>
+        </>
       ) : (
         <>
           {game.finishReason === "score" && scoring?.finalizedAt ? (
             <div className="final-score-summary">
-              <strong>{copy.agreedScore}</strong>
-              <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
-              <span>
-                {scoring.deadStones.length} {copy.dead.toLocaleLowerCase()} {scoring.deadStones.length === 1 ? copy.stone : copy.stones}
-                {" · "}{rulesSummary} · {copy.neutralShared}
-              </span>
-              <span>
-                {copy.black}: {scoring.preview.blackStones} {copy.stones} + {scoring.preview.blackTerritory} {copy.territory}
-                {" · "}{copy.white}: {scoring.preview.whiteStones} {copy.stones} + {scoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
-              </span>
-              <span>
-                {copy.neutral}: {scoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
-              </span>
+              {"blackPrisoners" in scoring.preview ? (
+                <>
+                  <strong>{copy.agreedJapaneseScore}</strong>
+                  <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
+                  <span>
+                    {copy.black}: {scoring.preview.blackTerritory} {copy.territory.toLocaleLowerCase()} + {scoring.preview.blackPrisoners} {copy.prisoners}
+                  </span>
+                  <span>
+                    {copy.white}: {scoring.preview.whiteTerritory} {copy.territory.toLocaleLowerCase()} + {scoring.preview.whitePrisoners} {copy.prisoners} + {game.komi} {dictionary.rules.komi}
+                  </span>
+                  <span>
+                    {copy.dame}: {scoring.preview.neutralPoints} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>{copy.agreedScore}</strong>
+                  <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
+                  <span>
+                    {scoring.deadStones.length} {copy.dead.toLocaleLowerCase()} {scoring.deadStones.length === 1 ? copy.stone : copy.stones}
+                    {" · "}{rulesSummary} · {copy.neutralShared}
+                  </span>
+                  <span>
+                    {copy.black}: {scoring.preview.blackStones} {copy.stones} + {scoring.preview.blackTerritory} {copy.territory}
+                    {" · "}{copy.white}: {scoring.preview.whiteStones} {copy.stones} + {scoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
+                  </span>
+                  <span>
+                    {copy.neutral}: {scoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                  </span>
+                </>
+              )}
             </div>
           ) : null}
           <button className="button button--primary game-leave" onClick={onLeave} type="button">

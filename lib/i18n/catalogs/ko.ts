@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const ko = {
   "metadata": {
@@ -185,6 +185,7 @@ export const ko = {
     "skipToContent": "본문으로 건너뛰기"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "요청이 너무 많습니다. 잠시 기다린 후 다시 시도해 주세요.",
     "internal_error": "서비스가 일시적으로 이용 불가입니다.",
     "guest_session_failed": "안전한 게스트 세션을 준비할 수 없습니다.",
@@ -250,14 +251,18 @@ export const ko = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "중국어"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "레거시 즉시 점수 계산",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "영역"
     },
     "komi": "고미",
@@ -389,6 +394,7 @@ export const ko = {
     "recordBody": "착수는 서버에서 확인되며, 완료된 게임은 결과를 보존합니다. 점수로 합의된 게임도 해당 점수 합의를 보존합니다. 이러한 사실들이 여러분의 검토 출발점이 됩니다; GoStone은 분석으로서 발명된 엔진 판단을 제시하지 않습니다."
   },
   "game": {
+    ...en.game,
     "loadFailed": "게임을 불러올 수 없습니다.",
     "moveFailed": "착수가 실패했습니다.",
     "resignFailed": "기권할 수 없습니다.",

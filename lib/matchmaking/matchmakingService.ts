@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "@/lib/db";
 import { botDifficultyForRating } from "@/lib/bot/difficulty";
 import { botDisplayName, deterministicUnit } from "@/lib/bot/identity";
-import { DEFAULT_MATCH_RULES, resolveRulesConfiguration } from "@/lib/game/rulesPolicy";
+import { newGameRulesConfiguration } from "@/lib/game/newGameRules";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import {
@@ -64,13 +64,7 @@ async function matchWaitingPlayerWithBot(
   allowOnDemandBot: boolean,
 ): Promise<MatchmakingStatus> {
   const timeControl = getTimeControl(expected.time_control);
-  const rules = resolveRulesConfiguration({
-    ruleset: DEFAULT_MATCH_RULES.ruleset,
-    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
-    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
-    komi: DEFAULT_MATCH_RULES.komi,
-    handicap: DEFAULT_MATCH_RULES.handicap,
-  });
+  const rules = newGameRulesConfiguration();
   return withTransaction(async (client) => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
@@ -249,13 +243,7 @@ export async function joinMatchmaking(
   timeControlId: TimeControlId,
 ): Promise<MatchmakingStatus> {
   const timeControl = getTimeControl(timeControlId);
-  const rules = resolveRulesConfiguration({
-    ruleset: DEFAULT_MATCH_RULES.ruleset,
-    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
-    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
-    komi: DEFAULT_MATCH_RULES.komi,
-    handicap: DEFAULT_MATCH_RULES.handicap,
-  });
+  const rules = newGameRulesConfiguration();
   return withTransaction(async (client) => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",

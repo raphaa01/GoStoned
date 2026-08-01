@@ -2,7 +2,7 @@ import type { ScoredOutcome } from "./scoreContract";
 import type { Stone } from "./types";
 
 export const JAPANESE_1989_CONTRACT_ID =
-  "japanese-1989-gostone-inactive-v1" as const;
+  "japanese-1989-gostone-contract-v1" as const;
 export const JAPANESE_1989_RULES_PROFILE = "japanese-1989-gostone-v1" as const;
 export const JAPANESE_SETTLEMENT_PROPOSAL_DIGEST_VERSION =
   "japanese-settlement-proposal-v1" as const;
@@ -20,10 +20,10 @@ export type Japanese1989ContractOutcome =
   | Readonly<{ kind: "forfeit"; winner: Stone; reason: "rules-violation" }>;
 
 /**
- * An inactive implementation contract for the 1989 Japanese Rules of Go.
- * It is intentionally separate from the persisted RULES_POLICIES registry:
- * these semantics are not playable until their full service and persistence
- * lifecycle exists.
+ * GoStone's versioned implementation contract for the 1989 Japanese Rules of
+ * Go. Product policies such as komi, clocks, KataGo assistance, deadlines, and
+ * the bounded resumption cap are explicitly identified as GoStone match
+ * conditions rather than being attributed to the underlying rules text.
  *
  * @see https://www.nihonkiin.or.jp/match/kiyaku/zenbun.htm
  * @see https://www.nihonkiin.or.jp/match/kiyaku/kiyaku06.htm
@@ -37,7 +37,7 @@ export type Japanese1989ContractOutcome =
 export const JAPANESE_1989_POLICY_CONTRACT = Object.freeze({
   contractId: JAPANESE_1989_CONTRACT_ID,
   futureRulesProfile: JAPANESE_1989_RULES_PROFILE,
-  activation: "inactive",
+  activation: "active",
   ruleset: "japanese",
   scoringMethod: "territory",
   scoringRule: "japanese-territory-with-prisoners",
@@ -57,7 +57,11 @@ export const JAPANESE_1989_POLICY_CONTRACT = Object.freeze({
       "sorted-neutral-region-seeds",
     ]),
   }),
-  automatedLifeDeathAdjudication: false,
+  automatedLifeDeathAdjudication: Object.freeze({
+    role: "deadline-fallback-only",
+    authority: "katago-suggestion-validated-by-gostone",
+    invalidOrLowConfidenceOutcome: "no-result",
+  }),
   normalPlayKoRule: "simple-ko",
   koBanClearedBy: "prohibited-player-plays-elsewhere",
   passClearsNormalPlayKoBan: false,

@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const ja = {
   "metadata": {
@@ -185,6 +185,7 @@ export const ja = {
     "skipToContent": "メインコンテンツへスキップ"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "リクエストが多すぎます。しばらく待ってから再度お試しください。",
     "internal_error": "サービスは一時的に利用できません。",
     "guest_session_failed": "安全なゲストセッションを準備できませんでした。",
@@ -250,14 +251,18 @@ export const ja = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "中国語"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "従来の即時計算",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "エリア"
     },
     "komi": "コミ",
@@ -389,6 +394,7 @@ export const ja = {
     "recordBody": "手はサーバーによってチェックされ、終了した対局はその結果が保持されます。スコアで合意された対局も、そのスコア合意が保持されます。これらの事実が自身のレビューの出発点です。GoStoneは分析として架空のエンジン判断を提示することはありません。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "対局を読み込めませんでした。",
     "moveFailed": "手の実行に失敗しました。",
     "resignFailed": "投了できませんでした。",

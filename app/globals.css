@@ -1796,6 +1796,189 @@ a {
   color: var(--text);
 }
 
+.japanese-scoring-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.japanese-scoring-guide {
+  background: rgba(129, 182, 76, 0.08);
+  border: 1px solid rgba(129, 182, 76, 0.24);
+  border-radius: 7px;
+  padding: 10px;
+}
+
+.japanese-scoring-guide > strong {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.japanese-scoring-guide ol {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.japanese-scoring-guide li {
+  align-items: start;
+  color: var(--muted);
+  display: grid;
+  font-size: 9px;
+  gap: 7px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.japanese-scoring-guide li b {
+  align-items: center;
+  background: var(--green-dark);
+  border-radius: 50%;
+  color: #e9f6dd;
+  display: flex;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.japanese-suggestion,
+.scoring-revision-feedback,
+.japanese-score-breakdown,
+.final-resolution-note {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.japanese-provisional-result {
+  font-size: 12px;
+  text-align: center;
+}
+
+.japanese-score-breakdown summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.japanese-score-breakdown > div {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.japanese-suggestion {
+  background: rgba(210, 167, 93, 0.06);
+}
+
+.japanese-suggestion[data-status="ready"] {
+  background: rgba(129, 182, 76, 0.07);
+  border-color: rgba(129, 182, 76, 0.22);
+}
+
+.japanese-suggestion strong,
+.japanese-score-breakdown > strong,
+.final-resolution-note strong {
+  font-size: 9px;
+}
+
+.japanese-suggestion span,
+.scoring-revision-feedback span,
+.japanese-score-breakdown span,
+.final-resolution-note span,
+.resumption-note {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.scoring-countdown {
+  align-items: center;
+  background: #343230;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 5px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 10px;
+}
+
+.scoring-countdown > span:first-child {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.scoring-countdown time {
+  color: var(--text);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.scoring-countdown.is-expired {
+  border-color: rgba(210, 167, 93, 0.5);
+}
+
+.scoring-countdown.is-expired time {
+  color: #e5bd7b;
+  font-size: 10px;
+}
+
+.scoring-countdown button {
+  background: transparent;
+  border: 1px solid rgba(210, 167, 93, 0.5);
+  border-radius: 6px;
+  color: #e5bd7b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  grid-column: 1 / -1;
+  min-height: 36px;
+  padding: 7px 9px;
+}
+
+.scoring-countdown button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.scoring-revision-feedback strong,
+.resumption-note strong {
+  color: var(--text);
+}
+
+.final-resolution-note {
+  background: rgba(210, 167, 93, 0.08);
+  border-color: rgba(210, 167, 93, 0.35);
+}
+
+.resumption-note {
+  margin: 0 !important;
+}
+
+.repetition-claim {
+  background: rgba(210, 167, 93, 0.08);
+  border: 1px solid rgba(210, 167, 93, 0.35);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.repetition-claim strong {
+  font-size: 10px;
+}
+
+.repetition-claim span {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 .scoring-breakdown {
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -1848,6 +2031,27 @@ a {
 
 .scoring-actions button:nth-last-child(-n + 2) {
   grid-column: 1 / -1;
+}
+
+.japanese-scoring-actions {
+  margin-top: 0;
+}
+
+.japanese-scoring-actions button,
+.japanese-scoring-actions button:nth-last-child(-n + 2) {
+  grid-column: auto;
+}
+
+.japanese-scoring-actions button:first-child,
+.japanese-scoring-actions button:nth-last-child(2),
+.japanese-scoring-actions button:last-child {
+  grid-column: 1 / -1;
+}
+
+.japanese-scoring-actions button:first-child {
+  background: var(--green-dark);
+  color: #f4faee;
+  font-weight: 800;
 }
 
 .final-score-summary {

@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const zh = {
   "metadata": {
@@ -185,6 +185,7 @@ export const zh = {
     "skipToContent": "跳至主要内容"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "请求过多。请稍候再试。",
     "internal_error": "服务暂时不可用。",
     "guest_session_failed": "无法准备安全的访客会话。",
@@ -250,14 +251,18 @@ export const zh = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "中文"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "传统即时结算",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "区域"
     },
     "komi": "贴目",
@@ -389,6 +394,7 @@ export const zh = {
     "recordBody": "走法由服务器检查，已完成的游戏将保留其结果。按比分达成一致的游戏也会保留该评分协议。这些事实是你自己复盘的起点；GoStone不会将虚构的引擎判断作为分析呈现。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "无法加载游戏。",
     "moveFailed": "落子失败。",
     "resignFailed": "无法投子认输。",

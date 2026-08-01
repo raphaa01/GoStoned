@@ -219,7 +219,7 @@ function normalizeRestrictions(
  * restrictions. The replay primitive below applies that rule to persisted
  * passes.
  */
-function applyJapaneseSimpleKoMove(
+export function applyJapaneseSimpleKoMove(
   currentBoard: Board,
   color: Stone,
   x: number,
