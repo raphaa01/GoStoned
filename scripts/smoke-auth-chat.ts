@@ -67,7 +67,12 @@ async function run() {
 
   const registeredFirst = await request(
     "/api/auth/register",
-    json("POST", { username: firstUsername, password }),
+    json("POST", {
+      username: firstUsername,
+      password,
+      startingStrength: "unspecified",
+      knownRank: null,
+    }),
     201,
   );
   assert.equal(registeredFirst.body.ok, true);
@@ -77,7 +82,12 @@ async function run() {
 
   const duplicate = await request(
     "/api/auth/register",
-    json("POST", { username: firstUsername.toUpperCase(), password }),
+    json("POST", {
+      username: firstUsername.toUpperCase(),
+      password,
+      startingStrength: "unspecified",
+      knownRank: null,
+    }),
     409,
   );
   assert.equal(duplicate.body.ok, false);
@@ -113,7 +123,12 @@ async function run() {
 
   const registeredSecond = await request(
     "/api/auth/register",
-    json("POST", { username: secondUsername, password }),
+    json("POST", {
+      username: secondUsername,
+      password,
+      startingStrength: "unspecified",
+      knownRank: null,
+    }),
     201,
   );
   assert.ok(registeredSecond.cookie);
