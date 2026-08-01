@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS game_japanese_scoring_proposals (
       AND suggestion_confidence_policy_version IS NULL
       AND suggestion_latency_ms IS NULL
     )
-  ), FALSE)
+  ), FALSE))
 );
 
 CREATE TABLE IF NOT EXISTS game_japanese_scoring_terminal_events (
@@ -629,13 +629,13 @@ BEGIN
   IF NOT FOUND OR game_row.status <> 'finished' OR game_row.phase <> 'play'
     OR game_row.to_move IS NOT NULL OR game_row.has_state
     OR game_row.scoring_revision IS DISTINCT FROM NEW.scoring_revision
-    OR game_row.finish_reason IS DISTINCT FROM CASE NEW.outcome_kind
+    OR game_row.finish_reason IS DISTINCT FROM (CASE NEW.outcome_kind
       WHEN 'abandonment' THEN 'japanese_abandonment'
       WHEN 'katago_validated' THEN 'japanese_adjudication'
-      ELSE 'japanese_no_result' END
-    OR game_row.winner_key IS DISTINCT FROM CASE NEW.winner_color
+      ELSE 'japanese_no_result' END)
+    OR game_row.winner_key IS DISTINCT FROM (CASE NEW.winner_color
       WHEN 'black' THEN game_row.black_player_key
-      WHEN 'white' THEN game_row.white_player_key ELSE NULL END
+      WHEN 'white' THEN game_row.white_player_key ELSE NULL END)
   THEN RAISE EXCEPTION 'Terminal evidence requires the matching completed game transition.' USING ERRCODE = '23514';
   END IF;
   RETURN NULL;
