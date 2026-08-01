@@ -664,7 +664,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && yourColor
     && game.status === "active"
     && game.phase === "scoring"
-    && game.scoring,
+    && game.scoring
   ) && gameInteractionAllowed && !busy;
 
   function reconcileAfterOperation(requestError: unknown) {
@@ -762,8 +762,35 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }
 
+  async function claimRepetition() {
+    if (!game || !playerKey || !gameInteractionAllowed || busy || !game.repetition?.eligible) return;
+    const requestIdentity = identityAuthority.current.capture();
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}/repetition/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
+        body: JSON.stringify({ expectedVersion: game.version }),
+      });
+      const data = await readApi<{ actor: string; game: GameState }>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
+    } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      setError(localizedApiError(dictionary, requestError, copy.repetitionClaimFailed));
+      reconcileAfterOperation(requestError);
+    } finally {
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
+    }
+  }
+
   async function scoringAction(
-    action: "dead-stones" | "confirm" | "resume",
+    action: "dead-stones" | "confirm" | "reset" | "resolve-deadline" | "resume" | "undo",
     body: Record<string, unknown>,
   ) {
     if (!game || !game.scoring || !playerKey || !gameInteractionAllowed || busy) return;
@@ -1259,7 +1286,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
           {game.phase === "scoring" || game.boardSize > 9 ? (
             <p className="scoring-board-hint">
               {game.phase === "scoring"
-                ? copy.scoringBoardHint
+                ? game.rulesProfile === "japanese-1989-gostone-v1"
+                  && game.scoring?.suggestion?.status === "pending"
+                  ? copy.suggestionPendingBoardHint
+                  : copy.scoringBoardHint
                 : copy.boardHint}
             </p>
           ) : null}
@@ -1274,7 +1304,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             interactionDisabled={!gameInteractionAllowed}
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
+            onClaimRepetition={claimRepetition}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onResetScoring={() => scoringAction("reset", {})}
+            onResolveDeadline={() => scoringAction("resolve-deadline", {})}
             onResign={() => {
               if (!gameInteractionAllowed) return;
               setError(null);
@@ -1287,6 +1320,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 y: disputedStone.y,
               });
             }}
+            onResumeJapanesePlay={() => scoringAction("resume", {})}
+            onUndoScoring={() => scoringAction("undo", {})}
             playerKey={playerKey}
           />
           <ChatPanel

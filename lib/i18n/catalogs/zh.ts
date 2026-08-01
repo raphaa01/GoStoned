@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const zh = {
   "metadata": {
@@ -141,6 +141,7 @@ export const zh = {
     "puzzlesChapterAction": "解决一个题目"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "您已登录",
     "continueAs": "继续使用",
     "findGame": "寻找游戏",
@@ -162,6 +163,7 @@ export const zh = {
     "haveAccount": "已有账户？",
     "newToGoStone": "首次使用GoStone？",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "请求无法读取。请再试一次。",
       "request_rejected": "此身份验证请求被阻止。请再试一次。",
       "invalid_username": "用户名必须包含3–20个字母、数字或下划线。",
@@ -185,6 +187,7 @@ export const zh = {
     "skipToContent": "跳至主要内容"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "请求过多。请稍候再试。",
     "internal_error": "服务暂时不可用。",
     "guest_session_failed": "无法准备安全的访客会话。",
@@ -250,20 +253,25 @@ export const zh = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "中文"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "传统即时结算",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "区域"
     },
     "komi": "贴目",
     "handicap": "让子"
   },
   "play": {
+    ...en.play,
     "kicker": "实时匹配",
     "title": "选择你的棋盘。",
     "description": "一旦有其他玩家加入，你就进入无干扰的游戏房间。每步棋和消息都会保存在服务器上。",
@@ -389,6 +397,7 @@ export const zh = {
     "recordBody": "走法由服务器检查，已完成的游戏将保留其结果。按比分达成一致的游戏也会保留该评分协议。这些事实是你自己复盘的起点；GoStone不会将虚构的引擎判断作为分析呈现。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "无法加载游戏。",
     "moveFailed": "落子失败。",
     "resignFailed": "无法投子认输。",
@@ -565,6 +574,7 @@ export const zh = {
     "botOpponent": "自动对手"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "无法加载您的统计信息。",
     "loading": "正在加载个人资料…",
     "loadComplete": "个人资料加载完成。",
@@ -609,6 +619,7 @@ export const zh = {
     "to": "到"
   },
   "leaderboard": {
+    "globalScope": "全局等级分",
     "kicker": "账户评级",
     "title": "排行榜",
     "description": "仅包括由完成的评级比赛全额支持的账户评级。与等级匹配的KataGo对手的比赛计入评级比赛。",

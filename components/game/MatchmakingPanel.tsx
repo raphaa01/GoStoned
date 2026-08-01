@@ -7,6 +7,8 @@ import type { MatchmakingConnectionState } from "@/lib/client/matchmakingConnect
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import type { MatchmakingQueueState } from "@/lib/client/matchmaking";
+import { RatingLabel } from "@/components/rating/RatingLabel";
 
 type MatchmakingPanelProps = {
   boardSize: BoardSize;
@@ -25,6 +27,8 @@ type MatchmakingPanelProps = {
   onRecover: () => void;
   onRetry: () => void;
   primaryActionRef?: RefObject<HTMLButtonElement | null>;
+  queueDetails: MatchmakingQueueState | null;
+  identityKind: "account" | "guest" | null;
 };
 
 export function MatchmakingPanel({
@@ -44,8 +48,10 @@ export function MatchmakingPanel({
   onRecover,
   onRetry,
   primaryActionRef,
+  queueDetails,
+  identityKind,
 }: MatchmakingPanelProps) {
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
   const copy = dictionary.play;
   const waiting = status === "waiting";
   const selectedTime = dictionary.timeControls[timeControl];
@@ -111,7 +117,7 @@ export function MatchmakingPanel({
         </div>
         <div>
           <span>{copy.rules}</span>
-          <strong>{copy.chinese}</strong>
+          <strong>{dictionary.rules.rulesets.japanese} · 1989</strong>
         </div>
       </div>
 
@@ -121,6 +127,25 @@ export function MatchmakingPanel({
             <Search className="spin" size={20} />
             <span>{waitingDescription}</span>
           </div>
+          <p className="panel-note">
+            {queueDetails?.pool === "registered-rated" || identityKind === "account"
+              ? copy.registeredRatedPool
+              : copy.guestUnratedPool}
+            {queueDetails?.botMatchPreference === "calibrated-rated-after-wait"
+                ? ` ${copy.calibratedBotFallbackPending}`
+                : ` ${copy.noBotFallback}`}
+          </p>
+          {queueDetails?.pool === "registered-rated" && queueDetails.rating !== null
+            && queueDetails.rating !== undefined ? (
+              <div className="queue-rating">
+                <span>{copy.queueRating}</span>
+                <RatingLabel
+                  locale={locale}
+                  preference={queueDetails.displayPreference ?? "both"}
+                  rating={queueDetails.rating}
+                />
+              </div>
+            ) : null}
           {terminal ? (
             <Button className="match-button" disabled={busy} onClick={onRecover} ref={primaryActionRef} size="lg">
               <RefreshCw size={20} />

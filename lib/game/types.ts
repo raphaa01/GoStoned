@@ -1,4 +1,5 @@
 import type { Ruleset, RulesProfile, ScoringMethod } from "./rulesPolicy";
+import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 
 export type BoardSize = 9 | 13 | 19;
 export type TimeControlId = "blitz" | "rapid" | "classic";
@@ -43,12 +44,27 @@ export type GameState = {
   whitePlayerName: string;
   blackPlayerIsBot?: boolean;
   whitePlayerIsBot?: boolean;
+  blackRating?: number | null;
+  blackRatingDeviation?: number | null;
+  whiteRating?: number | null;
+  whiteRatingDeviation?: number | null;
+  viewerRatingChange?: number | null;
+  ratingDisplayPreference?: RatingDisplayPreference;
   winnerKey: string | null;
   rated: boolean;
   status: "active" | "finished";
   phase: "play" | "scoring";
   result: string | null;
-  finishReason: "score" | "resignation" | "timeout" | "legacy_score" | null;
+  finishReason:
+    | "score"
+    | "japanese_adjudication"
+    | "japanese_abandonment"
+    | "japanese_no_result"
+    | "japanese_repetition"
+    | "resignation"
+    | "timeout"
+    | "legacy_score"
+    | null;
   komi: number;
   ruleset: Ruleset;
   rulesProfile: RulesProfile;
@@ -58,9 +74,15 @@ export type GameState = {
   scoringRevision: number;
   scoring: GameScoringState | null;
   lastResume: {
-    claim: "dead" | "alive" | "deadline";
+    claim: "dead" | "alive" | "deadline" | "resume";
     requestedBy: Stone | null;
     disputedStone: Position | null;
+  } | null;
+  repetition?: {
+    eligible: boolean;
+    repeatedFromMoveNumber: number | null;
+    blackClaimed: boolean;
+    whiteClaimed: boolean;
   } | null;
   version: number;
   startedAt: string;
@@ -80,9 +102,27 @@ export type GameScoringState = {
   deadStones: Position[];
   blackConfirmed: boolean;
   whiteConfirmed: boolean;
-  preview: ChineseAreaScore;
+  preview: ScorePreview;
   finalizedAt: string | null;
   expiresAt: string;
+  proposalHash?: string;
+  neutralRegionSeeds?: Position[];
+  resumptionsUsed?: number;
+  resumptionsRemaining?: number;
+  finalResolution?: boolean;
+  blackParticipated?: boolean;
+  whiteParticipated?: boolean;
+  canUndo?: boolean;
+  canResetToSuggestion?: boolean;
+  suggestion?: {
+    status: "pending" | "ready" | "unavailable" | "invalid" | "low_confidence";
+    transparentRole: "suggestion";
+    providerKind: "hosted-http" | "local-http" | "deterministic" | null;
+    engineVersion: string | null;
+    modelVersion: string | null;
+    configVersion: string | null;
+    confidencePolicyVersion: string | null;
+  };
 };
 
 export type PlayerClockState = {
@@ -128,6 +168,24 @@ export type ChineseAreaScore = {
   margin: number;
   result: string;
 };
+
+export type JapaneseTerritoryPreview = {
+  black: number;
+  white: number;
+  blackStones: number;
+  whiteStones: number;
+  blackTerritory: number;
+  whiteTerritory: number;
+  neutralPoints: number;
+  territoryExcludedByAgreement: number;
+  blackPrisoners: number;
+  whitePrisoners: number;
+  winner: Stone | null;
+  margin: number;
+  result: string;
+};
+
+export type ScorePreview = ChineseAreaScore | JapaneseTerritoryPreview;
 
 /** @deprecated Use the scoring-rule-specific ChineseAreaScore name. */
 export type Score = ChineseAreaScore;

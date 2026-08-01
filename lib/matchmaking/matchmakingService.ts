@@ -1,18 +1,39 @@
 import { randomUUID } from "node:crypto";
-import { query, withTransaction } from "@/lib/db";
+import type { PoolClient } from "pg";
 import { botDifficultyForRating } from "@/lib/bot/difficulty";
-import { botDisplayName, deterministicUnit } from "@/lib/bot/identity";
-import { DEFAULT_MATCH_RULES, resolveRulesConfiguration } from "@/lib/game/rulesPolicy";
+import { deterministicUnit } from "@/lib/bot/identity";
+import { query, withTransaction } from "@/lib/db";
+import { JAPANESE_1989_CONTRACT_ID } from "@/lib/game/japanesePolicyContract";
+import { newGameRulesConfiguration } from "@/lib/game/newGameRules";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import {
   isPlayerPairBlocked,
   lockPlayerPair,
 } from "@/lib/moderation/playerBlockService";
+import {
+  ADAPTIVE_MATCH_POLICY_VERSION,
+  evaluateAdaptiveMatch,
+  rankAdaptiveMatchCandidates,
+  type AdaptiveMatchEntry,
+  type MatchPool,
+} from "./adaptiveMatchPolicy";
+import type { BotMatchPreference } from "@/lib/rating/preferences";
+import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
+import {
+  selectNearestCalibratedBot,
+  type BotCalibrationEvidence,
+  type BotGameConfiguration,
+  type BotProfileCandidate,
+  type CalibratedBotProfile,
+} from "./calibratedBotPolicy";
 
 export type MatchmakingStatus =
   | { status: "idle"; gameId: null; boardSize: null; timeControl: null }
-  | { status: "waiting"; gameId: null; boardSize: BoardSize; timeControl: TimeControlId }
+  | { status: "waiting"; gameId: null; boardSize: BoardSize; timeControl: TimeControlId;
+      pool?: MatchPool; botMatchPreference?: BotMatchPreference; rating?: number | null;
+      ratingDeviation?: number | null; displayPreference?: RatingDisplayPreference;
+      waitingSince?: string }
   | { status: "matched"; gameId: string; boardSize: BoardSize; timeControl: TimeControlId };
 
 type QueueRow = {
@@ -23,18 +44,67 @@ type QueueRow = {
   status: "waiting" | "matched";
   game_id: string | null;
   created_at: Date;
+  matchmaking_policy_version?: string | null;
+  match_pool?: MatchPool;
+  rules_snapshot?: "japanese" | "chinese";
+  rules_version_snapshot?: string;
+  scoring_method_snapshot?: "territory" | "area";
+  komi_snapshot?: number;
+  handicap_snapshot?: number;
+  rating_snapshot?: number | null;
+  rating_deviation_snapshot?: number | null;
+  reliable_latency_ms?: number | null;
+  abandonment_risk?: "normal" | "elevated" | "restricted";
+  handicap_preference?: "even-only" | "verified-handicap-ok";
+  bot_match_preference?: BotMatchPreference;
+  display_preference_snapshot?: RatingDisplayPreference | null;
   game_status?: "active" | "finished" | null;
   is_stale?: boolean;
-  bot_fallback_due?: boolean;
-  bot_worker_available?: boolean;
+  evaluation_now?: Date;
+  bot_fallback_not_before?: Date | null;
+};
+
+type ActiveBotProfileRow = {
+  profile_id: string;
+  profile_contract_version: "calibrated-bot-profile-v1";
+  profile_fingerprint: string;
+  transparent_name: string;
+  engine_family: string;
+  engine_version: string;
+  model_version: string;
+  config_version: string;
+  fixed_rating: string | number;
+  fixed_rating_deviation: string | number;
+  handicap_mode: "even" | "verified-handicap";
+  acceptance_policy_version: "bot-calibration-acceptance-v1";
+  source_revision: string;
+  dataset_digest: string;
+  runner_digest: string;
+  reproduction_command: string;
+  calibration_games: number;
+  holdout_games: number;
+  distinct_registered_humans: number;
+  estimated_rating: string | number;
+  standard_error: string | number;
+  unresolved_audit_findings: number;
+  activation_id: string | number;
+  configurations: Array<{
+    configurationKey: string;
+    boardSize: BoardSize;
+    timeControl: TimeControlId;
+    rulesProfile: string;
+    rulesVersion: string;
+    komi: string | number;
+    handicap: number;
+    games: number;
+  }>;
 };
 
 type CancellationOptions = {
   staleOnly?: boolean;
 };
 
-const MAX_BLOCKED_CANDIDATE_RECHECKS = 8;
-const BOT_FALLBACK_SECONDS = 10;
+const CALIBRATED_BOT_FALLBACK_SECONDS = 10;
 
 export function isBoardSize(value: unknown): value is BoardSize {
   return value === 9 || value === 13 || value === 19;
@@ -55,158 +125,262 @@ function mapQueue(row?: QueueRow): MatchmakingStatus {
     gameId: null,
     boardSize: row.board_size,
     timeControl: row.time_control,
+    pool: row.match_pool,
+    botMatchPreference: row.bot_match_preference,
+    rating: row.rating_snapshot === null || row.rating_snapshot === undefined
+      ? null : Number(row.rating_snapshot),
+    ratingDeviation: row.rating_deviation_snapshot === null
+      || row.rating_deviation_snapshot === undefined
+      ? null : Number(row.rating_deviation_snapshot),
+    displayPreference: row.display_preference_snapshot ?? undefined,
+    waitingSince: row.created_at.toISOString(),
   };
 }
 
-async function matchWaitingPlayerWithBot(
-  playerKey: string,
-  expected: Pick<QueueRow, "board_size" | "time_control" | "rules_profile">,
+function adaptiveEntry(row: QueueRow): AdaptiveMatchEntry {
+  const configuration = {
+    boardSize: row.board_size,
+    timeControl: row.time_control,
+    rules: row.rules_snapshot ?? "japanese",
+    rulesProfile: row.rules_profile,
+    rulesVersion: row.rules_version_snapshot ?? JAPANESE_1989_CONTRACT_ID,
+    scoringMethod: row.scoring_method_snapshot ?? "territory",
+    komi: Number(row.komi_snapshot ?? 6.5),
+    handicap: row.handicap_snapshot ?? 0,
+  };
+  const base = {
+    playerKey: row.player_key,
+    configuration,
+    waitingSinceMs: row.created_at.getTime(),
+    reliableLatencyMs: row.reliable_latency_ms ?? null,
+    abandonmentRisk: row.abandonment_risk ?? "normal",
+    handicapPreference: row.handicap_preference ?? "even-only",
+  } as const;
+  return row.match_pool === "registered-rated"
+    ? {
+        ...base,
+        pool: "registered-rated",
+        globalRating: Number(row.rating_snapshot),
+        ratingDeviation: Number(row.rating_deviation_snapshot),
+      }
+    : { ...base, pool: "guest-unrated", globalRating: null, ratingDeviation: null };
+}
+
+function calibratedBotCandidate(row: ActiveBotProfileRow): BotProfileCandidate {
+  const supportedConfigurations = row.configurations.map((configuration) => ({
+    boardSize: configuration.boardSize,
+    timeControl: configuration.timeControl,
+    rulesProfile: configuration.rulesProfile,
+    rulesVersion: configuration.rulesVersion,
+    komi: Number(configuration.komi),
+    handicap: configuration.handicap,
+  }));
+  const profile: CalibratedBotProfile = {
+    contractVersion: row.profile_contract_version,
+    profileId: row.profile_id,
+    transparentName: row.transparent_name,
+    engineFamily: row.engine_family,
+    engineVersion: row.engine_version,
+    modelVersion: row.model_version,
+    configVersion: row.config_version,
+    fixedRating: Number(row.fixed_rating),
+    fixedRatingDeviation: Number(row.fixed_rating_deviation),
+    supportedConfigurations,
+    handicapMode: row.handicap_mode,
+  };
+  const evidence: BotCalibrationEvidence = {
+    acceptancePolicyVersion: row.acceptance_policy_version,
+    profileContractVersion: row.profile_contract_version,
+    profileId: row.profile_id,
+    profileFingerprint: row.profile_fingerprint,
+    sourceRevision: row.source_revision,
+    datasetDigest: row.dataset_digest,
+    runnerDigest: row.runner_digest,
+    reproductionCommand: row.reproduction_command,
+    games: row.calibration_games,
+    holdoutGames: row.holdout_games,
+    distinctRegisteredHumans: row.distinct_registered_humans,
+    estimatedRating: Number(row.estimated_rating),
+    standardError: Number(row.standard_error),
+    unresolvedAuditFindings: row.unresolved_audit_findings,
+    coverage: row.configurations.map((configuration) => ({
+      configurationKey: configuration.configurationKey,
+      games: configuration.games,
+    })),
+  };
+  return { profile, evidence };
+}
+
+async function activeCalibratedBotProfiles(
+  client: PoolClient,
+  configuration: BotGameConfiguration,
+): Promise<ActiveBotProfileRow[]> {
+  const result = await client.query<ActiveBotProfileRow>(
+    `SELECT profile.*,
+            activation.activation_id,
+            COALESCE((
+              SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+                'configurationKey', configured.configuration_key,
+                'boardSize', configured.board_size,
+                'timeControl', configured.time_control,
+                'rulesProfile', configured.rules_profile,
+                'rulesVersion', configured.rules_version,
+                'komi', configured.komi,
+                'handicap', configured.handicap,
+                'games', configured.calibration_games
+              ) ORDER BY configured.configuration_key)
+                FROM calibrated_bot_profile_configurations configured
+               WHERE configured.profile_id = profile.profile_id
+            ), '[]'::jsonb) AS configurations
+       FROM calibrated_bot_profiles profile
+       JOIN LATERAL (
+         SELECT event.activation_id,event.action
+           FROM calibrated_bot_profile_activation_events event
+          WHERE event.profile_id = profile.profile_id
+          ORDER BY event.activation_id DESC
+          LIMIT 1
+       ) activation ON activation.action = 'activate'
+      WHERE CHAR_LENGTH(profile.transparent_name) BETWEEN 2 AND 40
+        AND EXISTS (
+          SELECT 1 FROM calibrated_bot_profile_configurations requested
+           WHERE requested.profile_id = profile.profile_id
+             AND requested.board_size = $1 AND requested.time_control = $2
+             AND requested.rules_profile = $3 AND requested.rules_version = $4
+             AND requested.komi = $5 AND requested.handicap = $6
+        )
+      ORDER BY profile.profile_id`,
+    [
+      configuration.boardSize, configuration.timeControl,
+      configuration.rulesProfile, configuration.rulesVersion,
+      configuration.komi, configuration.handicap,
+    ],
+  );
+  return result.rows;
+}
+
+async function matchWaitingPlayerWithCalibratedBot(
+  client: PoolClient,
+  requester: QueueRow,
   allowOnDemandBot: boolean,
-): Promise<MatchmakingStatus> {
-  const timeControl = getTimeControl(expected.time_control);
-  const rules = resolveRulesConfiguration({
-    ruleset: DEFAULT_MATCH_RULES.ruleset,
-    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
-    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
-    komi: DEFAULT_MATCH_RULES.komi,
-    handicap: DEFAULT_MATCH_RULES.handicap,
-  });
-  return withTransaction(async (client) => {
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [`matchmaking-pool:v1:${expected.board_size}:${expected.time_control}:${expected.rules_profile}`],
-    );
-    const currentResult = await client.query<QueueRow>(
-      `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
-              q.status, q.game_id, q.created_at,
-              g.status AS game_status
-         FROM matchmaking_queue q
-         LEFT JOIN games g ON g.id = q.game_id
-        WHERE q.player_key = $1
-        FOR UPDATE OF q`,
-      [playerKey],
-    );
-    const current = currentResult.rows[0];
-    if (!current) return mapQueue();
-    if (current.status === "matched" && current.game_id && current.game_status === "active") {
-      return mapQueue(current);
-    }
-    if (
-      current.status !== "waiting"
-      || current.game_id !== null
-      || current.board_size !== expected.board_size
-      || current.time_control !== expected.time_control
-      || current.rules_profile !== expected.rules_profile
-      || current.rules_profile !== rules.rulesProfile
-    ) {
-      return mapQueue(current);
-    }
+): Promise<MatchmakingStatus | null> {
+  const now = requester.evaluation_now;
+  if (
+    !allowOnDemandBot
+    || requester.status !== "waiting"
+    || requester.match_pool !== "registered-rated"
+    || requester.bot_match_preference !== "calibrated-rated-after-wait"
+    || requester.rating_snapshot === null
+    || requester.rating_snapshot === undefined
+    || requester.rating_deviation_snapshot === null
+    || requester.rating_deviation_snapshot === undefined
+    || !(requester.bot_fallback_not_before instanceof Date)
+    || !(now instanceof Date)
+    || requester.bot_fallback_not_before > now
+  ) return null;
 
-    const eligibility = await client.query<{ due: boolean; worker_available: boolean }>(
-      `SELECT $1::timestamptz <= NOW() - make_interval(secs => $2::int) AS due,
-              ($3::boolean OR EXISTS (
-                SELECT 1 FROM katago_workers
-                 WHERE ready
-                   AND 'bot' = ANY(capabilities)
-                   AND last_seen_at >= NOW() - INTERVAL '15 seconds'
-              )) AS worker_available`,
-      [current.created_at, BOT_FALLBACK_SECONDS, allowOnDemandBot],
-    );
-    if (!eligibility.rows[0]?.due || !eligibility.rows[0].worker_available) {
-      return mapQueue(current);
-    }
+  const configuration: BotGameConfiguration = {
+    boardSize: requester.board_size,
+    timeControl: requester.time_control,
+    rulesProfile: requester.rules_profile,
+    rulesVersion: requester.rules_version_snapshot ?? JAPANESE_1989_CONTRACT_ID,
+    komi: Number(requester.komi_snapshot ?? 6.5),
+    handicap: requester.handicap_snapshot ?? 0,
+  };
+  const rows = await activeCalibratedBotProfiles(client, configuration);
+  const selection = selectNearestCalibratedBot({
+    globalRating: Number(requester.rating_snapshot),
+    ratingDeviation: Number(requester.rating_deviation_snapshot),
+  }, configuration, rows.map(calibratedBotCandidate), requester.handicap_preference ?? "even-only");
+  if (!selection) return null;
+  const selectedRow = rows.find(({ profile_id }) => profile_id === selection.profile.profileId);
+  if (!selectedRow) throw new Error("The selected calibrated bot profile disappeared.");
 
-    const activeGame = await client.query<{ id: string }>(
-      `SELECT id FROM games
-        WHERE status = 'active'
-          AND (black_player_key = $1 OR white_player_key = $1)
-        LIMIT 1
-        FOR UPDATE`,
-      [playerKey],
-    );
-    if (activeGame.rows[0]) return mapQueue(current);
-
-    const ratingResult = await client.query<{ rating: number }>(
-      `SELECT COALESCE((
-         SELECT rating FROM player_stats
-          WHERE player_key = $1 AND board_size = $2
-       ), 1200)::int AS rating`,
-      [playerKey, current.board_size],
-    );
-    const difficulty = botDifficultyForRating(ratingResult.rows[0]?.rating ?? 1200);
-    const identitySeed = `${playerKey}:${current.created_at.toISOString()}:${current.board_size}`;
-    const botPlayerKey = `bot:${randomUUID()}`;
-    const botIsBlack = deterministicUnit(`${identitySeed}:color`) < 0.5;
-    const blackPlayerKey = botIsBlack ? botPlayerKey : playerKey;
-    const whitePlayerKey = botIsBlack ? playerKey : botPlayerKey;
-    const gameResult = await client.query<{ id: string }>(
-      `INSERT INTO games (
-         board_size, black_player_key, white_player_key, time_control,
-         rules, rules_profile, scoring_method, komi, handicap, phase, to_move,
-         main_time_seconds, byo_yomi_periods, byo_yomi_seconds,
-         black_time_remaining_ms, white_time_remaining_ms,
-         black_periods_remaining, white_periods_remaining, turn_started_at
-       )
-       VALUES (
-         $1, $2, $3, $4,
-         $5, $6, $7, $8, $9, 'play', $10,
-         $11, $12, $13, $14, $14, $12, $12, NOW()
-       )
-       RETURNING id`,
-      [
-        current.board_size,
-        blackPlayerKey,
-        whitePlayerKey,
-        current.time_control,
-        rules.ruleset,
-        rules.rulesProfile,
-        rules.scoringMethod,
-        rules.komi,
-        rules.handicap,
-        rules.policy.initialTurn,
-        timeControl.mainTimeSeconds,
-        timeControl.byoYomiPeriods,
-        timeControl.byoYomiSeconds,
-        timeControl.mainTimeSeconds * 1_000,
-      ],
-    );
-    const gameId = gameResult.rows[0].id;
-    await client.query(
-      `INSERT INTO game_bots (
-         game_id, bot_player_key, display_name, color, target_rating,
-         visits_per_turn, candidate_limit, temperature
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        gameId,
-        botPlayerKey,
-        botDisplayName(identitySeed),
-        botIsBlack ? "black" : "white",
-        difficulty.targetRating,
-        difficulty.visitsPerTurn,
-        difficulty.candidateLimit,
-        difficulty.temperature,
-      ],
-    );
-    const publication = await client.query(
-      `UPDATE matchmaking_queue
-          SET status = 'matched', game_id = $1, rules_profile = $2,
-              updated_at = NOW()
-        WHERE player_key = $3
-          AND board_size = $4 AND time_control = $5 AND rules_profile = $2
-          AND status = 'waiting' AND game_id IS NULL`,
-      [gameId, rules.rulesProfile, playerKey, current.board_size, current.time_control],
-    );
-    if (publication.rowCount !== 1) {
-      throw new Error("Matchmaking state changed before the bot game could be published.");
-    }
-    return {
-      status: "matched",
-      gameId,
-      boardSize: current.board_size,
-      timeControl: current.time_control,
-    };
-  });
+  const rules = newGameRulesConfiguration();
+  if (
+    requester.rules_snapshot !== rules.ruleset
+    || requester.rules_profile !== rules.rulesProfile
+    || requester.scoring_method_snapshot !== rules.scoringMethod
+    || Number(requester.komi_snapshot) !== rules.komi
+    || requester.handicap_snapshot !== rules.handicap
+  ) throw new Error("The queued rules snapshot changed before calibrated bot matching.");
+  const timeControl = getTimeControl(requester.time_control);
+  const identitySeed = `${requester.player_key}:${requester.created_at.toISOString()}:${selection.profile.profileId}`;
+  const botPlayerKey = `bot:${randomUUID()}`;
+  const botIsBlack = deterministicUnit(`${identitySeed}:color`) < 0.5;
+  const blackPlayerKey = botIsBlack ? botPlayerKey : requester.player_key;
+  const whitePlayerKey = botIsBlack ? requester.player_key : botPlayerKey;
+  const gameResult = await client.query<{ id: string }>(
+    `INSERT INTO games (
+       board_size,black_player_key,white_player_key,time_control,
+       rules,rules_profile,scoring_method,komi,handicap,phase,to_move,
+       main_time_seconds,byo_yomi_periods,byo_yomi_seconds,
+       black_time_remaining_ms,white_time_remaining_ms,
+       black_periods_remaining,white_periods_remaining,turn_started_at
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,'play',$10,
+       $11,$12,$13,$14,$14,$12,$12,NOW()
+     ) RETURNING id`,
+    [
+      requester.board_size, blackPlayerKey, whitePlayerKey, requester.time_control,
+      rules.ruleset, rules.rulesProfile, rules.scoringMethod, rules.komi, rules.handicap,
+      rules.policy.initialTurn, timeControl.mainTimeSeconds,
+      timeControl.byoYomiPeriods, timeControl.byoYomiSeconds,
+      timeControl.mainTimeSeconds * 1_000,
+    ],
+  );
+  const gameId = gameResult.rows[0]?.id;
+  if (!gameId) throw new Error("The calibrated bot game was not created.");
+  const difficulty = botDifficultyForRating(selection.profile.fixedRating);
+  await client.query(
+    `INSERT INTO game_bots (
+       game_id,bot_player_key,display_name,color,target_rating,
+       visits_per_turn,candidate_limit,temperature,rating_mode
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'calibrated-v1')`,
+    [
+      gameId, botPlayerKey, selection.profile.transparentName,
+      botIsBlack ? "black" : "white", difficulty.targetRating,
+      difficulty.visitsPerTurn, difficulty.candidateLimit, difficulty.temperature,
+    ],
+  );
+  const publication = await client.query(
+    `UPDATE matchmaking_queue
+        SET status='matched',game_id=$1,updated_at=NOW()
+      WHERE player_key=$2 AND status='waiting' AND game_id IS NULL
+        AND matchmaking_policy_version=$3 AND match_pool='registered-rated'
+        AND bot_match_preference='calibrated-rated-after-wait'`,
+    [gameId, requester.player_key, ADAPTIVE_MATCH_POLICY_VERSION],
+  );
+  if (publication.rowCount !== 1) {
+    throw new Error("Matchmaking changed before the calibrated bot game could be published.");
+  }
+  await client.query(
+    `INSERT INTO game_calibrated_bot_bindings (
+       game_id,bot_player_key,bot_color,human_player_key,profile_id,activation_id,
+       binding_version,profile_contract_version,profile_fingerprint,engine_family,
+       engine_version,model_version,config_version,opponent_rating,
+       opponent_rating_deviation,configuration_key,credit_mode,
+       rating_credit_policy_version,bound_game_version
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+       'calibrated-bot-rating-credit-v1',0
+     )`,
+    [
+      gameId, botPlayerKey, botIsBlack ? "black" : "white", requester.player_key,
+      selection.binding.profileId, selectedRow.activation_id,
+      selection.binding.bindingVersion, selection.binding.profileContractVersion,
+      selection.binding.profileFingerprint, selection.binding.engineFamily,
+      selection.binding.engineVersion, selection.binding.modelVersion,
+      selection.binding.configVersion, selection.binding.opponentRating,
+      selection.binding.opponentRatingDeviation, selection.binding.configurationKey,
+      selection.binding.creditMode,
+    ],
+  );
+  return {
+    status: "matched",
+    gameId,
+    boardSize: requester.board_size,
+    timeControl: requester.time_control,
+  };
 }
 
 export async function getMatchmakingStatus(
@@ -214,21 +388,14 @@ export async function getMatchmakingStatus(
   options: { allowOnDemandBot?: boolean } = {},
 ): Promise<MatchmakingStatus> {
   const result = await query<QueueRow>(
-    `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
-            q.status, q.game_id, q.created_at,
+    `SELECT q.*,
             g.status AS game_status,
             q.updated_at < NOW() - INTERVAL '5 minutes' AS is_stale,
-            q.created_at <= NOW() - INTERVAL '10 seconds' AS bot_fallback_due,
-            ($2::boolean OR EXISTS (
-              SELECT 1 FROM katago_workers
-               WHERE ready
-                 AND 'bot' = ANY(capabilities)
-                 AND last_seen_at >= NOW() - INTERVAL '15 seconds'
-            )) AS bot_worker_available
+            statement_timestamp() AS evaluation_now
        FROM matchmaking_queue q
        LEFT JOIN games g ON g.id = q.game_id
       WHERE q.player_key = $1`,
-    [playerKey, options.allowOnDemandBot === true],
+    [playerKey],
   );
   const row = result.rows[0];
   if (row?.status === "matched" && row.game_status !== "active") {
@@ -237,8 +404,11 @@ export async function getMatchmakingStatus(
   if (row?.status === "waiting" && row.is_stale) {
     return cancelMatchmaking(playerKey, { staleOnly: true });
   }
-  if (row?.status === "waiting" && row.bot_fallback_due && row.bot_worker_available) {
-    return matchWaitingPlayerWithBot(playerKey, row, options.allowOnDemandBot === true);
+  if (row?.status === "waiting") {
+    return joinMatchmaking(playerKey, row.board_size, row.time_control, {
+      preserveWaitingSince: true,
+      allowOnDemandBot: options.allowOnDemandBot === true,
+    });
   }
   return mapQueue(row);
 }
@@ -247,15 +417,10 @@ export async function joinMatchmaking(
   playerKey: string,
   boardSize: BoardSize,
   timeControlId: TimeControlId,
+  options: { preserveWaitingSince?: boolean; allowOnDemandBot?: boolean } = {},
 ): Promise<MatchmakingStatus> {
   const timeControl = getTimeControl(timeControlId);
-  const rules = resolveRulesConfiguration({
-    ruleset: DEFAULT_MATCH_RULES.ruleset,
-    rulesProfile: DEFAULT_MATCH_RULES.rulesProfile,
-    scoringMethod: DEFAULT_MATCH_RULES.scoringMethod,
-    komi: DEFAULT_MATCH_RULES.komi,
-    handicap: DEFAULT_MATCH_RULES.handicap,
-  });
+  const rules = newGameRulesConfiguration();
   return withTransaction(async (client) => {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
@@ -285,22 +450,77 @@ export async function joinMatchmaking(
       [boardSize, timeControlId, rules.rulesProfile],
     );
 
+    const authorityResult = await client.query<{
+      rating: number;
+      rating_deviation: number;
+      algorithm_version: string;
+      rating_updated_at: string;
+      preference_revision: number;
+      display_preference: RatingDisplayPreference;
+      bot_match_preference: BotMatchPreference;
+      handicap_preference: "even-only" | "verified-handicap-ok";
+    }>(
+      `SELECT rating.rating::double precision AS rating,
+              rating.rating_deviation::double precision AS rating_deviation,
+              rating.algorithm_version,
+              rating.updated_at::text AS rating_updated_at,
+              preference.preference_revision,
+              preference.display_preference,
+              preference.bot_match_preference,
+              preference.handicap_preference
+         FROM player_glicko2_ratings rating
+         JOIN player_rating_preferences preference
+           ON preference.user_id = rating.user_id
+        WHERE rating.player_key = $1
+        FOR UPDATE OF rating,preference`,
+      [playerKey],
+    );
+    const authority = authorityResult.rows[0];
+    const registered = playerKey.startsWith("user:");
+    if (registered && !authority) {
+      throw new Error("Registered matchmaking requires an authoritative global rating state.");
+    }
+    if (!registered && !playerKey.startsWith("guest:")) {
+      throw new Error("Matchmaking identity is unsupported.");
+    }
+    const pool: MatchPool = authority ? "registered-rated" : "guest-unrated";
+    const botMatchPreference: BotMatchPreference = authority?.bot_match_preference ?? "never";
+    const handicapPreference = authority?.handicap_preference ?? "even-only";
+
     // A no-op conflict update materializes and locks the participant row even
     // when concurrent requests both began before it existed.
     await client.query(
       `INSERT INTO matchmaking_queue (
-         player_key, board_size, time_control, rules_profile, status, game_id
+         player_key, board_size, time_control, rules_profile, status, game_id,
+         matchmaking_policy_version,match_pool,rules_snapshot,rules_version_snapshot,
+         scoring_method_snapshot,komi_snapshot,handicap_snapshot,rating_snapshot,
+         rating_deviation_snapshot,rating_algorithm_version,rating_state_updated_at,
+         preference_revision,display_preference_snapshot,bot_match_preference,reliable_latency_ms,
+         latency_evidence_version,latency_observed_at,abandonment_risk,
+         abandonment_policy_version,abandonment_evaluated_at,handicap_preference,
+         bot_fallback_not_before
        )
-       VALUES ($1, $2, $3, $4, 'waiting', NULL)
+       VALUES ($1,$2,$3,$4,'waiting',NULL,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+               $15,$16,$17,$18,NULL,NULL,NULL,'normal','abandonment-risk-v1',NOW(),$19,
+               NOW() + make_interval(secs => $20::int))
        ON CONFLICT (player_key) DO UPDATE
        SET player_key = EXCLUDED.player_key`,
-      [playerKey, boardSize, timeControlId, rules.rulesProfile],
+      [
+        playerKey, boardSize, timeControlId, rules.rulesProfile,
+        ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, JAPANESE_1989_CONTRACT_ID,
+        rules.scoringMethod, rules.komi, rules.handicap,
+        authority?.rating ?? null, authority?.rating_deviation ?? null,
+        authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,
+        authority?.preference_revision ?? 1, authority?.display_preference ?? null,
+        botMatchPreference, handicapPreference,
+        CALIBRATED_BOT_FALLBACK_SECONDS,
+      ],
     );
 
     const existing = await client.query<QueueRow>(
-      `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
-              q.status, q.game_id, q.created_at,
-              g.status AS game_status
+      `SELECT q.*,
+              g.status AS game_status,
+              statement_timestamp() AS evaluation_now
          FROM matchmaking_queue q
          LEFT JOIN games g ON g.id = q.game_id
         WHERE q.player_key = $1
@@ -339,29 +559,73 @@ export async function joinMatchmaking(
       return mapQueue(game);
     }
 
-    await client.query(
-      `UPDATE matchmaking_queue
+    const existingRow = existing.rows[0];
+    const preserveWaitingSince = options.preserveWaitingSince === true
+      && existingRow?.status === "waiting"
+      && existingRow.game_id === null
+      && existingRow.board_size === boardSize
+      && existingRow.time_control === timeControlId
+      && existingRow.rules_profile === rules.rulesProfile
+      && existingRow.matchmaking_policy_version === ADAPTIVE_MATCH_POLICY_VERSION
+      && existingRow.match_pool === pool;
+    const requesterResult = preserveWaitingSince
+      ? { rows: [existingRow], rowCount: 1 }
+      : await client.query<QueueRow>(
+        `UPDATE matchmaking_queue
           SET board_size = $2, time_control = $3, rules_profile = $4,
               status = 'waiting', game_id = NULL,
+              matchmaking_policy_version = $5, match_pool = $6,
+              rules_snapshot = $7, rules_version_snapshot = $8,
+              scoring_method_snapshot = $9, komi_snapshot = $10,
+              handicap_snapshot = $11, rating_snapshot = $12,
+              rating_deviation_snapshot = $13, rating_algorithm_version = $14,
+              rating_state_updated_at = $15, preference_revision = $16,
+              display_preference_snapshot = $17, bot_match_preference = $18,
+              abandonment_risk = 'normal',
+              abandonment_policy_version = 'abandonment-risk-v1',
+              abandonment_evaluated_at = NOW(), handicap_preference = $19,
+              reliable_latency_ms = NULL, latency_evidence_version = NULL,
+              latency_observed_at = NULL,
+              bot_fallback_not_before = NOW() + make_interval(secs => $20::int),
               created_at = NOW(), updated_at = NOW()
-        WHERE player_key = $1`,
-      [playerKey, boardSize, timeControlId, rules.rulesProfile],
-    );
+          WHERE player_key = $1
+          RETURNING *,statement_timestamp() AS evaluation_now`,
+        [
+          playerKey, boardSize, timeControlId, rules.rulesProfile,
+          ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, JAPANESE_1989_CONTRACT_ID,
+          rules.scoringMethod, rules.komi, rules.handicap,
+          authority?.rating ?? null, authority?.rating_deviation ?? null,
+          authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,
+          authority?.preference_revision ?? 1, authority?.display_preference ?? null,
+          botMatchPreference, handicapPreference,
+          CALIBRATED_BOT_FALLBACK_SECONDS,
+        ],
+      );
 
+    const requester = requesterResult.rows[0];
+    if (!requester) throw new Error("Matchmaking queue state was not persisted.");
     let opponent: QueueRow | undefined;
-    for (
-      let attempt = 0;
-      attempt < MAX_BLOCKED_CANDIDATE_RECHECKS && !opponent;
-      attempt += 1
-    ) {
-      const opponentResult = await client.query<QueueRow>(
-        `SELECT q.player_key, q.board_size, q.time_control, q.rules_profile,
-                q.status, q.game_id, q.created_at
+    const opponentResult = await client.query<QueueRow>(
+        `SELECT q.*,statement_timestamp() AS evaluation_now
            FROM matchmaking_queue q
           WHERE q.board_size = $1 AND q.time_control = $2
             AND q.rules_profile = $3
             AND q.status = 'waiting' AND q.player_key <> $4
+            AND q.matchmaking_policy_version = $5
+            AND q.match_pool = $6
             AND q.updated_at >= NOW() - INTERVAL '5 minutes'
+            AND q.abandonment_risk <> 'restricted'
+            AND (
+              q.match_pool = 'guest-unrated'
+              OR EXISTS (
+                SELECT 1 FROM player_glicko2_ratings live_rating
+                 WHERE live_rating.player_key = q.player_key
+                   AND live_rating.rating IS NOT DISTINCT FROM q.rating_snapshot
+                   AND live_rating.rating_deviation IS NOT DISTINCT FROM q.rating_deviation_snapshot
+                   AND live_rating.algorithm_version IS NOT DISTINCT FROM q.rating_algorithm_version
+                   AND live_rating.updated_at IS NOT DISTINCT FROM q.rating_state_updated_at
+              )
+            )
             AND NOT EXISTS (
               SELECT 1
                 FROM games active_game
@@ -379,29 +643,62 @@ export async function joinMatchmaking(
               SELECT 1 FROM player_blocks
                WHERE blocker_key = q.player_key AND blocked_key = $4
             )
+            AND (
+              $6::text = 'guest-unrated'
+              OR ABS(q.rating_snapshot - $7::numeric) <=
+                LEAST(500::numeric,
+                  100 + 20 * GREATEST(
+                    EXTRACT(EPOCH FROM (statement_timestamp() - q.created_at)),
+                    EXTRACT(EPOCH FROM (statement_timestamp() - $9::timestamptz))
+                  ) / 60
+                )
+                + LEAST(200::numeric,
+                    0.35 * (q.rating_deviation_snapshot + $8::numeric))
+            )
           ORDER BY q.created_at, q.player_key
-          LIMIT 1
+          LIMIT 8
           FOR UPDATE SKIP LOCKED`,
-        [boardSize, timeControlId, rules.rulesProfile, playerKey],
+        [
+          boardSize, timeControlId, rules.rulesProfile, playerKey,
+          ADAPTIVE_MATCH_POLICY_VERSION, pool,
+          requester.rating_snapshot ?? 0,
+          requester.rating_deviation_snapshot ?? 350,
+          requester.created_at,
+        ],
       );
-      const candidate = opponentResult.rows[0];
-      if (!candidate) {
-        return {
-          status: "waiting",
-          gameId: null,
-          boardSize,
-          timeControl: timeControlId,
-        };
-      }
-
-      // The pair lock makes the final eligibility check linearizable with
-      // blocking and chat. The queue/pool locks are always acquired first;
-      // block and chat operations never acquire them, avoiding a lock cycle.
+    const evaluationNowMs = opponentResult.rows[0]?.evaluation_now?.getTime()
+      ?? requester.evaluation_now?.getTime()
+      ?? Date.now();
+    const ranked = rankAdaptiveMatchCandidates(
+      adaptiveEntry(requester),
+      opponentResult.rows.map(adaptiveEntry),
+      () => ({ nowMs: evaluationNowMs, blockedEitherDirection: false }),
+    );
+    for (const rankedCandidate of ranked) {
+      if (!rankedCandidate.evaluation.eligible) continue;
+      const candidate = opponentResult.rows.find(
+        (row) => row.player_key === rankedCandidate.candidate.playerKey,
+      );
+      if (!candidate) continue;
+      // The pair lock makes the final block check linearizable with chat and
+      // moderation after adaptive ranking has selected a bounded candidate.
       await lockPlayerPair(client, playerKey, candidate.player_key);
       if (await isPlayerPairBlocked(client, playerKey, candidate.player_key)) continue;
+      const finalEvaluation = evaluateAdaptiveMatch(
+        adaptiveEntry(requester), adaptiveEntry(candidate),
+        { nowMs: evaluationNowMs, blockedEitherDirection: false },
+      );
+      if (!finalEvaluation.eligible) continue;
       opponent = candidate;
+      break;
     }
     if (!opponent) {
+      const botMatch = await matchWaitingPlayerWithCalibratedBot(
+        client,
+        requester,
+        options.allowOnDemandBot === true,
+      );
+      if (botMatch) return botMatch;
       return {
         status: "waiting",
         gameId: null,
@@ -449,6 +746,7 @@ export async function joinMatchmaking(
               updated_at = NOW()
         WHERE player_key = ANY($3::text[])
           AND board_size = $4 AND time_control = $5 AND rules_profile = $2
+          AND matchmaking_policy_version = $6 AND match_pool = $7
           AND status = 'waiting' AND game_id IS NULL`,
       [
         gameId,
@@ -456,6 +754,8 @@ export async function joinMatchmaking(
         [opponent.player_key, playerKey],
         boardSize,
         timeControlId,
+        ADAPTIVE_MATCH_POLICY_VERSION,
+        pool,
       ],
     );
     if (publication.rowCount !== 2) {

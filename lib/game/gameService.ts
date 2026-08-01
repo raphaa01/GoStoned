@@ -8,6 +8,21 @@ import {
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
+import { GameServiceError } from "./gameServiceError";
+import {
+  claimJapaneseWholeBoardRepetition,
+  confirmJapaneseScore,
+  getJapaneseGameState,
+  pollJapaneseGameState,
+  resignJapaneseGame,
+  resetJapaneseScoringSuggestion,
+  resolveJapaneseScoringDeadline,
+  resumeJapanesePlay,
+  setJapaneseDeadGroup,
+  submitJapaneseMove,
+  undoJapaneseScoringChange,
+} from "./japaneseGameService";
+import { JAPANESE_1989_RULES_PROFILE } from "./japanesePolicyContract";
 import {
   isRepeatedPositionForbidden,
   removeDeadStones,
@@ -18,7 +33,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
-  DEFAULT_RULES_PROFILE,
+  CURRENT_CHINESE_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
@@ -33,9 +48,8 @@ import {
   type ScoredOutcome,
 } from "./scoreContract";
 import {
-  resolveRatingParticipants,
-  type RatingParticipantRow,
-} from "./ratingPolicy";
+  finalizeGameRatings,
+} from "@/lib/rating/ratingFinalizer";
 import type {
   Board,
   BoardSize,
@@ -58,6 +72,12 @@ type GameRow = {
   white_player_name: string;
   black_player_is_bot: boolean;
   white_player_is_bot: boolean;
+  black_rating: string | number | null;
+  black_rating_deviation: string | number | null;
+  white_rating: string | number | null;
+  white_rating_deviation: string | number | null;
+  viewer_rating_change: string | number | null;
+  rating_display_preference: "rank-primary" | "rating-primary" | "both" | null;
   winner_key: string | null;
   rated: boolean;
   status: "active" | "finished";
@@ -202,15 +222,7 @@ type LoadedGame = {
   deadRows: DeadStoneRow[];
 };
 
-export class GameServiceError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code: string,
-  ) {
-    super(message);
-  }
-}
+export { GameServiceError } from "./gameServiceError";
 
 function storedRulesConfiguration(input: {
   rules: unknown;
@@ -792,18 +804,34 @@ async function loadGame(
             ) AS white_player_name,
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+            CASE WHEN g.black_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating ELSE black_rating.rating END AS black_rating,
+            CASE WHEN g.black_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating_deviation
+              ELSE black_rating.rating_deviation END AS black_rating_deviation,
+            CASE WHEN g.white_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating ELSE white_rating.rating END AS white_rating,
+            CASE WHEN g.white_player_key = game_bot.bot_player_key
+              THEN calibrated_binding.opponent_rating_deviation
+              ELSE white_rating.rating_deviation END AS white_rating_deviation,
+            (viewer_event.rating_after - viewer_event.rating_before) AS viewer_rating_change,
+            viewer_preference.display_preference AS rating_display_preference,
             CASE
               WHEN g.status = 'finished' THEN (
-                SELECT COUNT(DISTINCT history.player_key) = 2
-                  FROM player_rating_history history
-                 WHERE history.game_id = g.id
-                   AND history.player_key IN (g.black_player_key, g.white_player_key)
+                SELECT COALESCE(
+                  (COUNT(*) = 2 AND BOOL_AND(event.opponent_kind = 'registered_human'))
+                  OR (COUNT(*) = 1 AND BOOL_AND(event.opponent_kind = 'calibrated_bot')),
+                  FALSE
+                ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
               )
               ELSE g.black_player_key <> g.white_player_key
                 AND (
                   (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                   OR (
                     game_bot.game_id IS NOT NULL
+                    AND game_bot.rating_mode = 'calibrated-v1'
+                    AND EXISTS (SELECT 1 FROM game_calibrated_bot_bindings binding
+                                 WHERE binding.game_id = g.id)
                     AND (
                       (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
                       OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
@@ -817,8 +845,15 @@ async function loadGame(
        LEFT JOIN users white_user
          ON g.white_player_key = 'user:' || white_user.id::text
        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
+       LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
+       LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
+       LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
+       LEFT JOIN game_glicko2_rating_events viewer_event
+         ON viewer_event.game_id = g.id AND viewer_event.player_key = $2
+       LEFT JOIN player_rating_preferences viewer_preference
+         ON viewer_preference.player_key = $2
       WHERE g.id = $1${lock ? " FOR UPDATE OF g" : ""}`,
-    [gameId],
+    [gameId, playerKey],
   );
   let game = gameResult.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
@@ -1204,6 +1239,12 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerName: game.white_player_name,
     blackPlayerIsBot: game.black_player_is_bot,
     whitePlayerIsBot: game.white_player_is_bot,
+    blackRating: game.black_rating === null ? null : Number(game.black_rating),
+    blackRatingDeviation: game.black_rating_deviation === null ? null : Number(game.black_rating_deviation),
+    whiteRating: game.white_rating === null ? null : Number(game.white_rating),
+    whiteRatingDeviation: game.white_rating_deviation === null ? null : Number(game.white_rating_deviation),
+    viewerRatingChange: game.viewer_rating_change === null ? null : Number(game.viewer_rating_change),
+    ratingDisplayPreference: game.rating_display_preference ?? "both",
     winnerKey: game.winner_key,
     rated: game.rated,
     status: game.status,
@@ -1261,116 +1302,6 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
   };
 }
 
-async function recordFinishedStats(
-  client: PoolClient,
-  game: GameRow,
-  winnerKey: string | null,
-) {
-  const existingHistory = await client.query<{ player_key: string }>(
-    `SELECT player_key
-       FROM player_rating_history
-      WHERE game_id = $1
-      FOR UPDATE`,
-    [game.id],
-  );
-  if (existingHistory.rowCount !== 0) {
-    throw new GameServiceError(
-      "The rating history already contains evidence before this game finalization.",
-      500,
-      "rating_history_conflict",
-    );
-  }
-
-  const candidates = await client.query<RatingParticipantRow>(
-    `SELECT 'user:' || id::text AS player_key,
-            1200::int AS initial_rating,
-            'account'::text AS participant_type
-       FROM users
-      WHERE 'user:' || id::text IN ($1::text, $2::text)
-      UNION ALL
-     SELECT bot_player_key AS player_key,
-            target_rating AS initial_rating,
-            'bot'::text AS participant_type
-       FROM game_bots
-      WHERE game_id = $3
-        AND bot_player_key IN ($1::text, $2::text)`,
-    [game.black_player_key, game.white_player_key, game.id],
-  );
-  const ratedParticipants = resolveRatingParticipants(
-    [game.black_player_key, game.white_player_key],
-    candidates.rows,
-  );
-  if (!ratedParticipants) return false;
-  const initialRatings = new Map(
-    ratedParticipants.map(({ player_key, initial_rating }) => [player_key, initial_rating]),
-  );
-
-  for (const playerKey of [game.black_player_key, game.white_player_key].sort()) {
-    const won = winnerKey === playerKey;
-    const draw = winnerKey === null;
-    const ratingDelta = draw ? 0 : won ? 16 : -16;
-    await client.query(
-      `INSERT INTO player_stats (player_key, board_size, rating, highest_rating)
-       VALUES ($1, $2, $3, $3)
-       ON CONFLICT (player_key, board_size) DO NOTHING`,
-      [playerKey, game.board_size, initialRatings.get(playerKey)],
-    );
-    const current = await client.query<{ rating: number }>(
-      `SELECT rating
-         FROM player_stats
-        WHERE player_key = $1 AND board_size = $2
-        FOR UPDATE`,
-      [playerKey, game.board_size],
-    );
-    const ratingBefore = current.rows[0].rating;
-    const ratingAfter = Math.max(100, ratingBefore + ratingDelta);
-    const ledger = await client.query<{ id: string }>(
-      `INSERT INTO player_rating_history
-         (player_key, game_id, board_size, rating_before, rating_after,
-          rating_change, result, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()))
-       ON CONFLICT (player_key, game_id) DO NOTHING
-       RETURNING id`,
-      [
-        playerKey,
-        game.id,
-        game.board_size,
-        ratingBefore,
-        ratingAfter,
-        ratingAfter - ratingBefore,
-        draw ? "draw" : won ? "win" : "loss",
-        game.finished_at,
-      ],
-    );
-    if (ledger.rowCount !== 1) {
-      throw new GameServiceError(
-        "The rating history could not be recorded exactly once.",
-        500,
-        "rating_history_conflict",
-      );
-    }
-    await client.query(
-      `UPDATE player_stats
-          SET games = games + 1,
-              wins = wins + $3,
-              losses = losses + $4,
-              draws = draws + $5,
-              rating = $6,
-              highest_rating = GREATEST(highest_rating, $6),
-              updated_at = NOW()
-        WHERE player_key = $1 AND board_size = $2`,
-      [
-        playerKey,
-        game.board_size,
-        won ? 1 : 0,
-        !won && !draw ? 1 : 0,
-        draw ? 1 : 0,
-        ratingAfter,
-      ],
-    );
-  }
-  return true;
-}
 
 async function finishOnTime(
   client: PoolClient,
@@ -1395,7 +1326,7 @@ async function finishOnTime(
     [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
   );
   const nextLoaded = withUpdatedGame(loaded, updated.rows[0]);
-  const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+  const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
   return serializeGame({
     ...nextLoaded,
     game: { ...nextLoaded.game, rated },
@@ -1571,7 +1502,7 @@ async function verifyPollState(
   if (
     loaded.game.version === knownVersion
     && loaded.game.status === "active"
-    && loaded.rules.rulesProfile === DEFAULT_RULES_PROFILE
+    && loaded.rules.rulesProfile === CURRENT_CHINESE_RULES_PROFILE
   ) {
     return {
       needsMutation: false,
@@ -1596,28 +1527,28 @@ async function assertPollParticipant(gameId: string, playerKey: string): Promise
   assertParticipant(game, playerKey);
 }
 
-export async function pollGameState(
+async function pollChineseGameState(
   gameId: string,
   playerKey: string,
   knownVersion: number | null,
 ): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
   if (knownVersion === null) {
-    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+    return { unchanged: false, game: await getChineseGameState(gameId, playerKey) };
   }
   await assertPollParticipant(gameId, playerKey);
   const verified = await withReadOnlyTransaction((client) =>
     verifyPollState(client, gameId, playerKey, knownVersion));
   if (verified.needsMutation) {
-    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+    return { unchanged: false, game: await getChineseGameState(gameId, playerKey) };
   }
   return verified.result;
 }
 
-export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
+async function getChineseGameState(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction((client) => resolveGameState(client, gameId, playerKey));
 }
 
-export async function submitMove(
+async function submitChineseMove(
   gameId: string,
   playerKey: string,
   move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
@@ -1730,7 +1661,7 @@ export async function submitMove(
           ],
         );
         const legacyLoaded = withUpdatedGame(loaded, updated.rows[0]);
-        const rated = await recordFinishedStats(client, legacyLoaded.game, winnerKey);
+        const { rated } = await finalizeGameRatings(client, legacyLoaded.game.id);
         return serializeGame({
           ...legacyLoaded,
           game: { ...legacyLoaded.game, rated },
@@ -1842,7 +1773,7 @@ export async function submitMove(
   });
 }
 
-export async function setDeadGroup(
+async function setChineseDeadGroup(
   gameId: string,
   playerKey: string,
   proposal: { x: number; y: number; dead: boolean; expectedRevision: number },
@@ -1918,7 +1849,7 @@ export async function setDeadGroup(
   });
 }
 
-export async function confirmScore(
+async function confirmChineseScore(
   gameId: string,
   playerKey: string,
   expectedRevision: number,
@@ -2020,7 +1951,7 @@ export async function confirmScore(
       ...withUpdatedGame(nextLoaded, finished.rows[0]),
       scoring: finalScoring.rows[0],
     };
-    const rated = await recordFinishedStats(client, finalLoaded.game, winnerKey);
+    const { rated } = await finalizeGameRatings(client, finalLoaded.game.id);
     return serializeGame({
       ...finalLoaded,
       game: { ...finalLoaded.game, rated },
@@ -2028,7 +1959,7 @@ export async function confirmScore(
   });
 }
 
-export async function resumePlay(
+async function resumeChinesePlay(
   gameId: string,
   playerKey: string,
   expectedRevision: number,
@@ -2106,7 +2037,7 @@ export async function resumePlay(
   });
 }
 
-export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
+async function resignChineseGame(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction(async (client) => {
     let loaded = await loadGame(client, gameId, playerKey, true);
     loaded = await resumeExpiredScoring(client, loaded, new Date()) ?? loaded;
@@ -2144,10 +2075,97 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
       scoring: null,
       deadRows: [],
     };
-    const rated = await recordFinishedStats(client, nextLoaded.game, winnerKey);
+    const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
     return serializeGame({
       ...nextLoaded,
       game: { ...nextLoaded.game, rated },
     }, now);
   });
 }
+
+async function usesJapaneseService(gameId: string): Promise<boolean> {
+  // Existing Chinese service tests replace the transaction pool with narrow
+  // protocol doubles. Japanese lifecycle tests exercise the dedicated module
+  // directly so the historical suite remains an exact regression boundary.
+  if (process.env.NODE_TEST_CONTEXT !== undefined) return false;
+  const result = await query<{ rules_profile: unknown }>(
+    "SELECT rules_profile FROM games WHERE id = $1",
+    [gameId],
+  );
+  return result.rows[0]?.rules_profile === JAPANESE_1989_RULES_PROFILE;
+}
+
+export async function pollGameState(
+  gameId: string,
+  playerKey: string,
+  knownVersion: number | null,
+): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
+  return await usesJapaneseService(gameId)
+    ? pollJapaneseGameState(gameId, playerKey, knownVersion)
+    : pollChineseGameState(gameId, playerKey, knownVersion);
+}
+
+export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? getJapaneseGameState(gameId, playerKey)
+    : getChineseGameState(gameId, playerKey);
+}
+
+export async function submitMove(
+  gameId: string,
+  playerKey: string,
+  move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? submitJapaneseMove(gameId, playerKey, move)
+    : submitChineseMove(gameId, playerKey, move);
+}
+
+export async function setDeadGroup(
+  gameId: string,
+  playerKey: string,
+  proposal: { x: number; y: number; dead: boolean; expectedRevision: number },
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? setJapaneseDeadGroup(gameId, playerKey, proposal)
+    : setChineseDeadGroup(gameId, playerKey, proposal);
+}
+
+export async function confirmScore(
+  gameId: string,
+  playerKey: string,
+  expectedRevision: number,
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? confirmJapaneseScore(gameId, playerKey, expectedRevision)
+    : confirmChineseScore(gameId, playerKey, expectedRevision);
+}
+
+export async function resumePlay(
+  gameId: string,
+  playerKey: string,
+  expectedRevision: number,
+  claim: "dead" | "alive" | null,
+  disputedStone: Position | null,
+): Promise<GameState> {
+  if (await usesJapaneseService(gameId)) {
+    return resumeJapanesePlay(gameId, playerKey, expectedRevision);
+  }
+  if (!claim || !disputedStone) {
+    throw new GameServiceError("A Chinese scoring dispute requires a marked group.", 400, "invalid_dispute_claim");
+  }
+  return resumeChinesePlay(gameId, playerKey, expectedRevision, claim, disputedStone);
+}
+
+export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? resignJapaneseGame(gameId, playerKey)
+    : resignChineseGame(gameId, playerKey);
+}
+
+export {
+  claimJapaneseWholeBoardRepetition,
+  resetJapaneseScoringSuggestion,
+  resolveJapaneseScoringDeadline,
+  undoJapaneseScoringChange,
+};

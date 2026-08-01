@@ -1,10 +1,19 @@
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
+import type { MatchPool } from "@/lib/matchmaking/adaptiveMatchPolicy";
+import type { BotMatchPreference } from "@/lib/rating/preferences";
+import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 
 export type MatchmakingQueueState = {
   status: "idle" | "waiting" | "matched";
   gameId: string | null;
   boardSize: BoardSize | null;
   timeControl: TimeControlId | null;
+  pool?: MatchPool;
+  botMatchPreference?: BotMatchPreference;
+  rating?: number | null;
+  ratingDeviation?: number | null;
+  displayPreference?: RatingDisplayPreference;
+  waitingSince?: string;
 };
 
 type ActiveMatch = {

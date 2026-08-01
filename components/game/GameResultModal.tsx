@@ -7,6 +7,7 @@ import { ModalDialog } from "@/components/ui/ModalDialog";
 import type { GameState } from "@/lib/game/types";
 import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
+import { RatingLabel } from "@/components/rating/RatingLabel";
 
 type GameResultModalProps = {
   game: GameState;
@@ -27,7 +28,7 @@ export function GameResultModal({
   onViewBoard,
   finalFocusRef,
 }: GameResultModalProps) {
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
   const copy = dictionary.game;
   const rulesSummary = localizedRulesSummary(game, dictionary);
   const titleId = useId();
@@ -50,10 +51,13 @@ export function GameResultModal({
 
   if (!open) return null;
 
-  const draw = !game.winnerKey;
+  const noResult = game.finishReason === "japanese_no_result"
+    || game.finishReason === "japanese_repetition";
+  const draw = !game.winnerKey && !noResult;
+  const neutralOutcome = draw || noResult;
   const won = game.winnerKey === playerKey;
-  const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
-  const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
+  const outcome = noResult ? copy.noResult : draw ? copy.draw : won ? copy.victory : copy.defeat;
+  const OutcomeIcon = neutralOutcome ? Minus : won ? Trophy : XCircle;
   const deadCounts = (game.scoring?.deadStones ?? []).reduce(
     (counts, { x, y }) => {
       const color = game.board[y]?.[x];
@@ -66,7 +70,7 @@ export function GameResultModal({
   return (
     <ModalDialog
       backdropClassName="modal-backdrop--result"
-      className={`result-modal ${draw ? "is-draw" : won ? "is-win" : "is-loss"}`}
+      className={`result-modal ${neutralOutcome ? "is-draw" : won ? "is-win" : "is-loss"}`}
       descriptionId={descriptionId}
       finalFocusRef={finalFocusRef}
       initialFocusRef={playAgainButton}
@@ -94,6 +98,9 @@ export function GameResultModal({
             <span>
               <strong>{game.blackPlayerName}{game.blackPlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
               <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
+              {game.blackRating !== null && game.blackRating !== undefined
+                ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
+                : null}
             </span>
             {game.winnerKey === game.blackPlayerKey ? <b>{copy.winner}</b> : null}
           </div>
@@ -102,10 +109,19 @@ export function GameResultModal({
             <span>
               <strong>{game.whitePlayerName}{game.whitePlayerIsBot ? <span className="bot-badge">{copy.bot}</span> : null}</strong>
               <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
+              {game.whiteRating !== null && game.whiteRating !== undefined
+                ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
+                : null}
             </span>
             {game.winnerKey === game.whitePlayerKey ? <b>{copy.winner}</b> : null}
           </div>
         </div>
+
+        {game.rated && game.viewerRatingChange !== null && game.viewerRatingChange !== undefined ? (
+          <p className="result-rating-change">
+            {dictionary.profile.ratingChange}: {game.viewerRatingChange > 0 ? "+" : ""}{Math.round(game.viewerRatingChange)}
+          </p>
+        ) : null}
 
         <div className="result-facts">
           <span><small>{copy.board}</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
@@ -119,20 +135,41 @@ export function GameResultModal({
               <span><small>{copy.blackTotal}</small><strong>{game.scoring.preview.black}</strong></span>
               <span><small>{copy.whiteTotal}</small><strong>{game.scoring.preview.white}</strong></span>
             </div>
-            <div>
-              <span>
-                <small>{copy.blackStonesTerritory}</small>
-                <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
-              </span>
-              <span>
-                <small>{copy.whiteStonesTerritory}</small>
-                <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
-              </span>
-            </div>
-            <p>
-              {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
-              {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
-            </p>
+            {"blackPrisoners" in game.scoring.preview ? (
+              <>
+                <div>
+                  <span>
+                    <small>{copy.blackTerritoryPrisoners}</small>
+                    <strong>{game.scoring.preview.blackTerritory} · {game.scoring.preview.blackPrisoners}</strong>
+                  </span>
+                  <span>
+                    <small>{copy.whiteTerritoryPrisoners}</small>
+                    <strong>{game.scoring.preview.whiteTerritory} · {game.scoring.preview.whitePrisoners}</strong>
+                  </span>
+                </div>
+                <p>
+                  {rulesSummary} · {copy.dame.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}
+                  {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                </p>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span>
+                    <small>{copy.blackStonesTerritory}</small>
+                    <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
+                  </span>
+                  <span>
+                    <small>{copy.whiteStonesTerritory}</small>
+                    <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
+                  </span>
+                </div>
+                <p>
+                  {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
+                  {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                </p>
+              </>
+            )}
           </section>
         ) : null}
 

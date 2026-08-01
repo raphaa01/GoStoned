@@ -4,6 +4,7 @@ import "dotenv/config";
 import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
+import { newGameRulesConfiguration } from "../lib/game/newGameRules";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -20,8 +21,9 @@ if (!isUnambiguousLocalDatabase(databaseUrl)) {
 }
 
 const suffix = randomUUID();
+const rules = newGameRulesConfiguration();
 const simultaneous = [`guest:sim-a-${suffix}`, `guest:sim-b-${suffix}`];
-const repeated = `user:repeat-${suffix}`;
+const repeated = `guest:repeat-${suffix}`;
 const rapidOpponent = `guest:rapid-${suffix}`;
 const classicOpponent = `guest:classic-${suffix}`;
 const cancellationTarget = `guest:cancel-target-${suffix}`;
@@ -41,10 +43,10 @@ async function assertIsolatedPools() {
        FROM matchmaking_queue
       WHERE board_size = 9
         AND time_control = ANY($1::text[])
-        AND rules_profile = 'chinese-2002-gostone-v1'
-        AND NOT (player_key = ANY($2::text[]))
+        AND rules_profile = $2
+        AND NOT (player_key = ANY($3::text[]))
       LIMIT 1`,
-    [["rapid", "classic"], playerKeys],
+    [["rapid", "classic"], rules.rulesProfile, playerKeys],
   );
   if (result.rows[0]) {
     throw new Error(
@@ -94,8 +96,8 @@ async function verifyContestedCancellation() {
   await query(
     `INSERT INTO matchmaking_queue (
        player_key, board_size, time_control, rules_profile, status, game_id
-     ) VALUES ($1, 9, 'rapid', 'chinese-2002-gostone-v1', 'waiting', NULL)`,
-    [cancellationTarget],
+     ) VALUES ($1, 9, 'rapid', $2, 'waiting', NULL)`,
+    [cancellationTarget, rules.rulesProfile],
   );
   const publisher = await getPool().connect();
   let committed = false;
@@ -117,10 +119,13 @@ async function verifyContestedCancellation() {
          black_periods_remaining, white_periods_remaining, turn_started_at
        ) VALUES (
          9, $1, $2, 'rapid',
-         'chinese', 'chinese-2002-gostone-v1', 'area', 7.5, 0, 'play', 'black',
+         $3, $4, $5, $6, $7, 'play', $8,
          900, 5, 30, 900000, 900000, 5, 5, NOW()
        ) RETURNING id`,
-      [cancellationTarget, cancellationPeer],
+      [
+        cancellationTarget, cancellationPeer, rules.ruleset, rules.rulesProfile,
+        rules.scoringMethod, rules.komi, rules.handicap, rules.policy.initialTurn,
+      ],
     );
     await publisher.query(
       `UPDATE matchmaking_queue
@@ -161,14 +166,11 @@ async function run() {
     assert.equal(simultaneousStatuses[1].status, "matched");
     assert.equal(simultaneousStatuses[0].gameId, simultaneousStatuses[1].gameId);
 
-    await query(
-      `INSERT INTO matchmaking_queue (
-         player_key, board_size, time_control, rules_profile, status, game_id
-       ) VALUES
-         ($1, 9, 'rapid', 'chinese-2002-gostone-v1', 'waiting', NULL),
-         ($2, 9, 'classic', 'chinese-2002-gostone-v1', 'waiting', NULL)`,
-      [rapidOpponent, classicOpponent],
-    );
+    const waitingOpponents = await Promise.all([
+      joinMatchmaking(rapidOpponent, 9, "rapid"),
+      joinMatchmaking(classicOpponent, 9, "classic"),
+    ]);
+    assert.deepEqual(waitingOpponents.map(({ status }) => status), ["waiting", "waiting"]);
     const repeatedResults = await Promise.all([
       joinMatchmaking(repeated, 9, "rapid"),
       joinMatchmaking(repeated, 9, "classic"),

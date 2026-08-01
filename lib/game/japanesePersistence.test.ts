@@ -42,7 +42,7 @@ function assertBothContain(fragment: string): void {
   assert.ok(migration.includes(fragment), `migration 009 must contain: ${fragment}`);
 }
 
-test("reserves one exact Japanese rules tuple without activating it", () => {
+test("reserves the exact Japanese tuple used by the active application policy", () => {
   const tuple = [
     "rules = 'japanese'",
     `rules_profile = '${JAPANESE_1989_RULES_PROFILE}'`,
@@ -52,7 +52,7 @@ test("reserves one exact Japanese rules tuple without activating it", () => {
   ];
   tuple.forEach(assertBothContain);
 
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
   assert.ok(
     schema.includes(
       "CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1'))",
@@ -204,11 +204,16 @@ test("keeps fresh and upgraded Japanese table definitions byte-stable", () => {
   for (const fn of [
     "enforce_matchmaking_rules_profile",
     "guard_game_rules_identity_mutation",
-    "guard_japanese_scoring_state_mutation",
     "guard_japanese_scoring_evidence_mutation",
   ]) {
     assert.equal(functionDefinition(schema, fn), functionDefinition(migration, fn));
   }
+  assert.ok(
+    functionDefinition(schema, "guard_japanese_scoring_state_mutation").includes(
+      "game_japanese_resume_authorizations",
+    ),
+    "schema.sql must include migration 023's authorized-delete exception",
+  );
 });
 
 test("adds tuple constraints after idempotent schema upgrades", () => {

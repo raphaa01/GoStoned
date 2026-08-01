@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const fr = {
   "metadata": {
@@ -141,6 +141,7 @@ export const fr = {
     "puzzlesChapterAction": "Résoudre un problème"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "Vous êtes déjà connecté",
     "continueAs": "Continuer en tant que",
     "findGame": "Trouver une partie",
@@ -162,6 +163,7 @@ export const fr = {
     "haveAccount": "Vous avez déjà un compte ?",
     "newToGoStone": "Nouveau sur GoStone ?",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "La requête n'a pas pu être lue. Veuillez réessayer.",
       "request_rejected": "Cette demande d'authentification a été bloquée. Veuillez réessayer.",
       "invalid_username": "Le nom d'utilisateur doit contenir 3 à 20 lettres, chiffres ou underscores.",
@@ -185,6 +187,7 @@ export const fr = {
     "skipToContent": "Aller au contenu principal"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "Trop de requêtes. Veuillez patienter et réessayer.",
     "internal_error": "Le service est temporairement indisponible.",
     "guest_session_failed": "Impossible de préparer une session invité sécurisée.",
@@ -250,20 +253,25 @@ export const fr = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "Chinois"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "comptage immédiat hérité",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "zone"
     },
     "komi": "komi",
     "handicap": "Handicap"
   },
   "play": {
+    ...en.play,
     "kicker": "Appariement en direct",
     "title": "Choisissez votre plateau.",
     "description": "Vous entrez dans une salle de jeu sans distraction dès qu'un autre joueur rejoint. Chaque coup et message est enregistré sur le serveur.",
@@ -389,6 +397,7 @@ export const fr = {
     "recordBody": "Les coups sont vérifiés par le serveur, et les parties terminées conservent leur résultat. Les parties acceptées par score conservent également cet accord de score. Ces faits sont le point de départ de votre propre révision ; GoStone ne présente pas un jugement d'ordinateur inventé comme analyse."
   },
   "game": {
+    ...en.game,
     "loadFailed": "Impossible de charger la partie.",
     "moveFailed": "Le coup a échoué.",
     "resignFailed": "Impossible de se rendre.",
@@ -565,6 +574,7 @@ export const fr = {
     "botOpponent": "Adversaire automatisé"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "Impossible de charger vos statistiques.",
     "loading": "Chargement du profil…",
     "loadComplete": "Chargement du profil terminé.",
@@ -609,6 +619,7 @@ export const fr = {
     "to": "à"
   },
   "leaderboard": {
+    "globalScope": "Classement global",
     "kicker": "Cotes de compte",
     "title": "Classement",
     "description": "Seules les évaluations de compte entièrement soutenues par des parties classées terminées sont incluses. Les parties contre un adversaire KataGo de même classement sont considérées comme des parties classées.",

@@ -128,6 +128,7 @@ jobs:
 
       - name: Run direct PostgreSQL concurrency smokes
         run: |
+          npm run test:glicko2-db
           npm run test:matchmaking-races
           npm run test:player-report-races
           npm run test:move-hash-db

@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const es = {
   "metadata": {
@@ -141,6 +141,7 @@ export const es = {
     "puzzlesChapterAction": "Resolver un problema"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "Ya has iniciado sesión",
     "continueAs": "Continuar como",
     "findGame": "Encontrar un juego",
@@ -162,6 +163,7 @@ export const es = {
     "haveAccount": "¿Ya tienes una cuenta?",
     "newToGoStone": "¿Nuevo en GoStone?",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "No se pudo leer la solicitud. Por favor, inténtelo de nuevo.",
       "request_rejected": "Esta solicitud de autenticación fue bloqueada. Por favor, inténtelo de nuevo.",
       "invalid_username": "El nombre de usuario debe contener entre 3 y 20 letras, números o guiones bajos.",
@@ -185,6 +187,7 @@ export const es = {
     "skipToContent": "Saltar al contenido principal"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "Demasiadas solicitudes. Por favor, espere e inténtelo de nuevo.",
     "internal_error": "El servicio no está disponible temporalmente.",
     "guest_session_failed": "No se pudo preparar una sesión de invitado segura.",
@@ -250,20 +253,25 @@ export const es = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "Chino"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "puntuación inmediata heredada",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "área"
     },
     "komi": "komi",
     "handicap": "Ventaja"
   },
   "play": {
+    ...en.play,
     "kicker": "Partida en vivo",
     "title": "Elige tu tablero.",
     "description": "Entras en una sala de juego sin distracciones tan pronto como otro jugador se une. Cada movimiento y mensaje se guarda en el servidor.",
@@ -389,6 +397,7 @@ export const es = {
     "recordBody": "Las jugadas son verificadas por el servidor, y los juegos completados conservan su resultado. Los juegos acordados por puntuación también conservan ese acuerdo de puntuación. Estos hechos son el punto de partida para tu propia revisión; GoStone no presenta un juicio de motor inventado como análisis."
   },
   "game": {
+    ...en.game,
     "loadFailed": "No se pudo cargar el juego.",
     "moveFailed": "La jugada falló.",
     "resignFailed": "No se pudo rendir.",
@@ -565,6 +574,7 @@ export const es = {
     "botOpponent": "Oponente automatizado"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "No se pudieron cargar tus estadísticas.",
     "loading": "Cargando perfil…",
     "loadComplete": "Carga del perfil completada.",
@@ -609,6 +619,7 @@ export const es = {
     "to": "aha"
   },
   "leaderboard": {
+    "globalScope": "Clasificación global",
     "kicker": "Calificaciones de cuentas",
     "title": "Tabla de clasificación",
     "description": "Solo se incluyen las calificaciones de la cuenta completamente respaldadas por juegos calificados completados. Los juegos contra un oponente de KataGo con calificación equivalente cuentan como juegos calificados.",

@@ -8,16 +8,20 @@ type DispatchConfig = {
   tokenSecret: string;
 };
 
-function config(): DispatchConfig | null {
-  const url = process.env.KATAGO_DISPATCH_URL?.trim();
-  const tokenId = process.env.MODAL_PROXY_TOKEN_ID?.trim();
-  const tokenSecret = process.env.MODAL_PROXY_TOKEN_SECRET?.trim();
+function config(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): DispatchConfig | null {
+  const url = environment.KATAGO_DISPATCH_URL?.trim();
+  const tokenId = environment.MODAL_PROXY_TOKEN_ID?.trim();
+  const tokenSecret = environment.MODAL_PROXY_TOKEN_SECRET?.trim();
   if (!url || !tokenId || !tokenSecret) return null;
   return { url, tokenId, tokenSecret };
 }
 
-export function isKataGoOnDemandConfigured(): boolean {
-  return config() !== null;
+export function isKataGoOnDemandConfigured(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return config(environment) !== null;
 }
 
 export async function dispatchKataGoJob(kind: KataGoJobKind, targetId?: string): Promise<boolean> {

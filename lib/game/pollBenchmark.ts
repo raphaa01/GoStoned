@@ -2,6 +2,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 import { isProxy } from "node:util/types";
 
 export const POLL_BENCHMARK_STATEMENTS = [
+  "rules_profile_read",
   "participant_read",
   "read_only_begin",
   "transaction_begin",
@@ -165,6 +166,8 @@ const PARTICIPANT_READ_SQL = `
    WHERE id = $1
 `;
 
+const RULES_PROFILE_READ_SQL = "SELECT rules_profile FROM games WHERE id = $1";
+
 const GAME_READ_SQL = `
   SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
          g.status, g.phase, g.to_move, g.consecutive_passes, g.scoring_revision,
@@ -189,31 +192,54 @@ const GAME_READ_SQL = `
          ) AS white_player_name,
          g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
          g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+         CASE WHEN g.black_player_key = game_bot.bot_player_key
+           THEN calibrated_binding.opponent_rating ELSE black_rating.rating END AS black_rating,
+         CASE WHEN g.black_player_key = game_bot.bot_player_key
+           THEN calibrated_binding.opponent_rating_deviation
+           ELSE black_rating.rating_deviation END AS black_rating_deviation,
+         CASE WHEN g.white_player_key = game_bot.bot_player_key
+           THEN calibrated_binding.opponent_rating ELSE white_rating.rating END AS white_rating,
+         CASE WHEN g.white_player_key = game_bot.bot_player_key
+           THEN calibrated_binding.opponent_rating_deviation
+           ELSE white_rating.rating_deviation END AS white_rating_deviation,
+         (viewer_event.rating_after - viewer_event.rating_before) AS viewer_rating_change,
+         viewer_preference.display_preference AS rating_display_preference,
          CASE
            WHEN g.status = 'finished' THEN (
-             SELECT COUNT(DISTINCT history.player_key) = 2
-               FROM player_rating_history history
-              WHERE history.game_id = g.id
-                AND history.player_key IN (g.black_player_key, g.white_player_key)
+             SELECT COALESCE(
+               (COUNT(*) = 2 AND BOOL_AND(event.opponent_kind = 'registered_human'))
+               OR (COUNT(*) = 1 AND BOOL_AND(event.opponent_kind = 'calibrated_bot')),
+               FALSE
+             ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
            )
-         ELSE g.black_player_key <> g.white_player_key
+           ELSE g.black_player_key <> g.white_player_key
              AND (
                (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                OR (
                  game_bot.game_id IS NOT NULL
+                 AND game_bot.rating_mode = 'calibrated-v1'
+                 AND EXISTS (SELECT 1 FROM game_calibrated_bot_bindings binding
+                              WHERE binding.game_id = g.id)
                  AND (
                    (g.black_player_key = game_bot.bot_player_key AND white_user.id IS NOT NULL)
                    OR (g.white_player_key = game_bot.bot_player_key AND black_user.id IS NOT NULL)
                  )
                )
              )
-       END AS rated
+         END AS rated
     FROM games g
     LEFT JOIN users black_user
       ON g.black_player_key = 'user:' || black_user.id::text
     LEFT JOIN users white_user
       ON g.white_player_key = 'user:' || white_user.id::text
     LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
+    LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
+    LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
+    LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
+    LEFT JOIN game_glicko2_rating_events viewer_event
+      ON viewer_event.game_id = g.id AND viewer_event.player_key = $2
+    LEFT JOIN player_rating_preferences viewer_preference
+      ON viewer_preference.player_key = $2
    WHERE g.id = $1
 `;
 
@@ -245,26 +271,25 @@ const DEAD_STONES_READ_SQL = `
    ORDER BY y, x
 `;
 
+const RATING_GAME_READ_SQL = `
+  SELECT id,status,black_player_key,white_player_key,winner_key,
+         finish_reason,result,finished_at
+    FROM games WHERE id=$1 FOR UPDATE
+`;
+
 const RATING_HISTORY_READ_SQL = `
-  SELECT player_key
-    FROM player_rating_history
-   WHERE game_id = $1
+  SELECT player_key,outcome_kind,algorithm_version,opponent_kind
+    FROM game_glicko2_rating_events
+   WHERE game_id=$1
+   ORDER BY player_key
    FOR UPDATE
 `;
 
 const RATING_PARTICIPANTS_READ_SQL = `
-  SELECT 'user:' || id::text AS player_key,
-         1200::int AS initial_rating,
-         'account'::text AS participant_type
+  SELECT id::text AS user_id,'user:' || id::text AS player_key
     FROM users
-   WHERE 'user:' || id::text IN ($1::text, $2::text)
-   UNION ALL
-  SELECT bot_player_key AS player_key,
-         target_rating AS initial_rating,
-         'bot'::text AS participant_type
-    FROM game_bots
-   WHERE game_id = $3
-     AND bot_player_key IN ($1::text, $2::text)
+   WHERE 'user:' || id::text IN ($1::text,$2::text)
+   ORDER BY player_key
 `;
 
 const SCORING_RESUME_INSERT_SQL = `
@@ -306,6 +331,9 @@ function sqlCase(sql: string, metadata: QueryMetadata): readonly [string, QueryM
 }
 
 const SQL_CASES = [
+  sqlCase(RULES_PROFILE_READ_SQL, {
+    statement: "rules_profile_read", read: true, write: false, locking: false,
+  }),
   sqlCase(PARTICIPANT_READ_SQL, {
     statement: "participant_read", read: true, write: false, locking: false,
   }),
@@ -338,6 +366,9 @@ const SQL_CASES = [
   }),
   sqlCase(DEAD_STONES_READ_SQL, {
     statement: "dead_stones_read", read: true, write: false, locking: false,
+  }),
+  sqlCase(RATING_GAME_READ_SQL, {
+    statement: "game_read", read: true, write: false, locking: true,
   }),
   sqlCase(RATING_HISTORY_READ_SQL, {
     statement: "rating_history_read", read: true, write: false, locking: true,
@@ -478,6 +509,7 @@ function countsFor(sequence: readonly PollBenchmarkStatement[]) {
 }
 
 const PLAY_SEQUENCE: readonly PollBenchmarkStatement[] = [
+  "rules_profile_read",
   "participant_read",
   "read_only_begin",
   "statement_timeout",
@@ -503,6 +535,7 @@ const TIMEOUT_SEQUENCE: readonly PollBenchmarkStatement[] = [
   "resume_events_read",
   "scoring_read",
   "timeout_game_update",
+  "game_read",
   "rating_history_read",
   "rating_participants_read",
   "transaction_commit",
@@ -551,10 +584,10 @@ function contract(
 }
 
 const PLAY_TOTALS = (moveCount: number) => ({
-  reads: 5,
+  reads: 6,
   writes: 0,
   lockingStatements: 0,
-  returnedRows: moveCount + 2,
+  returnedRows: moveCount + 3,
   affectedRows: 0,
   lockedRows: 0,
 });
@@ -588,17 +621,17 @@ export const POLL_BENCHMARK_CONTRACTS: Readonly<Record<PollBenchmarkScenario, Sc
   scoring_current_302: contract(
     { name: "scoring_current_302", positionMoves: 300, knownVersion: "current", response: "heartbeat", responseMoves: null },
     SCORING_SEQUENCE,
-    { reads: 6, writes: 0, lockingStatements: 0, returnedRows: 305, affectedRows: 0, lockedRows: 0 },
+    { reads: 7, writes: 0, lockingStatements: 0, returnedRows: 306, affectedRows: 0, lockedRows: 0 },
   ),
   play_timeout_150: contract(
     { name: "play_timeout_150", positionMoves: 150, knownVersion: "current", response: "full", responseMoves: 150 },
     TIMEOUT_SEQUENCE,
-    { reads: 11, writes: 1, lockingStatements: 3, returnedRows: 304, affectedRows: 1, lockedRows: 1 },
+    { reads: 13, writes: 1, lockingStatements: 4, returnedRows: 306, affectedRows: 1, lockedRows: 2 },
   ),
   scoring_expiry_302: contract(
     { name: "scoring_expiry_302", positionMoves: 300, knownVersion: "current", response: "full", responseMoves: 302 },
     EXPIRY_SEQUENCE,
-    { reads: 11, writes: 3, lockingStatements: 2, returnedRows: 610, affectedRows: 3, lockedRows: 2 },
+    { reads: 12, writes: 3, lockingStatements: 2, returnedRows: 611, affectedRows: 3, lockedRows: 2 },
   ),
 });
 

@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const ja = {
   "metadata": {
@@ -141,6 +141,7 @@ export const ja = {
     "puzzlesChapterAction": "問題を解く"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "すでにログインしています",
     "continueAs": "として続行",
     "findGame": "ゲームを探す",
@@ -162,6 +163,7 @@ export const ja = {
     "haveAccount": "既にアカウントをお持ちですか？",
     "newToGoStone": "GoStoneを初めてですか？",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "リクエストを読み取ることができませんでした。もう一度お試しください。",
       "request_rejected": "この認証リクエストはブロックされました。もう一度お試しください。",
       "invalid_username": "ユーザー名は3〜20文字の英字、数字、またはアンダースコアを含める必要があります。",
@@ -185,6 +187,7 @@ export const ja = {
     "skipToContent": "メインコンテンツへスキップ"
   },
   "apiErrors": {
+    ...en.apiErrors,
     "rate_limited": "リクエストが多すぎます。しばらく待ってから再度お試しください。",
     "internal_error": "サービスは一時的に利用できません。",
     "guest_session_failed": "安全なゲストセッションを準備できませんでした。",
@@ -250,20 +253,25 @@ export const ja = {
     }
   },
   "rules": {
+    ...en.rules,
     "rulesets": {
+      ...en.rules.rulesets,
       "chinese": "中国語"
     },
     "profiles": {
+      ...en.rules.profiles,
       "legacy-immediate-area": "従来の即時計算",
       "chinese-2002-gostone-v1": "2002 · GoStone v1"
     },
     "methods": {
+      ...en.rules.methods,
       "area": "エリア"
     },
     "komi": "コミ",
     "handicap": "ハンディキャップ"
   },
   "play": {
+    ...en.play,
     "kicker": "ライブマッチメイキング",
     "title": "ボードを選択してください。",
     "description": "他のプレイヤーが参加次第、気が散らないゲームルームに入ります。すべての手とメッセージはサーバーに保存されます。",
@@ -389,6 +397,7 @@ export const ja = {
     "recordBody": "手はサーバーによってチェックされ、終了した対局はその結果が保持されます。スコアで合意された対局も、そのスコア合意が保持されます。これらの事実が自身のレビューの出発点です。GoStoneは分析として架空のエンジン判断を提示することはありません。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "対局を読み込めませんでした。",
     "moveFailed": "手の実行に失敗しました。",
     "resignFailed": "投了できませんでした。",
@@ -565,6 +574,7 @@ export const ja = {
     "botOpponent": "自動対戦相手"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "統計を読み込めませんでした。",
     "loading": "プロフィールを読み込み中…",
     "loadComplete": "プロフィールの読み込み完了。",
@@ -609,6 +619,7 @@ export const ja = {
     "to": "～まで"
   },
   "leaderboard": {
+    "globalScope": "グローバルレーティング",
     "kicker": "アカウント評価",
     "title": "リーダーボード",
     "description": "完了したレーティング対象の対局によって完全に裏付けられたアカウント評価のみが含まれます。レーティングが一致する KataGo 対戦相手との対局は評価対象対局としてカウントされます。",
