@@ -117,6 +117,19 @@ function providerCredentials(provider: OAuthProvider): ProviderCredentials {
   return provider === "google" ? googleCredentials() : appleCredentials();
 }
 
+export function configuredOAuthProviders(): OAuthProvider[] {
+  return (["google", "apple"] as const).filter((provider) => {
+    try {
+      providerCredentials(provider);
+      appOrigin();
+      return true;
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) return false;
+      return false;
+    }
+  });
+}
+
 function randomToken(): string {
   return randomBytes(32).toString("base64url");
 }

@@ -363,7 +363,7 @@ a {
   justify-content: flex-start;
 }
 
-.sidebar-user > span {
+.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__name) {
   align-items: center;
   background: var(--green-dark);
   border-radius: 6px;
@@ -2625,6 +2625,10 @@ a {
   min-height: calc(100vh - 116px);
 }
 
+.auth-page--register {
+  align-items: flex-start;
+}
+
 .auth-card {
   background: var(--bg-deep);
   border-radius: 12px;
@@ -2655,6 +2659,14 @@ a {
 .auth-social {
   display: grid;
   gap: 10px;
+  margin-top: 0;
+}
+
+.auth-social--register {
+  margin-top: 24px;
+}
+
+.auth-form--social-first {
   margin-top: 0;
 }
 
@@ -2719,14 +2731,41 @@ a {
   border: 1px solid var(--border);
   border-radius: 14px;
   display: grid;
-  gap: 0.65rem;
   margin: 0;
-  padding: 0.9rem;
+  overflow: clip;
+  padding: 0;
 }
 
-.auth-strength legend {
+.auth-strength summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
   font-weight: 700;
-  padding: 0 0.35rem;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 48px;
+  padding: 0.75rem 0.9rem;
+}
+
+.auth-strength summary::-webkit-details-marker {
+  display: none;
+}
+
+.auth-strength summary::after {
+  color: var(--muted-2);
+  content: "+";
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+
+.auth-strength[open] summary::after {
+  content: "−";
+}
+
+.auth-strength-content {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0 0.9rem 0.9rem;
 }
 
 .auth-strength p {

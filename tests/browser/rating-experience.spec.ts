@@ -29,11 +29,9 @@ async function assertNoHorizontalOverflow(page: Page) {
 }
 
 for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
-  test(`${locale.toUpperCase()} onboarding, global leaderboard, and rating preferences are honest and responsive`, async ({ page }) => {
+  test(`${locale.toUpperCase()} onboarding, global leaderboard, and profile rating are honest and responsive`, async ({ page }) => {
     let signedIn = false;
     let registrationBody: unknown;
-    let preferenceBody: unknown;
-    let ratingDisplayPreference = "both";
 
     await page.route("**/api/**", async (route) => {
       const request = route.request();
@@ -121,31 +119,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
             value: 1642.4,
             deviation: 58.2,
             isProvisional: false,
-            displayPreference: ratingDisplayPreference,
-          },
-        });
-        return;
-      }
-      if (pathname === "/api/profile/preferences" && request.method() === "PATCH") {
-        preferenceBody = request.postDataJSON();
-        ratingDisplayPreference = "rank-primary";
-        await fulfillJson(route, {
-          ok: true,
-          preferences: {
-            displayPreference: "rank-primary",
-            botMatchPreference: "calibrated-rated-after-wait",
-            preferenceRevision: 2,
-          },
-        });
-        return;
-      }
-      if (pathname === "/api/profile/preferences" && request.method() === "GET") {
-        await fulfillJson(route, {
-          ok: true,
-          preferences: {
-            displayPreference: "rank-primary",
-            botMatchPreference: "never",
-            preferenceRevision: 1,
+            displayPreference: "both",
           },
         });
         return;
@@ -157,6 +131,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/register`);
     await page.getByLabel(dictionary.auth.username).fill("global_player");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
+    await page.locator("details.auth-strength > summary").click();
     await page.getByLabel(dictionary.auth.startingStrength).selectOption("known");
     await expect(page.getByLabel(dictionary.auth.knownRank)).toBeVisible();
     await page.getByLabel(dictionary.auth.knownRank).selectOption("3d");
@@ -174,7 +149,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/leaderboard`);
     await expect(page.getByRole("heading", { name: dictionary.leaderboard.title })).toBeVisible();
     await expect(page.getByRole("rowheader", { name: "Honest Human" })).toBeVisible();
-    await expect(page.locator("tbody td:last-child strong")).toHaveText(
+    await expect(page.locator("tbody td:last-child strong")).toContainText(
       locale === "de" ? "8. Kyu" : "8 kyu",
     );
     await expect(page.getByText(dictionary.leaderboard.globalScope, { exact: false }).first()).toBeVisible();
@@ -183,13 +158,20 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
 
     await page.goto(`${prefix}/profile`);
     await expect(page.getByText(dictionary.profile.globalRating, { exact: true })).toBeVisible();
-    await expect(page.locator(".profile-header__rating .rating-label")).toContainText(
+    await expect(page.locator(".profile-header__identity")).toContainText(USER.displayName);
+    await expect(page.locator(".profile-header__handle")).toHaveText(`@${USER.username}`);
+    await expect(page.locator(".profile-header__rating")).toHaveCount(0);
+    await expect(page.locator(".profile-rating-band .rating-label")).toContainText(
       locale === "de" ? "8. Kyu" : "8 kyu",
     );
+    await page.getByRole("button", { name: dictionary.profile.changeAvatar }).click();
+    await expect(page.getByRole("heading", { name: dictionary.profile.avatarPickerTitle })).toBeVisible();
+    await expect(page.getByLabel(dictionary.profile.avatarKifuName)).toBeVisible();
+    await expect(page.getByLabel(dictionary.profile.avatarUrushiName)).toBeVisible();
+    await page.getByRole("button", { name: dictionary.profile.cancelAvatar }).click();
     if ((page.viewportSize()?.width ?? 0) > 840) {
-      await expect(page.locator(".sidebar-user .rating-label")).toContainText(
-        locale === "de" ? "8. Kyu" : "8 kyu",
-      );
+      await expect(page.locator(".sidebar-user__name")).toHaveText(USER.displayName);
+      await expect(page.locator(".sidebar-user .rating-label")).toHaveCount(0);
     } else {
       await page.getByRole("button", { name: dictionary.nav.openMenu }).click();
       await expect(page.locator(".mobile-menu .rating-label")).toContainText(
@@ -204,19 +186,8 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       }),
     ).toBeVisible();
     await expect(page.locator(".rating-chart svg")).toBeVisible();
-    await page.locator(".rating-preferences-shell > summary").click();
-    await expect(page.getByText(dictionary.profile.botCalibrationNotice, { exact: true })).toBeVisible();
-    await page.getByLabel(dictionary.profile.displayPreference).selectOption("rank-primary");
-    await page.getByLabel(dictionary.profile.botPreference).selectOption("calibrated-rated-after-wait");
-    await page.getByRole("button", { name: dictionary.profile.savePreferences }).click();
-    await expect(page.getByRole("status").filter({ hasText: dictionary.profile.preferencesSaved })).toBeVisible();
-    expect(preferenceBody).toEqual({
-      displayPreference: "rank-primary",
-      botMatchPreference: "calibrated-rated-after-wait",
-    });
-    await expect(page.locator(".profile-rating-band .rating-label")).toContainText(
-      locale === "de" ? "8. Kyu" : "8 kyu",
-    );
+    await expect(page.locator(".rating-preferences-shell")).toHaveCount(0);
+    await expect(page.locator(".profile-performance__disclosures")).toHaveCount(0);
     await assertNoHorizontalOverflow(page);
   });
 }

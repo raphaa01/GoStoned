@@ -7,14 +7,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
-import { RatingLabel } from "@/components/rating/RatingLabel";
 import { isRouteActive } from "@/lib/i18n/routing";
 
 export function DesktopHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, loading, logout, rating } = useAuth();
-  const { dictionary, href: localizedHref, locale } = useI18n();
+  const { user, loading, logout } = useAuth();
+  const { dictionary, href: localizedHref } = useI18n();
   const items = [
     { href: "/play", label: dictionary.nav.play },
     { href: "/learn", label: dictionary.nav.learn },
@@ -59,19 +58,13 @@ export function DesktopHeader() {
         <LanguageSwitcher />
         {loading ? <span className="sidebar-account-loading">{dictionary.nav.accountLoading}</span> : user ? (
           <>
-            <Link className="sidebar-user" href={localizedHref("/profile")}>
+            <Link
+              aria-label={dictionary.nav.profile}
+              className="sidebar-user sidebar-user--profile"
+              href={localizedHref("/profile")}
+            >
               <ProfileAvatar size="sm" style={user.avatarStyle} />
-              <span className="sidebar-user__identity">
-                <strong>{user.displayName}</strong>
-                {rating ? (
-                  <RatingLabel
-                    locale={locale}
-                    preference={rating.displayPreference}
-                    rating={rating.value}
-                    variant="compact"
-                  />
-                ) : null}
-              </span>
+              <span className="sidebar-user__name">{user.displayName}</span>
             </Link>
             <button aria-label={dictionary.nav.logout} className="sidebar-login sidebar-login--icon" onClick={signOut} type="button">
               <LogOut size={17} />
