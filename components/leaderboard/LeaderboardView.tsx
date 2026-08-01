@@ -4,6 +4,7 @@ import { Medal, Trophy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { RatingLabel } from "@/components/rating/RatingLabel";
 import { readApi } from "@/lib/client/api";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { presentRating } from "@/lib/rating/rankPolicy";
@@ -14,7 +15,7 @@ import {
 } from "@/lib/stats/leaderboardContract";
 
 export function LeaderboardView() {
-  const { user } = useAuth();
+  const { rating: viewerRating, user } = useAuth();
   const { dictionary, locale } = useI18n();
   const copy = dictionary.leaderboard;
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -117,6 +118,30 @@ export function LeaderboardView() {
       <section className="leaderboard-card">
         <div className="leaderboard-title"><Trophy aria-hidden="true" size={20} /><strong>{copy.globalScope} · {copy.players}</strong></div>
         <p className="leaderboard-method">{copy.ratingMethod}</p>
+        {user && viewerRating ? (
+          <aside
+            aria-label={`${dictionary.profile.currentRating}: ${user.displayName}`}
+            className="leaderboard-viewer"
+          >
+            <span className="leaderboard-viewer__identity">
+              <small>{dictionary.profile.currentRating}</small>
+              <strong>{user.displayName}</strong>
+            </span>
+            <span className="leaderboard-viewer__rating">
+              <RatingLabel
+                locale={locale}
+                preference={viewerRating.displayPreference}
+                rating={viewerRating.value}
+                variant="compact"
+              />
+              <small>
+                {viewerRating.isProvisional
+                  ? dictionary.profile.provisional
+                  : dictionary.profile.established} · ±{Math.round(viewerRating.deviation)}
+              </small>
+            </span>
+          </aside>
+        ) : null}
         {loading ? (
           <p
             aria-live="polite"
