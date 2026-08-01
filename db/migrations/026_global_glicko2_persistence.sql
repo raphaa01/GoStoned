@@ -202,9 +202,9 @@ BEGIN
     OR game_row.finish_reason IS NULL OR game_row.result IS NULL
     OR game_row.black_player_key = game_row.white_player_key
     OR NEW.player_key NOT IN (game_row.black_player_key, game_row.white_player_key)
-    OR NEW.opponent_key IS DISTINCT FROM CASE NEW.player_key
+    OR NEW.opponent_key IS DISTINCT FROM (CASE NEW.player_key
          WHEN game_row.black_player_key THEN game_row.white_player_key
-         ELSE game_row.black_player_key END
+         ELSE game_row.black_player_key END)
     OR NEW.opponent_kind <> 'registered_human'
     OR NEW.opponent_profile_version IS NOT NULL
     OR NEW.game_finished_at IS DISTINCT FROM game_row.finished_at
@@ -261,8 +261,8 @@ BEGIN
     OR companion.game_finished_at IS DISTINCT FROM NEW.game_finished_at
     OR companion.finish_reason IS DISTINCT FROM NEW.finish_reason
     OR companion.game_result IS DISTINCT FROM NEW.game_result
-    OR companion.outcome_kind IS DISTINCT FROM CASE NEW.outcome_kind
-         WHEN 'win' THEN 'loss' WHEN 'loss' THEN 'win' ELSE NEW.outcome_kind END
+    OR companion.outcome_kind IS DISTINCT FROM (CASE NEW.outcome_kind
+         WHEN 'win' THEN 'loss' WHEN 'loss' THEN 'win' ELSE NEW.outcome_kind END)
     OR companion.opponent_rating IS DISTINCT FROM NEW.rating_before
     OR companion.opponent_rating_deviation IS DISTINCT FROM NEW.rating_deviation_before
     OR NEW.opponent_rating IS DISTINCT FROM companion.rating_before

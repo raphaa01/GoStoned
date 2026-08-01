@@ -187,10 +187,10 @@ BEGIN
     OR EXISTS (SELECT 1 FROM public.moves WHERE game_id = NEW.game_id)
     OR bot_row.bot_player_key IS DISTINCT FROM NEW.bot_player_key
     OR bot_row.color IS DISTINCT FROM NEW.bot_color OR bot_row.rating_mode <> 'calibrated-v1'
-    OR NEW.human_player_key IS DISTINCT FROM CASE NEW.bot_color
-         WHEN 'black' THEN game_row.white_player_key ELSE game_row.black_player_key END
-    OR NEW.bot_player_key IS DISTINCT FROM CASE NEW.bot_color
-         WHEN 'black' THEN game_row.black_player_key ELSE game_row.white_player_key END
+    OR NEW.human_player_key IS DISTINCT FROM (CASE NEW.bot_color
+         WHEN 'black' THEN game_row.white_player_key ELSE game_row.black_player_key END)
+    OR NEW.bot_player_key IS DISTINCT FROM (CASE NEW.bot_color
+         WHEN 'black' THEN game_row.black_player_key ELSE game_row.white_player_key END)
     OR queue_row.player_key IS NULL OR queue_row.match_pool <> 'registered-rated'
     OR queue_row.bot_match_preference <> 'calibrated-rated-after-wait'
     OR queue_row.matchmaking_policy_version <> 'adaptive-global-glicko-match-v1'

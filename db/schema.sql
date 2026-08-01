@@ -2047,9 +2047,9 @@ BEGIN
     OR game_row.finish_reason IS NULL OR game_row.result IS NULL
     OR game_row.black_player_key = game_row.white_player_key
     OR NEW.player_key NOT IN (game_row.black_player_key, game_row.white_player_key)
-    OR NEW.opponent_key IS DISTINCT FROM CASE NEW.player_key
+    OR NEW.opponent_key IS DISTINCT FROM (CASE NEW.player_key
          WHEN game_row.black_player_key THEN game_row.white_player_key
-         ELSE game_row.black_player_key END
+         ELSE game_row.black_player_key END)
     OR NEW.opponent_kind <> 'registered_human'
     OR NEW.opponent_profile_version IS NOT NULL
     OR NEW.game_finished_at IS DISTINCT FROM game_row.finished_at
@@ -2106,8 +2106,8 @@ BEGIN
     OR companion.game_finished_at IS DISTINCT FROM NEW.game_finished_at
     OR companion.finish_reason IS DISTINCT FROM NEW.finish_reason
     OR companion.game_result IS DISTINCT FROM NEW.game_result
-    OR companion.outcome_kind IS DISTINCT FROM CASE NEW.outcome_kind
-         WHEN 'win' THEN 'loss' WHEN 'loss' THEN 'win' ELSE NEW.outcome_kind END
+    OR companion.outcome_kind IS DISTINCT FROM (CASE NEW.outcome_kind
+         WHEN 'win' THEN 'loss' WHEN 'loss' THEN 'win' ELSE NEW.outcome_kind END)
     OR companion.opponent_rating IS DISTINCT FROM NEW.rating_before
     OR companion.opponent_rating_deviation IS DISTINCT FROM NEW.rating_deviation_before
     OR NEW.opponent_rating IS DISTINCT FROM companion.rating_before
@@ -2634,10 +2634,10 @@ BEGIN
     OR EXISTS (SELECT 1 FROM public.moves WHERE game_id = NEW.game_id)
     OR bot_row.bot_player_key IS DISTINCT FROM NEW.bot_player_key
     OR bot_row.color IS DISTINCT FROM NEW.bot_color OR bot_row.rating_mode <> 'calibrated-v1'
-    OR NEW.human_player_key IS DISTINCT FROM CASE NEW.bot_color
-         WHEN 'black' THEN game_row.white_player_key ELSE game_row.black_player_key END
-    OR NEW.bot_player_key IS DISTINCT FROM CASE NEW.bot_color
-         WHEN 'black' THEN game_row.black_player_key ELSE game_row.white_player_key END
+    OR NEW.human_player_key IS DISTINCT FROM (CASE NEW.bot_color
+         WHEN 'black' THEN game_row.white_player_key ELSE game_row.black_player_key END)
+    OR NEW.bot_player_key IS DISTINCT FROM (CASE NEW.bot_color
+         WHEN 'black' THEN game_row.black_player_key ELSE game_row.white_player_key END)
     OR queue_row.player_key IS NULL OR queue_row.match_pool <> 'registered-rated'
     OR queue_row.bot_match_preference <> 'calibrated-rated-after-wait'
     OR queue_row.matchmaking_policy_version <> 'adaptive-global-glicko-match-v1'
