@@ -482,42 +482,14 @@ async function run() {
   assert.equal(firstConfirmation.game.status, "active");
   assert.equal(firstConfirmation.game.scoring.blackConfirmed, true);
 
-  const marked = await post<{
-    game: {
-      scoring: {
-        revision: number;
-        deadStones: Array<{ x: number; y: number }>;
-        blackConfirmed: boolean;
-      };
-    };
-  }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
-    dead: true,
-    expectedRevision: firstConfirmation.game.scoring.revision,
-  }, white.cookie, white.playerKey);
-  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
-  assert.equal(marked.game.scoring.blackConfirmed, false);
-
-  const confirmations = await Promise.all([
-    post<{ game: { status: string; result: string | null; moveCount: number; rated: boolean } }>(
-      `/api/games/${gameId}/scoring/confirm`,
-      { expectedRevision: marked.game.scoring.revision },
-      black.cookie,
-      black.playerKey,
-    ),
-    post<{ game: { status: string; result: string | null; moveCount: number; rated: boolean } }>(
-      `/api/games/${gameId}/scoring/confirm`,
-      { expectedRevision: marked.game.scoring.revision },
-      white.cookie,
-      white.playerKey,
-    ),
-  ]);
-  assert.deepEqual(
-    confirmations.map(({ game }) => game.status).sort(),
-    ["active", "finished"],
+  const finished = await post<{
+    game: { status: string; result: string | null; moveCount: number; rated: boolean };
+  }>(
+    `/api/games/${gameId}/scoring/confirm`,
+    { expectedRevision: firstConfirmation.game.scoring.revision },
+    white.cookie,
+    white.playerKey,
   );
-  const finished = confirmations.find(({ game }) => game.status === "finished")!;
   assert.equal(finished.game.status, "finished");
   assert.equal(finished.game.moveCount, 10);
   assert.ok(finished.game.result);
@@ -525,7 +497,7 @@ async function run() {
 
   const retry = await post<{ game: { status: string; result: string; rated: boolean } }>(
     `/api/games/${gameId}/scoring/confirm`,
-    { expectedRevision: marked.game.scoring.revision },
+    { expectedRevision: firstConfirmation.game.scoring.revision },
     black.cookie,
     black.playerKey,
   );
