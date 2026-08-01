@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -13,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .arena import ArenaService
+from .arena import ArenaService, ModelCatalog
 from .presets import PRESETS, resolve_preset
 from .runtime import RunJournal, atomic_json, load_json, process_is_alive
 from .teacher import default_cache_dir, repository_root
@@ -109,6 +110,24 @@ class RunManager:
             if current.get("status") in ACTIVE_STATUSES:
                 raise RuntimeError("Es läuft bereits ein Training.")
             preset, threads = resolve_preset(preset_id, cpu_threads)
+            real_models = [
+                artifact
+                for artifact in ModelCatalog(self.runs_dir).artifacts()
+                if not artifact.technical_test and artifact.model_version is not None
+            ]
+            model_version = None
+            base_model = None
+            base_model_version = None
+            display_name = "GoStone Techniktest"
+            training_seed = 20260801
+            if preset.id != "smoke":
+                model_version = max((artifact.model_version or 0 for artifact in real_models), default=0) + 1
+                display_name = f"GoStone Bot v{model_version}"
+                training_seed = secrets.randbelow(2_000_000_000) + 1
+                if real_models:
+                    newest = max(real_models, key=lambda artifact: artifact.created_at)
+                    base_model = str(newest.checkpoint.resolve())
+                    base_model_version = newest.model_version
             run_id = time.strftime("%Y%m%d-%H%M%S") + f"-{preset.id}"
             run_dir = self.runs_dir / run_id
             suffix = 1
@@ -121,10 +140,14 @@ class RunManager:
                 {
                     "preset": preset.to_public_dict(),
                     "cpu_threads": threads,
-                    "seed": 20260801,
+                    "seed": training_seed,
                     "created_at": time.time(),
                     "rules": "japanese",
                     "model_limit_bytes": 8 * 1024 * 1024,
+                    "model_version": model_version,
+                    "display_name": display_name,
+                    "base_model_checkpoint": base_model,
+                    "base_model_version": base_model_version,
                 },
             )
             journal = RunJournal(run_dir)
@@ -134,7 +157,7 @@ class RunManager:
                 phase_progress=0.0,
                 overall_progress=0.0,
                 preset_id=preset.id,
-                preset_name=preset.name,
+                preset_name=display_name,
                 cpu_threads=threads,
                 message="Lokales Training wird vorbereitet.",
                 started_at=time.time(),

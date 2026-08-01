@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import threading
 import unittest
@@ -71,6 +72,36 @@ class ControlCenterTests(unittest.TestCase):
             state = load_json(run_dir / "state.json")
             self.assertEqual(state["positions"], 42)
             self.assertEqual(state["message"], "weiter")
+
+    def test_real_run_gets_next_version_fresh_seed_and_latest_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            prior = root / "runs" / "prior"
+            artifact = prior / "artifact"
+            artifact.mkdir(parents=True)
+            (artifact / "gostone-japanese-v1.pt").write_bytes(b"checkpoint")
+            (artifact / "gostone-japanese-v1.onnx").write_bytes(b"onnx")
+            (artifact / "gostone-japanese-v1.json").write_text(
+                json.dumps({"rules": "japanese", "komi": 6.5}), encoding="utf-8"
+            )
+            atomic_json(
+                prior / "config.json",
+                {"created_at": 1, "preset": {"id": "short"}, "model_version": 4},
+            )
+            manager = RunManager(root)
+
+            def fake_launch(run_dir: Path) -> int:
+                RunJournal(run_dir).update(status="running", pid=os.getpid())
+                return os.getpid()
+
+            manager._launch = fake_launch  # type: ignore[method-assign]
+            started = manager.start("short", 4)
+            config = load_json(Path(str(started["run_dir"])) / "config.json")
+            self.assertEqual(config["model_version"], 5)
+            self.assertEqual(config["base_model_version"], 4)
+            self.assertEqual(config["base_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
+            self.assertNotEqual(config["seed"], 20260801)
+            self.assertEqual(started["preset_name"], "GoStone Bot v5")
 
 
 if __name__ == "__main__":

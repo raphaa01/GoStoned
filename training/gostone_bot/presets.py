@@ -19,6 +19,7 @@ class TrainingPreset:
     channels: int = 96
     blocks: int = 10
     board_sizes: tuple[int, ...] = (9, 13, 19)
+    ensure_endgame: bool = False
 
     def to_public_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -44,13 +45,14 @@ PRESETS = {
             "short",
             "Ein paar Stunden",
             "Erster kleiner Lernlauf mit allen Brettgrößen und tieferen Endspielbewertungen.",
-            "ca. 2–6 Stunden",
+            "ca. 4–12 Stunden",
             "Experimentell – noch nicht veröffentlichen",
-            games=9,
+            games=18,
             max_moves=55,
             normal_visits=1,
             endgame_visits=8,
             epochs=8,
+            ensure_endgame=True,
         ),
         TrainingPreset(
             "overnight",
@@ -63,6 +65,7 @@ PRESETS = {
             normal_visits=1,
             endgame_visits=12,
             epochs=18,
+            ensure_endgame=True,
         ),
         TrainingPreset(
             "serious",
@@ -75,6 +78,7 @@ PRESETS = {
             normal_visits=2,
             endgame_visits=30,
             epochs=30,
+            ensure_endgame=True,
         ),
     )
 }

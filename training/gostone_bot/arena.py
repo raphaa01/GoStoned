@@ -32,6 +32,8 @@ class ModelArtifact:
     label: str
     created_at: float
     onnx_bytes: int
+    model_version: int | None
+    technical_test: bool
 
     def public(self) -> dict[str, object]:
         return {
@@ -40,6 +42,8 @@ class ModelArtifact:
             "created_at": self.created_at,
             "onnx_bytes": self.onnx_bytes,
             "onnx_mib": round(self.onnx_bytes / 1024 / 1024, 2),
+            "model_version": self.model_version,
+            "technical_test": self.technical_test,
         }
 
 
@@ -48,9 +52,9 @@ class ModelCatalog:
         self.runs_dir = runs_dir
 
     def artifacts(self) -> list[ModelArtifact]:
-        result: list[ModelArtifact] = []
+        candidates: list[dict[str, Any]] = []
         if not self.runs_dir.is_dir():
-            return result
+            return []
         for run_dir in self.runs_dir.iterdir():
             if not run_dir.is_dir():
                 continue
@@ -69,22 +73,44 @@ class ModelCatalog:
                 config_path = run_dir / "config.json"
                 config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
                 preset = config.get("preset", {}) if isinstance(config, dict) else {}
-                preset_name = preset.get("name", "Trainiertes Modell") if isinstance(preset, dict) else "Trainiertes Modell"
                 created_at = float(config.get("created_at", onnx.stat().st_mtime)) if isinstance(config, dict) else onnx.stat().st_mtime
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
-            result.append(
-                ModelArtifact(
-                    id=run_dir.name,
-                    run_dir=run_dir,
-                    checkpoint=checkpoint,
-                    onnx=onnx,
-                    metadata=metadata_path,
-                    label=f"{preset_name} · {time.strftime('%d.%m.%Y %H:%M', time.localtime(created_at))}",
-                    created_at=created_at,
-                    onnx_bytes=onnx.stat().st_size,
-                )
+            preset_id = str(preset.get("id", "")) if isinstance(preset, dict) else ""
+            raw_version = config.get("model_version") if isinstance(config, dict) else None
+            version = raw_version if isinstance(raw_version, int) and raw_version > 0 else None
+            candidates.append(
+                {
+                    "id": run_dir.name,
+                    "run_dir": run_dir,
+                    "checkpoint": checkpoint,
+                    "onnx": onnx,
+                    "metadata": metadata_path,
+                    "created_at": created_at,
+                    "onnx_bytes": onnx.stat().st_size,
+                    "model_version": version,
+                    "technical_test": preset_id == "smoke",
+                }
             )
+        candidates.sort(key=lambda item: float(item["created_at"]))
+        used_versions = {
+            int(item["model_version"])
+            for item in candidates
+            if item["model_version"] is not None and not item["technical_test"]
+        }
+        next_legacy_version = 1
+        result: list[ModelArtifact] = []
+        for item in candidates:
+            version = item["model_version"]
+            if not item["technical_test"] and version is None:
+                while next_legacy_version in used_versions:
+                    next_legacy_version += 1
+                version = next_legacy_version
+                used_versions.add(version)
+                next_legacy_version += 1
+            date = time.strftime("%d.%m.%Y %H:%M", time.localtime(float(item["created_at"])))
+            label = f"GoStone Techniktest · {date}" if item["technical_test"] else f"GoStone Bot v{version} · {date}"
+            result.append(ModelArtifact(**{**item, "model_version": version, "label": label}))
         return sorted(result, key=lambda artifact: artifact.created_at, reverse=True)
 
     def resolve(self, model_id: str) -> ModelArtifact:

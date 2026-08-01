@@ -43,6 +43,23 @@ STRENGTHS = (
 )
 
 
+def training_profiles(game_index: int, board_size_count: int = 3) -> tuple[StrengthProfile, StrengthProfile]:
+    if game_index < 0 or board_size_count <= 0:
+        raise ValueError("game_index must be nonnegative and board_size_count positive")
+    profile_index = (game_index // board_size_count) % len(STRENGTHS)
+    black = STRENGTHS[profile_index]
+    white = STRENGTHS[(profile_index + len(STRENGTHS) // 2) % len(STRENGTHS)]
+    return black, white
+
+
+def training_position_limit(size: int, requested: int, ensure_endgame: bool) -> int:
+    if requested <= 0:
+        raise ValueError("max_moves must be positive")
+    # Real runs may stop earlier after two passes, but never cut a game off
+    # before it has enough room to reach a natural Japanese settlement.
+    return max(requested, size * size) if ensure_endgame else requested
+
+
 @dataclass
 class TrainingGame:
     features: list[np.ndarray]
@@ -155,20 +172,23 @@ def generate_game_samples(
     endgame_visits: int,
     max_moves: int,
     seed: int,
+    ensure_endgame: bool = False,
     control: Callable[[], None] | None = None,
     on_position: Callable[[int, int, int, int], None] | None = None,
 ) -> TrainingGame:
     if not board_sizes or any(size not in (9, 13, 19) for size in board_sizes):
         raise ValueError("Training requires at least one supported board size")
     size = board_sizes[game_index % len(board_sizes)]
-    black_profile = STRENGTHS[(game_index * 2) % len(STRENGTHS)]
-    white_profile = STRENGTHS[(game_index * 2 + 1) % len(STRENGTHS)]
+    # Both colors cycle through every rank equally. The former adjacent-pair
+    # schedule always made White stronger and taught a harmful color bias.
+    black_profile, white_profile = training_profiles(game_index, len(board_sizes))
     rng = np.random.default_rng(seed + game_index * 10_007)
     board = BoardState(size)
     history: list[list[str]] = []
     game = TrainingGame([], [], [], [], [], [], [], [], 0)
+    position_limit = training_position_limit(size, max_moves, ensure_endgame)
     try:
-        for position_index in range(max_moves):
+        for position_index in range(position_limit):
             if control:
                 control()
             profile = black_profile if board.to_move == 1 else white_profile
@@ -201,7 +221,7 @@ def generate_game_samples(
             board.play(move)
             history.append([color, move])
             if on_position:
-                on_position(position_index + 1, max_moves, size, visits)
+                on_position(position_index + 1, position_limit, size, visits)
             if board.consecutive_passes >= 2:
                 break
     except StopRequested as error:

@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import torch
 
 from .board import BoardState, PASS_INDEX, policy_to_padded, spatial_to_padded
-from .generate import STRENGTHS, make_target_policy, settlement_targets
+from .generate import (
+    STRENGTHS,
+    make_target_policy,
+    settlement_targets,
+    training_position_limit,
+    training_profiles,
+)
 from .model import GoStoneStudent, StudentConfig
 from .settlement import propose_settlement, score_japanese
-from .train import MAX_MODEL_BYTES
+from .train import MAX_MODEL_BYTES, train_student
 
 
 class BoardEncodingTests(unittest.TestCase):
@@ -65,6 +73,44 @@ class StudentModelTests(unittest.TestCase):
         self.assertEqual(float(target[PASS_INDEX]), 0.0)
         self.assertAlmostEqual(float(target.sum()), 1.0)
 
+    def test_new_version_starts_from_the_previous_model_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "sample.npz"
+            features = np.zeros((1, 12, 19, 19), dtype=np.float32)
+            features[:, 4] = 1.0
+            policies = np.zeros((1, 362), dtype=np.float32)
+            policies[:, PASS_INDEX] = 1.0
+            np.savez_compressed(
+                data,
+                features=features,
+                policies=policies,
+                values=np.zeros(1, dtype=np.float32),
+                scores=np.zeros(1, dtype=np.float32),
+                ownerships=np.zeros((1, 361), dtype=np.float32),
+                ownership_weights=np.ones((1, 361), dtype=np.float32),
+            )
+            config = StudentConfig(channels=8, blocks=1)
+            base_model = GoStoneStudent(config)
+            with torch.no_grad():
+                base_model.stem[0].weight.fill_(0.125)
+            base = root / "base.pt"
+            torch.save({"config": config.as_dict(), "state_dict": base_model.state_dict()}, base)
+            train_student(
+                data=data,
+                output_dir=root / "output",
+                epochs=0,
+                batch_size=1,
+                learning_rate=3e-4,
+                channels=8,
+                blocks=1,
+                seed=7,
+                initial_checkpoint=base,
+            )
+            saved = torch.load(root / "output" / "gostone-japanese-v1.pt", weights_only=True)
+            inherited = saved["state_dict"]["stem.0.weight"]
+            self.assertTrue(torch.allclose(inherited, torch.full_like(inherited, 0.125)))
+
     def test_settlement_targets_require_complete_teacher_maps(self) -> None:
         ownership, confidence = settlement_targets(
             {"ownership": [-0.5] * 81, "ownershipStdev": [0.2] * 81},
@@ -73,6 +119,26 @@ class StudentModelTests(unittest.TestCase):
         self.assertEqual(ownership.shape, (361,))
         self.assertEqual(confidence.shape, (361,))
         self.assertAlmostEqual(float(confidence.max()), 0.8)
+
+    def test_real_training_balances_ranks_across_both_colors(self) -> None:
+        pairings = [training_profiles(index) for index in range(18)]
+        black = [profile.nominal_elo for profile, _ in pairings]
+        white = [profile.nominal_elo for _, profile in pairings]
+        expected = sorted([profile.nominal_elo for profile in STRENGTHS] * 3)
+        self.assertEqual(sorted(black), expected)
+        self.assertEqual(sorted(white), expected)
+        for board_index in range(3):
+            board_black = sorted(pairings[index][0].nominal_elo for index in range(board_index, 18, 3))
+            board_white = sorted(pairings[index][1].nominal_elo for index in range(board_index, 18, 3))
+            all_strengths = sorted(profile.nominal_elo for profile in STRENGTHS)
+            self.assertEqual(board_black, all_strengths)
+            self.assertEqual(board_white, all_strengths)
+
+    def test_real_presets_reach_the_endgame_on_every_board_size(self) -> None:
+        self.assertEqual(training_position_limit(9, 55, True), 81)
+        self.assertEqual(training_position_limit(13, 55, True), 169)
+        self.assertEqual(training_position_limit(19, 55, True), 361)
+        self.assertEqual(training_position_limit(19, 8, False), 8)
 
 
 class JapaneseSettlementTests(unittest.TestCase):

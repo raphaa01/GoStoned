@@ -50,6 +50,7 @@ def run(run_dir: Path) -> None:
         overall_progress=0.0,
         rules="japanese",
         komi=6.5,
+        preset_name=str(config.get("display_name", preset.name)),
         target_games=preset.games,
         completed_games=len(list(data_dir.glob("game-*.npz"))),
         target_epochs=preset.epochs,
@@ -104,6 +105,7 @@ def run(run_dir: Path) -> None:
                         endgame_visits=preset.endgame_visits,
                         max_moves=preset.max_moves,
                         seed=int(config.get("seed", 20260801)),
+                        ensure_endgame=preset.ensure_endgame,
                         control=gate.checkpoint,
                         on_position=on_position,
                     )
@@ -130,6 +132,13 @@ def run(run_dir: Path) -> None:
 
         gate.checkpoint()
         journal.event(f"Modelltraining startet mit {positions} Stellungen.")
+        base_checkpoint_raw = config.get("base_model_checkpoint")
+        base_checkpoint = Path(base_checkpoint_raw) if isinstance(base_checkpoint_raw, str) else None
+        if base_checkpoint is not None:
+            journal.event(
+                f"{config.get('display_name', 'Neues Modell')} lernt auf "
+                f"GoStone Bot v{config.get('base_model_version')} weiter."
+            )
 
         def on_epoch(epoch: int, total: int, metrics: dict[str, float]) -> None:
             fraction = epoch / total
@@ -154,6 +163,7 @@ def run(run_dir: Path) -> None:
             blocks=preset.blocks,
             cpu_threads=cpu_threads,
             seed=int(config.get("seed", 20260801)),
+            initial_checkpoint=base_checkpoint,
             control=gate.checkpoint,
             on_epoch=on_epoch,
             resume=True,
@@ -165,6 +175,13 @@ def run(run_dir: Path) -> None:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if metadata.get("rules") != "japanese" or model_path.stat().st_size > MAX_MODEL_BYTES:
             raise RuntimeError("Final model did not satisfy the Japanese-rules 8 MiB contract")
+        metadata.update(
+            display_name=config.get("display_name"),
+            model_version=config.get("model_version"),
+            training_seed=config.get("seed"),
+            base_model_version=config.get("base_model_version"),
+        )
+        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         journal.update(
             status="completed",
             phase="validation",

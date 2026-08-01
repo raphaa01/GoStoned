@@ -39,6 +39,23 @@ The launcher checks Python, Docker, Python packages, and the local KataGo image.
 The approximately 99 MB KataGo human teacher is checksum-verified and stored in
 `.cache/gostone-bot-training/`. It is not part of the final browser model.
 
+## Versions and repeated training
+
+Completed real models are named `GoStone Bot v1`, `GoStone Bot v2`, and so on.
+The number is assigned only to a run that reaches the final artifact validation;
+failed runs do not consume a version. Smoke runs are listed separately as
+`GoStone Techniktest` and are never used as the base for a real model.
+
+A new real run uses a fresh random seed and starts with the newest successful
+model weights. It therefore creates different KataGo games and continues learning
+instead of reproducing the previous model. Every strength profile appears equally
+often as Black and White on every board size over a complete 18-game cycle. Real presets also continue
+9x9, 13x13, and 19x19 games far enough to include actual endgame positions.
+
+More training is not an automatic guarantee of a stronger release. Compare the
+new version with the previous one in fixed test positions and bot games before
+shipping it.
+
 ## Model contract
 
 - Japanese territory rules only, with 6.5 komi.

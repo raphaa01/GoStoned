@@ -11,7 +11,13 @@ from .arena import MAX_MODEL_BYTES, ArenaService, ModelCatalog
 from .model import GoStoneStudent, StudentConfig
 
 
-def create_artifact(root: Path, run_id: str = "test-run") -> Path:
+def create_artifact(
+    root: Path,
+    run_id: str = "test-run",
+    *,
+    preset_id: str = "short",
+    model_version: int | None = None,
+) -> Path:
     run_dir = root / run_id
     artifact_dir = run_dir / "artifact"
     artifact_dir.mkdir(parents=True)
@@ -27,7 +33,13 @@ def create_artifact(root: Path, run_id: str = "test-run") -> Path:
         encoding="utf-8",
     )
     (run_dir / "config.json").write_text(
-        json.dumps({"created_at": 10, "preset": {"name": "Testmodell"}}),
+        json.dumps(
+            {
+                "created_at": 10,
+                "preset": {"id": preset_id, "name": "Interner Presetname"},
+                "model_version": model_version,
+            }
+        ),
         encoding="utf-8",
     )
     return run_dir
@@ -46,7 +58,18 @@ class ArenaTests(unittest.TestCase):
                 output.truncate(MAX_MODEL_BYTES + 1)
             models = ModelCatalog(root).artifacts()
             self.assertEqual([model.id for model in models], ["test-run"])
-            self.assertTrue(models[0].label.startswith("Testmodell · "))
+            self.assertTrue(models[0].label.startswith("GoStone Bot v1 · "))
+            self.assertEqual(models[0].model_version, 1)
+
+    def test_versioned_and_technical_models_have_product_names(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_artifact(root, "real", model_version=7)
+            create_artifact(root, "smoke", preset_id="smoke")
+            models = {model.id: model for model in ModelCatalog(root).artifacts()}
+            self.assertTrue(models["smoke"].label.startswith("GoStone Techniktest · "))
+            self.assertTrue(models["real"].label.startswith("GoStone Bot v7 · "))
+            self.assertTrue(models["smoke"].technical_test)
 
     def test_player_can_start_and_make_a_legal_move_against_the_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

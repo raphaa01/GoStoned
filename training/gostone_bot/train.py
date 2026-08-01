@@ -145,6 +145,7 @@ def train_student(
     channels: int,
     blocks: int,
     seed: int,
+    initial_checkpoint: Path | None = None,
     cpu_threads: int | None = None,
     control: Callable[[], None] | None = None,
     on_epoch: Callable[[int, int, dict[str, float]], None] | None = None,
@@ -165,12 +166,20 @@ def train_student(
     progress_checkpoint = output_dir / "training-progress.pt"
     start_epoch = 0
     if resume and progress_checkpoint.is_file():
-        saved = torch.load(progress_checkpoint, map_location="cpu")
+        saved = torch.load(progress_checkpoint, map_location="cpu", weights_only=True)
         if saved.get("config") != config.as_dict():
             raise RuntimeError("Saved training architecture does not match this run")
         model.load_state_dict(saved["state_dict"])
         optimizer.load_state_dict(saved["optimizer"])
         start_epoch = int(saved.get("completed_epochs", 0))
+    elif initial_checkpoint is not None:
+        if not initial_checkpoint.is_file():
+            raise RuntimeError("The selected base model checkpoint no longer exists")
+        saved = torch.load(initial_checkpoint, map_location="cpu", weights_only=True)
+        if saved.get("config") != config.as_dict():
+            raise RuntimeError("Base model architecture does not match this run")
+        model.load_state_dict(saved["state_dict"], strict=True)
+        print(f"continuing from base model: {initial_checkpoint}", flush=True)
     print(f"student parameters: {model.parameter_count:,}; positions: {len(dataset):,}", flush=True)
     for epoch in range(start_epoch, epochs):
         model.train()
@@ -297,6 +306,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--blocks", type=int, default=10)
     parser.add_argument("--cpu-threads", type=int)
     parser.add_argument("--seed", type=int, default=20260801)
+    parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument("--resume", action="store_true")
     return parser.parse_args()
 
@@ -313,5 +323,6 @@ if __name__ == "__main__":
         blocks=arguments.blocks,
         cpu_threads=arguments.cpu_threads,
         seed=arguments.seed,
+        initial_checkpoint=arguments.initial_checkpoint,
         resume=arguments.resume,
     )
