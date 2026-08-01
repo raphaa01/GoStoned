@@ -377,7 +377,7 @@ body {
   gap: 9px;
 }
 
-.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__identity) {
+.sidebar-user > span:not(.profile-symbol):not(.sidebar-user__identity):not(.sidebar-user__name) {
   background: var(--color-moss);
   border-radius: 50%;
   color: white;
