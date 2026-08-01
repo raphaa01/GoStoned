@@ -205,7 +205,7 @@ export function ProfileView() {
         <ProfileAvatar size="lg" style={user.avatarStyle} />
         <span aria-hidden="true" className="profile-avatar-trigger__edit"><Pencil size={12} strokeWidth={2.2} /></span>
       </button>
-      <div><span className="section-kicker">{copy.playerProfile}</span><h1>{user.displayName}</h1><p>@{user.username}</p></div>
+      <div className="profile-header__identity"><span className="section-kicker">{copy.playerProfile}</span><h1>{user.displayName}</h1><p>@{user.username}</p></div>
       <div className="profile-header__actions">
         {rating && preferences ? (
           <span className="profile-header__rating">
