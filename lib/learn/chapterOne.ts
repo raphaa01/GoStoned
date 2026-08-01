@@ -3,20 +3,18 @@ import type { Position, Stone } from "@/lib/game/types";
 
 export const CHAPTER_ONE_LESSON_IDS = [
   "goal",
-  "turns",
-  "intersections",
-  "stones-stay",
-  "surround",
-  "board-regions",
+  "liberties",
+  "capture",
+  "escape",
+  "connect",
+  "capture-group",
 ] as const;
 
 export type ChapterOneLessonId = (typeof CHAPTER_ONE_LESSON_IDS)[number];
-
 export type LessonStone = Position & { color: Stone };
 
 export type LessonDefinition = {
   id: ChapterOneLessonId;
-  kind: ChapterOneLessonId;
   minutes: number;
 };
 
@@ -36,8 +34,8 @@ export type ChapterOneCopy = {
   title: string;
   description: string;
   chapterLabel: string;
+  chapterSummary: string;
   progressLabel: string;
-  completedLabel: string;
   lessonsLabel: string;
   minuteLabel: string;
   resetProgress: string;
@@ -45,6 +43,7 @@ export type ChapterOneCopy = {
   boardLabel: string;
   boardContext: string;
   blackToPlay: string;
+  markLiberties: string;
   guidedExercise: string;
   instructionLabel: string;
   hint: string;
@@ -58,283 +57,271 @@ export type ChapterOneCopy = {
   playNine: string;
   feedbackIdle: string;
   feedbackWrong: string;
-  feedbackProgress: string;
-  turnProgress: string;
-  regionProgress: string;
-  regionCorner: string;
-  regionSide: string;
-  regionCenter: string;
-  occupiedPoint: string;
-  lessonDone: string;
+  libertyProgress: string;
   emptyPoint: string;
   blackStone: string;
   whiteStone: string;
   suggestedPoint: string;
   territoryPoint: string;
+  libertyPoint: string;
   takeawayLabel: string;
   lessons: Record<ChapterOneLessonId, LessonText>;
 };
 
 export const CHAPTER_ONE_LESSONS: readonly LessonDefinition[] = [
-  { id: "goal", kind: "goal", minutes: 3 },
-  { id: "turns", kind: "turns", minutes: 3 },
-  { id: "intersections", kind: "intersections", minutes: 2 },
-  { id: "stones-stay", kind: "stones-stay", minutes: 2 },
-  { id: "surround", kind: "surround", minutes: 3 },
-  { id: "board-regions", kind: "board-regions", minutes: 4 },
+  { id: "goal", minutes: 3 },
+  { id: "liberties", minutes: 4 },
+  { id: "capture", minutes: 3 },
+  { id: "escape", minutes: 3 },
+  { id: "connect", minutes: 3 },
+  { id: "capture-group", minutes: 4 },
 ] as const;
 
-export const LESSON_BOARD_SIZE = 7;
-
+export const LESSON_BOARD_SIZE = 5;
 export const GOAL_POSITION = { x: 2, y: 2 } as const;
 export const GOAL_CLOSING_MOVE = { x: 2, y: 3 } as const;
-export const INTERSECTION_TARGET = { x: 3, y: 3 } as const;
-export const SURROUND_DISTRACTOR = { x: 4, y: 4 } as const;
+export const LIBERTY_POINTS = [
+  { x: 2, y: 1 },
+  { x: 1, y: 2 },
+  { x: 3, y: 2 },
+  { x: 2, y: 3 },
+] as const;
+export const CAPTURE_MOVE = { x: 2, y: 3 } as const;
+export const ESCAPE_MOVE = { x: 2, y: 3 } as const;
+export const CONNECT_MOVE = { x: 2, y: 2 } as const;
+export const GROUP_CAPTURE_MOVE = { x: 2, y: 4 } as const;
 
 export const LESSON_SETUPS: Record<ChapterOneLessonId, readonly LessonStone[]> = {
   goal: [
     { x: 2, y: 1, color: "black" },
     { x: 1, y: 2, color: "black" },
     { x: 3, y: 2, color: "black" },
-    { x: 5, y: 1, color: "white" },
-    { x: 5, y: 2, color: "white" },
+    { x: 4, y: 1, color: "white" },
   ],
-  turns: [],
-  intersections: [],
-  "stones-stay": [{ x: 2, y: 3, color: "black" }],
-  surround: [
+  liberties: [{ x: 2, y: 2, color: "black" }],
+  capture: [
+    { x: 2, y: 2, color: "white" },
     { x: 2, y: 1, color: "black" },
     { x: 1, y: 2, color: "black" },
     { x: 3, y: 2, color: "black" },
-    { x: 5, y: 4, color: "white" },
   ],
-  "board-regions": [],
+  escape: [
+    { x: 2, y: 2, color: "black" },
+    { x: 2, y: 1, color: "white" },
+    { x: 1, y: 2, color: "white" },
+    { x: 3, y: 2, color: "white" },
+  ],
+  connect: [
+    { x: 1, y: 2, color: "black" },
+    { x: 3, y: 2, color: "black" },
+  ],
+  "capture-group": [
+    { x: 2, y: 2, color: "white" },
+    { x: 2, y: 3, color: "white" },
+    { x: 2, y: 1, color: "black" },
+    { x: 1, y: 2, color: "black" },
+    { x: 3, y: 2, color: "black" },
+    { x: 1, y: 3, color: "black" },
+    { x: 3, y: 3, color: "black" },
+  ],
 };
 
-export const REGION_EXERCISES = [
-  {
-    id: "corner",
-    target: { x: 0, y: 0 },
-    required: [{ x: 1, y: 0 }, { x: 0, y: 1 }],
-  },
-  {
-    id: "side",
-    target: { x: 3, y: 0 },
-    required: [{ x: 2, y: 0 }, { x: 4, y: 0 }, { x: 3, y: 1 }],
-  },
-  {
-    id: "center",
-    target: { x: 3, y: 4 },
-    required: [{ x: 2, y: 4 }, { x: 4, y: 4 }, { x: 3, y: 3 }, { x: 3, y: 5 }],
-  },
-] as const;
-
 const en: ChapterOneCopy = {
-  kicker: "Interactive learning path",
-  title: "Your first six Go lessons.",
-  description: "Learn the objective, the board, and the rhythm of a turn by placing stones yourself. Every exercise gives immediate feedback and leaves you with one clear idea.",
-  chapterLabel: "Chapter 1 · What is Go?",
-  progressLabel: "Chapter progress",
-  completedLabel: "completed",
+  kicker: "Learn Go by playing",
+  title: "Understand Go, one move at a time.",
+  description: "This first chapter teaches the ideas you need at the board: territory, liberties, atari, capturing, escaping, and connecting stones.",
+  chapterLabel: "Chapter 1 · Liberties & capturing",
+  chapterSummary: "Six short exercises from the objective of Go to your first captured group.",
+  progressLabel: "Progress",
   lessonsLabel: "lessons",
   minuteLabel: "min",
-  resetProgress: "Reset progress",
+  resetProgress: "Reset",
   lessonNavigation: "Lessons in chapter 1",
   boardLabel: "Interactive teaching board",
-  boardContext: "7×7 teaching view · the same ideas apply to every board size",
-  blackToPlay: "You play Black",
-  guidedExercise: "Guided exercise",
-  instructionLabel: "Your task",
+  boardContext: "5×5 practice board",
+  blackToPlay: "Play Black",
+  markLiberties: "Find the liberties",
+  guidedExercise: "On the board",
+  instructionLabel: "Your move",
   hint: "Show hint",
   hideHint: "Hide hint",
-  restartLesson: "Restart lesson",
+  restartLesson: "Restart",
   previousLesson: "Previous",
   nextLesson: "Next lesson",
   finishChapter: "Try 9×9",
   chapterComplete: "Chapter 1 complete",
-  chapterCompleteBody: "You now know what Go is about, where stones are played, and why the corners are efficient. Next comes liberties and capturing.",
+  chapterCompleteBody: "You can now identify liberties, capture a stone or group, escape from atari, and connect stones.",
   playNine: "Try a 9×9 game",
-  feedbackIdle: "Place a stone on the board to try the exercise.",
-  feedbackWrong: "That move is legal, but it does not solve this task yet. Look again at the marked area.",
-  feedbackProgress: "Good. Keep going—the stones already placed stay on the board.",
-  turnProgress: "Black moves placed: {count} of 3. White answers automatically.",
-  regionProgress: "{region}: {count} of {total} boundary stones placed.",
-  regionCorner: "Corner",
-  regionSide: "Side",
-  regionCenter: "Centre",
-  occupiedPoint: "That intersection is already occupied.",
-  lessonDone: "Exercise solved.",
+  feedbackIdle: "Use the board to solve the task.",
+  feedbackWrong: "Not quite. Only points directly connected by a line matter here—diagonals do not.",
+  libertyProgress: "Correct: {count} of 4 liberties found.",
   emptyPoint: "Empty intersection {coordinate}",
   blackStone: "Black stone on {coordinate}",
   whiteStone: "White stone on {coordinate}",
-  suggestedPoint: "Suggested intersection {coordinate}",
-  territoryPoint: "Point to surround at {coordinate}",
+  suggestedPoint: "Suggested move on {coordinate}",
+  territoryPoint: "Point to surround on {coordinate}",
+  libertyPoint: "Marked liberty on {coordinate}",
   takeawayLabel: "Remember",
   lessons: {
     goal: {
       eyebrow: "Lesson 1 of 6",
       shortTitle: "The objective",
-      title: "Surround more space than your opponent.",
-      summary: "Go is a game about controlling the board. Empty intersections fully enclosed by your stones become your territory.",
-      instruction: "Black almost surrounds the golden point. Place the one stone that closes the boundary.",
-      hint: "The missing boundary is directly below the golden point.",
-      success: "Exactly. The golden point is now enclosed by Black on all four open sides.",
-      takeaway: "The objective is territory. Capturing stones will later help you build and protect it.",
+      title: "Surround empty space.",
+      summary: "You win Go by controlling more of the board than your opponent. Empty points enclosed by your stones become territory.",
+      instruction: "Black has surrounded the golden point on three sides. Close the one remaining gap.",
+      hint: "Play directly below the golden point.",
+      success: "Correct. The empty golden point is now enclosed by Black.",
+      takeaway: "Territory is the objective. Capturing helps you protect it and break the opponent's boundaries.",
     },
-    turns: {
+    liberties: {
       eyebrow: "Lesson 2 of 6",
-      shortTitle: "Black and White",
-      title: "Black starts, then both players alternate.",
-      summary: "One player uses Black, the other White. Each turn adds exactly one new stone to an empty intersection.",
-      instruction: "Place three Black stones wherever you like. White will answer after each move.",
-      hint: "There is no wrong empty point here. Watch how the colours alternate.",
-      success: "Three turns complete: Black, White, Black, White, Black, White.",
-      takeaway: "Black always makes the first move in an even game, and turns alternate after that.",
+      shortTitle: "Liberties",
+      title: "Every stone needs liberties.",
+      summary: "A liberty is an empty point directly above, below, left, or right of a stone. Diagonal points do not count.",
+      instruction: "Find all four liberties of the black stone by clicking them one after another.",
+      hint: "Follow the four lines leading out from the stone.",
+      success: "Exactly four. A lone stone in the centre starts with four liberties.",
+      takeaway: "Before every fight, count the liberties of your stones and the opponent's stones.",
     },
-    intersections: {
+    capture: {
       eyebrow: "Lesson 3 of 6",
-      shortTitle: "Intersections",
-      title: "Stones sit where two lines cross.",
-      summary: "The spaces between the lines are not playable squares. Every move belongs on an intersection.",
-      instruction: "Place a Black stone on the marked intersection in the centre.",
-      hint: "Tap the pulsing point where the horizontal and vertical lines meet.",
-      success: "Correct. The stone is centred directly on the crossing of two lines.",
-      takeaway: "In Go, coordinates name line intersections—not the spaces between them.",
+      shortTitle: "Capture",
+      title: "Take the last liberty.",
+      summary: "The white stone has only one liberty left. A stone or group with one liberty is in atari.",
+      instruction: "Play Black on White's last liberty. The white stone will be removed from the board.",
+      hint: "The last free point is directly below the white stone.",
+      success: "Captured. With no liberties left, the white stone is removed.",
+      takeaway: "Atari means one liberty remains. Occupy that final liberty to capture.",
     },
-    "stones-stay": {
+    escape: {
       eyebrow: "Lesson 4 of 6",
-      shortTitle: "Stones stay",
-      title: "A played stone does not move again.",
-      summary: "Unlike many board games, Go has no moving pieces. Your position grows by adding new stones.",
-      instruction: "Add two more Black stones. Notice that the first stone remains exactly where it was.",
-      hint: "Choose any two empty intersections. You are building a position, not moving the first stone.",
-      success: "Now three stones remain on the board. They only leave later if the opponent captures them.",
-      takeaway: "Every turn adds a stone; it never slides or jumps to a different point.",
+      shortTitle: "Escape",
+      title: "Save a stone in atari.",
+      summary: "This time your black stone has only one liberty. If White fills it next, Black is captured.",
+      instruction: "Extend Black onto its last liberty. The two connected stones will gain new liberties.",
+      hint: "Play directly below the black stone.",
+      success: "Saved. The new black stone connects to the first and gives the group more room.",
+      takeaway: "When your group is in atari, extend, connect, or capture before the opponent takes its last liberty.",
     },
-    surround: {
+    connect: {
       eyebrow: "Lesson 5 of 6",
-      shortTitle: "Surround, don’t chase",
-      title: "Territory matters more than chasing every stone.",
-      summary: "The nearby White stone may look tempting, but a move that completes a boundary creates value immediately.",
-      instruction: "Choose the move that closes Black's territory around the golden point.",
-      hint: "Ignore the distant White stone. Fill the gap directly below the golden point.",
-      success: "Good choice. Black completed territory instead of spending a move on a distant chase.",
-      takeaway: "Capturing is useful, but the winner is decided by controlled space—not by who chases the most stones.",
+      shortTitle: "Connect",
+      title: "Connected stones share liberties.",
+      summary: "Stones touching along a line form one group. Diagonally separated stones remain separate groups.",
+      instruction: "Place one black stone in the gap to join both stones into a single group.",
+      hint: "Play exactly between the two black stones.",
+      success: "Connected. All three stones now form one group and share their liberties.",
+      takeaway: "Connection makes stones support each other—but the whole group is captured together if all shared liberties disappear.",
     },
-    "board-regions": {
+    "capture-group": {
       eyebrow: "Lesson 6 of 6",
-      shortTitle: "Corner, side, centre",
-      title: "The edge of the board can help you surround.",
-      summary: "A corner already supplies two boundaries, a side supplies one, and the centre supplies none.",
-      instruction: "Surround the marked point first in the corner, then on the side, and finally in the centre.",
-      hint: "Place Black stones only on the open lines directly next to the golden point.",
-      success: "You used 2 stones in the corner, 3 on the side, and 4 in the centre. That is why early Go usually begins near the corners.",
-      takeaway: "Corner first, then sides, then centre is a useful opening principle—not an absolute rule.",
+      shortTitle: "Capture a group",
+      title: "A group also shares one fate.",
+      summary: "The two white stones are connected. Together they have only one liberty left at the bottom edge.",
+      instruction: "Find the group's final liberty and capture both white stones with one move.",
+      hint: "Follow the white group downward to the only empty neighboring point.",
+      success: "Two stones captured. Connected stones share liberties and are removed together.",
+      takeaway: "Count liberties for the whole connected group, not for each stone separately.",
     },
   },
 };
 
 const de: ChapterOneCopy = {
-  kicker: "Interaktiver Lernpfad",
-  title: "Deine ersten sechs Go-Lektionen.",
-  description: "Lerne Ziel, Brett und Zugrhythmus, indem du selbst Steine setzt. Jede Aufgabe reagiert sofort und vermittelt genau eine klare Idee.",
-  chapterLabel: "Kapitel 1 · Was ist Go?",
-  progressLabel: "Kapitelfortschritt",
-  completedLabel: "abgeschlossen",
+  kicker: "Go durch Spielen lernen",
+  title: "Verstehe Go – Zug für Zug.",
+  description: "Dieses erste Kapitel vermittelt die Ideen, die du am Brett wirklich brauchst: Gebiet, Freiheiten, Atari, Schlagen, Retten und Verbinden.",
+  chapterLabel: "Kapitel 1 · Freiheiten & Schlagen",
+  chapterSummary: "Sechs kurze Aufgaben vom Spielziel bis zur ersten geschlagenen Gruppe.",
+  progressLabel: "Fortschritt",
   lessonsLabel: "Lektionen",
   minuteLabel: "Min.",
-  resetProgress: "Fortschritt zurücksetzen",
+  resetProgress: "Zurücksetzen",
   lessonNavigation: "Lektionen in Kapitel 1",
   boardLabel: "Interaktives Lernbrett",
-  boardContext: "7×7-Lernausschnitt · die Ideen gelten auf jeder Brettgröße",
-  blackToPlay: "Du spielst Schwarz",
-  guidedExercise: "Geführte Aufgabe",
-  instructionLabel: "Deine Aufgabe",
+  boardContext: "5×5-Übungsbrett",
+  blackToPlay: "Spiele Schwarz",
+  markLiberties: "Finde die Freiheiten",
+  guidedExercise: "Auf dem Brett",
+  instructionLabel: "Dein Zug",
   hint: "Hinweis zeigen",
   hideHint: "Hinweis ausblenden",
-  restartLesson: "Lektion neu starten",
+  restartLesson: "Neu starten",
   previousLesson: "Zurück",
   nextLesson: "Nächste Lektion",
   finishChapter: "9×9 ausprobieren",
   chapterComplete: "Kapitel 1 abgeschlossen",
-  chapterCompleteBody: "Du kennst jetzt das Ziel von Go, weißt, wo Steine gesetzt werden, und verstehst, warum die Ecken effizient sind. Als Nächstes kommen Freiheiten und Gefangennahmen.",
+  chapterCompleteBody: "Du kannst jetzt Freiheiten erkennen, einen Stein oder eine Gruppe schlagen, aus Atari fliehen und Steine verbinden.",
   playNine: "9×9-Partie ausprobieren",
-  feedbackIdle: "Setze einen Stein auf das Brett, um die Aufgabe zu lösen.",
-  feedbackWrong: "Dieser Zug wäre möglich, löst die Aufgabe aber noch nicht. Sieh dir den markierten Bereich noch einmal an.",
-  feedbackProgress: "Gut. Mach weiter – die bereits gesetzten Steine bleiben auf dem Brett.",
-  turnProgress: "Schwarze Züge: {count} von 3. Weiß antwortet automatisch.",
-  regionProgress: "{region}: {count} von {total} Begrenzungssteinen gesetzt.",
-  regionCorner: "Ecke",
-  regionSide: "Rand",
-  regionCenter: "Mitte",
-  occupiedPoint: "Dieser Schnittpunkt ist bereits besetzt.",
-  lessonDone: "Aufgabe gelöst.",
+  feedbackIdle: "Löse die Aufgabe direkt auf dem Brett.",
+  feedbackWrong: "Noch nicht. Hier zählen nur Punkte, die direkt durch eine Linie verbunden sind – Diagonalen zählen nicht.",
+  libertyProgress: "Richtig: {count} von 4 Freiheiten gefunden.",
   emptyPoint: "Leerer Schnittpunkt {coordinate}",
   blackStone: "Schwarzer Stein auf {coordinate}",
   whiteStone: "Weißer Stein auf {coordinate}",
-  suggestedPoint: "Empfohlener Schnittpunkt {coordinate}",
+  suggestedPoint: "Empfohlener Zug auf {coordinate}",
   territoryPoint: "Zu umschließender Punkt auf {coordinate}",
+  libertyPoint: "Markierte Freiheit auf {coordinate}",
   takeawayLabel: "Merksatz",
   lessons: {
     goal: {
       eyebrow: "Lektion 1 von 6",
       shortTitle: "Das Spielziel",
-      title: "Umschließe mehr Raum als dein Gegner.",
-      summary: "Bei Go geht es darum, das Brett zu kontrollieren. Leere Schnittpunkte, die vollständig von deinen Steinen umschlossen sind, werden zu deinem Gebiet.",
-      instruction: "Schwarz umschließt den goldenen Punkt fast. Setze den einen Stein, der die Grenze schließt.",
-      hint: "Die fehlende Begrenzung liegt direkt unter dem goldenen Punkt.",
-      success: "Genau. Der goldene Punkt ist nun auf allen offenen Seiten von Schwarz umschlossen.",
-      takeaway: "Das Ziel ist Gebiet. Gefangennahmen helfen dir später, dieses Gebiet aufzubauen und zu schützen.",
+      title: "Umschließe leeren Raum.",
+      summary: "Du gewinnst Go, indem du mehr vom Brett kontrollierst als dein Gegner. Leere Punkte innerhalb deiner Grenzen werden zu Gebiet.",
+      instruction: "Schwarz umschließt den goldenen Punkt bereits von drei Seiten. Schließe die letzte Lücke.",
+      hint: "Spiele direkt unter dem goldenen Punkt.",
+      success: "Richtig. Der leere goldene Punkt ist jetzt von Schwarz umschlossen.",
+      takeaway: "Gebiet ist das Ziel. Schlagen hilft dir, eigenes Gebiet zu schützen und gegnerische Grenzen zu durchbrechen.",
     },
-    turns: {
+    liberties: {
       eyebrow: "Lektion 2 von 6",
-      shortTitle: "Schwarz und Weiß",
-      title: "Schwarz beginnt, danach wird abgewechselt.",
-      summary: "Ein Spieler setzt Schwarz, der andere Weiß. In jedem Zug kommt genau ein neuer Stein auf einen freien Schnittpunkt.",
-      instruction: "Setze drei schwarze Steine an beliebige freie Stellen. Weiß antwortet nach jedem Zug.",
-      hint: "Hier gibt es keinen falschen freien Punkt. Beobachte, wie sich die Farben abwechseln.",
-      success: "Drei Zugpaare sind vollständig: Schwarz, Weiß, Schwarz, Weiß, Schwarz, Weiß.",
-      takeaway: "In einer ausgeglichenen Partie macht Schwarz immer den ersten Zug; danach wechseln sich beide Spieler ab.",
+      shortTitle: "Freiheiten",
+      title: "Jeder Stein braucht Freiheiten.",
+      summary: "Eine Freiheit ist ein leerer Punkt direkt über, unter, links oder rechts neben einem Stein. Diagonalen zählen nicht.",
+      instruction: "Finde alle vier Freiheiten des schwarzen Steins, indem du sie nacheinander anklickst.",
+      hint: "Folge den vier Linien, die vom Stein wegführen.",
+      success: "Genau vier. Ein einzelner Stein in der Mitte beginnt mit vier Freiheiten.",
+      takeaway: "Zähle vor jedem Kampf die Freiheiten deiner Steine und die des Gegners.",
     },
-    intersections: {
+    capture: {
       eyebrow: "Lektion 3 von 6",
-      shortTitle: "Schnittpunkte",
-      title: "Steine liegen dort, wo sich zwei Linien kreuzen.",
-      summary: "Die Flächen zwischen den Linien sind keine Spielfelder. Jeder Zug gehört auf einen Schnittpunkt.",
-      instruction: "Setze einen schwarzen Stein auf den markierten Schnittpunkt in der Mitte.",
-      hint: "Tippe auf den pulsierenden Punkt, an dem sich die waagerechte und senkrechte Linie treffen.",
-      success: "Richtig. Der Stein liegt genau auf der Kreuzung zweier Linien.",
-      takeaway: "Go-Koordinaten bezeichnen Schnittpunkte der Linien – nicht die Flächen dazwischen.",
+      shortTitle: "Schlagen",
+      title: "Nimm die letzte Freiheit.",
+      summary: "Der weiße Stein hat nur noch eine Freiheit. Ein Stein oder eine Gruppe mit einer Freiheit steht im Atari.",
+      instruction: "Spiele Schwarz auf die letzte Freiheit von Weiß. Danach wird der weiße Stein vom Brett entfernt.",
+      hint: "Der letzte freie Punkt liegt direkt unter dem weißen Stein.",
+      success: "Geschlagen. Ohne Freiheiten wird der weiße Stein vom Brett entfernt.",
+      takeaway: "Atari bedeutet: Eine Freiheit bleibt. Besetze diese letzte Freiheit, um zu schlagen.",
     },
-    "stones-stay": {
+    escape: {
       eyebrow: "Lektion 4 von 6",
-      shortTitle: "Steine bleiben liegen",
-      title: "Ein gesetzter Stein wird nicht mehr bewegt.",
-      summary: "Anders als bei vielen Brettspielen gibt es bei Go keine beweglichen Figuren. Deine Stellung wächst, indem du neue Steine hinzufügst.",
-      instruction: "Setze zwei weitere schwarze Steine. Achte darauf, dass der erste Stein genau an seinem Platz bleibt.",
-      hint: "Wähle zwei beliebige freie Schnittpunkte. Du baust eine Stellung auf, statt den ersten Stein zu bewegen.",
-      success: "Jetzt bleiben drei Steine auf dem Brett. Sie verschwinden später nur, wenn der Gegner sie gefangen nimmt.",
-      takeaway: "Jeder Zug fügt einen Stein hinzu; er rutscht oder springt niemals auf einen anderen Punkt.",
+      shortTitle: "Retten",
+      title: "Rette einen Stein im Atari.",
+      summary: "Diesmal hat dein schwarzer Stein nur noch eine Freiheit. Besetzt Weiß sie im nächsten Zug, wird Schwarz geschlagen.",
+      instruction: "Verlängere Schwarz auf seine letzte Freiheit. Die zwei verbundenen Steine erhalten dadurch neue Freiheiten.",
+      hint: "Spiele direkt unter dem schwarzen Stein.",
+      success: "Gerettet. Der neue Stein verbindet sich mit dem ersten und gibt der Gruppe mehr Raum.",
+      takeaway: "Steht deine Gruppe im Atari, musst du verlängern, verbinden oder selbst schlagen.",
     },
-    surround: {
+    connect: {
       eyebrow: "Lektion 5 von 6",
-      shortTitle: "Umschließen statt jagen",
-      title: "Gebiet ist wichtiger als jeden Stein zu verfolgen.",
-      summary: "Der nahe weiße Stein wirkt vielleicht verlockend. Ein Zug, der sofort eine Grenze schließt, schafft jedoch unmittelbar Wert.",
-      instruction: "Wähle den Zug, der das schwarze Gebiet um den goldenen Punkt schließt.",
-      hint: "Ignoriere den entfernten weißen Stein. Schließe die Lücke direkt unter dem goldenen Punkt.",
-      success: "Gute Wahl. Schwarz hat Gebiet vollendet, statt einen Zug für eine entfernte Verfolgung auszugeben.",
-      takeaway: "Gefangennahmen sind nützlich, aber kontrollierter Raum entscheidet die Partie – nicht die Zahl der verfolgten Steine.",
+      shortTitle: "Verbinden",
+      title: "Verbundene Steine teilen Freiheiten.",
+      summary: "Steine, die sich entlang einer Linie berühren, bilden eine Gruppe. Diagonal getrennte Steine bleiben getrennte Gruppen.",
+      instruction: "Setze einen schwarzen Stein in die Lücke und verbinde beide Steine zu einer Gruppe.",
+      hint: "Spiele genau zwischen die beiden schwarzen Steine.",
+      success: "Verbunden. Alle drei Steine bilden jetzt eine Gruppe und teilen ihre Freiheiten.",
+      takeaway: "Verbindungen lassen Steine zusammenarbeiten – aber ohne gemeinsame Freiheiten wird die ganze Gruppe geschlagen.",
     },
-    "board-regions": {
+    "capture-group": {
       eyebrow: "Lektion 6 von 6",
-      shortTitle: "Ecke, Rand und Mitte",
-      title: "Der Brettrand hilft dir beim Umschließen.",
-      summary: "Eine Ecke liefert bereits zwei Begrenzungen, ein Rand eine und die Mitte keine.",
-      instruction: "Umschließe den markierten Punkt zuerst in der Ecke, dann am Rand und zuletzt in der Mitte.",
-      hint: "Setze schwarze Steine nur auf die offenen Linien direkt neben dem goldenen Punkt.",
-      success: "Du brauchtest 2 Steine in der Ecke, 3 am Rand und 4 in der Mitte. Deshalb beginnen Go-Partien meist in der Nähe der Ecken.",
-      takeaway: "Ecken zuerst, dann Ränder, dann die Mitte ist ein hilfreiches Eröffnungsprinzip – keine starre Regel.",
+      shortTitle: "Gruppe schlagen",
+      title: "Eine Gruppe teilt auch ihr Schicksal.",
+      summary: "Die zwei weißen Steine sind verbunden. Gemeinsam haben sie nur noch eine Freiheit am unteren Rand.",
+      instruction: "Finde die letzte Freiheit der Gruppe und schlage beide weißen Steine mit einem Zug.",
+      hint: "Folge der weißen Gruppe nach unten bis zum einzigen freien Nachbarpunkt.",
+      success: "Zwei Steine geschlagen. Verbundene Steine teilen ihre Freiheiten und werden gemeinsam entfernt.",
+      takeaway: "Zähle die Freiheiten der gesamten verbundenen Gruppe, nicht die jedes einzelnen Steins.",
     },
   },
 };
