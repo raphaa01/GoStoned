@@ -206,16 +206,15 @@ async function run() {
   const firstProfile = await request("/api/profile", {
     headers: { Cookie: firstLogin.cookie! },
   });
-  const firstStats = firstProfile.body.stats as Array<{
-    boardSize: number;
-    games: number;
-    wins: number;
-    losses: number;
-    draws: number;
+  const firstRating = firstProfile.body.rating as {
     rating: number;
+    ratingDeviation: number;
+    ratedGameCount: number;
+    isProvisional: boolean;
+    algorithmVersion: string;
     highestRating: number;
     ratingChange30Days: number;
-  }>;
+  };
   const firstHistory = firstProfile.body.history as Array<{
     gameId: string;
     result: string;
@@ -230,21 +229,20 @@ async function run() {
     rated: boolean;
   }>;
   const firstGameHistory = firstHistory.find((entry) => entry.gameId === gameId);
-  const firstBoardStat = firstStats.find((stat) => stat.boardSize === 9);
-  assert.equal(firstBoardStat?.games, 1);
-  assert.equal(firstBoardStat?.wins, 0);
-  assert.equal(firstBoardStat?.losses, 1);
-  assert.equal(firstBoardStat?.draws, 0);
-  assert.equal(firstBoardStat?.rating, 1184);
-  assert.equal(firstBoardStat?.highestRating, 1200);
-  assert.equal(firstBoardStat?.ratingChange30Days, -16);
+  assert.equal(firstRating.ratedGameCount, 1);
+  assert.equal(firstRating.isProvisional, true);
+  assert.equal(firstRating.algorithmVersion, "glicko2-v1-tau-0.5");
+  assert.ok(firstRating.rating < 1200);
+  assert.ok(firstRating.ratingDeviation > 0 && firstRating.ratingDeviation < 350);
+  assert.equal(firstRating.highestRating, firstRating.rating);
+  assert.ok(firstRating.ratingChange30Days < 0);
   assert.equal(firstGameHistory?.result, "loss");
   assert.equal(firstGameHistory?.ratingBefore, 1200);
-  assert.equal(firstGameHistory?.ratingAfter, 1184);
-  assert.equal(firstGameHistory?.ratingChange, -16);
+  assert.equal(firstGameHistory?.ratingAfter, firstRating.rating);
+  assert.equal(firstGameHistory?.ratingChange, firstRating.ratingChange30Days);
   assert.equal(firstRecentGames[0].gameId, gameId);
   assert.equal(firstRecentGames[0].result, "loss");
-  assert.equal(firstRecentGames[0].ratingChange, -16);
+  assert.equal(firstRecentGames[0].ratingChange, firstGameHistory?.ratingChange);
   assert.equal(firstRecentGames[0].rated, true);
 
   const storedGame = await request(`/api/games/${gameId}`, {
@@ -258,16 +256,60 @@ async function run() {
   const secondProfile = await request("/api/profile", {
     headers: { Cookie: registeredSecond.cookie! },
   });
+  const secondRating = secondProfile.body.rating as {
+    rating: number;
+    ratingDeviation: number;
+    ratedGameCount: number;
+    isProvisional: boolean;
+    algorithmVersion: string;
+    ratingChange30Days: number;
+  };
   const secondHistory = secondProfile.body.history as Array<{
     gameId: string;
     result: string;
+    ratingBefore: number;
+    ratingAfter: number;
     ratingChange: number;
   }>;
   const secondGameHistory = secondHistory.find((entry) => entry.gameId === gameId);
+  assert.equal(secondRating.ratedGameCount, 1);
+  assert.equal(secondRating.isProvisional, true);
+  assert.equal(secondRating.algorithmVersion, "glicko2-v1-tau-0.5");
+  assert.ok(secondRating.rating > 1200);
+  assert.equal(secondRating.ratingDeviation, firstRating.ratingDeviation);
+  assert.equal(secondRating.ratingChange30Days, secondRating.rating - 1200);
   assert.equal(secondGameHistory?.result, "win");
-  assert.equal(secondGameHistory?.ratingChange, 16);
+  assert.equal(secondGameHistory?.ratingBefore, 1200);
+  assert.equal(secondGameHistory?.ratingAfter, secondRating.rating);
+  assert.equal(secondGameHistory?.ratingChange, secondRating.ratingChange30Days);
 
-  console.log(`Accounts, sessions, matchmaking, chat, rating history, and game ${gameId} passed.`);
+  const events = await getPool().query<{
+    player_key: string;
+    outcome_kind: string;
+    opponent_kind: string;
+    algorithm_version: string;
+  }>(
+    `SELECT player_key,outcome_kind,opponent_kind,algorithm_version
+       FROM game_glicko2_rating_events
+      WHERE game_id=$1
+      ORDER BY player_key`,
+    [gameId],
+  );
+  assert.equal(events.rowCount, 2);
+  assert.deepEqual(
+    new Set(events.rows.map(({ player_key }) => player_key)),
+    new Set([firstUser.playerKey, secondUser.playerKey]),
+  );
+  assert.deepEqual(
+    events.rows.map(({ outcome_kind }) => outcome_kind).sort(),
+    ["loss", "win"],
+  );
+  assert.ok(events.rows.every(({ opponent_kind }) => opponent_kind === "registered_human"));
+  assert.ok(events.rows.every(
+    ({ algorithm_version }) => algorithm_version === "glicko2-v1-tau-0.5",
+  ));
+
+  console.log(`Accounts, sessions, matchmaking, chat, global ratings, and game ${gameId} passed.`);
 }
 
 run()
