@@ -11,6 +11,7 @@ const initialPeriod = new Date("2026-01-01T00:00:00.000Z");
 const nextPeriod = new Date("2026-01-02T00:00:00.000Z");
 
 type StoredEvent = {
+  sql: string;
   player_key: string;
   outcome_kind: "win" | "loss" | "draw" | "no_result";
   algorithm_version: string;
@@ -112,6 +113,7 @@ class FakeRatingDatabase {
         if (sql.includes("INSERT INTO game_glicko2_rating_events")) {
           const botEvent = sql.includes("'calibrated_bot'");
           this.events.push({
+            sql,
             player_key: String(values[1]),
             outcome_kind: values[botEvent ? 10 : 4] as StoredEvent["outcome_kind"],
             algorithm_version: String(values[botEvent ? 28 : 21]),
@@ -152,6 +154,10 @@ test("concurrent retries serialize on the game and persist one exact paired tran
   assert.equal(database.updateCount, 2);
   assert.deepEqual(database.events.map((event) => event.player_key), [blackKey, whiteKey]);
   assert.deepEqual(database.events.map((event) => event.outcome_kind), ["win", "loss"]);
+  for (const event of database.events) {
+    assert.match(event.sql, /SELECT terminal\.finished_at FROM games AS terminal/);
+    assert.match(event.sql, /SELECT state\.last_rating_period_at/);
+  }
   assert.equal(database.states.get(blackKey)?.count, 1);
   assert.equal(database.states.get(whiteKey)?.count, 1);
   assert.ok((database.states.get(blackKey)?.rating ?? 0) > 1200);
@@ -197,6 +203,8 @@ test("an exact calibrated binding updates only the registered human state", asyn
   assert.deepEqual(await database.run(), { rated: true, kind: "rated" });
   assert.equal(database.events.length, 1);
   assert.equal(database.events[0].opponent_kind, "calibrated_bot");
+  assert.match(database.events[0].sql, /SELECT terminal\.finished_at FROM games AS terminal/);
+  assert.match(database.events[0].sql, /SELECT state\.last_rating_period_at/);
   assert.equal(database.updateCount, 1);
   assert.ok((database.states.get(blackKey)?.rating ?? 0) > 1200);
 });
@@ -204,6 +212,7 @@ test("an exact calibrated binding updates only the registered human state", asyn
 test("partial pre-existing evidence fails closed", async () => {
   const database = new FakeRatingDatabase();
   database.events.push({
+    sql: "",
     player_key: blackKey,
     outcome_kind: "win",
     algorithm_version: "glicko2-v1-tau-0.5",
