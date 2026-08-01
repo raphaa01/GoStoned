@@ -907,3 +907,9 @@ test("all eligible Japanese terminal transitions invoke the shared rating bounda
   const source = readFileSync(join(process.cwd(), "lib/game/japaneseGameService.ts"), "utf8");
   assert.equal(source.match(/await recordLegacyFinishedStats\(/g)?.length, 5);
 });
+
+test("Japanese move clocks bind timestamp columns through separate PostgreSQL parameters", () => {
+  const source = readFileSync(join(process.cwd(), "lib/game/japaneseGameService.ts"), "utf8");
+  assert.match(source, /turn_started_at=\$8, updated_at=\$9/);
+  assert.match(source, /\.\.\.clockAssignments,\s+now,\s+now,/);
+});

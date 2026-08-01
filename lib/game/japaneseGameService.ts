@@ -1257,9 +1257,16 @@ export async function submitJapaneseMove(
       `UPDATE games SET to_move=$2, consecutive_passes=$3,
           black_time_remaining_ms=$4, white_time_remaining_ms=$5,
           black_periods_remaining=$6, white_periods_remaining=$7,
-          turn_started_at=$8, updated_at=$8, version=version+1
+          turn_started_at=$8, updated_at=$9, version=version+1
         WHERE id=$1 RETURNING *`,
-      [gameId, nextAuthority.state.toMove, nextAuthority.state.consecutivePasses, ...clockAssignments, now],
+      [
+        gameId,
+        nextAuthority.state.toMove,
+        nextAuthority.state.consecutivePasses,
+        ...clockAssignments,
+        now,
+        now,
+      ],
     );
     const nextLoaded = {
       ...loaded,
