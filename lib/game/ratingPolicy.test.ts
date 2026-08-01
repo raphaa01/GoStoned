@@ -56,13 +56,9 @@ test("rates only games between two verified registered accounts", () => {
   }
 });
 
-test("routes every terminal flow through the global rating finalizer", () => {
-  const chineseService = readFileSync(
+test("routes every active terminal flow through the global rating finalizer", () => {
+  const service = readFileSync(
     join(process.cwd(), "lib/game/gameService.ts"),
-    "utf8",
-  );
-  const japaneseService = readFileSync(
-    join(process.cwd(), "lib/game/japaneseGameService.ts"),
     "utf8",
   );
   const finalizer = readFileSync(
@@ -70,18 +66,13 @@ test("routes every terminal flow through the global rating finalizer", () => {
     "utf8",
   );
 
-  assert.equal(chineseService.match(/await finalizeGameRatings\(/g)?.length, 4);
-  assert.equal(japaneseService.match(/await finalizeGameRatings\(/g)?.length, 5);
-  assert.doesNotMatch(chineseService, /INSERT INTO player_stats|UPDATE player_stats/);
-  assert.doesNotMatch(chineseService, /INSERT INTO player_rating_history/);
-  assert.doesNotMatch(japaneseService, /INSERT INTO player_stats|UPDATE player_stats/);
-  assert.doesNotMatch(japaneseService, /INSERT INTO player_rating_history/);
+  assert.equal(service.match(/await finalizeGameRatings\(/g)?.length, 4);
+  assert.doesNotMatch(service, /INSERT INTO player_stats|UPDATE player_stats/);
+  assert.doesNotMatch(service, /INSERT INTO player_rating_history/);
   assert.match(finalizer, /INSERT INTO game_glicko2_rating_events/);
   assert.match(finalizer, /UPDATE player_glicko2_ratings/);
-  for (const service of [chineseService, japaneseService]) {
-    assert.match(service, /COUNT\(\*\) = 2 AND BOOL_AND\(event\.opponent_kind = 'registered_human'\)/);
-    assert.match(service, /COUNT\(\*\) = 1 AND BOOL_AND\(event\.opponent_kind = 'calibrated_bot'\)/);
-  }
+  assert.match(service, /COUNT\(\*\) = 2 AND BOOL_AND\(event\.opponent_kind = 'registered_human'\)/);
+  assert.match(service, /COUNT\(\*\) = 1 AND BOOL_AND\(event\.opponent_kind = 'calibrated_bot'\)/);
   assert.match(finalizer, /FROM games WHERE id=\$1 FOR UPDATE/);
   assert.match(finalizer, /ORDER BY player_key\s+FOR UPDATE/);
   assert.match(finalizer, /if \(existing\.rowCount !== 0\)/);

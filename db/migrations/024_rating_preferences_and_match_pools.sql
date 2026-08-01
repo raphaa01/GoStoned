@@ -165,9 +165,9 @@ BEGIN
       matchmaking_policy_version IS NULL
       OR COALESCE((
         matchmaking_policy_version = 'adaptive-global-glicko-match-v1'
-        AND rules_snapshot IN ('japanese', 'chinese')
+        AND rules_snapshot = 'chinese'
         AND LENGTH(rules_version_snapshot) BETWEEN 1 AND 120
-        AND scoring_method_snapshot IN ('territory', 'area')
+        AND scoring_method_snapshot = 'area'
         AND komi_snapshot IS NOT NULL
         AND handicap_snapshot >= 0
         AND preference_revision > 0

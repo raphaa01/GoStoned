@@ -13,11 +13,11 @@ const now = 1_800_000;
 const configuration: ExactMatchConfiguration = Object.freeze({
   boardSize: 19,
   timeControl: "rapid",
-  rules: "japanese",
-  rulesProfile: "japanese-1989-gostone-v1",
-  rulesVersion: "japanese-1989-gostone-contract-v1",
-  scoringMethod: "territory",
-  komi: 6.5,
+  rules: "chinese",
+  rulesProfile: "chinese-2002-gostone-v1",
+  rulesVersion: "chinese-2002-gostone-v1",
+  scoringMethod: "area",
+  komi: 7.5,
   handicap: 0,
 });
 
@@ -88,11 +88,11 @@ test("board, time, and every persisted rules field are exact pool boundaries", a
   for (const [field, value] of [
     ["boardSize", 13],
     ["timeControl", "classic"],
-    ["rules", "chinese"],
+    ["rules", "other-rules"],
     ["rulesProfile", "another-profile"],
     ["rulesVersion", "another-version"],
-    ["scoringMethod", "area"],
-    ["komi", 7.5],
+    ["scoringMethod", "territory"],
+    ["komi", 6.5],
     ["handicap", 2],
   ] as const) {
     await t.test(field, () => {

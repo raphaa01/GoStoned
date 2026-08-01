@@ -304,8 +304,6 @@ export async function getPlayerProfileStats(playerKey: string) {
               CASE
                 WHEN rating_event.outcome_kind = 'no_result' THEN 'no-result'
                 WHEN rating_event.outcome_kind IS NOT NULL THEN rating_event.outcome_kind
-                WHEN game_record.finish_reason IN ('japanese_no_result', 'japanese_repetition')
-                  AND game_record.winner_key IS NULL THEN 'no-result'
                 WHEN game_record.winner_key IS NULL THEN 'draw'
                 WHEN game_record.winner_key = $1 THEN 'win'
                 ELSE 'loss'

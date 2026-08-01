@@ -18,9 +18,9 @@ type StoredQueue = {
   updated_at: Date;
   matchmaking_policy_version: string;
   match_pool: "guest-unrated" | "registered-rated";
-  rules_snapshot: "japanese";
+  rules_snapshot: "chinese";
   rules_version_snapshot: string;
-  scoring_method_snapshot: "territory";
+  scoring_method_snapshot: "area";
   komi_snapshot: number;
   handicap_snapshot: number;
   rating_snapshot: number | null;
@@ -117,10 +117,10 @@ class MatchmakingPool {
       updated_at: now,
       matchmaking_policy_version: "adaptive-global-glicko-match-v1",
       match_pool: registered ? "registered-rated" : "guest-unrated",
-      rules_snapshot: "japanese",
-      rules_version_snapshot: "japanese-1989-gostone-contract-v1",
-      scoring_method_snapshot: "territory",
-      komi_snapshot: 6.5,
+      rules_snapshot: "chinese",
+      rules_version_snapshot: "chinese-2002-gostone-v1",
+      scoring_method_snapshot: "area",
+      komi_snapshot: 7.5,
       handicap_snapshot: 0,
       rating_snapshot: registered ? 1200 : null,
       rating_deviation_snapshot: registered ? 350 : null,
@@ -357,9 +357,9 @@ class MatchmakingClient {
           updated_at: now,
           matchmaking_policy_version: String(values[4]),
           match_pool: values[5] as StoredQueue["match_pool"],
-          rules_snapshot: "japanese",
+          rules_snapshot: "chinese",
           rules_version_snapshot: String(values[7]),
-          scoring_method_snapshot: "territory",
+          scoring_method_snapshot: "area",
           komi_snapshot: Number(values[9]),
           handicap_snapshot: Number(values[10]),
           rating_snapshot: registered ? Number(values[11]) : null,
@@ -438,9 +438,9 @@ class MatchmakingClient {
         updated_at: now,
         matchmaking_policy_version: String(values[4]),
         match_pool: values[5] as StoredQueue["match_pool"],
-        rules_snapshot: "japanese",
+        rules_snapshot: "chinese",
         rules_version_snapshot: String(values[7]),
-        scoring_method_snapshot: "territory",
+        scoring_method_snapshot: "area",
         komi_snapshot: Number(values[9]),
         handicap_snapshot: Number(values[10]),
         rating_snapshot: values[11] === null ? null : Number(values[11]),

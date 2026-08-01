@@ -319,10 +319,8 @@ BEGIN
   expected_color := CASE NEW.player_key WHEN game_row.black_player_key THEN 'black'
                     WHEN game_row.white_player_key THEN 'white' ELSE NULL END;
   expected_outcome := CASE
-    WHEN game_row.finish_reason IN ('japanese_no_result','japanese_repetition')
-      AND game_row.winner_key IS NULL THEN 'no_result'
     WHEN game_row.winner_key IS NULL
-      AND game_row.finish_reason IN ('score','legacy_score','japanese_adjudication') THEN 'draw'
+      AND game_row.finish_reason IN ('score','legacy_score') THEN 'draw'
     WHEN game_row.winner_key = NEW.player_key THEN 'win'
     WHEN game_row.winner_key IN (game_row.black_player_key,game_row.white_player_key) THEN 'loss'
     ELSE NULL END;

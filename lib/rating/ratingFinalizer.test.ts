@@ -164,27 +164,6 @@ test("concurrent retries serialize on the game and persist one exact paired tran
   assert.ok((database.states.get(whiteKey)?.rating ?? 0) < 1200);
 });
 
-test("Japanese repetition records immutable zero-change evidence without a rating period update", async () => {
-  const database = new FakeRatingDatabase();
-  database.finishReason = "japanese_repetition";
-  database.result = "Void";
-  database.winnerKey = null;
-
-  assert.deepEqual(await database.run(), { rated: true, kind: "no_result" });
-  assert.equal(database.events.length, 2);
-  assert.equal(database.updateCount, 0);
-  for (const event of database.events) {
-    const values = event.values;
-    assert.equal(event.outcome_kind, "no_result");
-    assert.equal(values[5], null);
-    assert.equal(values[11], values[12]);
-    assert.equal(values[13], values[14]);
-    assert.equal(values[15], values[16]);
-    assert.equal(values[17], values[18]);
-    assert.equal(values[19], values[20]);
-  }
-});
-
 test("guest games remain unrated and cannot create global state or evidence", async () => {
   const database = new FakeRatingDatabase();
   database.registeredKeys.delete(whiteKey);

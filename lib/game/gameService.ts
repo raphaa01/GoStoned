@@ -1,5 +1,7 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { query, withReadOnlyTransaction, withTransaction } from "@/lib/db";
+import { GameServiceError } from "./gameServiceError";
+export { GameServiceError } from "./gameServiceError";
 import {
   applyMove,
   boardHash,
@@ -206,16 +208,6 @@ type LoadedGame = {
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
 };
-
-export class GameServiceError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code: string,
-  ) {
-    super(message);
-  }
-}
 
 function storedRulesConfiguration(input: {
   rules: unknown;

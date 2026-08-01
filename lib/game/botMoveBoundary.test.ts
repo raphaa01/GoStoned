@@ -24,9 +24,9 @@ import {
 const configuration: BotGameConfiguration = {
   boardSize: 9,
   timeControl: "rapid",
-  rulesProfile: "japanese-1989-gostone-v1",
-  rulesVersion: "japanese-1989-gostone-contract-v1",
-  komi: 6.5,
+  rulesProfile: "chinese-2002-gostone-v1",
+  rulesVersion: "chinese-2002-gostone-v1",
+  komi: 7.5,
   handicap: 0,
 };
 
@@ -104,7 +104,7 @@ test("canonical requests are stable, content-bound snapshots", () => {
     komi: 7.5,
   };
   assert.equal(canonical.board[0][0], null);
-  assert.equal(canonical.profile.supportedConfigurations[0].komi, 6.5);
+  assert.equal(canonical.profile.supportedConfigurations[0].komi, 7.5);
   assert.equal(Object.isFrozen(canonical), true);
   assert.equal(Object.isFrozen(canonical.board[0]), true);
   assert.equal(Object.isFrozen(canonical.profile), true);

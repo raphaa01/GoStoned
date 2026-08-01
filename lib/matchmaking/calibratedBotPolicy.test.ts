@@ -19,9 +19,9 @@ import {
 const configuration: BotGameConfiguration = Object.freeze({
   boardSize: 19,
   timeControl: "rapid",
-  rulesProfile: "japanese-1989-gostone-v1",
-  rulesVersion: "japanese-1989-gostone-contract-v1",
-  komi: 6.5,
+  rulesProfile: "chinese-2002-gostone-v1",
+  rulesVersion: "chinese-2002-gostone-v1",
+  komi: 7.5,
   handicap: 0,
 });
 

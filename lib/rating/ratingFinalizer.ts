@@ -16,11 +16,7 @@ type TerminalFinishReason =
   | "score"
   | "legacy_score"
   | "resignation"
-  | "timeout"
-  | "japanese_adjudication"
-  | "japanese_no_result"
-  | "japanese_repetition"
-  | "japanese_abandonment";
+  | "timeout";
 
 type TerminalGameRow = QueryResultRow & {
   id: string;
@@ -121,25 +117,8 @@ function classifyTerminal(game: TerminalGameRow): ClassifiedTerminal {
   if (game.black_player_key === game.white_player_key) {
     return conflict("Ratings require two distinct game participants.");
   }
-  if (
-    game.finish_reason === "japanese_no_result"
-    || game.finish_reason === "japanese_repetition"
-  ) {
-    if (game.winner_key !== null) {
-      return conflict("A no-result game cannot identify a winner.");
-    }
-    return {
-      kind: "no_result",
-      outcomes: { black: "no_result", white: "no_result" },
-      scores: { black: null, white: null },
-    };
-  }
   if (game.winner_key === null) {
-    if (![
-      "score",
-      "legacy_score",
-      "japanese_adjudication",
-    ].includes(game.finish_reason)) {
+    if (!["score", "legacy_score"].includes(game.finish_reason)) {
       return conflict("This terminal reason requires an unambiguous winner.");
     }
     return {

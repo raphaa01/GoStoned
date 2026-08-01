@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-const migrationPath = join(process.cwd(), "db/migrations/026_global_glicko2_persistence.sql");
+const migrationPath = join(process.cwd(), "db/migrations/023_global_glicko2_persistence.sql");
 const migration = readFileSync(migrationPath, "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
@@ -54,11 +54,9 @@ test("global state and paired evidence retain the complete versioned Glicko-2 tr
   assert.match(migration, /CREATE POLICY gostone_app_server_insert ON game_glicko2_rating_events/);
 });
 
-test("no-result and opponent boundaries are explicit and fail closed", () => {
-  assert.match(migration, /japanese_no_result', 'japanese_repetition/);
+test("opponent boundaries are explicit and fail closed", () => {
   assert.match(migration, /outcome_kind = 'no_result'[\s\S]*rating_after = rating_before/);
-  assert.match(migration, /game_japanese_repetition_claims/);
-  assert.match(migration, /COUNT\(DISTINCT claim\.claimant_color\) = 2/);
+  assert.match(migration, /finish_reason IN \('score', 'legacy_score'\) THEN 'draw'/);
   assert.match(migration, /opponent_kind IN \('registered_human', 'calibrated_bot'\)/);
   assert.match(migration, /NEW\.opponent_kind <> 'registered_human'/);
   assert.match(migration, /opponent_profile_version/);
