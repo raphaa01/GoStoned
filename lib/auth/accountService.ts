@@ -3,6 +3,18 @@ import { hashPassword, normalizeUsername, validatePasswordIssue, verifyPassword 
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
+import {
+  initialRatingForStartingStrength,
+  STARTING_STRENGTH_POLICY_VERSION,
+  type StartingStrength,
+} from "@/lib/rating/preferences";
+import {
+  GLICKO2_ALGORITHM_VERSION,
+} from "@/lib/rating/glicko2";
+import {
+  GLICKO2_INITIAL_RATING_DEVIATION,
+  GLICKO2_INITIAL_VOLATILITY,
+} from "@/lib/rating/ratingFinalizer";
 
 type LoginRow = AuthUserRow & {
   password_hash: string | null;
@@ -49,14 +61,50 @@ type Registration = {
   token: string;
 };
 
-export async function registerAccount(username: string, password: string): Promise<Registration> {
+export async function registerAccount(
+  username: string,
+  password: string,
+  startingStrength: StartingStrength = { estimate: "unspecified", knownRank: null },
+): Promise<Registration> {
   const passwordHash = await hashPassword(password);
+  const initialRating = initialRatingForStartingStrength(startingStrength);
   return withTransaction(async (client) => {
     const result = await client.query<AuthUserRow>(
-      `INSERT INTO users (username, password_hash, display_name)
-       VALUES ($1, $2, $1)
-       RETURNING id, username, display_name`,
-      [username, passwordHash],
+      `WITH account AS (
+         INSERT INTO users (username, password_hash, display_name)
+         VALUES ($1, $2, $1)
+         RETURNING id, username, display_name
+       ), preference AS (
+         INSERT INTO player_rating_preferences
+           (user_id,display_preference,bot_match_preference,handicap_preference,
+            preference_revision)
+         SELECT id,'both','never','even-only',1 FROM account
+       ), rating_state AS (
+         INSERT INTO player_glicko2_ratings
+           (user_id,player_key,rating,rating_deviation,volatility,rated_game_count,
+            algorithm_version,last_rating_period_at)
+         SELECT id,'user:' || id::text,$6,$7,$8,0,$9,statement_timestamp()
+           FROM account
+         RETURNING user_id,rating,rating_deviation,created_at
+       ), initial_claim AS (
+         INSERT INTO player_initial_rating_claims
+           (user_id,estimate,known_rank,applied_initial_rating,
+            applied_initial_deviation,policy_version,applied_at)
+         SELECT user_id,$3,$4,rating,rating_deviation,$5,created_at
+           FROM rating_state
+       )
+       SELECT id,username,display_name FROM account`,
+      [
+        username,
+        passwordHash,
+        startingStrength.estimate,
+        startingStrength.knownRank,
+        STARTING_STRENGTH_POLICY_VERSION,
+        initialRating,
+        GLICKO2_INITIAL_RATING_DEVIATION,
+        GLICKO2_INITIAL_VOLATILITY,
+        GLICKO2_ALGORITHM_VERSION,
+      ],
     ).catch((error: unknown) => {
       if (isUsernameUniqueViolation(error)) {
         throw new AuthError("This username is already taken.", 409, "username_taken");

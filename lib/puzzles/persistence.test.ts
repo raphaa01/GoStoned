@@ -29,7 +29,7 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(variationMigration, /idx_puzzles_category_order/);
   assert.match(variationMigration, /variation_progress JSONB NOT NULL/);
   assert.ok(
-    schema.replaceAll("\r\n", "\n").endsWith(boardGuardMigration.replaceAll("\r\n", "\n")),
-    "Canonical schema must end with migration 022.",
+    schema.replaceAll("\r\n", "\n").includes(boardGuardMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must contain migration 022 exactly.",
   );
 });

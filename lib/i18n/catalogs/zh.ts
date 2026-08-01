@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const zh = {
   "metadata": {
@@ -141,6 +141,7 @@ export const zh = {
     "puzzlesChapterAction": "解决一个题目"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "您已登录",
     "continueAs": "继续使用",
     "findGame": "寻找游戏",
@@ -162,6 +163,7 @@ export const zh = {
     "haveAccount": "已有账户？",
     "newToGoStone": "首次使用GoStone？",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "请求无法读取。请再试一次。",
       "request_rejected": "此身份验证请求被阻止。请再试一次。",
       "invalid_username": "用户名必须包含3–20个字母、数字或下划线。",
@@ -264,6 +266,7 @@ export const zh = {
     "handicap": "让子"
   },
   "play": {
+    ...en.play,
     "kicker": "实时匹配",
     "title": "选择你的棋盘。",
     "description": "一旦有其他玩家加入，你就进入无干扰的游戏房间。每步棋和消息都会保存在服务器上。",
@@ -565,6 +568,7 @@ export const zh = {
     "botOpponent": "自动对手"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "无法加载您的统计信息。",
     "loading": "正在加载个人资料…",
     "loadComplete": "个人资料加载完成。",
@@ -609,6 +613,7 @@ export const zh = {
     "to": "到"
   },
   "leaderboard": {
+    "globalScope": "全局等级分",
     "kicker": "账户评级",
     "title": "排行榜",
     "description": "仅包括由完成的评级比赛全额支持的账户评级。与等级匹配的KataGo对手的比赛计入评级比赛。",

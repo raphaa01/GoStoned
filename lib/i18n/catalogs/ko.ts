@@ -1,4 +1,4 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 
 export const ko = {
   "metadata": {
@@ -141,6 +141,7 @@ export const ko = {
     "puzzlesChapterAction": "문제 풀기"
   },
   "auth": {
+    ...en.auth,
     "alreadyLoggedIn": "이미 로그인되어 있습니다",
     "continueAs": "계속 진행",
     "findGame": "게임 찾기",
@@ -162,6 +163,7 @@ export const ko = {
     "haveAccount": "이미 계정이 있습니까?",
     "newToGoStone": "GoStone이 처음이신가요?",
     "errors": {
+      ...en.auth.errors,
       "invalid_request": "요청을 읽을 수 없습니다. 다시 시도해 주세요.",
       "request_rejected": "이 인증 요청이 차단되었습니다. 다시 시도해 주세요.",
       "invalid_username": "사용자 이름은 3~20자의 문자, 숫자 또는 밑줄(_)을 포함해야 합니다.",
@@ -264,6 +266,7 @@ export const ko = {
     "handicap": "핸디캡"
   },
   "play": {
+    ...en.play,
     "kicker": "실시간 매치메이킹",
     "title": "보드를 선택하세요.",
     "description": "다른 플레이어가 참가하면 즉시 방해 없는 게임룸에 들어갑니다. 모든 수와 메시지는 서버에 저장됩니다.",
@@ -565,6 +568,7 @@ export const ko = {
     "botOpponent": "자동 상대"
   },
   "profile": {
+    ...en.profile,
     "loadFailed": "통계를 불러올 수 없습니다.",
     "loading": "프로필 불러오는 중…",
     "loadComplete": "프로필 불러오기 완료.",
@@ -609,6 +613,7 @@ export const ko = {
     "to": "에서"
   },
   "leaderboard": {
+    "globalScope": "글로벌 레이팅",
     "kicker": "계정 등급",
     "title": "순위표",
     "description": "완료된 등급 게임으로 완전히 뒷받침된 계정 등급만 포함됩니다. 등급이 맞춰진 KataGo 상대와의 게임은 등급 게임으로 계산됩니다.",

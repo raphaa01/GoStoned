@@ -2368,7 +2368,8 @@ test("second score confirmation rates two database-verified registered players",
   });
   let scoringWrite: unknown[] | undefined;
   let gameFinishWrite: unknown[] | undefined;
-  const ratingLedgerWrites: unknown[][] = [];
+  const ratingEventWrites: unknown[][] = [];
+  const ratingPeriod = new Date("2099-01-01T00:06:00.000Z");
   const client = {
     async query(sql: string, values: unknown[] = []) {
       if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
@@ -2434,28 +2435,57 @@ test("second score confirmation rates two database-verified registered players",
           rowCount: 1,
         };
       }
+      if (sql.includes("FROM games WHERE id=$1 FOR UPDATE")) {
+        return {
+          rows: [finishedScoredGame({
+            id: gameId,
+            black_player_key: blackUserKey,
+            white_player_key: whiteUserKey,
+            result: "B+73.5",
+            winner_key: blackUserKey,
+            finished_at: finalizedAt,
+          })],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("FROM game_glicko2_rating_events") && sql.includes("FOR UPDATE")) {
+        return { rows: [], rowCount: 0 };
+      }
       if (sql.includes("AS player_key") && sql.includes("FROM users")) {
-        assert.deepEqual(values, [blackUserKey, whiteUserKey, gameId]);
+        assert.deepEqual(values, [blackUserKey, whiteUserKey]);
         return {
           rows: [
-            { player_key: blackUserKey, initial_rating: 1_200, participant_type: "account" },
-            { player_key: whiteUserKey, initial_rating: 1_200, participant_type: "account" },
+            { user_id: blackUserKey.slice(5), player_key: blackUserKey },
+            { user_id: whiteUserKey.slice(5), player_key: whiteUserKey },
           ],
           rowCount: 2,
         };
       }
-      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
-        assert.deepEqual(values, [gameId]);
-        return { rows: [], rowCount: 0 };
+      if (sql.includes("INSERT INTO player_glicko2_ratings")) {
+        return { rows: [], rowCount: 2 };
       }
-      if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
-        return { rows: [{ rating: 1_200 }], rowCount: 1 };
+      if (sql.includes("FROM player_glicko2_ratings") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [blackUserKey, whiteUserKey].map((player_key) => ({
+            player_key,
+            rating: "1200",
+            rating_deviation: "350",
+            volatility: "0.06",
+            rated_game_count: 0,
+            algorithm_version: "glicko2-v1-tau-0.5",
+            last_rating_period_at: finalizedAt,
+          })),
+          rowCount: 2,
+        };
       }
-      if (sql.includes("INSERT INTO player_rating_history")) {
-        ratingLedgerWrites.push(values);
-        return { rows: [{ id: `history-${ratingLedgerWrites.length}` }], rowCount: 1 };
+      if (sql.includes("statement_timestamp() AS rating_period_at")) {
+        return { rows: [{ rating_period_at: ratingPeriod }], rowCount: 1 };
       }
-      if (sql.includes("INSERT INTO player_stats") || sql.includes("UPDATE player_stats")) {
+      if (sql.includes("INSERT INTO game_glicko2_rating_events")) {
+        ratingEventWrites.push(values);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("UPDATE player_glicko2_ratings")) {
         return { rows: [], rowCount: 1 };
       }
       throw new Error(`Unexpected database statement in score finalization test: ${sql}`);
@@ -2475,8 +2505,8 @@ test("second score confirmation rates two database-verified registered players",
   }
 
   assert.ok(scoringWrite);
-  const finalizedAt = scoringWrite[12];
-  assert.ok(finalizedAt instanceof Date);
+  const observedFinalizedAt = scoringWrite[12];
+  assert.ok(observedFinalizedAt instanceof Date);
   assert.deepEqual(scoringWrite, [
     gameId,
     boardHash(scoredBoard),
@@ -2490,14 +2520,14 @@ test("second score confirmation rates two database-verified registered players",
     81,
     7.5,
     "B+73.5",
-    finalizedAt,
+    observedFinalizedAt,
   ]);
-  assert.deepEqual(gameFinishWrite, [gameId, "B+73.5", blackUserKey, finalizedAt]);
+  assert.deepEqual(gameFinishWrite, [gameId, "B+73.5", blackUserKey, observedFinalizedAt]);
   assert.deepEqual(
-    ratingLedgerWrites.map((values) => [values[0], values[5], values[6]]),
+    ratingEventWrites.map((values) => [values[1], values[4], values[5]]),
     [
-      [blackUserKey, 16, "win"],
-      [whiteUserKey, -16, "loss"],
+      [blackUserKey, "win", 1],
+      [whiteUserKey, "loss", 0],
     ],
   );
   assert.equal(state.winnerKey, blackUserKey);
@@ -2508,102 +2538,8 @@ test("second score confirmation rates two database-verified registered players",
   );
 });
 
-test("a registered player versus the verified game bot receives a rated result", async () => {
-  const botKey = "bot:44444444-4444-4444-8444-444444444444";
-  const activeGame = gameRow({
-    black_player_key: blackUserKey,
-    white_player_key: botKey,
-    black_player_name: "Registered player",
-    white_player_name: "QuietPanda",
-    black_player_is_bot: false,
-    white_player_is_bot: true,
-    rated: true,
-  });
-  const finishedAt = new Date("2099-01-01T00:05:00.000Z");
-  const finishedGame = gameRow({
-    ...activeGame,
-    status: "finished",
-    phase: "play",
-    to_move: null,
-    result: "W+R",
-    winner_key: botKey,
-    finish_reason: "resignation",
-    finished_at: finishedAt,
-    version: 1,
-  });
-  const statsInserts: unknown[][] = [];
-  const historyInserts: unknown[][] = [];
-  const client = {
-    async query(sql: string, values: unknown[] = []) {
-      if (sql === "BEGIN" || sql.startsWith("SET LOCAL") || sql === "COMMIT" || sql === "ROLLBACK") {
-        return { rows: [], rowCount: 0 };
-      }
-      if (sql.includes("FROM games g")) return { rows: [activeGame], rowCount: 1 };
-      if (sql.includes("FROM moves")) return { rows: [], rowCount: 0 };
-      if (sql.includes("FROM game_scoring_resume_events")) return { rows: [], rowCount: 0 };
-      if (sql.includes("FROM game_scoring_state")) return { rows: [], rowCount: 0 };
-      if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
-        return { rows: [finishedGame], rowCount: 1 };
-      }
-      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
-        return { rows: [], rowCount: 0 };
-      }
-      if (sql.includes("AS player_key") && sql.includes("FROM users")) {
-        assert.deepEqual(values, [blackUserKey, botKey, gameId]);
-        return {
-          rows: [
-            { player_key: blackUserKey, initial_rating: 1_200, participant_type: "account" },
-            { player_key: botKey, initial_rating: 1_350, participant_type: "bot" },
-          ],
-          rowCount: 2,
-        };
-      }
-      if (sql.includes("INSERT INTO player_stats")) {
-        statsInserts.push(values);
-        return { rows: [], rowCount: 1 };
-      }
-      if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
-        return {
-          rows: [{ rating: values[0] === botKey ? 1_350 : 1_280 }],
-          rowCount: 1,
-        };
-      }
-      if (sql.includes("INSERT INTO player_rating_history")) {
-        historyInserts.push(values);
-        return { rows: [{ id: `history-${historyInserts.length}` }], rowCount: 1 };
-      }
-      if (sql.includes("UPDATE player_stats")) return { rows: [], rowCount: 1 };
-      throw new Error(`Unexpected database statement in bot rating test: ${sql}`);
-    },
-    release() {},
-  };
-  const previousPool = globalThis.goStonedDbPool;
-  globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
-
-  let state: GameState;
-  try {
-    state = await resignGame(gameId, blackUserKey);
-  } finally {
-    globalThis.goStonedDbPool = previousPool;
-  }
-
-  assert.equal(state.rated, true);
-  assert.equal(state.winnerKey, botKey);
-  assert.deepEqual(statsInserts, [
-    [botKey, 9, 1_350],
-    [blackUserKey, 9, 1_200],
-  ]);
-  assert.deepEqual(
-    historyInserts.map((values) => [values[0], values[3], values[4], values[5], values[6]]),
-    [
-      [botKey, 1_350, 1_366, 16, "win"],
-      [blackUserKey, 1_280, 1_264, -16, "loss"],
-    ],
-  );
-});
-
-test("rating finalization rolls back pre-existing and racing ledger conflicts", async (t) => {
-  for (const mode of ["pre-existing", "insert-race"] as const) {
+test("rating finalization rolls back partial and contradictory evidence", async (t) => {
+  for (const mode of ["partial", "contradictory"] as const) {
     await t.test(mode, async () => {
       const statements: string[] = [];
       const activeGame = gameRow({
@@ -2635,26 +2571,25 @@ test("rating finalization rolls back pre-existing and racing ledger conflicts", 
           if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
             return { rows: [finishedGame], rowCount: 1 };
           }
-          if (sql.includes("AS player_key") && sql.includes("FROM users")) {
-            return {
-              rows: [
-                { player_key: blackUserKey, initial_rating: 1_200, participant_type: "account" },
-                { player_key: whiteUserKey, initial_rating: 1_200, participant_type: "account" },
-              ],
-              rowCount: 2,
+          if (sql.includes("FROM games WHERE id=$1 FOR UPDATE")) {
+            return { rows: [finishedGame], rowCount: 1 };
+          }
+          if (sql.includes("FROM game_glicko2_rating_events") && sql.includes("FOR UPDATE")) {
+            const blackEvent = {
+              player_key: blackUserKey,
+              outcome_kind: mode === "contradictory" ? "win" : "loss",
+              algorithm_version: "glicko2-v1-tau-0.5",
             };
-          }
-          if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
-            return mode === "pre-existing"
-              ? { rows: [{ player_key: blackUserKey }], rowCount: 1 }
-              : { rows: [], rowCount: 0 };
-          }
-          if (sql.includes("INSERT INTO player_stats")) return { rows: [], rowCount: 1 };
-          if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
-            return { rows: [{ rating: 1_200 }], rowCount: 1 };
-          }
-          if (sql.includes("INSERT INTO player_rating_history")) {
-            return { rows: [], rowCount: 0 };
+            return mode === "partial"
+              ? { rows: [blackEvent], rowCount: 1 }
+              : {
+                rows: [blackEvent, {
+                  player_key: whiteUserKey,
+                  outcome_kind: "loss",
+                  algorithm_version: "glicko2-v1-tau-0.5",
+                }],
+                rowCount: 2,
+              };
           }
           throw new Error(`Unexpected database statement in rating-conflict test: ${sql}`);
         },
@@ -2676,11 +2611,8 @@ test("rating finalization rolls back pre-existing and racing ledger conflicts", 
       assert.equal(rejection.code, "rating_history_conflict");
       assert.equal(statements.includes("ROLLBACK"), true);
       assert.equal(statements.includes("COMMIT"), false);
-      assert.equal(statements.some((sql) => sql.includes("UPDATE player_stats")), false);
-      assert.equal(
-        statements.filter((sql) => sql.includes("INSERT INTO player_rating_history")).length,
-        mode === "insert-race" ? 1 : 0,
-      );
+      assert.equal(statements.some((sql) => sql.includes("UPDATE player_glicko2_ratings")), false);
+      assert.equal(statements.some((sql) => sql.includes("INSERT INTO game_glicko2_rating_events")), false);
     });
   }
 });
@@ -2723,24 +2655,18 @@ test("a controlled guest can resign to an account without creating rating writes
       if (sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'")) {
         return { rows: [finishedGame], rowCount: 1 };
       }
-      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
+      if (sql.includes("FROM games WHERE id=$1 FOR UPDATE")) {
+        return { rows: [finishedGame], rowCount: 1 };
+      }
+      if (sql.includes("FROM game_glicko2_rating_events") && sql.includes("FOR UPDATE")) {
         return { rows: [], rowCount: 0 };
       }
       if (sql.includes("AS player_key") && sql.includes("FROM users")) {
         eligibilityChecks.push(values);
         return {
-          rows: [{ player_key: blackUserKey, initial_rating: 1_200, participant_type: "account" }],
+          rows: [{ user_id: blackUserKey.slice(5), player_key: blackUserKey }],
           rowCount: 1,
         };
-      }
-      if (sql.includes("SELECT rating") && sql.includes("FROM player_stats")) {
-        return { rows: [{ rating: 1_200 }], rowCount: 1 };
-      }
-      if (sql.includes("INSERT INTO player_rating_history")) {
-        return { rows: [{ id: "history" }], rowCount: 1 };
-      }
-      if (sql.includes("INSERT INTO player_stats") || sql.includes("UPDATE player_stats")) {
-        return { rows: [], rowCount: 1 };
       }
       throw new Error(`Unexpected database statement in resignation test: ${sql}`);
     },
@@ -2767,11 +2693,11 @@ test("a controlled guest can resign to an account without creating rating writes
   const gameFinish = statements.findIndex((sql) =>
     sql.includes("UPDATE games") && sql.includes("finish_reason = 'resignation'"),
   );
-  const ratingWrite = statements.findIndex((sql) => sql.includes("INSERT INTO player_rating_history"));
-  const statsWrite = statements.findIndex((sql) => sql.includes("INSERT INTO player_stats"));
+  const ratingWrite = statements.findIndex((sql) => sql.includes("INSERT INTO game_glicko2_rating_events"));
+  const statsWrite = statements.findIndex((sql) => sql.includes("UPDATE player_glicko2_ratings"));
   assert.ok(scoringDelete >= 0);
   assert.ok(gameFinish > scoringDelete);
-  assert.deepEqual(eligibilityChecks, [[blackUserKey, whiteKey, gameId]]);
+  assert.deepEqual(eligibilityChecks, [[blackUserKey, whiteKey]]);
   assert.equal(ratingWrite, -1);
   assert.equal(statsWrite, -1);
   assert.equal(statements.at(-1), "COMMIT");

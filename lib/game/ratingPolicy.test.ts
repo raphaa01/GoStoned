@@ -18,22 +18,18 @@ const bot = (playerKey: string, rating = 1_350): RatingParticipantRow => ({
   participant_type: "bot",
 });
 
-test("rates account games and account-versus-bot games with verified identities", () => {
+test("rates only games between two verified registered accounts", () => {
   assert.deepEqual(resolveRatingParticipants(
     [black, white],
     [account(white), account(black)],
   ), [account(black), account(white)]);
 
   const botKey = "bot:44444444-4444-4444-8444-444444444444";
-  assert.deepEqual(resolveRatingParticipants(
-    [black, botKey],
-    [bot(botKey), account(black)],
-  ), [account(black), bot(botKey)]);
-
   for (const [name, participants, rows] of [
     ["guest versus guest", ["guest:black", "guest:white"], []],
     ["account versus guest", [black, "guest:white"], [account(black)]],
     ["guest versus bot", ["guest:black", botKey], [bot(botKey)]],
+    ["uncalibrated bot", [black, botKey], [account(black), bot(botKey)]],
     ["deleted account", [black, white], [account(black)]],
     ["malformed account key", [black, "user:not-a-uuid"], [account(black)]],
     ["same account twice", [black, black], [account(black)]],
@@ -60,24 +56,24 @@ test("rates account games and account-versus-bot games with verified identities"
   }
 });
 
-test("keeps every terminal rating write behind one eligibility boundary", () => {
+test("routes every active terminal flow through the global rating finalizer", () => {
   const service = readFileSync(
     join(process.cwd(), "lib/game/gameService.ts"),
     "utf8",
   );
-  assert.equal(service.match(/await recordFinishedStats\(/g)?.length, 4);
-  assert.equal(service.match(/INSERT INTO player_stats/g)?.length, 1);
-  assert.equal(service.match(/INSERT INTO player_rating_history/g)?.length, 1);
-  assert.equal(service.match(/UPDATE player_stats/g)?.length, 1);
-  assert.match(service, /SELECT 'user:' \|\| id::text AS player_key/);
-  assert.match(service, /SELECT bot_player_key AS player_key/);
-  assert.match(service, /target_rating AS initial_rating/);
-  assert.match(service, /COUNT\(DISTINCT history\.player_key\) = 2/);
-  assert.match(
-    service,
-    /history\.player_key IN \(g\.black_player_key, g\.white_player_key\)/,
+  const finalizer = readFileSync(
+    join(process.cwd(), "lib/rating/ratingFinalizer.ts"),
+    "utf8",
   );
-  assert.match(service, /FROM player_rating_history\s+WHERE game_id = \$1\s+FOR UPDATE/);
-  assert.match(service, /if \(existingHistory\.rowCount !== 0\)/);
-  assert.match(service, /if \(ledger\.rowCount !== 1\)/);
+
+  assert.equal(service.match(/await finalizeGameRatings\(/g)?.length, 4);
+  assert.doesNotMatch(service, /INSERT INTO player_stats|UPDATE player_stats/);
+  assert.doesNotMatch(service, /INSERT INTO player_rating_history/);
+  assert.match(finalizer, /INSERT INTO game_glicko2_rating_events/);
+  assert.match(finalizer, /UPDATE player_glicko2_ratings/);
+  assert.match(service, /COUNT\(\*\) = 2 AND BOOL_AND\(event\.opponent_kind = 'registered_human'\)/);
+  assert.match(service, /COUNT\(\*\) = 1 AND BOOL_AND\(event\.opponent_kind = 'calibrated_bot'\)/);
+  assert.match(finalizer, /FROM games WHERE id=\$1 FOR UPDATE/);
+  assert.match(finalizer, /ORDER BY player_key\s+FOR UPDATE/);
+  assert.match(finalizer, /if \(existing\.rowCount !== 0\)/);
 });

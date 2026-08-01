@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LoaderCircle, UserRound } from "lucide-react";
+import { Gauge, KeyRound, LoaderCircle, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useId, useRef, useState } from "react";
@@ -8,6 +8,10 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields, type AuthField } from "@/lib/auth/errorFields";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
+import {
+  KNOWN_RANK_OPTIONS,
+  type StartingStrengthEstimate,
+} from "@/lib/rating/preferences";
 
 type FormError = {
   message: string;
@@ -26,6 +30,8 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [startingStrength, setStartingStrength] = useState<StartingStrengthEstimate>("unspecified");
+  const [knownRank, setKnownRank] = useState("12k");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
   const usernameHintId = useId();
@@ -41,7 +47,14 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
       const response = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(mode === "register"
+          ? {
+              username,
+              password,
+              startingStrength,
+              knownRank: startingStrength === "known" ? knownRank : null,
+            }
+          : { username, password }),
       });
       const body = (await response.json()) as { ok: boolean; code?: string };
       if (!response.ok || !body.ok) {
@@ -144,6 +157,43 @@ export function AuthForm({ mode, reauthenticate = false, returnTo = null }: Auth
             />
           </span>
         </label>
+
+        {registering ? (
+          <fieldset className="auth-strength">
+            <legend>{dictionary.auth.startingStrength}</legend>
+            <p>{dictionary.auth.startingStrengthHint}</p>
+            <label>
+              <span className="sr-only">{dictionary.auth.startingStrength}</span>
+              <span className="input-wrap">
+                <Gauge size={18} />
+                <select
+                  aria-label={dictionary.auth.startingStrength}
+                  onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}
+                  value={startingStrength}
+                >
+                  <option value="unspecified">{dictionary.auth.strengthUnspecified}</option>
+                  <option value="new">{dictionary.auth.strengthNew}</option>
+                  <option value="beginner">{dictionary.auth.strengthBeginner}</option>
+                  <option value="intermediate">{dictionary.auth.strengthIntermediate}</option>
+                  <option value="experienced">{dictionary.auth.strengthExperienced}</option>
+                  <option value="known">{dictionary.auth.strengthKnown}</option>
+                </select>
+              </span>
+            </label>
+            {startingStrength === "known" ? (
+              <label>
+                <span>{dictionary.auth.knownRank}</span>
+                <select
+                  aria-label={dictionary.auth.knownRank}
+                  onChange={(event) => setKnownRank(event.target.value)}
+                  value={knownRank}
+                >
+                  {KNOWN_RANK_OPTIONS.map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+                </select>
+              </label>
+            ) : null}
+          </fieldset>
+        ) : null}
 
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">

@@ -16,6 +16,19 @@ type StoredQueue = {
   game_id: string | null;
   created_at: Date;
   updated_at: Date;
+  matchmaking_policy_version: string;
+  match_pool: "guest-unrated" | "registered-rated";
+  rules_snapshot: "chinese";
+  rules_version_snapshot: string;
+  scoring_method_snapshot: "area";
+  komi_snapshot: number;
+  handicap_snapshot: number;
+  rating_snapshot: number | null;
+  rating_deviation_snapshot: number | null;
+  reliable_latency_ms: number | null;
+  abandonment_risk: "normal";
+  handicap_preference: "even-only";
+  bot_match_preference: "never";
 };
 
 type StoredGame = {
@@ -92,6 +105,7 @@ class MatchmakingPool {
     boardSize: StoredQueue["board_size"] = 9,
   ) {
     const now = new Date();
+    const registered = playerKey.startsWith("user:");
     this.queue.set(playerKey, {
       player_key: playerKey,
       board_size: boardSize,
@@ -101,6 +115,19 @@ class MatchmakingPool {
       game_id: null,
       created_at: now,
       updated_at: now,
+      matchmaking_policy_version: "adaptive-global-glicko-match-v1",
+      match_pool: registered ? "registered-rated" : "guest-unrated",
+      rules_snapshot: "chinese",
+      rules_version_snapshot: "chinese-2002-gostone-v1",
+      scoring_method_snapshot: "area",
+      komi_snapshot: 7.5,
+      handicap_snapshot: 0,
+      rating_snapshot: registered ? 1200 : null,
+      rating_deviation_snapshot: registered ? 350 : null,
+      reliable_latency_ms: null,
+      abandonment_risk: "normal",
+      handicap_preference: "even-only",
+      bot_match_preference: "never",
     });
   }
 
@@ -228,6 +255,25 @@ class MatchmakingClient {
       this.releases.push(release);
       return { rows: [{}], rowCount: 1 };
     }
+    if (normalized.includes("FROM player_glicko2_ratings rating")
+      && normalized.includes("FOR UPDATE OF rating,preference")) {
+      assert.match(
+        normalized,
+        /rating\.updated_at::text AS rating_updated_at/,
+        "rating snapshots must retain PostgreSQL microsecond precision",
+      );
+      const playerKey = String(values[0]);
+      if (!playerKey.startsWith("user:")) return { rows: [], rowCount: 0 };
+      return { rows: [{
+        rating: 1200,
+        rating_deviation: 350,
+        algorithm_version: "glicko2-v1-tau-0.5",
+        rating_updated_at: "1970-01-01 00:00:00.000001+00",
+        preference_revision: 1,
+        bot_match_preference: "never",
+        handicap_preference: "even-only",
+      }], rowCount: 1 };
+    }
     if (normalized.startsWith("SELECT ( EXISTS") && normalized.includes("FROM player_blocks")) {
       const firstPlayerKey = String(values[0]);
       const secondPlayerKey = String(values[1]);
@@ -299,6 +345,7 @@ class MatchmakingClient {
       await this.lockRow(playerKey);
       if (!this.viewQueue(playerKey)) {
         const now = new Date();
+        const registered = playerKey.startsWith("user:");
         this.localQueue.set(playerKey, {
           player_key: playerKey,
           board_size: values[1] as StoredQueue["board_size"],
@@ -308,6 +355,19 @@ class MatchmakingClient {
           game_id: null,
           created_at: now,
           updated_at: now,
+          matchmaking_policy_version: String(values[4]),
+          match_pool: values[5] as StoredQueue["match_pool"],
+          rules_snapshot: "chinese",
+          rules_version_snapshot: String(values[7]),
+          scoring_method_snapshot: "area",
+          komi_snapshot: Number(values[9]),
+          handicap_snapshot: Number(values[10]),
+          rating_snapshot: registered ? Number(values[11]) : null,
+          rating_deviation_snapshot: registered ? Number(values[12]) : null,
+          reliable_latency_ms: null,
+          abandonment_risk: "normal",
+          handicap_preference: "even-only",
+          bot_match_preference: "never",
         });
       }
       return { rows: [], rowCount: 1 };
@@ -376,8 +436,21 @@ class MatchmakingClient {
         game_id: null,
         created_at: now,
         updated_at: now,
+        matchmaking_policy_version: String(values[4]),
+        match_pool: values[5] as StoredQueue["match_pool"],
+        rules_snapshot: "chinese",
+        rules_version_snapshot: String(values[7]),
+        scoring_method_snapshot: "area",
+        komi_snapshot: Number(values[9]),
+        handicap_snapshot: Number(values[10]),
+        rating_snapshot: values[11] === null ? null : Number(values[11]),
+        rating_deviation_snapshot: values[12] === null ? null : Number(values[12]),
+        reliable_latency_ms: null,
+        abandonment_risk: "normal",
+        handicap_preference: "even-only",
+        bot_match_preference: values[16] as StoredQueue["bot_match_preference"],
       });
-      return { rows: [], rowCount: 1 };
+      return { rows: [this.localQueue.get(playerKey)!], rowCount: 1 };
     }
     if (
       normalized.startsWith("UPDATE matchmaking_queue")
@@ -407,6 +480,8 @@ class MatchmakingClient {
       const timeControl = values[1];
       const profile = values[2];
       const playerKey = String(values[3]);
+      const policyVersion = String(values[4]);
+      const matchPool = String(values[5]);
       const visibleQueue = new Map(this.pool.queue);
       for (const [localPlayerKey, row] of this.localQueue) {
         if (row) visibleQueue.set(localPlayerKey, row);
@@ -418,6 +493,8 @@ class MatchmakingClient {
           && row.board_size === boardSize
           && row.time_control === timeControl
           && row.rules_profile === profile
+          && row.matchmaking_policy_version === policyVersion
+          && row.match_pool === matchPool
           && row.status === "waiting"
           && row.updated_at.getTime() >= Date.now() - 5 * 60_000
           && !this.pool.isPairBlocked(playerKey, row.player_key)
@@ -431,16 +508,18 @@ class MatchmakingClient {
         .sort((left, right) =>
           left.created_at.getTime() - right.created_at.getTime()
           || (left.player_key < right.player_key ? -1 : left.player_key > right.player_key ? 1 : 0));
-      const opponent = candidates[0];
-      if (!opponent) return { rows: [], rowCount: 0 };
-      await this.lockRow(opponent.player_key);
-      const current = this.viewQueue(opponent.player_key);
-      if (!current || current.status !== "waiting") return { rows: [], rowCount: 0 };
+      const selected = candidates.slice(0, 8);
+      if (selected.length === 0) return { rows: [], rowCount: 0 };
+      for (const candidate of selected) await this.lockRow(candidate.player_key);
+      const currentRows = selected
+        .map((candidate) => this.viewQueue(candidate.player_key))
+        .filter((row): row is StoredQueue => Boolean(row && row.status === "waiting"));
+      if (currentRows.length === 0) return { rows: [], rowCount: 0 };
       if (this.pool.pauseAfterOpponent) {
         this.pool.opponentLocked.resolve();
         await this.pool.continueAfterOpponent.promise;
       }
-      return { rows: [{ ...current }], rowCount: 1 };
+      return { rows: currentRows.map((row) => ({ ...row })), rowCount: currentRows.length };
     }
     if (normalized.startsWith("INSERT INTO games")) {
       const id = this.pool.nextGameId();
@@ -562,7 +641,7 @@ test("simultaneous compatible first joins converge on one game", async () => {
   assert.equal(statuses[0].gameId, statuses[1].gameId);
 });
 
-test("concurrent cross-pool joins for one player cannot create overlapping games", async () => {
+test("concurrent registered joins cannot consume guest opponents or create overlapping games", async () => {
   const pool = new MatchmakingPool();
   pool.seedWaiting("guest:rapid-opponent", "rapid");
   pool.seedWaiting("guest:classic-opponent", "classic");
@@ -572,11 +651,9 @@ test("concurrent cross-pool joins for one player cannot create overlapping games
     joinMatchmaking("user:repeat", 9, "classic"),
   ]));
 
-  assert.equal(pool.games.size, 1);
-  assert.equal(results[0].status, "matched");
-  assert.equal(results[1].status, "matched");
-  assert.equal(results[0].gameId, results[1].gameId);
-  assert.equal(pool.queue.get("user:repeat")?.game_id, results[0].gameId);
+  assert.equal(pool.games.size, 0);
+  assert.ok(results.every((result) => result.status === "waiting"));
+  assert.equal(pool.queue.get("user:repeat")?.match_pool, "registered-rated");
 });
 
 test("cancellation that loses to matching preserves and returns the active game", async () => {
@@ -819,7 +896,7 @@ test("guarded publication rolls back an orphan game and preserves the opponent",
 
 test("created games preserve the selected pool and canonical rules tuple", async () => {
   const pool = new MatchmakingPool();
-  pool.seedWaiting("guest:black", "blitz", 13);
+  pool.seedWaiting("user:black", "blitz", 13);
 
   await withPool(pool, () => joinMatchmaking("user:white", 13, "blitz"));
   const game = [...pool.games.values()][0];

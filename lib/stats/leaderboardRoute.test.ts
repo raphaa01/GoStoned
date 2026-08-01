@@ -38,6 +38,7 @@ function snapshotPool(onQuery?: (sql: string, values: readonly unknown[]) => voi
             games: 3,
             wins: 2,
             rating: 1_216,
+            ratingDeviation: 72,
           }],
         }],
         rowCount: 1,
@@ -46,14 +47,13 @@ function snapshotPool(onQuery?: (sql: string, values: readonly unknown[]) => voi
   } as unknown as Pool;
 }
 
-test("leaderboard returns a narrow timestamped public snapshot with shared caching", async () => {
-  for (const boardSize of [9, 13, 19] as const) {
+test("leaderboard returns one narrow global public snapshot with shared caching", async () => {
     let values: readonly unknown[] = [];
     const response = await withPool(
       snapshotPool((_sql, parameters) => {
         values = parameters;
       }),
-      () => GET(request(`203.0.113.${boardSize}`, `?boardSize=${boardSize}`)),
+      () => GET(request("203.0.113.19", "")),
     );
     const body = await response.json();
 
@@ -62,18 +62,19 @@ test("leaderboard returns a narrow timestamped public snapshot with shared cachi
       response.headers.get("cache-control"),
       "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
     );
-    assert.deepEqual(values, [boardSize, 50]);
+    assert.deepEqual(values, [50, "all-rated"]);
     assert.deepEqual(body, {
       ok: true,
-      boardSize,
       leaderboard: [{
         position: 1,
         playerName: "Visible Player",
         games: 3,
         wins: 2,
         rating: 1_216,
+        ratingDeviation: 72,
       }],
       observedAt: observedAt.toISOString(),
+      opponentScope: "all-rated",
     });
     assert.deepEqual(Object.keys(body.leaderboard[0]), [
       "position",
@@ -81,13 +82,12 @@ test("leaderboard returns a narrow timestamped public snapshot with shared cachi
       "games",
       "wins",
       "rating",
+      "ratingDeviation",
     ]);
-  }
 });
 
 test("leaderboard rejects noncanonical query shapes before rate limiting or database work", async () => {
   const invalidQueries = [
-    "",
     "?boardSize=",
     "?boardSize=bogus",
     "?boardSize=09",
@@ -118,11 +118,22 @@ test("leaderboard rejects noncanonical query shapes before rate limiting or data
     assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
     assert.deepEqual(await response.json(), {
       ok: false,
-      error: "Stats requests require exactly one supported board size.",
+      error: "Use either the global leaderboard or the exact human-only opponent filter.",
       code: "invalid_stats_request",
     });
     assert.equal(databaseCalls, 0);
   }
+});
+
+test("leaderboard exposes one canonical human-only opponent filter", async () => {
+  let values: readonly unknown[] = [];
+  const response = await withPool(
+    snapshotPool((_sql, parameters) => { values = parameters; }),
+    () => GET(request("203.0.113.77", "?opponents=human-only")),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(values, [50, "human-only"]);
+  assert.equal((await response.json()).opponentScope, "human-only");
 });
 
 test("leaderboard rate limiting keeps denials uncached and stops database amplification", async () => {
@@ -134,7 +145,7 @@ test("leaderboard rate limiting keeps denials uncached and stops database amplif
   await withPool(pool, async () => {
     let response: Response | null = null;
     for (let attempt = 0; attempt <= 60; attempt += 1) {
-      response = await GET(request("203.0.113.201", "?boardSize=19"));
+      response = await GET(request("203.0.113.201", ""));
     }
     assert.equal(response?.status, 429);
     assert.equal(response?.headers.get("cache-control"), "no-store, max-age=0");
@@ -155,7 +166,7 @@ test("leaderboard database failures return a stable uncached localized error cod
   try {
     const response = await withPool(
       pool,
-      () => GET(request("203.0.113.202", "?boardSize=19")),
+      () => GET(request("203.0.113.202", "")),
     );
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
