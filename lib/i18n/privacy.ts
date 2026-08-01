@@ -122,7 +122,7 @@ const heading = {
     "GoStone의 개인정보 처리, 쿠키, 서비스 제공업체, 보관 기간 및 개인정보 권리에 관한 정보입니다.",
   ),
   updatedLabel: text("Last updated", "Stand", "Dernière mise à jour", "Última actualización", "更新日期", "最終更新日", "최종 업데이트"),
-  updated: text("July 31, 2026", "31. Juli 2026", "31 juillet 2026", "31 de julio de 2026", "2026年7月31日", "2026年7月31日", "2026년 7월 31일"),
+  updated: text("August 1, 2026", "1. August 2026", "1 août 2026", "1 de agosto de 2026", "2026年8月1日", "2026年8月1日", "2026년 8월 1일"),
 };
 
 const controller = {
@@ -177,15 +177,26 @@ const sections: LocalizedSection[] = [
   },
   {
     title: text("Accounts and authentication", "Konten und Authentifizierung", "Comptes et authentification", "Cuentas y autenticación", "账户与身份验证", "アカウントと認証", "계정 및 인증"),
-    paragraphs: [text(
-      "Creating an account requires a username and password. We store a generated user ID, username, display name, password hash, creation and update times, and hashed session tokens. We never store the password in plain text, and an email address is not required for an account. The data is used to create and authenticate the account and to retain the profile, ratings, and game history. The legal basis is Article 6(1)(b) GDPR. The username and password are required only if you choose an account; guest play remains available.",
-      "Für ein Konto werden Benutzername und Passwort benötigt. Gespeichert werden eine erzeugte Nutzer-ID, Benutzername, Anzeigename, Passwort-Hash, Erstellungs- und Änderungszeitpunkte sowie gehashte Sitzungstokens. Das Passwort wird niemals im Klartext gespeichert; eine E-Mail-Adresse ist für ein Konto nicht erforderlich. Die Daten dienen der Kontoerstellung und Anmeldung sowie der Speicherung von Profil, Wertungen und Partieverlauf. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Benutzername und Passwort sind nur erforderlich, wenn du ein Konto wählst; das Spielen als Gast bleibt möglich.",
-      "La création d’un compte nécessite un nom d’utilisateur et un mot de passe. Nous conservons un identifiant généré, le nom d’utilisateur, le nom affiché, une empreinte du mot de passe, les dates de création et de mise à jour et des jetons de session hachés. Le mot de passe n’est jamais stocké en clair et aucune adresse e-mail n’est requise. Ces données servent à créer et authentifier le compte et à conserver le profil, les classements et l’historique. La base juridique est l’article 6, paragraphe 1, point b) du RGPD. Ces données ne sont obligatoires que si vous choisissez un compte ; le jeu en invité reste possible.",
-      "Para crear una cuenta se necesitan nombre de usuario y contraseña. Guardamos un identificador generado, nombre de usuario, nombre visible, hash de contraseña, fechas de creación y actualización y tokens de sesión cifrados mediante hash. Nunca guardamos la contraseña en texto claro y no exigimos correo electrónico. Los datos se usan para crear y autenticar la cuenta y conservar perfil, puntuaciones e historial. La base jurídica es el artículo 6.1.b del RGPD. Solo son obligatorios si eliges una cuenta; puedes seguir jugando como invitado.",
-      "创建账户需要用户名和密码。我们会保存生成的用户 ID、用户名、显示名称、密码哈希、创建与更新时间以及经过哈希处理的会话令牌。密码绝不会以明文保存，账户也不要求电子邮箱。上述数据用于创建和验证账户并保存个人资料、等级分和对局历史。法律依据为 GDPR 第6条第1款(b)项。只有在您选择创建账户时才必须提供用户名和密码；您仍可作为访客游戏。",
-      "アカウント作成にはユーザー名とパスワードが必要です。生成されたユーザー ID、ユーザー名、表示名、パスワードのハッシュ、作成・更新日時、ハッシュ化されたセッショントークンを保存します。パスワードを平文で保存することはなく、メールアドレスは必須ではありません。アカウントの作成・認証、プロフィール、レーティング、対局履歴の保持に利用します。法的根拠は GDPR 第6条1項(b)です。これらはアカウントを選択した場合のみ必要で、ゲストとしても利用できます。",
-      "계정 생성에는 사용자 이름과 비밀번호가 필요합니다. 생성된 사용자 ID, 사용자 이름, 표시 이름, 비밀번호 해시, 생성·수정 시각 및 해시된 세션 토큰을 저장합니다. 비밀번호는 평문으로 저장하지 않으며 이메일 주소도 요구하지 않습니다. 계정 생성과 인증, 프로필, 레이팅 및 대국 기록 보존에 사용합니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다. 계정을 선택한 경우에만 필수이며 게스트 플레이도 가능합니다.",
-    )],
+    paragraphs: [
+      text(
+        "You can create an account with a username and password. We store a generated user ID, username, display name, password hash, creation and update times, and hashed session tokens. We never store the password in plain text, and an email address is not required for this method. The data is used to create and authenticate the account and to retain the profile, ratings, and game history. The legal basis is Article 6(1)(b) GDPR. Guest play remains available.",
+        "Du kannst ein Konto mit Benutzername und Passwort erstellen. Gespeichert werden eine erzeugte Nutzer-ID, Benutzername, Anzeigename, Passwort-Hash, Erstellungs- und Änderungszeitpunkte sowie gehashte Sitzungstokens. Das Passwort wird niemals im Klartext gespeichert; eine E-Mail-Adresse ist für diese Methode nicht erforderlich. Die Daten dienen der Kontoerstellung und Anmeldung sowie der Speicherung von Profil, Wertungen und Partieverlauf. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Das Spielen als Gast bleibt möglich.",
+        "Vous pouvez créer un compte avec un nom d’utilisateur et un mot de passe. Nous conservons un identifiant généré, le nom affiché, une empreinte du mot de passe, les dates de création et de mise à jour et des jetons de session hachés. Le mot de passe n’est jamais stocké en clair et cette méthode n’exige pas d’adresse e-mail. Ces données servent à créer et authentifier le compte et à conserver le profil, les classements et l’historique. La base juridique est l’article 6, paragraphe 1, point b) du RGPD. Le jeu en invité reste possible.",
+        "Puedes crear una cuenta con nombre de usuario y contraseña. Guardamos un identificador generado, nombre visible, hash de contraseña, fechas de creación y actualización y tokens de sesión con hash. Nunca guardamos la contraseña en texto claro y este método no exige correo electrónico. Los datos se usan para crear y autenticar la cuenta y conservar el perfil, las puntuaciones y el historial. La base jurídica es el artículo 6.1.b del RGPD. Puedes seguir jugando como invitado.",
+        "您可以使用用户名和密码创建账户。我们会保存生成的用户 ID、用户名、显示名称、密码哈希、创建与更新时间以及经过哈希处理的会话令牌。密码绝不会以明文保存，此方式也不要求电子邮箱。上述数据用于创建和验证账户并保存个人资料、等级分和对局历史。法律依据为 GDPR 第6条第1款(b)项。您仍可作为访客游戏。",
+        "ユーザー名とパスワードでアカウントを作成できます。生成されたユーザー ID、ユーザー名、表示名、パスワードのハッシュ、作成・更新日時、ハッシュ化されたセッショントークンを保存します。パスワードを平文で保存することはなく、この方法ではメールアドレスは必須ではありません。アカウントの作成・認証、プロフィール、レーティング、対局履歴の保持に利用します。法的根拠は GDPR 第6条1項(b)です。ゲストとしても利用できます。",
+        "사용자 이름과 비밀번호로 계정을 만들 수 있습니다. 생성된 사용자 ID, 사용자 이름, 표시 이름, 비밀번호 해시, 생성·수정 시각 및 해시된 세션 토큰을 저장합니다. 비밀번호는 평문으로 저장하지 않으며 이 방식에는 이메일 주소가 필요하지 않습니다. 계정 생성과 인증, 프로필, 레이팅 및 대국 기록 보존에 사용합니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다. 게스트 플레이도 가능합니다.",
+      ),
+      text(
+        "Alternatively, you can choose Google or Apple sign-in. You are redirected to that provider, which processes the authentication request under its own privacy terms. GoStone receives the provider-specific account identifier, verified email address, and—when supplied—your name. We store the identifier mapping, email and verification status to recognize the account; we do not store provider access or refresh tokens. The legal basis is Article 6(1)(b) GDPR because this processing performs the sign-in method you request.",
+        "Alternativ kannst du die Anmeldung mit Google oder Apple wählen. Du wirst zum jeweiligen Anbieter weitergeleitet, der die Authentifizierungsanfrage nach seinen eigenen Datenschutzbedingungen verarbeitet. GoStone erhält die anbieterspezifische Kontokennung, die bestätigte E-Mail-Adresse und – sofern übermittelt – deinen Namen. Wir speichern die Zuordnung, E-Mail-Adresse und den Bestätigungsstatus zur Wiedererkennung des Kontos; Zugriffs- oder Aktualisierungstokens des Anbieters werden nicht gespeichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, da die von dir gewählte Anmeldemethode ausgeführt wird.",
+        "Vous pouvez aussi choisir la connexion Google ou Apple. Vous êtes redirigé vers ce fournisseur, qui traite la demande selon ses propres règles de confidentialité. GoStone reçoit l’identifiant propre au fournisseur, l’adresse e-mail vérifiée et, s’il est transmis, votre nom. Nous conservons cette association, l’e-mail et son état de vérification pour reconnaître le compte ; aucun jeton d’accès ou d’actualisation du fournisseur n’est conservé. La base juridique est l’article 6, paragraphe 1, point b) du RGPD.",
+        "También puedes iniciar sesión con Google o Apple. Serás redirigido al proveedor, que trata la autenticación según sus propias condiciones de privacidad. GoStone recibe el identificador del proveedor, el correo verificado y, si se facilita, tu nombre. Guardamos la asociación, el correo y su estado de verificación para reconocer la cuenta; no guardamos tokens de acceso ni de actualización. La base jurídica es el artículo 6.1.b del RGPD.",
+        "您也可以选择使用 Google 或 Apple 登录。系统会将您重定向至相应提供商，提供商将依据其自身隐私条款处理验证请求。GoStone 会收到提供商专用账户标识符、已验证的电子邮箱以及（如提供）您的姓名。我们保存标识符映射、邮箱及验证状态以识别账户；不会保存提供商访问令牌或刷新令牌。法律依据为 GDPR 第6条第1款(b)项。",
+        "Google または Apple でのサインインも選択できます。各事業者に移動し、そのプライバシー条件に基づいて認証が処理されます。GoStone は事業者固有のアカウント ID、確認済みメールアドレス、提供された場合は氏名を受け取ります。アカウント識別のため対応関係、メール、確認状態を保存しますが、アクセストークンや更新トークンは保存しません。法的根拠は GDPR 第6条1項(b)です。",
+        "Google 또는 Apple 로그인을 선택할 수도 있습니다. 해당 업체로 이동하며 업체는 자체 개인정보 조건에 따라 인증 요청을 처리합니다. GoStone은 업체별 계정 식별자, 확인된 이메일 주소 및 제공된 경우 이름을 받습니다. 계정 식별을 위해 연결 정보, 이메일 및 확인 상태를 저장하지만 업체의 액세스 토큰이나 갱신 토큰은 저장하지 않습니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다.",
+      ),
+    ],
   },
   {
     title: text("Playing and platform features", "Spielen und Plattformfunktionen", "Jeu et fonctionnalités", "Juego y funciones de la plataforma", "对局与平台功能", "対局とプラットフォーム機能", "대국 및 플랫폼 기능"),
@@ -378,6 +389,11 @@ const cookies = {
       name: "gostone_guest_session",
       purpose: text("Authenticates a randomly generated guest identity for play and puzzles.", "Authentifiziert eine zufällig erzeugte Gastkennung für Partien und Puzzles.", "Authentifie une identité invité aléatoire pour les parties et problèmes.", "Autentica una identidad aleatoria de invitado para partidas y problemas.", "验证用于对局和题目的随机访客身份。", "対局と問題用にランダム生成されたゲスト ID を認証します。", "대국과 문제용으로 무작위 생성된 게스트 신원을 인증합니다."),
       duration: text("30 days", "30 Tage", "30 jours", "30 días", "30天", "30日", "30일"),
+    },
+    {
+      name: "gostone_oauth_google / gostone_oauth_apple",
+      purpose: text("Temporarily binds a Google or Apple sign-in response to the browser that started it and prevents login request forgery.", "Verknüpft die Antwort einer Google- oder Apple-Anmeldung vorübergehend mit dem Browser, der sie gestartet hat, und verhindert gefälschte Anmeldeanfragen.", "Relie temporairement la réponse Google ou Apple au navigateur qui a initié la connexion et empêche la falsification des demandes.", "Vincula temporalmente la respuesta de Google o Apple al navegador que inició la sesión y evita solicitudes falsificadas.", "临时将 Google 或 Apple 登录响应绑定到发起该流程的浏览器，并防止伪造登录请求。", "Google または Apple の応答を開始したブラウザに一時的に関連付け、ログインリクエストの偽造を防ぎます。", "Google 또는 Apple 로그인 응답을 시작한 브라우저에 일시적으로 연결하여 위조 로그인 요청을 방지합니다."),
+      duration: text("10 minutes; deleted after the callback", "10 Minuten; nach dem Rückruf gelöscht", "10 minutes ; supprimé après le retour", "10 minutos; se elimina tras la respuesta", "10分钟；回调后删除", "10分（コールバック後に削除）", "10분, 콜백 후 삭제"),
     },
     {
       name: "gostone_locale",

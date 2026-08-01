@@ -140,6 +140,13 @@ export const de = {
     login: "Anmelden",
     haveAccount: "Du hast bereits ein Konto?",
     newToGoStone: "Neu bei GoStone?",
+    socialOptions: "Weitere Anmeldeoptionen",
+    continueWithGoogle: "Mit Google fortfahren",
+    continueWithApple: "Mit Apple fortfahren",
+    orContinueWithUsername: "oder mit Benutzername fortfahren",
+    socialCancelled: "Die Anmeldung mit Google oder Apple wurde abgebrochen.",
+    socialUnavailable: "Diese Anmeldeoption ist noch nicht eingerichtet.",
+    socialFailed: "Die Anmeldung mit Google oder Apple konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
     errors: {
       invalid_request: "Die Anfrage konnte nicht gelesen werden. Bitte versuche es erneut.",
       request_rejected: "Diese Authentifizierungsanfrage wurde blockiert. Bitte versuche es erneut.",

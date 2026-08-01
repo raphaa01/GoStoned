@@ -17,6 +17,20 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
   ON users(LOWER(username));
 
+CREATE TABLE IF NOT EXISTS auth_identities (
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple')),
+  provider_subject TEXT NOT NULL CHECK (CHAR_LENGTH(provider_subject) BETWEEN 1 AND 255),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT CHECK (email IS NULL OR CHAR_LENGTH(email) <= 320),
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  last_login_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  PRIMARY KEY (provider, provider_subject),
+  UNIQUE (user_id, provider),
+  CHECK (updated_at >= created_at AND last_login_at >= created_at)
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
@@ -1364,6 +1378,7 @@ ALTER TABLE game_scoring_resume_events
 
 ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_identities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
@@ -1385,11 +1400,12 @@ ALTER TABLE game_japanese_neutral_region_seeds ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON game_scoring_resume_events FROM PUBLIC;
 REVOKE ALL ON player_blocks FROM PUBLIC;
 REVOKE ALL ON player_reports FROM PUBLIC;
+REVOKE ALL ON auth_identities FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
@@ -1397,12 +1413,20 @@ BEGIN
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
       game_japanese_scoring_state,
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM authenticated;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE ON auth_identities TO gostone_app;
   END IF;
 END
 $$;

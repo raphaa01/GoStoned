@@ -4,10 +4,20 @@ import { pageMetadata } from "@/lib/i18n/metadata";
 
 export const metadata = pageMetadata("en", "register", "/register");
 
-export default function RegisterPage() {
+type RegisterPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  const parameters = await searchParams;
   return (
     <AppShell>
-      <div className="auth-page"><AuthForm mode="register" /></div>
+      <div className="auth-page">
+        <AuthForm
+          mode="register"
+          oauthError={typeof parameters.oauthError === "string" ? parameters.oauthError : null}
+        />
+      </div>
     </AppShell>
   );
 }

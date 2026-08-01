@@ -6,6 +6,12 @@ import { getLegalNotice } from "../lib/legal";
 const requiredVariables = [
   "DATABASE_URL",
   "NEXT_PUBLIC_APP_URL",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "APPLE_CLIENT_ID",
+  "APPLE_TEAM_ID",
+  "APPLE_KEY_ID",
+  "APPLE_PRIVATE_KEY",
   "LEGAL_OPERATOR_TYPE",
   "LEGAL_NAME",
   "LEGAL_STREET",
@@ -16,6 +22,7 @@ const requiredVariables = [
 const requiredTables = [
   "schema_migrations",
   "users",
+  "auth_identities",
   "user_sessions",
   "guest_sessions",
   "auth_rate_limits",
@@ -500,6 +507,7 @@ const requiredTriggerDefinitions = {
 const requiredProtectedTables = [
   "users",
   "user_sessions",
+  "auth_identities",
   "player_blocks",
   "player_reports",
   "game_scoring_resume_events",
