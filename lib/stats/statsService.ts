@@ -7,7 +7,10 @@ import type { LeaderboardEntry } from "./leaderboardContract";
 export type LeaderboardSnapshot = {
   entries: LeaderboardEntry[];
   observedAt: Date;
+  opponentScope: LeaderboardOpponentScope;
 };
+
+export type LeaderboardOpponentScope = "all-rated" | "human-only";
 
 export type GlobalRatingSummary = {
   rating: number;
@@ -109,7 +112,13 @@ type LeaderboardSnapshotRow = {
   observed_at: Date;
 };
 
-export async function getLeaderboard(limit = 50): Promise<LeaderboardSnapshot> {
+export async function getLeaderboard(
+  limit = 50,
+  opponentScope: LeaderboardOpponentScope = "all-rated",
+): Promise<LeaderboardSnapshot> {
+  if (opponentScope !== "all-rated" && opponentScope !== "human-only") {
+    throw new RangeError("Leaderboard opponent scope is unsupported.");
+  }
   const normalizedLimit = Number.isFinite(limit) ? Math.trunc(limit) : 50;
   const safeLimit = Math.min(Math.max(normalizedLimit, 1), 100);
   const result = await query<LeaderboardSnapshotRow>(
@@ -118,6 +127,7 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardSnapshot> {
               COUNT(*) FILTER (WHERE outcome_kind <> 'no_result')::int AS games,
               COUNT(*) FILTER (WHERE outcome_kind = 'win')::int AS wins
          FROM game_glicko2_rating_events
+        WHERE $2::text = 'all-rated' OR opponent_kind = 'registered_human'
         GROUP BY player_key
      ), eligible AS (
        SELECT rating.player_key,
@@ -130,7 +140,7 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardSnapshot> {
          JOIN users account ON account.id = rating.user_id
          JOIN verified_totals totals ON totals.player_key = rating.player_key
         WHERE rating.rated_game_count >= 10
-          AND rating.rated_game_count = totals.games
+          AND ($2::text = 'human-only' OR rating.rated_game_count = totals.games)
           AND CHAR_LENGTH(
                 COALESCE(NULLIF(BTRIM(account.display_name), ''), account.username, 'Player')
               ) BETWEEN 1 AND 80
@@ -161,12 +171,12 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardSnapshot> {
               '[]'::jsonb
             ) AS entries
        FROM visible`,
-    [safeLimit],
+    [safeLimit, opponentScope],
   );
 
   const snapshot = result.rows[0];
   if (!snapshot) throw new Error("Leaderboard query did not return a snapshot.");
-  return { entries: snapshot.entries, observedAt: snapshot.observed_at };
+  return { entries: snapshot.entries, observedAt: snapshot.observed_at, opponentScope };
 }
 
 export async function getPlayerProfileStats(playerKey: string) {

@@ -62,7 +62,7 @@ test("leaderboard returns one narrow global public snapshot with shared caching"
       response.headers.get("cache-control"),
       "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
     );
-    assert.deepEqual(values, [50]);
+    assert.deepEqual(values, [50, "all-rated"]);
     assert.deepEqual(body, {
       ok: true,
       leaderboard: [{
@@ -74,6 +74,7 @@ test("leaderboard returns one narrow global public snapshot with shared caching"
         ratingDeviation: 72,
       }],
       observedAt: observedAt.toISOString(),
+      opponentScope: "all-rated",
     });
     assert.deepEqual(Object.keys(body.leaderboard[0]), [
       "position",
@@ -117,11 +118,22 @@ test("leaderboard rejects noncanonical query shapes before rate limiting or data
     assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
     assert.deepEqual(await response.json(), {
       ok: false,
-      error: "Global leaderboard requests do not accept filters.",
+      error: "Use either the global leaderboard or the exact human-only opponent filter.",
       code: "invalid_stats_request",
     });
     assert.equal(databaseCalls, 0);
   }
+});
+
+test("leaderboard exposes one canonical human-only opponent filter", async () => {
+  let values: readonly unknown[] = [];
+  const response = await withPool(
+    snapshotPool((_sql, parameters) => { values = parameters; }),
+    () => GET(request("203.0.113.77", "?opponents=human-only")),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(values, [50, "human-only"]);
+  assert.equal((await response.json()).opponentScope, "human-only");
 });
 
 test("leaderboard rate limiting keeps denials uncached and stops database amplification", async () => {

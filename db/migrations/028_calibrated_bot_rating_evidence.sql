@@ -197,11 +197,13 @@ BEGIN
     OR queue_row.board_size <> game_row.board_size
     OR queue_row.time_control <> game_row.time_control
     OR queue_row.rules_snapshot <> game_row.rules
-    OR queue_row.rules_profile_snapshot <> game_row.rules_profile
+    OR queue_row.rules_profile <> game_row.rules_profile
     OR queue_row.scoring_method_snapshot <> game_row.scoring_method
     OR queue_row.komi_snapshot <> game_row.komi
     OR queue_row.handicap_snapshot <> game_row.handicap
     OR profile_row.profile_id IS NULL OR activation_row.action <> 'activate'
+    OR bot_row.target_rating IS DISTINCT FROM
+       ROUND(profile_row.fixed_rating)::INT
     OR EXISTS (SELECT 1 FROM public.calibrated_bot_profile_activation_events later
                 WHERE later.profile_id = NEW.profile_id AND later.activation_id > NEW.activation_id)
     OR profile_row.profile_contract_version IS DISTINCT FROM NEW.profile_contract_version
@@ -264,7 +266,11 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.game_calibrated_bot_bindings binding WHERE binding.game_id = OLD.game_id)
     AND (NEW.bot_player_key IS DISTINCT FROM OLD.bot_player_key
       OR NEW.color IS DISTINCT FROM OLD.color
-      OR NEW.rating_mode IS DISTINCT FROM OLD.rating_mode)
+      OR NEW.rating_mode IS DISTINCT FROM OLD.rating_mode
+      OR NEW.target_rating IS DISTINCT FROM OLD.target_rating
+      OR NEW.visits_per_turn IS DISTINCT FROM OLD.visits_per_turn
+      OR NEW.candidate_limit IS DISTINCT FROM OLD.candidate_limit
+      OR NEW.temperature IS DISTINCT FROM OLD.temperature)
   THEN RAISE EXCEPTION 'A calibrated game cannot change its bound bot identity or rating mode.' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;

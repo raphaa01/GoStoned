@@ -307,6 +307,25 @@ REVOKE ALL ON game_glicko2_rating_events FROM PUBLIC;
 
 DO $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT,INSERT,UPDATE ON player_glicko2_ratings TO gostone_app;
+    GRANT SELECT,INSERT ON game_glicko2_rating_events TO gostone_app;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='player_glicko2_ratings' AND policyname='gostone_app_server_access') THEN
+      CREATE POLICY gostone_app_server_access ON player_glicko2_ratings
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='game_glicko2_rating_events' AND policyname='gostone_app_server_read') THEN
+      CREATE POLICY gostone_app_server_read ON game_glicko2_rating_events
+        FOR SELECT TO gostone_app USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+      AND tablename='game_glicko2_rating_events' AND policyname='gostone_app_server_insert') THEN
+      CREATE POLICY gostone_app_server_insert ON game_glicko2_rating_events
+        FOR INSERT TO gostone_app WITH CHECK (true);
+    END IF;
+  END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON player_glicko2_ratings, game_glicko2_rating_events FROM anon;
     REVOKE ALL ON FUNCTION public.guard_glicko2_rating_event_mutation(),

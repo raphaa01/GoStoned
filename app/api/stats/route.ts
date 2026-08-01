@@ -20,11 +20,15 @@ function publicLeaderboardJson(body: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  if (request.nextUrl.search !== "") {
+  const search = request.nextUrl.search;
+  const opponentScope = search === "" ? "all-rated"
+    : search === "?opponents=human-only" ? "human-only"
+      : null;
+  if (opponentScope === null) {
     return noStoreJson(
       {
         ok: false,
-        error: "Global leaderboard requests do not accept filters.",
+        error: "Use either the global leaderboard or the exact human-only opponent filter.",
         code: "invalid_stats_request",
       },
       { status: 400 },
@@ -33,11 +37,12 @@ export async function GET(request: NextRequest) {
 
   try {
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.publicStats);
-    const snapshot = await getLeaderboard();
+    const snapshot = await getLeaderboard(50, opponentScope);
     return publicLeaderboardJson({
       ok: true,
       leaderboard: snapshot.entries,
       observedAt: snapshot.observedAt.toISOString(),
+      opponentScope: snapshot.opponentScope,
     });
   } catch (error) {
     if (error instanceof RateLimitError) return apiError(error);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { closePool, getPool } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
@@ -39,12 +40,44 @@ async function run(): Promise<void> {
     );
     assert.equal(game.rowCount, 1);
 
-    const first = await finalizeGameRatings(client, game.rows[0].id);
-    const retry = await finalizeGameRatings(client, game.rows[0].id);
+    const guestGame = await client.query<{ id: string }>(
+      `INSERT INTO games
+         (board_size,black_player_key,white_player_key,winner_key,status,result,
+          rules,phase,to_move,rules_profile,scoring_method,handicap,finish_reason,
+          finished_at)
+       VALUES (9,$1,$2,$1,'finished','B+R','chinese','play',NULL,
+               'chinese-2002-gostone-v1','area',0,'resignation',statement_timestamp())
+       RETURNING id::text`,
+      [`guest:${randomUUID()}`, `guest:${randomUUID()}`],
+    );
+    await client.query("COMMIT");
+    transactionOpen = false;
+
+    const finalizeOnce = async () => {
+      const concurrent = await getPool().connect();
+      try {
+        await concurrent.query("BEGIN");
+        const result = await finalizeGameRatings(concurrent, game.rows[0].id);
+        await concurrent.query("SET CONSTRAINTS ALL IMMEDIATE");
+        await concurrent.query("COMMIT");
+        return result;
+      } catch (error) {
+        await concurrent.query("ROLLBACK");
+        throw error;
+      } finally {
+        concurrent.release();
+      }
+    };
+    const [first, retry] = await Promise.all([finalizeOnce(), finalizeOnce()]);
     assert.deepEqual(first, { rated: true, kind: "rated" });
     assert.deepEqual(retry, first);
 
-    await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+    await client.query("BEGIN");
+    transactionOpen = true;
+    assert.deepEqual(
+      await finalizeGameRatings(client, guestGame.rows[0].id),
+      { rated: false, kind: "unrated" },
+    );
     const evidence = await client.query<{
       event_count: number;
       state_count: number;
@@ -65,9 +98,9 @@ async function run(): Promise<void> {
       maximum_games: 1,
     });
 
-    await client.query("ROLLBACK");
+    await client.query("COMMIT");
     transactionOpen = false;
-    console.log("Glicko-2 persistence smoke passed.");
+    console.log("Concurrent human retry and unrated guest Glicko-2 persistence smoke passed.");
   } finally {
     if (transactionOpen) await client.query("ROLLBACK");
     client.release();

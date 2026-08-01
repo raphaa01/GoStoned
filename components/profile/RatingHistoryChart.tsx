@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { Locale } from "@/lib/i18n/config";
+import { presentRating, type RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 import type { RatingHistoryEntry } from "@/lib/stats/statsService";
 
 type ChartPoint = {
@@ -20,16 +21,23 @@ function formatShortDate(value: string, locale: Locale) {
 export function RatingHistoryChart({
   history,
   currentRating,
+  preference,
 }: {
   history: RatingHistoryEntry[];
   currentRating: number;
+  preference: RatingDisplayPreference;
 }) {
   const { dictionary, locale } = useI18n();
   const copy = dictionary.profile;
+  const ratingLabel = (rating: number) => presentRating(
+    rating,
+    preference,
+    locale === "de" ? "de" : "en",
+  ).primaryLabel;
   if (history.length === 0) {
     return (
       <div className="rating-chart-empty">
-        <span>1200</span>
+        <span>{ratingLabel(currentRating)}</span>
         <strong>{copy.chartEmptyTitle}</strong>
         <p>{copy.chartEmptyDescription}</p>
       </div>
@@ -78,7 +86,7 @@ export function RatingHistoryChart({
   return (
     <div className="rating-chart">
       <svg
-        aria-label={`${copy.ratingDevelopment} ${first.ratingBefore} ${copy.to} ${currentRating}`}
+        aria-label={`${copy.ratingDevelopment} ${ratingLabel(first.ratingBefore)} ${copy.to} ${ratingLabel(currentRating)}`}
         role="img"
         viewBox="0 0 800 250"
       >
@@ -88,7 +96,7 @@ export function RatingHistoryChart({
             <g key={`${rating}-${index}`}>
               <line className="rating-chart__grid" x1={chartLeft} x2={chartRight} y1={y} y2={y} />
               <text className="rating-chart__axis" x={chartLeft - 9} y={y + 4}>
-                {rating}
+                {ratingLabel(rating)}
               </text>
             </g>
           );
@@ -103,7 +111,7 @@ export function RatingHistoryChart({
                 key={`${point.recordedAt}-${index}`}
                 r={index === coordinates.length - 1 ? 5 : 3}
               >
-                <title>{`${point.label}: ${point.rating} · ${formatShortDate(point.recordedAt, locale)}`}</title>
+                <title>{`${point.label}: ${ratingLabel(point.rating)} · ${formatShortDate(point.recordedAt, locale)}`}</title>
               </circle>
             ))
           : null}
