@@ -149,29 +149,33 @@ export function ProfileView() {
 
   const recentForm = recentGames.slice(0, 10);
   const change = rating?.ratingChange30Days ?? 0;
+  const hasDistinctHandle = user.displayName.trim().toLocaleLowerCase()
+    !== user.username.trim().toLocaleLowerCase();
   return <>
     {profileStatus}
     <header className="profile-header">
-      <button
-        aria-controls={avatarPickerId}
-        aria-expanded={avatarPickerOpen}
-        aria-label={copy.changeAvatar}
-        className="profile-avatar-trigger"
-        onClick={() => {
-          setAvatarStatus(null);
-          setSelectedAvatarStyle(user.avatarStyle);
-          setAvatarPickerOpen((current) => !current);
-        }}
-        ref={avatarTriggerRef}
-        type="button"
-      >
-        <ProfileAvatar size="lg" style={user.avatarStyle} />
-        <span aria-hidden="true" className="profile-avatar-trigger__edit"><Pencil size={12} strokeWidth={2.2} /></span>
-      </button>
-      <div className="profile-header__identity">
-        <span className="section-kicker">{copy.playerProfile}</span>
-        <h1>{user.displayName}</h1>
-        <p>@{user.username}</p>
+      <div className="profile-header__primary">
+        <button
+          aria-controls={avatarPickerId}
+          aria-expanded={avatarPickerOpen}
+          aria-label={copy.changeAvatar}
+          className="profile-avatar-trigger"
+          onClick={() => {
+            setAvatarStatus(null);
+            setSelectedAvatarStyle(user.avatarStyle);
+            setAvatarPickerOpen((current) => !current);
+          }}
+          ref={avatarTriggerRef}
+          type="button"
+        >
+          <ProfileAvatar size="lg" style={user.avatarStyle} />
+          <span aria-hidden="true" className="profile-avatar-trigger__edit"><Pencil size={12} strokeWidth={2.2} /></span>
+        </button>
+        <div className="profile-header__identity">
+          <span className="section-kicker">{copy.playerProfile}</span>
+          <h1>{user.displayName}</h1>
+          {hasDistinctHandle ? <p className="profile-header__handle">@{user.username}</p> : null}
+        </div>
       </div>
       <div className="profile-header__actions">
         <Link className="button button--primary" href={href("/play")}><Gamepad2 size={18} /> {copy.play}</Link>

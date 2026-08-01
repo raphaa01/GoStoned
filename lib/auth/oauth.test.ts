@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { GET as oauthCallback } from "@/app/api/auth/oauth/[provider]/callback/route";
 import { GET as startOAuth } from "@/app/api/auth/oauth/[provider]/route";
 import {
+  configuredOAuthProviders,
   oauthTransactionCookie,
   parseOAuthTransaction,
   serializeOAuthTransaction,
@@ -86,6 +87,47 @@ test("an unconfigured provider returns to the localized form with a safe error",
       response.headers.get("location"),
       "https://gostone.test/de/register?oauthError=provider_unavailable&returnTo=%2Freview",
     );
+  });
+});
+
+test("only fully configured OAuth providers are presented to users", async () => {
+  const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const applePrivateKey = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+
+  await withEnvironment({
+    NEXT_PUBLIC_APP_URL: "https://gostone.test",
+    GOOGLE_CLIENT_ID: "google-client-id",
+    GOOGLE_CLIENT_SECRET: "google-client-secret",
+    APPLE_CLIENT_ID: undefined,
+    APPLE_TEAM_ID: undefined,
+    APPLE_KEY_ID: undefined,
+    APPLE_PRIVATE_KEY: undefined,
+  }, async () => {
+    assert.deepEqual(configuredOAuthProviders(), ["google"]);
+  });
+
+  await withEnvironment({
+    NEXT_PUBLIC_APP_URL: "https://gostone.test",
+    GOOGLE_CLIENT_ID: "google-client-id",
+    GOOGLE_CLIENT_SECRET: undefined,
+    APPLE_CLIENT_ID: undefined,
+    APPLE_TEAM_ID: undefined,
+    APPLE_KEY_ID: undefined,
+    APPLE_PRIVATE_KEY: undefined,
+  }, async () => {
+    assert.deepEqual(configuredOAuthProviders(), []);
+  });
+
+  await withEnvironment({
+    NEXT_PUBLIC_APP_URL: "https://gostone.test",
+    GOOGLE_CLIENT_ID: undefined,
+    GOOGLE_CLIENT_SECRET: undefined,
+    APPLE_CLIENT_ID: "test.gostone.web",
+    APPLE_TEAM_ID: "TESTTEAM",
+    APPLE_KEY_ID: "TESTKEY",
+    APPLE_PRIVATE_KEY: applePrivateKey,
+  }, async () => {
+    assert.deepEqual(configuredOAuthProviders(), ["apple"]);
   });
 });
 

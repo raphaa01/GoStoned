@@ -1,5 +1,6 @@
 import { AuthForm } from "@/components/auth/AuthForm";
 import { AppShell } from "@/components/layout/AppShell";
+import { configuredOAuthProviders } from "@/lib/auth/oauth";
 import { safeAccountReturnPath } from "@/lib/auth/returnPath";
 import { pageMetadata } from "@/lib/i18n/metadata";
 
@@ -14,8 +15,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const returnTo = safeAccountReturnPath(parameters.returnTo);
   return (
     <AppShell>
-      <div className="auth-page">
+      <div className="auth-page auth-page--register">
         <AuthForm
+          configuredOAuthProviders={configuredOAuthProviders()}
           mode="register"
           oauthError={typeof parameters.oauthError === "string" ? parameters.oauthError : null}
           returnTo={returnTo}

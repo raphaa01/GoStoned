@@ -131,6 +131,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/register`);
     await page.getByLabel(dictionary.auth.username).fill("global_player");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
+    await page.locator("details.auth-strength > summary").click();
     await page.getByLabel(dictionary.auth.startingStrength).selectOption("known");
     await expect(page.getByLabel(dictionary.auth.knownRank)).toBeVisible();
     await page.getByLabel(dictionary.auth.knownRank).selectOption("3d");
@@ -158,6 +159,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/profile`);
     await expect(page.getByText(dictionary.profile.globalRating, { exact: true })).toBeVisible();
     await expect(page.locator(".profile-header__identity")).toContainText(USER.displayName);
+    await expect(page.locator(".profile-header__handle")).toHaveText(`@${USER.username}`);
     await expect(page.locator(".profile-header__rating")).toHaveCount(0);
     await expect(page.locator(".profile-rating-band .rating-label")).toContainText(
       locale === "de" ? "8. Kyu" : "8 kyu",
