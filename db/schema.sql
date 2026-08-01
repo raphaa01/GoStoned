@@ -3122,7 +3122,7 @@ BEGIN
          AND proposal.stopped_board_hash = NEW.stopped_board_hash
     ))
     OR (NEW.outcome_kind NOT LIKE 'katago_%' AND NEW.suggestion_request_identity IS NOT NULL)
-    OR (NEW.outcome_kind = 'abandonment' AND NEW.abandoned_by_color IS DISTINCT FROM CASE WHEN scoring_row.black_participated_at IS NULL THEN 'black' ELSE 'white' END)
+    OR (NEW.outcome_kind = 'abandonment' AND NEW.abandoned_by_color IS DISTINCT FROM (CASE WHEN scoring_row.black_participated_at IS NULL THEN 'black' ELSE 'white' END))
   THEN RAISE EXCEPTION 'Terminal outcome contradicts participation or suggestion evidence.' USING ERRCODE = '23514';
   END IF;
   IF NEW.outcome_kind IN ('katago_validated', 'katago_low_confidence') THEN
