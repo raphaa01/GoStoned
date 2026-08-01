@@ -11,7 +11,7 @@ from .board import FEATURE_PLANES, MAX_BOARD_SIZE
 
 @dataclass(frozen=True)
 class StudentConfig:
-    channels: int = 64
+    channels: int = 96
     blocks: int = 10
     input_planes: int = FEATURE_PLANES
     board_size: int = MAX_BOARD_SIZE
@@ -35,7 +35,7 @@ class ResidualBlock(nn.Module):
 
 
 class GoStoneStudent(nn.Module):
-    """Small rank-conditioned policy/value network for browser inference."""
+    """Compact Japanese-rules policy, value, score, and settlement network."""
 
     def __init__(self, config: StudentConfig = StudentConfig()):
         super().__init__()
@@ -54,11 +54,19 @@ class GoStoneStudent(nn.Module):
             nn.Linear(config.channels, 1),
             nn.Tanh(),
         )
+        self.score_head = nn.Sequential(
+            nn.Linear(config.channels, config.channels),
+            nn.ReLU(),
+            nn.Linear(config.channels, 1),
+            nn.Tanh(),
+        )
+        self.ownership_head = nn.Conv2d(config.channels, 1, kernel_size=1)
+        self.survival_head = nn.Conv2d(config.channels, 1, kernel_size=1)
 
     def _masked_average(self, hidden: Tensor, mask: Tensor) -> Tensor:
         return (hidden * mask).sum(dim=(2, 3)) / mask.sum(dim=(2, 3)).clamp_min(1.0)
 
-    def forward(self, features: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         mask = features[:, 4:5]
         hidden = self.stem(features) * mask
         for block in self.blocks:
@@ -70,7 +78,11 @@ class GoStoneStudent(nn.Module):
         pass_logit = self.policy_pass(pooled)
         policy_logits = torch.cat((board_logits, pass_logit), dim=1)
         value = self.value_head(pooled).squeeze(1)
-        return policy_logits, value
+        score = self.score_head(pooled).squeeze(1)
+        ownership = torch.tanh(self.ownership_head(hidden)).flatten(1) * mask.flatten(1)
+        survival_logits = self.survival_head(hidden).flatten(1)
+        survival_logits = survival_logits.masked_fill(~legal_mask, 0.0)
+        return policy_logits, value, score, ownership, survival_logits
 
     @property
     def parameter_count(self) -> int:

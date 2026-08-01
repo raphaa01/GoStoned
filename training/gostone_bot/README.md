@@ -1,54 +1,75 @@
-# GoStone student bot training
+# GoStone Local Training Lab
 
-This directory is an offline training pipeline. Nothing here is imported by the
-Next.js production bundle. KataGo and its approximately 99 MB human-style model
-act only as local teachers; the generated browser model is capped at 8 MiB.
+This directory is an offline, resumable KataGo-to-student training system. It is
+never imported by the Next.js production bundle. Teacher weights, training data,
+checkpoints, run state, and generated browser models are ignored by Git.
 
-## Design
+## Start with one double-click
 
-- One rank-conditioned student model covers 9x9, 13x13, and 19x19.
-- KataGo's human SL profiles provide policies for nominal 600-2100 Elo levels.
-- KataGo's normal network provides the value target and search correction.
-- The browser receives a normalized strength feature. Later move temperature and
-  a small search budget can calibrate levels without downloading more models.
-- Training data, teacher weights, checkpoints, and exports are ignored by Git.
+1. Start Docker Desktop.
+2. Double-click `Start-GoStone-Training.cmd` in the repository root.
+3. The local control center opens at `http://127.0.0.1:4173`.
+4. Choose a preset and CPU limit, then press **Training starten**.
 
-The current laptop has no NVIDIA GPU. This pipeline therefore uses KataGo's
-Eigen CPU backend and is designed for slow local dataset generation in separate
-batches.
-A smoke test proves the complete process; a useful production model still needs
-many thousands of teacher positions and evaluation games.
+The browser may be closed while training. Keep the small command window open if
+you want to reopen the page easily. The actual runner is a separate local process;
+it does not consume Codex, Modal, Vercel, or Supabase resources.
 
-## Setup and smoke test
+The launcher checks Python, Docker, Python packages, and the local KataGo image.
+The approximately 99 MB KataGo human teacher is checksum-verified and stored in
+`.cache/gostone-bot-training/`. It is not part of the final browser model.
+
+## Model contract
+
+- Japanese territory rules only, with 6.5 komi.
+- 9x9, 13x13, and 19x19 from one model.
+- Rank-conditioned policies for nominal 600, 900, 1200, 1500, 1800, and 2100 Elo.
+- Policy, pass, win value, normalized score lead, per-point ownership, and
+  per-stone survival outputs.
+- Prisoner counts and recent game state are model inputs because Japanese scoring
+  cannot be reconstructed from the final board alone.
+- The exported ONNX artifact has a hard limit of 8 MiB.
+- Dead/alive thresholds deliberately preserve an `uncertain` state for seki, ko,
+  and unresolved capturing races.
+- Settlement is a proposal only. The application server must calculate Japanese
+  territory from the agreed dead groups, neutral seki regions, prisoners, and komi.
+
+Nominal Elo inputs are training targets, not measured ratings. A calibration
+league is required before displaying ratings publicly.
+
+## Safe controls and resume
+
+The control center supports pause, resume, and safe stop. Completed games are
+stored as independent compressed shards, and every completed epoch has a training
+checkpoint. After a restart, **Fortsetzen** reuses both. If a stop is requested
+inside a game, the already analyzed partial game is retained as valid training
+data.
+
+Runs live below:
+
+```text
+.cache/gostone-bot-training/control-center/runs/<run-id>/
+├── config.json
+├── state.json
+├── events.jsonl
+├── data/
+│   └── game-00000.npz
+└── artifact/
+    ├── training-progress.pt
+    ├── gostone-japanese-v1.pt
+    ├── gostone-japanese-v1.onnx
+    └── gostone-japanese-v1.json
+```
+
+## Command-line alternatives
 
 ```powershell
 python -m pip install -r training/gostone_bot/requirements.txt
 npm run bot:train:smoke
+npm run bot:train:test
+npm run bot:lab
 ```
 
-The teacher download is checksum-verified and stored below
-`.cache/gostone-bot-training/`. It is never deployed or committed.
-
-## Generate a pilot dataset
-
-```powershell
-npm run bot:dataset -- --games 12 --visits 8
-```
-
-For a first overnight run, start with 9x9 and 13x13. Full 19x19 games are much
-slower on CPU:
-
-```powershell
-npm run bot:dataset -- --games 60 --board-sizes 9 13 --visits 8
-npm run bot:train -- --epochs 30
-```
-
-Outputs are written to ignored directories:
-
-- `training/gostone_bot/data/teacher-v1.npz`
-- `training/gostone_bot/artifacts/v1/gostone-student-v1.onnx`
-- `training/gostone_bot/artifacts/v1/gostone-student-v1.json`
-
-Do not copy an artifact into `public/` until it has passed a fixed position test
-suite and a bot-vs-bot calibration league. The nominal Elo inputs are training
-targets, not measured ratings.
+Do not copy a generated model into `public/` until fixed endgame positions,
+bot-vs-bot games, pass behavior, and group-settlement confidence have been
+evaluated. A successful export proves the technical contract, not playing strength.

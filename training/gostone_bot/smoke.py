@@ -33,11 +33,11 @@ def main() -> None:
         epochs=1,
         batch_size=4,
         learning_rate=3e-4,
-        channels=64,
+        channels=96,
         blocks=10,
         seed=20260801,
     )
-    checkpoint = torch.load(smoke_dir / "artifact" / "gostone-student-v1.pt", map_location="cpu")
+    checkpoint = torch.load(smoke_dir / "artifact" / "gostone-japanese-v1.pt", map_location="cpu")
     config = StudentConfig(**checkpoint["config"])
     model = GoStoneStudent(config)
     model.load_state_dict(checkpoint["state_dict"])

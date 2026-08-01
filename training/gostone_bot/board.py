@@ -7,7 +7,7 @@ import numpy as np
 
 MAX_BOARD_SIZE = 19
 PASS_INDEX = MAX_BOARD_SIZE * MAX_BOARD_SIZE
-FEATURE_PLANES = 8
+FEATURE_PLANES = 12
 GTP_COLUMNS = "ABCDEFGHJKLMNOPQRST"
 
 
@@ -56,6 +56,19 @@ def policy_to_padded(policy: Iterable[float], size: int) -> np.ndarray:
     return result / total
 
 
+def spatial_to_padded(values: Iterable[float], size: int, fill: float = 0.0) -> np.ndarray:
+    source = np.asarray(list(values), dtype=np.float32)
+    expected = size * size
+    if source.shape != (expected,):
+        raise ValueError(f"Expected {expected} spatial entries, got {source.shape}")
+    result = np.full(PASS_INDEX, fill, dtype=np.float32)
+    offset = board_offset(size)
+    for y in range(size):
+        start = (y + offset) * MAX_BOARD_SIZE + offset
+        result[start : start + size] = source[y * size : (y + 1) * size]
+    return result
+
+
 def padded_policy_index(move: str, size: int) -> int:
     point = gtp_to_point(move, size)
     if point is None:
@@ -72,6 +85,9 @@ class BoardState:
     to_move: int = 1
     move_number: int = 0
     consecutive_passes: int = 0
+    captured_white_by_black: int = 0
+    captured_black_by_white: int = 0
+    last_move: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         board_offset(self.size)
@@ -110,6 +126,7 @@ class BoardState:
         if point is None:
             self.consecutive_passes += 1
             self.move_number += 1
+            self.last_move = None
             self.to_move *= -1
             return
         x, y = point
@@ -133,8 +150,13 @@ class BoardState:
         if not own_liberties and captured == 0:
             self.stones[y, x] = 0
             raise ValueError(f"Teacher returned a suicide move: {move}")
+        if self.to_move == 1:
+            self.captured_white_by_black += captured
+        else:
+            self.captured_black_by_white += captured
         self.consecutive_passes = 0
         self.move_number += 1
+        self.last_move = (x, y)
         self.to_move *= -1
 
     def features(self, strength: float, komi: float) -> np.ndarray:
@@ -151,4 +173,11 @@ class BoardState:
         features[5][area] = np.clip(komi / 20.0, -1.0, 1.0)
         features[6][area] = min(1.0, self.move_number / max(1, self.size * self.size))
         features[7][area] = strength
+        board_area = self.size * self.size
+        features[8][area] = min(1.0, self.captured_white_by_black / board_area)
+        features[9][area] = min(1.0, self.captured_black_by_white / board_area)
+        features[10][area] = min(1.0, self.consecutive_passes / 2.0)
+        if self.last_move is not None:
+            x, y = self.last_move
+            features[11, y + offset, x + offset] = 1.0
         return features

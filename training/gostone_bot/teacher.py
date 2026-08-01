@@ -91,6 +91,7 @@ class KataGoTeacher:
         komi: float,
         profile: str,
         visits: int,
+        include_ownership: bool = True,
     ) -> dict[str, Any]:
         if self._process.poll() is not None:
             details = "\n".join(self._stderr_tail)
@@ -99,7 +100,7 @@ class KataGoTeacher:
         query = {
             "id": query_id,
             "moves": moves,
-            "rules": "chinese",
+            "rules": "japanese",
             "komi": komi,
             "boardXSize": size,
             "boardYSize": size,
@@ -107,6 +108,8 @@ class KataGoTeacher:
             "maxVisits": max(1, visits),
             "analysisPVLen": 4,
             "includePolicy": True,
+            "includeOwnership": include_ownership,
+            "includeOwnershipStdev": include_ownership,
             "overrideSettings": {
                 "humanSLProfile": profile,
                 "ignorePreRootHistory": False,
