@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields, type AuthField } from "@/lib/auth/errorFields";
+import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 import {
@@ -19,13 +20,20 @@ type FormError = {
 };
 
 type AuthFormProps = {
+  configuredOAuthProviders?: readonly OAuthProvider[];
   mode: "login" | "register";
   oauthError?: string | null;
   reauthenticate?: boolean;
   returnTo?: string | null;
 };
 
-export function AuthForm({ mode, oauthError = null, reauthenticate = false, returnTo = null }: AuthFormProps) {
+export function AuthForm({
+  configuredOAuthProviders = [],
+  mode,
+  oauthError = null,
+  reauthenticate = false,
+  returnTo = null,
+}: AuthFormProps) {
   const { user, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const router = useRouter();
@@ -110,6 +118,22 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
       : oauthError
         ? dictionary.auth.socialFailed
         : null;
+  const socialOptions = configuredOAuthProviders.length ? (
+    <div className={`auth-social${registering ? " auth-social--register" : ""}`} aria-label={dictionary.auth.socialOptions}>
+      {configuredOAuthProviders.includes("google") ? (
+        <a className="auth-social-button" href={socialHref("google")}>
+          <GoogleIcon />
+          <span>{dictionary.auth.continueWithGoogle}</span>
+        </a>
+      ) : null}
+      {configuredOAuthProviders.includes("apple") ? (
+        <a className="auth-social-button" href={socialHref("apple")}>
+          <AppleIcon />
+          <span>{dictionary.auth.continueWithApple}</span>
+        </a>
+      ) : null}
+    </div>
+  ) : null;
   return (
     <section className="auth-card">
       <span className="section-kicker">{registering ? dictionary.auth.newPlayer : dictionary.auth.welcomeBack}</span>
@@ -120,7 +144,15 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
           : dictionary.auth.loginDescription}
       </p>
 
-      <form className="auth-form" onSubmit={submit}>
+      {registering && socialOptions ? (
+        <>
+          {socialOptions}
+          {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
+          <div className="auth-divider"><span>{dictionary.auth.orContinueWithUsername}</span></div>
+        </>
+      ) : null}
+
+      <form className={`auth-form${registering && socialOptions ? " auth-form--social-first" : ""}`} onSubmit={submit}>
         <label>
           <span>{dictionary.auth.username}</span>
           <span className="input-wrap">
@@ -173,40 +205,42 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
         </label>
 
         {registering ? (
-          <fieldset className="auth-strength">
-            <legend>{dictionary.auth.startingStrength}</legend>
-            <p>{dictionary.auth.startingStrengthHint}</p>
-            <label>
-              <span className="sr-only">{dictionary.auth.startingStrength}</span>
-              <span className="input-wrap">
-                <Gauge size={18} />
-                <select
-                  aria-label={dictionary.auth.startingStrength}
-                  onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}
-                  value={startingStrength}
-                >
-                  <option value="unspecified">{dictionary.auth.strengthUnspecified}</option>
-                  <option value="new">{dictionary.auth.strengthNew}</option>
-                  <option value="beginner">{dictionary.auth.strengthBeginner}</option>
-                  <option value="intermediate">{dictionary.auth.strengthIntermediate}</option>
-                  <option value="experienced">{dictionary.auth.strengthExperienced}</option>
-                  <option value="known">{dictionary.auth.strengthKnown}</option>
-                </select>
-              </span>
-            </label>
-            {startingStrength === "known" ? (
+          <details className="auth-strength">
+            <summary>{dictionary.auth.startingStrength}</summary>
+            <div className="auth-strength-content">
+              <p>{dictionary.auth.startingStrengthHint}</p>
               <label>
-                <span>{dictionary.auth.knownRank}</span>
-                <select
-                  aria-label={dictionary.auth.knownRank}
-                  onChange={(event) => setKnownRank(event.target.value)}
-                  value={knownRank}
-                >
-                  {KNOWN_RANK_OPTIONS.map((rank) => <option key={rank} value={rank}>{rank}</option>)}
-                </select>
+                <span className="sr-only">{dictionary.auth.startingStrength}</span>
+                <span className="input-wrap">
+                  <Gauge size={18} />
+                  <select
+                    aria-label={dictionary.auth.startingStrength}
+                    onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}
+                    value={startingStrength}
+                  >
+                    <option value="unspecified">{dictionary.auth.strengthUnspecified}</option>
+                    <option value="new">{dictionary.auth.strengthNew}</option>
+                    <option value="beginner">{dictionary.auth.strengthBeginner}</option>
+                    <option value="intermediate">{dictionary.auth.strengthIntermediate}</option>
+                    <option value="experienced">{dictionary.auth.strengthExperienced}</option>
+                    <option value="known">{dictionary.auth.strengthKnown}</option>
+                  </select>
+                </span>
               </label>
-            ) : null}
-          </fieldset>
+              {startingStrength === "known" ? (
+                <label>
+                  <span>{dictionary.auth.knownRank}</span>
+                  <select
+                    aria-label={dictionary.auth.knownRank}
+                    onChange={(event) => setKnownRank(event.target.value)}
+                    value={knownRank}
+                  >
+                    {KNOWN_RANK_OPTIONS.map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          </details>
         ) : null}
 
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
@@ -218,20 +252,16 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
         </button>
       </form>
 
-      <div className="auth-divider"><span>{dictionary.auth.orContinueWithSocial}</span></div>
+      {!registering && socialOptions ? (
+        <>
+          <div className="auth-divider"><span>{dictionary.auth.orContinueWithSocial}</span></div>
+          {socialOptions}
+        </>
+      ) : null}
 
-      <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
-        <a className="auth-social-button" href={socialHref("google")}>
-          <GoogleIcon />
-          <span>{dictionary.auth.continueWithGoogle}</span>
-        </a>
-        <a className="auth-social-button" href={socialHref("apple")}>
-          <AppleIcon />
-          <span>{dictionary.auth.continueWithApple}</span>
-        </a>
-      </div>
-
-      {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
+      {oauthErrorMessage && (!registering || !socialOptions)
+        ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p>
+        : null}
 
       <p className="auth-switch">
         {registering ? dictionary.auth.haveAccount : dictionary.auth.newToGoStone}{" "}

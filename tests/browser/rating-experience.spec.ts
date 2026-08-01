@@ -131,6 +131,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/register`);
     await page.getByLabel(dictionary.auth.username).fill("global_player");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
+    await page.locator("details.auth-strength > summary").click();
     await page.getByLabel(dictionary.auth.startingStrength).selectOption("known");
     await expect(page.getByLabel(dictionary.auth.knownRank)).toBeVisible();
     await page.getByLabel(dictionary.auth.knownRank).selectOption("3d");
