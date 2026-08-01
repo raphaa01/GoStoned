@@ -222,6 +222,12 @@ async function withProtocol<T>(store: Store, action: () => Promise<T>): Promise<
         const revision = Number(values[1]);
         return result(store.proposals.filter(({ scoring_revision }) => scoring_revision === revision));
       }
+      if (sql.includes("FROM player_rating_history") && sql.includes("FOR UPDATE")) {
+        return result();
+      }
+      if (sql.includes("FROM users") && sql.includes("UNION ALL")) {
+        return result();
+      }
       if (sql.includes("INSERT INTO moves")) {
         store.moves.push({
           move_number: values[1], color: values[2], x: values[3], y: values[4],
@@ -897,4 +903,7 @@ test("Japanese scoring mutation routes preserve the authenticated mutation guard
   }
 });
 
-test.todo("all eligible Japanese terminal transitions must invoke the idempotent rating ledger in the same transaction");
+test("all eligible Japanese terminal transitions invoke the shared rating boundary in the same transaction", () => {
+  const source = readFileSync(join(process.cwd(), "lib/game/japaneseGameService.ts"), "utf8");
+  assert.equal(source.match(/await recordLegacyFinishedStats\(/g)?.length, 5);
+});

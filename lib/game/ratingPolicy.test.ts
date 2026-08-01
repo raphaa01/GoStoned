@@ -65,19 +65,30 @@ test("keeps every terminal rating write behind one eligibility boundary", () => 
     join(process.cwd(), "lib/game/gameService.ts"),
     "utf8",
   );
-  assert.equal(service.match(/await recordFinishedStats\(/g)?.length, 4);
-  assert.equal(service.match(/INSERT INTO player_stats/g)?.length, 1);
-  assert.equal(service.match(/INSERT INTO player_rating_history/g)?.length, 1);
-  assert.equal(service.match(/UPDATE player_stats/g)?.length, 1);
-  assert.match(service, /SELECT 'user:' \|\| id::text AS player_key/);
-  assert.match(service, /SELECT bot_player_key AS player_key/);
-  assert.match(service, /target_rating AS initial_rating/);
+  const japaneseService = readFileSync(
+    join(process.cwd(), "lib/game/japaneseGameService.ts"),
+    "utf8",
+  );
+  const finalizer = readFileSync(
+    join(process.cwd(), "lib/game/legacyRatingFinalizer.ts"),
+    "utf8",
+  );
+  assert.equal(service.match(/await recordLegacyFinishedStats\(/g)?.length, 4);
+  assert.equal(japaneseService.match(/await recordLegacyFinishedStats\(/g)?.length, 5);
+  assert.equal(finalizer.match(/INSERT INTO player_stats/g)?.length, 1);
+  assert.equal(finalizer.match(/INSERT INTO player_rating_history/g)?.length, 1);
+  assert.equal(finalizer.match(/UPDATE player_stats/g)?.length, 1);
+  assert.match(finalizer, /SELECT 'user:' \|\| id::text AS player_key/);
+  assert.match(finalizer, /SELECT bot_player_key AS player_key/);
+  assert.match(finalizer, /target_rating AS initial_rating/);
   assert.match(service, /COUNT\(DISTINCT history\.player_key\) = 2/);
   assert.match(
     service,
     /history\.player_key IN \(g\.black_player_key, g\.white_player_key\)/,
   );
-  assert.match(service, /FROM player_rating_history\s+WHERE game_id = \$1\s+FOR UPDATE/);
-  assert.match(service, /if \(existingHistory\.rowCount !== 0\)/);
-  assert.match(service, /if \(ledger\.rowCount !== 1\)/);
+  assert.match(finalizer, /FROM player_rating_history\s+WHERE game_id = \$1\s+FOR UPDATE/);
+  assert.match(finalizer, /if \(existingHistory\.rowCount !== 0\)/);
+  assert.match(finalizer, /if \(ledger\.rowCount !== 1\)/);
+  assert.match(finalizer, /game\.finish_reason === "japanese_no_result"/);
+  assert.match(finalizer, /game\.finish_reason === "japanese_repetition"/);
 });

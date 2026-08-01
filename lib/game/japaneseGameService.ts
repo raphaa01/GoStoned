@@ -4,6 +4,7 @@ import { boardHash, type PrisonerLedger } from "./goEngine";
 import { advanceClock, restingClock } from "./goClock";
 import { GameServiceError } from "./gameServiceError";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
+import { recordLegacyFinishedStats } from "./legacyRatingFinalizer";
 import { toJapaneseTerritoryPreview } from "./japaneseGameScoring";
 import {
   replayJapanesePhaseAuthority,
@@ -1181,7 +1182,8 @@ export async function submitJapaneseMove(
           WHERE id=$1 RETURNING *`,
         [gameId, `${winner === "black" ? "B" : "W"}+T`, winnerKey, now],
       );
-      return { game: serializeJapaneseGame({ ...loaded, game: { ...updated.rows[0], black_player_name: game.black_player_name, white_player_name: game.white_player_name, rated: game.rated } }, now), boundary: null };
+      const rated = await recordLegacyFinishedStats(client, updated.rows[0], winnerKey);
+      return { game: serializeJapaneseGame({ ...loaded, game: { ...updated.rows[0], black_player_name: game.black_player_name, white_player_name: game.white_player_name, rated } }, now), boundary: null };
     }
     const isPass = move.isPass === true;
     let nextBoard = loaded.authority.normalPlay.board.map((row) => [...row]);
@@ -1435,10 +1437,11 @@ export async function confirmJapaneseScore(
         WHERE id=$1 RETURNING *`,
       [gameId, preview.result, winnerKey, now],
     );
+    const rated = await recordLegacyFinishedStats(client, finished.rows[0], winnerKey);
     next = {
       ...next,
       scoring: finalState.rows[0],
-      game: { ...finished.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+      game: { ...finished.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
     };
     return serializeJapaneseGame(next, now);
   });
@@ -1590,6 +1593,7 @@ async function finishJapaneseDeadline(
         version=version+1 WHERE id=$1 RETURNING *`,
     [loaded.game.id, reason, result, winnerKey, now],
   );
+  const rated = await recordLegacyFinishedStats(client, game.rows[0], winnerKey);
   await client.query("DELETE FROM game_japanese_scoring_state WHERE game_id=$1", [loaded.game.id]);
   return serializeJapaneseGame({
     ...loaded,
@@ -1597,7 +1601,7 @@ async function finishJapaneseDeadline(
     deadRows: [],
     neutralRows: [],
     currentProposal: null,
-    game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+    game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
   }, now);
 }
 
@@ -1783,6 +1787,9 @@ export async function claimJapaneseWholeBoardRepetition(
           WHERE id=$1 RETURNING *`
       : "UPDATE games SET updated_at=$2,version=version+1 WHERE id=$1 RETURNING *",
     [gameId, now]);
+    const rated = agreed
+      ? await recordLegacyFinishedStats(client, updated.rows[0], null)
+      : false;
     return serializeJapaneseGame({
       ...loaded,
       repetitionClaims: claims,
@@ -1790,7 +1797,7 @@ export async function claimJapaneseWholeBoardRepetition(
         ...updated.rows[0],
         black_player_name: loaded.game.black_player_name,
         white_player_name: loaded.game.white_player_name,
-        rated: false,
+        rated,
       },
     }, now);
   });
@@ -1813,13 +1820,14 @@ export async function resignJapaneseGame(gameId: string, playerKey: string): Pro
     if (loaded.scoring) {
       await client.query("DELETE FROM game_japanese_scoring_state WHERE game_id=$1", [gameId]);
     }
+    const rated = await recordLegacyFinishedStats(client, game.rows[0], winnerKey);
     return serializeJapaneseGame({
       ...loaded,
       scoring: null,
       deadRows: [],
       neutralRows: [],
       currentProposal: null,
-      game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated: false },
+      game: { ...game.rows[0], black_player_name: loaded.game.black_player_name, white_player_name: loaded.game.white_player_name, rated },
     }, now);
   });
 }
