@@ -2981,14 +2981,17 @@ a {
 
 .profile-avatar {
   align-items: center;
-  background: var(--green-dark);
-  border-radius: 10px;
-  color: white;
+  background: color-mix(in srgb, var(--green) 17%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--line));
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
+  color: color-mix(in srgb, var(--green-hover) 65%, var(--text));
   display: flex;
-  font-size: 24px;
-  font-weight: 850;
+  font-size: 20px;
+  font-weight: 720;
   height: 76px;
   justify-content: center;
+  letter-spacing: -0.025em;
   width: 76px;
 }
 
@@ -2999,13 +3002,53 @@ a {
 .profile-header {
   align-items: center;
   display: grid;
-  gap: 18px;
-  grid-template-columns: 76px 1fr auto;
-  padding: 24px 0 34px;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding: 22px 0 40px;
 }
 
 .profile-header > div {
   min-width: 0;
+}
+
+.profile-header > .profile-avatar {
+  justify-self: start;
+}
+
+.profile-header__identity {
+  max-width: min(560px, 56vw);
+  text-align: center;
+}
+
+.profile-header .section-kicker {
+  color: color-mix(in srgb, var(--green) 72%, var(--muted));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.profile-header h1 {
+  font-size: clamp(34px, 4.2vw, 46px);
+  font-weight: 680;
+  letter-spacing: -0.028em;
+  line-height: 1.03;
+  margin: 11px 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.profile-header p {
+  font-size: 14px;
+  letter-spacing: 0.015em;
+}
+
+.profile-header__actions {
+  justify-self: end;
+}
+
+.profile-header__actions .button {
+  border-radius: 999px;
+  min-height: 42px;
+  padding-inline: 18px;
 }
 
 .rating-grid {
@@ -3696,22 +3739,34 @@ a {
   }
 
   .profile-header {
-    grid-template-columns: 62px 1fr;
+    gap: 16px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 12px 0 34px;
+    text-align: center;
   }
 
   .profile-header .profile-avatar {
     height: 62px;
+    justify-self: center;
     width: 62px;
   }
 
-  .profile-header > .button {
-    grid-column: 1 / -1;
-    width: 100%;
+  .profile-header__identity {
+    max-width: 100%;
   }
 
   .profile-header h1 {
-    font-size: clamp(27px, 8vw, 36px);
-    overflow-wrap: anywhere;
+    font-size: clamp(30px, 9vw, 38px);
+    margin-top: 9px;
+  }
+
+  .profile-header__actions {
+    justify-self: center;
+  }
+
+  .profile-header__actions .button {
+    min-width: 132px;
   }
 
   .rating-grid {

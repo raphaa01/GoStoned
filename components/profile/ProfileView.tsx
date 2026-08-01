@@ -136,21 +136,12 @@ export function ProfileView() {
     {profileStatus}
     <header className="profile-header">
       <span className="profile-avatar">{user.displayName.slice(0, 2).toUpperCase()}</span>
-      <div><span className="section-kicker">{copy.playerProfile}</span><h1>{user.displayName}</h1><p>@{user.username}</p></div>
+      <div className="profile-header__identity">
+        <span className="section-kicker">{copy.playerProfile}</span>
+        <h1>{user.displayName}</h1>
+        <p>@{user.username}</p>
+      </div>
       <div className="profile-header__actions">
-        {rating && preferences ? (
-          <span className="profile-header__rating">
-            <span>{copy.currentRating}</span>
-            <RatingLabel
-              isProvisional={rating.isProvisional}
-              locale={locale}
-              preference={preferences.displayPreference}
-              provisionalLabel={copy.provisional}
-              rating={rating.rating}
-              variant="compact"
-            />
-          </span>
-        ) : null}
         <Link className="button button--primary" href={href("/play")}><Gamepad2 size={18} /> {copy.play}</Link>
       </div>
     </header>
