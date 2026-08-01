@@ -102,6 +102,7 @@ test("uses nearest-rank percentiles and rejects invalid samples", () => {
 });
 
 const READS = new Set<PollBenchmarkStatement>([
+  "rules_profile_read",
   "participant_read",
   "game_read",
   "moves_read",
@@ -131,9 +132,9 @@ function contractMeasurement(name: PollBenchmarkScenario): PollMeasurement {
     locking: false,
   }));
   const lockingIndexes = name === "play_timeout_150"
-    ? [10, 13, 15]
+    ? [11, 14, 16]
     : name === "scoring_expiry_302"
-      ? [11, 14]
+      ? [12, 15]
       : [];
   for (const index of lockingIndexes) {
     queries[index] = { ...queries[index], locking: true };
