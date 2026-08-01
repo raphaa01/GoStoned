@@ -43,6 +43,7 @@ export type GameState = {
   whitePlayerName: string;
   blackPlayerIsBot?: boolean;
   whitePlayerIsBot?: boolean;
+  botTargetRating?: number;
   winnerKey: string | null;
   rated: boolean;
   status: "active" | "finished";

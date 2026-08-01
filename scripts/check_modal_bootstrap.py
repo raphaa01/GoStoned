@@ -34,6 +34,8 @@ def main() -> None:
     forbid("postgresql://", APP_SOURCE, "A database URL must never be hardcoded.")
     forbid('"DATABASE_URL":', APP_SOURCE, "A database URL value must come only from Secret injection.")
     forbid("@app.server", APP_SOURCE, "A permanent Modal Server must not be deployed.")
+    forbid("process_bot", APP_SOURCE, "Ranked bot turns must run locally in the browser, not on Modal.")
+    forbid('"bot":', APP_SOURCE, "Modal dispatch must not accept local bot turns.")
     print("Modal scale-to-zero configuration is valid.")
 
 

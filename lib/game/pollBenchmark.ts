@@ -189,6 +189,7 @@ const GAME_READ_SQL = `
          ) AS white_player_name,
          g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
          g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+         game_bot.target_rating AS bot_target_rating,
          CASE
            WHEN g.status = 'finished' THEN (
              SELECT COUNT(DISTINCT history.player_key) = 2

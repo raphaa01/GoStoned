@@ -1,6 +1,4 @@
-import { query } from "@/lib/db";
-
-export type KataGoJobKind = "analysis" | "bot" | "puzzle";
+export type KataGoJobKind = "analysis" | "puzzle";
 
 type DispatchConfig = {
   url: string;
@@ -38,19 +36,6 @@ export async function dispatchKataGoJob(kind: KataGoJobKind, targetId?: string):
     throw new Error(`KataGo dispatch failed with HTTP ${response.status}.`);
   }
   return true;
-}
-
-export async function dispatchBotTurnIfNeeded(gameId: string): Promise<boolean> {
-  const result = await query<{ exists: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM game_bots bot
-       JOIN games game ON game.id = bot.game_id
-       WHERE bot.game_id = $1 AND game.status = 'active'
-     ) AS exists`,
-    [gameId],
-  );
-  if (!result.rows[0]?.exists) return false;
-  return dispatchKataGoJob("bot", gameId);
 }
 
 export async function safelyDispatch(task: () => Promise<unknown>): Promise<void> {
