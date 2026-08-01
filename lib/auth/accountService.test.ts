@@ -130,6 +130,7 @@ test("registration commits the user, session, and bounded cleanup before exposin
     username: "atomic_player",
     displayName: "atomic_player",
     playerKey: `user:${database.userId}`,
+    avatarStyle: "kifu-classic",
   });
   assert.equal(isSessionTokenFormat(result.token), true);
   assert.deepEqual(database.committedUsers, new Set(["atomic_player"]));

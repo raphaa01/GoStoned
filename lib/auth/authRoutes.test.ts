@@ -512,6 +512,7 @@ test("successful registration exposes only the committed user and hardened sessi
       username: "atomic_player",
       displayName: "atomic_player",
       playerKey: `user:${userId}`,
+      avatarStyle: "kifu-classic",
     },
   });
   const accountStatement = transactionStatements[2];

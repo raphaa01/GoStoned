@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { isRouteActive } from "@/lib/i18n/routing";
 
@@ -59,7 +60,7 @@ export function DesktopHeader() {
         {loading ? <span className="sidebar-account-loading">{dictionary.nav.accountLoading}</span> : user ? (
           <>
             <Link className="sidebar-user" href={localizedHref("/profile")}>
-              <span>{user.displayName.slice(0, 2).toUpperCase()}</span>
+              <ProfileAvatar size="sm" style={user.avatarStyle} />
               <span className="sidebar-user__identity">
                 <strong>{user.displayName}</strong>
                 {rating ? (

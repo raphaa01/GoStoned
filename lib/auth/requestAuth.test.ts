@@ -83,6 +83,7 @@ test("an authenticated account takes precedence over a guest cookie", async () =
     username: "secure_player",
     displayName: "Secure Player",
     playerKey: "user:33333333-3333-4333-8333-333333333333",
+    avatarStyle: "kifu-classic",
   };
   const request = requestWithCookies("https://gostone.test/api/matchmaking", {
     [SESSION_COOKIE]: "account-token",
