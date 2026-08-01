@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Pool } from "pg";
-import { getLeaderboard, getPlayerProfileStats } from "./statsService";
+import {
+  getCurrentRatingIdentity,
+  getLeaderboard,
+  getPlayerProfileStats,
+} from "./statsService";
 
 async function withPool<T>(pool: Pool, action: () => Promise<T>): Promise<T> {
   const previous = globalThis.goStonedDbPool;
@@ -38,6 +42,35 @@ test("human-only leaderboard statistics exclude calibrated-bot opponents", async
   const snapshot = await withPool(pool, () => getLeaderboard(50, "human-only"));
   assert.deepEqual(values, [50, "human-only"]);
   assert.equal(snapshot.opponentScope, "human-only");
+});
+
+test("current rating identity reads only the authenticated player's global rating", async () => {
+  let statement = "";
+  let values: readonly unknown[] = [];
+  const pool = { async query(sql: string, parameters: readonly unknown[]) {
+    statement = sql.replace(/\s+/g, " ").trim();
+    values = parameters;
+    return { rows: [{
+      rating: 1642.4,
+      rating_deviation: 58.2,
+      is_provisional: false,
+      display_preference: "both",
+    }], rowCount: 1 };
+  } } as unknown as Pool;
+  const rating = await withPool(
+    pool,
+    () => getCurrentRatingIdentity("user:11111111-1111-4111-8111-111111111111"),
+  );
+  assert.match(statement, /FROM player_glicko2_ratings rating/);
+  assert.match(statement, /JOIN player_rating_preferences preference ON preference\.user_id = rating\.user_id/);
+  assert.match(statement, /WHERE rating\.player_key = \$1 LIMIT 1/);
+  assert.deepEqual(values, ["user:11111111-1111-4111-8111-111111111111"]);
+  assert.deepEqual(rating, {
+    value: 1642.4,
+    deviation: 58.2,
+    isProvisional: false,
+    displayPreference: "both",
+  });
 });
 
 test("profile reads the global ledger, preferences, and bot disclosure", async () => {

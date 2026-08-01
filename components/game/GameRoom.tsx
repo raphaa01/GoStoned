@@ -3,6 +3,7 @@
 import { LogIn, LogOut, RefreshCw, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { SkipLink } from "@/components/layout/SkipLink";
@@ -58,6 +59,7 @@ const BLOCKED_CHAT_RECHECK_MS = 15_000;
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const router = useRouter();
+  const { refreshRating } = useAuth();
   const { dictionary, href } = useI18n();
   const copy = dictionary.game;
   const {
@@ -259,9 +261,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
       resultShownForGame.current = nextGame.id;
       setConfirmation(null);
       setShowResult(true);
+      if (nextGame.rated) void refreshRating().catch(() => undefined);
     }
     return true;
-  }, [clearGameBoundState, copy, playerKey, transitionConnection]);
+  }, [clearGameBoundState, copy, playerKey, refreshRating, transitionConnection]);
 
   const refreshGame = useCallback(async (
     signal: AbortSignal,

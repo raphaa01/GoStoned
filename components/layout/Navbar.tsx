@@ -7,13 +7,14 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { RatingLabel } from "@/components/rating/RatingLabel";
 import { isRouteActive } from "@/lib/i18n/routing";
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
-  const { dictionary, href } = useI18n();
+  const { user, logout, rating } = useAuth();
+  const { dictionary, href, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -95,7 +96,16 @@ export function Navbar() {
               onClick={() => setOpen(false)}
               aria-current={isRouteActive(pathname, path) ? "page" : undefined}
             >
-              <Icon size={18} /> {label}
+              <Icon size={18} />
+              <span className="mobile-menu-link-copy">{label}</span>
+              {path === "/profile" && rating ? (
+                <RatingLabel
+                  locale={locale}
+                  preference={rating.displayPreference}
+                  rating={rating.value}
+                  variant="compact"
+                />
+              ) : null}
             </Link>
           ))}
           {!user ? <Link href={href("/register")} onClick={() => setOpen(false)}>{dictionary.nav.createAccount}</Link> : null}
