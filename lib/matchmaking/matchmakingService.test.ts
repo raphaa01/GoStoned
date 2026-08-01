@@ -257,13 +257,18 @@ class MatchmakingClient {
     }
     if (normalized.includes("FROM player_glicko2_ratings rating")
       && normalized.includes("FOR UPDATE OF rating,preference")) {
+      assert.match(
+        normalized,
+        /rating\.updated_at::text AS rating_updated_at/,
+        "rating snapshots must retain PostgreSQL microsecond precision",
+      );
       const playerKey = String(values[0]);
       if (!playerKey.startsWith("user:")) return { rows: [], rowCount: 0 };
       return { rows: [{
         rating: 1200,
         rating_deviation: 350,
         algorithm_version: "glicko2-v1-tau-0.5",
-        rating_updated_at: new Date(0),
+        rating_updated_at: "1970-01-01 00:00:00.000001+00",
         preference_revision: 1,
         bot_match_preference: "never",
         handicap_preference: "even-only",
