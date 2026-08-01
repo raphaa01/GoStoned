@@ -21,7 +21,7 @@ type AuthContextValue = {
   error: string | null;
   rating: CurrentRatingIdentity | null;
   ratingLoading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (options?: { silent?: boolean }) => Promise<void>;
   refreshRating: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -37,8 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ratingLoading, setRatingLoading] = useState(false);
   const ratingRequestGeneration = useRef(0);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     try {
       const response = await fetch("/api/auth/session", { cache: "no-store" });
       const body = (await response.json()) as {
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       throw requestError;
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [dictionary]);
 

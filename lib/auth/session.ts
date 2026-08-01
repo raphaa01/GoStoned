@@ -28,7 +28,7 @@ const executeSessionDelete: SessionDeleteExecutor = async (tokenHash) => {
 
 const executeSessionLookup: SessionLookupExecutor = async (tokenHash) => {
   const result = await query<SessionRow>(
-    `SELECT u.id, u.username, u.display_name, s.expires_at
+    `SELECT u.id, u.username, u.display_name, u.avatar_style, s.expires_at
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1
