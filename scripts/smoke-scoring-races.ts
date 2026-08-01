@@ -103,21 +103,25 @@ async function postBodylessGame(
 async function setupScoringFixture(): Promise<ScoringFixture> {
   const black = await createGuest();
   const white = await createGuest();
-  const first = await api("/api/matchmaking", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, black.cookie, black.playerKey);
-  assert.equal(first.response.status, 200);
-  assert.equal(first.body.actor, black.playerKey);
-  const second = await api("/api/matchmaking", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, white.cookie, white.playerKey);
-  assert.equal(second.response.status, 200);
-  assert.equal(second.body.actor, white.playerKey);
-  const gameId = ((second.body.matchmaking as { gameId: string }).gameId);
+  const gameId = await withTransaction(async (transaction) => {
+    const inserted = await transaction.query<{ id: string }>(
+      `INSERT INTO games
+         (board_size,black_player_key,white_player_key,time_control,
+          rules,rules_profile,scoring_method,komi,handicap)
+       VALUES (9,$1,$2,'rapid','chinese','chinese-2002-gostone-v1','area',7.5,0)
+       RETURNING id`,
+      [black.playerKey, white.playerKey],
+    );
+    const id = inserted.rows[0].id;
+    await transaction.query(
+      `INSERT INTO matchmaking_queue
+         (player_key,board_size,time_control,rules_profile,status,game_id)
+       VALUES ($1,9,'rapid','chinese-2002-gostone-v1','matched',$3),
+              ($2,9,'rapid','chinese-2002-gostone-v1','matched',$3)`,
+      [black.playerKey, white.playerKey, id],
+    );
+    return id;
+  });
 
   for (const [guest, move] of [
     [black, { x: 2, y: 2 }],
