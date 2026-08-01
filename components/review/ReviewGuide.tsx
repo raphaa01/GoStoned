@@ -10,7 +10,7 @@ import type { RecentGame } from "@/lib/stats/statsService";
 import styles from "./review.module.css";
 
 export function ReviewGuide() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
   const [games, setGames] = useState<RecentGame[]>([]);
@@ -41,12 +41,6 @@ export function ReviewGuide() {
         <span className="section-kicker"><Sparkles size={15} /> {copy.kicker}</span>
         <h1>{copy.title}</h1>
         <p>{copy.description}</p>
-        {!loading && !user ? (
-          <div className={styles.actions}>
-            <Link className="button button--primary button--lg" href={href("/login")}>{copy.signIn}</Link>
-            <Link className="button button--secondary button--lg" href={href("/register")}>{copy.create}</Link>
-          </div>
-        ) : null}
       </header>
 
       <section className={styles.trustGrid}>

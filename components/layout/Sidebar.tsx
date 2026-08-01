@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
@@ -14,12 +15,14 @@ export function DesktopHeader() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const { dictionary, href: localizedHref } = useI18n();
+  const learnHref = useAccountFeatureHref("/learn");
+  const reviewHref = useAccountFeatureHref("/review");
   const items = [
-    { href: "/play", label: dictionary.nav.play },
-    { href: "/learn", label: dictionary.nav.learn },
-    { href: "/review", label: dictionary.nav.review },
-    { href: "/puzzles", label: dictionary.nav.puzzles },
-    { href: "/leaderboard", label: dictionary.nav.leaderboard },
+    { destination: localizedHref("/play"), path: "/play", label: dictionary.nav.play },
+    { destination: learnHref, path: "/learn", label: dictionary.nav.learn },
+    { destination: reviewHref, path: "/review", label: dictionary.nav.review },
+    { destination: localizedHref("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles },
+    { destination: localizedHref("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard },
   ];
 
   async function signOut() {
@@ -41,10 +44,10 @@ export function DesktopHeader() {
 
       <nav className="sidebar-nav" aria-label={dictionary.nav.mainLabel}>
         <div className="nav-group">
-          {items.map(({ href: path, label }) => (
+          {items.map(({ destination, path, label }) => (
             <Link
               className={`nav-link ${isRouteActive(pathname, path) ? "is-active" : ""}`}
-              href={localizedHref(path)}
+              href={destination}
               key={path}
               aria-current={isRouteActive(pathname, path) ? "page" : undefined}
             >

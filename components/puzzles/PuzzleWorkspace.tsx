@@ -13,12 +13,15 @@ import {
   TimerReset,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { LocalizedText } from "@/lib/i18n/config";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
-import { readApi } from "@/lib/client/api";
+import { accountRegistrationPath } from "@/lib/auth/returnPath";
+import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -45,11 +48,16 @@ function lineBoard(base: PuzzleHub["puzzles"][number]["board"], line: readonly P
   return board;
 }
 
-export function PuzzleWorkspace() {
-  const { dictionary, locale } = useI18n();
+export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: PuzzleKind }) {
+  const router = useRouter();
+  const { loading: authLoading, user } = useAuth();
+  const { dictionary, href, locale } = useI18n();
   const copy = dictionary.puzzles;
   const { playerKey, loading: identityLoading, error: identityError, retry } = usePlayerIdentity();
-  const [mode, setMode] = useState<PuzzleKind>("daily");
+  const personalPuzzlesRegistrationHref = href(
+    accountRegistrationPath("/puzzles?mode=practice"),
+  );
+  const [mode, setMode] = useState<PuzzleKind>(initialMode);
   const [hub, setHub] = useState<PuzzleHub | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<PuzzleCategory | null>(null);
   const [selectedOrder, setSelectedOrder] = useState(1);
@@ -60,8 +68,19 @@ export function PuzzleWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const puzzles = useMemo(() => hub?.puzzles ?? [], [hub?.puzzles]);
 
+  const redirectAccountFailure = useCallback((requestError: unknown) => {
+    if (
+      mode !== "practice"
+      || !(requestError instanceof ApiRequestError)
+      || (requestError.code !== "authentication_required"
+        && requestError.code !== "session_expired")
+    ) return false;
+    router.replace(personalPuzzlesRegistrationHref);
+    return true;
+  }, [mode, personalPuzzlesRegistrationHref, router]);
+
   const requestHub = useCallback(async (signal?: AbortSignal) => {
-    if (!playerKey) return null;
+    if (!playerKey || (mode === "practice" && !user)) return null;
     const response = await fetch(`/api/puzzles?mode=${mode}`, {
       cache: "no-store",
       headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
@@ -75,7 +94,12 @@ export function PuzzleWorkspace() {
       puzzles: data.puzzles,
       expectedPerCategory: data.expectedPerCategory,
     } satisfies PuzzleHub;
-  }, [mode, playerKey]);
+  }, [mode, playerKey, user]);
+
+  useEffect(() => {
+    if (mode !== "practice" || authLoading || user) return;
+    router.replace(personalPuzzlesRegistrationHref);
+  }, [authLoading, mode, personalPuzzlesRegistrationHref, router, user]);
 
   const acceptHub = useCallback((data: PuzzleHub | null) => {
     if (!data) return;
@@ -88,9 +112,10 @@ export function PuzzleWorkspace() {
       acceptHub(await requestHub(signal));
     } catch (loadError) {
       if (signal?.aborted) return;
+      if (redirectAccountFailure(loadError)) return;
       setError(localizedApiError(dictionary, loadError, copy.unavailable));
     }
-  }, [acceptHub, copy.unavailable, dictionary, requestHub]);
+  }, [acceptHub, copy.unavailable, dictionary, redirectAccountFailure, requestHub]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,11 +123,12 @@ export function PuzzleWorkspace() {
       .then(acceptHub)
       .catch((loadError) => {
         if (!controller.signal.aborted) {
+          if (redirectAccountFailure(loadError)) return;
           setError(localizedApiError(dictionary, loadError, copy.unavailable));
         }
       });
     return () => controller.abort();
-  }, [acceptHub, copy.unavailable, dictionary, requestHub]);
+  }, [acceptHub, copy.unavailable, dictionary, redirectAccountFailure, requestHub]);
 
   useEffect(() => {
     const incompleteCatalog = mode === "practice"
@@ -175,6 +201,7 @@ export function PuzzleWorkspace() {
         setFeedback("correct");
       }
     } catch (attemptError) {
+      if (redirectAccountFailure(attemptError)) return;
       setError(localizedApiError(dictionary, attemptError, copy.attemptFailed));
     } finally {
       setBusy(false);
@@ -190,6 +217,12 @@ export function PuzzleWorkspace() {
 
   function changeMode(nextMode: PuzzleKind) {
     if (nextMode === mode) return;
+    if (nextMode === "practice" && !user) {
+      if (!authLoading) {
+        router.push(personalPuzzlesRegistrationHref);
+      }
+      return;
+    }
     setMode(nextMode);
     setHub(null);
     setSelectedCategory(null);
@@ -243,7 +276,7 @@ export function PuzzleWorkspace() {
           <CalendarDays size={18} />
           <span><strong>{copy.daily}</strong><small>{copy.dailyDescription}</small></span>
         </button>
-        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} onClick={() => changeMode("practice")} role="tab" type="button">
+        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading} onClick={() => changeMode("practice")} role="tab" type="button">
           <Puzzle size={18} />
           <span><strong>{copy.practice}</strong><small>{copy.practiceDescription}</small></span>
         </button>

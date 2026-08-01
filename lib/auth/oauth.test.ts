@@ -42,7 +42,9 @@ test("Google sign-in starts with state, PKCE, and an HttpOnly transaction cookie
     GOOGLE_CLIENT_SECRET: "google-client-secret",
   }, async () => {
     const response = await startOAuth(
-      new NextRequest("https://gostone.test/api/auth/oauth/google?mode=register&locale=de"),
+      new NextRequest(
+        "https://gostone.test/api/auth/oauth/google?mode=register&locale=de&returnTo=%2Fde%2Freview",
+      ),
       { params: Promise.resolve({ provider: "google" }) },
     );
     assert.equal(response.status, 307);
@@ -58,7 +60,7 @@ test("Google sign-in starts with state, PKCE, and an HttpOnly transaction cookie
     assert.ok(transaction);
     assert.equal(transaction.mode, "register");
     assert.equal(transaction.locale, "de");
-    assert.equal(transaction.returnTo, null);
+    assert.equal(transaction.returnTo, "/review");
     assert.equal(authorization.searchParams.get("state"), transaction.state);
     assert.equal(
       authorization.searchParams.get("code_challenge"),
@@ -76,12 +78,14 @@ test("an unconfigured provider returns to the localized form with a safe error",
     GOOGLE_CLIENT_SECRET: undefined,
   }, async () => {
     const response = await startOAuth(
-      new NextRequest("https://gostone.test/api/auth/oauth/google?locale=de"),
+      new NextRequest(
+        "https://gostone.test/api/auth/oauth/google?mode=register&locale=de&returnTo=%2Freview",
+      ),
       { params: Promise.resolve({ provider: "google" }) },
     );
     assert.equal(
       response.headers.get("location"),
-      "https://gostone.test/de/login?oauthError=provider_unavailable",
+      "https://gostone.test/de/register?oauthError=provider_unavailable&returnTo=%2Freview",
     );
   });
 });

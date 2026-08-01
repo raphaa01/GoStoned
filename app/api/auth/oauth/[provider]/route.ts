@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { safeReauthenticationReturnPath } from "@/lib/auth/returnPath";
+import { safeAuthReturnPath } from "@/lib/auth/returnPath";
 import {
   createOAuthAuthorization,
   isOAuthProvider,
@@ -14,10 +14,17 @@ import { localizePathname } from "@/lib/i18n/routing";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function authPage(mode: OAuthMode, locale: Locale, origin: string, error?: string): URL {
+function authPage(
+  mode: OAuthMode,
+  locale: Locale,
+  origin: string,
+  error?: string,
+  returnTo?: string | null,
+): URL {
   const path = localizePathname(mode === "register" ? "/register" : "/login", locale);
   const url = new URL(path, origin);
   if (error) url.searchParams.set("oauthError", error);
+  if (returnTo) url.searchParams.set("returnTo", returnTo);
   return url;
 }
 
@@ -34,9 +41,9 @@ export async function GET(
     : "login";
   const localeValue = request.nextUrl.searchParams.get("locale");
   const locale = localeValue && isLocale(localeValue) ? localeValue : DEFAULT_LOCALE;
-  const returnTo = mode === "login"
-    ? safeReauthenticationReturnPath(request.nextUrl.searchParams.get("returnTo") ?? undefined)
-    : null;
+  const returnTo = safeAuthReturnPath(
+    request.nextUrl.searchParams.get("returnTo") ?? undefined,
+  );
 
   try {
     const { authorizationUrl, transaction } = createOAuthAuthorization(providerValue, {
@@ -59,6 +66,8 @@ export async function GET(
     if (!(error instanceof OAuthConfigurationError)) {
       console.error(`Could not start ${providerValue} sign-in:`, error);
     }
-    return NextResponse.redirect(authPage(mode, locale, request.nextUrl.origin, "provider_unavailable"));
+    return NextResponse.redirect(
+      authPage(mode, locale, request.nextUrl.origin, "provider_unavailable", returnTo),
+    );
   }
 }
