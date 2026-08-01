@@ -120,21 +120,6 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
           : dictionary.auth.loginDescription}
       </p>
 
-      <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
-        <a className="auth-social-button" href={socialHref("google")}>
-          <GoogleIcon />
-          <span>{dictionary.auth.continueWithGoogle}</span>
-        </a>
-        <a className="auth-social-button" href={socialHref("apple")}>
-          <AppleIcon />
-          <span>{dictionary.auth.continueWithApple}</span>
-        </a>
-      </div>
-
-      {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
-
-      <div className="auth-divider"><span>{dictionary.auth.orContinueWithUsername}</span></div>
-
       <form className="auth-form" onSubmit={submit}>
         <label>
           <span>{dictionary.auth.username}</span>
@@ -232,6 +217,21 @@ export function AuthForm({ mode, oauthError = null, reauthenticate = false, retu
             : registering ? dictionary.auth.createAccount : dictionary.auth.login}
         </button>
       </form>
+
+      <div className="auth-divider"><span>{dictionary.auth.orContinueWithSocial}</span></div>
+
+      <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
+        <a className="auth-social-button" href={socialHref("google")}>
+          <GoogleIcon />
+          <span>{dictionary.auth.continueWithGoogle}</span>
+        </a>
+        <a className="auth-social-button" href={socialHref("apple")}>
+          <AppleIcon />
+          <span>{dictionary.auth.continueWithApple}</span>
+        </a>
+      </div>
+
+      {oauthErrorMessage ? <p className="form-error auth-social-error" role="alert">{oauthErrorMessage}</p> : null}
 
       <p className="auth-switch">
         {registering ? dictionary.auth.haveAccount : dictionary.auth.newToGoStone}{" "}

@@ -143,7 +143,7 @@ export const de = {
     socialOptions: "Weitere Anmeldeoptionen",
     continueWithGoogle: "Mit Google fortfahren",
     continueWithApple: "Mit Apple fortfahren",
-    orContinueWithUsername: "oder mit Benutzername fortfahren",
+    orContinueWithSocial: "oder mit Google oder Apple fortfahren",
     socialCancelled: "Die Anmeldung mit Google oder Apple wurde abgebrochen.",
     socialUnavailable: "Diese Anmeldeoption ist noch nicht eingerichtet.",
     socialFailed: "Die Anmeldung mit Google oder Apple konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
