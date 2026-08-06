@@ -97,7 +97,7 @@ body {
 
 .app-content {
   max-width: 1380px;
-  padding: clamp(40px, 5vw, 72px) clamp(24px, 5vw, 72px) 88px;
+  padding: clamp(28px, 3vw, 44px) clamp(24px, 5vw, 72px) 88px;
 }
 
 .app-content:has(.home-experience) {
@@ -2004,7 +2004,7 @@ body {
   }
 
   .app-content {
-    padding: 44px 24px 60px;
+    padding: 32px 24px 60px;
   }
 
   .app-content:has(.home-experience) {
@@ -2073,7 +2073,7 @@ body {
 
 @media (max-width: 620px) {
   .app-content {
-    padding: 34px 16px 48px;
+    padding: 24px 16px 48px;
   }
 
   .match-lobby {
