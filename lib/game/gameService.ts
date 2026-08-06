@@ -1527,9 +1527,12 @@ async function verifyPollState(
   };
 }
 
-async function assertPollParticipant(gameId: string, playerKey: string): Promise<void> {
-  const result = await query<Pick<GameRow, "black_player_key" | "white_player_key">>(
-    `SELECT black_player_key, white_player_key
+async function pollRulesProfile(gameId: string, playerKey: string): Promise<unknown> {
+  const result = await query<Pick<
+    GameRow,
+    "black_player_key" | "white_player_key" | "rules_profile"
+  >>(
+    `SELECT black_player_key, white_player_key, rules_profile
        FROM games
       WHERE id = $1`,
     [gameId],
@@ -1537,17 +1540,19 @@ async function assertPollParticipant(gameId: string, playerKey: string): Promise
   const game = result.rows[0];
   if (!game) throw new GameServiceError("Game not found.", 404, "game_not_found");
   assertParticipant(game, playerKey);
+  return game.rules_profile;
 }
 
 async function pollChineseGameState(
   gameId: string,
   playerKey: string,
   knownVersion: number | null,
+  participantVerified = false,
 ): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
   if (knownVersion === null) {
     return { unchanged: false, game: await getChineseGameState(gameId, playerKey) };
   }
-  await assertPollParticipant(gameId, playerKey);
+  if (!participantVerified) await pollRulesProfile(gameId, playerKey);
   const verified = await withReadOnlyTransaction((client) =>
     verifyPollState(client, gameId, playerKey, knownVersion));
   if (verified.needsMutation) {
@@ -2145,9 +2150,9 @@ export async function pollGameState(
   playerKey: string,
   knownVersion: number | null,
 ): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
-  return await usesJapaneseService(gameId)
+  return await pollRulesProfile(gameId, playerKey) === JAPANESE_1989_RULES_PROFILE
     ? pollJapaneseGameState(gameId, playerKey, knownVersion)
-    : pollChineseGameState(gameId, playerKey, knownVersion);
+    : pollChineseGameState(gameId, playerKey, knownVersion, true);
 }
 
 export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {

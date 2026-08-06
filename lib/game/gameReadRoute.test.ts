@@ -228,8 +228,12 @@ test("full reads lock while version polls first reach lightweight participant ve
         if (sql.includes("FROM user_sessions s")) {
           return { rows: [sessionRow()], rowCount: 1 };
         }
-        if (sql.replace(/\s+/g, " ").trim() === "SELECT rules_profile FROM games WHERE id = $1") {
-          return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+        if (
+          sql.replace(/\s+/g, " ").trim()
+          === "SELECT black_player_key, white_player_key, rules_profile FROM games WHERE id = $1"
+          && query === ""
+        ) {
+          return { rows: [heartbeatRow()], rowCount: 1 };
         }
         if (sql.includes("FROM games") && query !== "") throw sentinel;
         throw new Error(`Unexpected boundary query: ${sql}`);
@@ -261,7 +265,7 @@ test("full reads lock while version polls first reach lightweight participant ve
     );
     assert.equal(
       statements.filter(({ sql }) => sql.includes("FROM games") && !sql.includes("FROM games g")).length,
-      query === "" ? 1 : 2,
+      1,
       query,
     );
     assert.equal(connectCalls, query === "" ? 1 : 0, query);
@@ -284,7 +288,7 @@ test("a matching actor receives the current version heartbeat without persistent
   assert.equal(body.version, 7);
   assert.equal(body.clock.mainTimeSeconds, 600);
   assert.equal(statements.filter(({ sql }) => sql.includes("FROM user_sessions s")).length, 1);
-  assert.equal(statements.filter(({ sql }) => sql.includes("FROM games")).length, 3);
+  assert.equal(statements.filter(({ sql }) => sql.includes("FROM games")).length, 2);
   assert.equal(statements.filter(({ sql }) => sql.includes("FROM moves")).length, 1);
   assert.equal(
     statements.filter(({ sql }) => sql.includes("FROM game_scoring_resume_events")).length,
