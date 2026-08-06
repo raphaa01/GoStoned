@@ -1,6 +1,5 @@
 "use client";
 
-import { ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
@@ -32,6 +31,7 @@ import { createPollingRequestGuard, nextPollDelay } from "@/lib/client/polling";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ActiveGamePanel } from "./ActiveGamePanel";
+import { BoardPreview } from "./BoardPreview";
 import { BoardSizeSelector } from "./BoardSizeSelector";
 import { MatchmakingPanel } from "./MatchmakingPanel";
 import { TimeControlSelector } from "./TimeControlSelector";
@@ -56,9 +56,8 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     retry: retryIdentity,
   } = usePlayerIdentity();
   const [boardSize, setBoardSize] = useState<BoardSize>(initialSize);
-  const [timeControl, setTimeControl] = useState<TimeControlId>("rapid");
+  const [timeControl, setTimeControl] = useState<TimeControlId>("blitz");
   const [queueStatus, setQueueStatus] = useState<"idle" | "waiting">("idle");
-  const [queueDetails, setQueueDetails] = useState<MatchmakingQueueState | null>(null);
   const [activeGame, setActiveGame] = useState<{
     gameId: string;
     boardSize: BoardSize;
@@ -95,7 +94,6 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     queueKnown.current = false;
     enterMatchedOnSync.current = false;
     setQueueStatus("idle");
-    setQueueDetails(null);
     setActiveGame(null);
     setConfirmLeave(false);
   }, []);
@@ -175,7 +173,6 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     }
     assertResponseActor(data.actor, playerKey);
     handleQueueState(data.matchmaking, enterMatchedGame);
-    setQueueDetails(data.matchmaking);
     queueKnown.current = true;
     enterMatchedOnSync.current = data.matchmaking.status === "waiting";
     transitionConnection(matchmakingConnectionAfterSuccess(Date.now()));
@@ -513,25 +510,9 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const panelError = error ?? identityError;
 
   return (
-    <div className="match-lobby">
-      <section className="match-lobby-copy">
-        <span className="section-kicker"><Sparkles size={14} /> {copy.kicker}</span>
-        <h1>{copy.title}</h1>
-        <p>{copy.description}</p>
-        <div className="lobby-trust">
-          <span><ShieldCheck size={17} /> {copy.serverValidated}</span>
-          <span>
-            {loading
-              ? copy.preparingPlayer
-              : identityError
-                ? copy.sessionUnavailable
-                : `${copy.playingAs} ${playerName}`}
-          </span>
-        </div>
-      </section>
-
-      <section className="match-lobby-card">
-        {activeGame ? (
+    <div className={`play-experience${activeGame ? " play-experience--active" : ""}`}>
+      {activeGame ? (
+        <section className="play-active-card">
           <ActiveGamePanel
             boardSize={activeGame.boardSize}
             timeControl={activeGame.timeControl}
@@ -543,26 +524,28 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
             }}
             onResume={() => router.push(href(`/game/${activeGame.gameId}`))}
           />
-        ) : (
-          <>
-            <div className="lobby-options">
-              <div>
-                <span>{copy.boardSize}</span>
-                <BoardSizeSelector
-                  disabled={busy || queueStatus === "waiting" || !actionReady}
-                  onChange={setBoardSize}
-                  value={boardSize}
-                />
-              </div>
-              <div>
-                <span>{copy.timeControl}</span>
-                <TimeControlSelector
-                  disabled={busy || queueStatus === "waiting" || !actionReady}
-                  onChange={setTimeControl}
-                  value={timeControl}
-                />
-              </div>
-            </div>
+        </section>
+      ) : (
+        <>
+          <section className="play-board-column" aria-label={copy.boardSize}>
+            <BoardPreview boardSize={boardSize} />
+            <BoardSizeSelector
+              disabled={busy || queueStatus === "waiting" || !actionReady}
+              onChange={setBoardSize}
+              value={boardSize}
+            />
+          </section>
+
+          <section className="play-pace-column" aria-labelledby="play-pace-title">
+            <header className="play-pace-heading">
+              <span>{copy.timeControl}</span>
+              <h1 id="play-pace-title">{copy.choosePace}</h1>
+            </header>
+            <TimeControlSelector
+              disabled={busy || queueStatus === "waiting" || !actionReady}
+              onChange={setTimeControl}
+              value={timeControl}
+            />
             <MatchmakingPanel
               boardSize={boardSize}
               busy={busy}
@@ -570,6 +553,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
               connectionKind={connectionState.kind}
               connectionLabel={connectionLabel}
               error={panelError}
+              identityUnavailable={!playerName && Boolean(panelError)}
               onCancel={cancelSearch}
               onFind={findMatch}
               onRecover={connectionState.kind === "session_expired"
@@ -579,7 +563,6 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
                   : retryQueueSync}
               onRetry={retryIdentity}
               primaryActionRef={matchmakingAction}
-              playerName={playerName}
               ready={actionReady}
               recoveryLabel={connectionState.kind === "session_expired"
                 ? identityKind === "account" ? copy.signInAgain : copy.startNewSession
@@ -588,12 +571,10 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
                   : copy.retryQueue}
               status={queueStatus}
               timeControl={timeControl}
-              queueDetails={queueDetails}
-              identityKind={identityKind}
             />
-          </>
-        )}
-      </section>
+          </section>
+        </>
+      )}
       <ConfirmModal
         busy={busy || !actionReady}
         confirmLabel={copy.leaveGame}

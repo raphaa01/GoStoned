@@ -23,6 +23,7 @@ const requiredTables = [
   "schema_migrations",
   "users",
   "auth_identities",
+  "oauth_registration_intents",
   "user_sessions",
   "guest_sessions",
   "auth_rate_limits",
@@ -135,6 +136,9 @@ const requiredResumeEventColumns = [
 const requiredIndexDefinitions = {
   idx_user_sessions_expires_at: [
     "ON public.user_sessions USING btree (expires_at)",
+  ],
+  idx_oauth_registration_intents_expires: [
+    "ON public.oauth_registration_intents USING btree (expires_at)",
   ],
   idx_matchmaking_waiting_pool_updated_at: [
     "ON public.matchmaking_queue USING btree (board_size, time_control, rules_profile, updated_at, player_key)",
@@ -535,6 +539,7 @@ const requiredProtectedTables = [
   "users",
   "user_sessions",
   "auth_identities",
+  "oauth_registration_intents",
   "player_blocks",
   "player_reports",
   "game_scoring_resume_events",
@@ -696,6 +701,8 @@ async function checkMvp() {
     trigger_signatures: string[];
     trigger_definitions: Record<string, string>;
     rls_tables: string[];
+    auth_identity_app_policy_is_valid: boolean;
+    oauth_registration_app_policy_is_valid: boolean;
     public_has_table_access: boolean;
     client_roles_have_table_access: boolean;
     public_can_execute_guard_functions: boolean;
@@ -832,6 +839,28 @@ async function checkMvp() {
                  AND relation.relrowsecurity
                ORDER BY relation.relname
             ) AS rls_tables,
+            EXISTS (
+              SELECT 1
+                FROM pg_catalog.pg_policies
+               WHERE schemaname = 'public'
+                 AND tablename = 'auth_identities'
+                 AND policyname = 'gostone_app_server_access'
+                 AND cmd = 'ALL'
+                 AND roles = ARRAY['gostone_app']::name[]
+                 AND qual = 'true'
+                 AND with_check = 'true'
+            ) AS auth_identity_app_policy_is_valid,
+            EXISTS (
+              SELECT 1
+                FROM pg_catalog.pg_policies
+               WHERE schemaname = 'public'
+                 AND tablename = 'oauth_registration_intents'
+                 AND policyname = 'gostone_app_oauth_registration_access'
+                 AND cmd = 'ALL'
+                 AND roles = ARRAY['gostone_app']::name[]
+                 AND qual = 'true'
+                 AND with_check = 'true'
+            ) AS oauth_registration_app_policy_is_valid,
             EXISTS (
               SELECT 1
                 FROM UNNEST($8::text[]) AS protected_table(table_name)
@@ -1054,6 +1083,16 @@ async function checkMvp() {
   if (absentRls.length > 0) {
     throw new Error(
       `Database client isolation is incomplete. RLS is disabled on: ${absentRls.join(", ")}`,
+    );
+  }
+  if (!row.auth_identity_app_policy_is_valid) {
+    throw new Error(
+      "Database OAuth identity access is incomplete: gostone_app is missing its exact RLS policy.",
+    );
+  }
+  if (!row.oauth_registration_app_policy_is_valid) {
+    throw new Error(
+      "Database OAuth registration access is incomplete: gostone_app is missing its exact RLS policy.",
     );
   }
   if (row.public_has_table_access) {

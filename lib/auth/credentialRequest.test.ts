@@ -6,6 +6,7 @@ import {
   assertAuthMutationRequest,
   MAX_CREDENTIAL_REQUEST_BODY_BYTES,
   readCredentialRequest,
+  readOAuthRegistrationRequest,
 } from "./credentialRequest";
 
 function credentialRequest(body: BodyInit, headers: Record<string, string> = {}) {
@@ -50,6 +51,33 @@ test("credential requests require the exact username and password object", async
       (error) => error instanceof AuthError
         && error.status === 400
         && error.code === "invalid_request",
+    );
+  }
+});
+
+test("social registration accepts only a username and optional starting strength", async () => {
+  assert.deepEqual(
+    await readOAuthRegistrationRequest(credentialRequest(JSON.stringify({
+      username: " Personal_Name ",
+      startingStrength: "known",
+      knownRank: "5K",
+    }))),
+    {
+      username: "Personal_Name",
+      startingStrength: { estimate: "known", knownRank: "5k" },
+    },
+  );
+
+  for (const body of [
+    { username: "player", startingStrength: "unspecified", knownRank: null, email: "forged@example.com" },
+    { username: "player", startingStrength: "unspecified" },
+    { username: "invalid name", startingStrength: "unspecified", knownRank: null },
+  ]) {
+    await assert.rejects(
+      readOAuthRegistrationRequest(credentialRequest(JSON.stringify(body))),
+      (error) => error instanceof AuthError
+        && error.status === 400
+        && (error.code === "invalid_request" || error.code === "invalid_username"),
     );
   }
 });

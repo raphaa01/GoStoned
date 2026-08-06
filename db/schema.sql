@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS auth_identities (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   email TEXT CHECK (email IS NULL OR CHAR_LENGTH(email) <= 320),
   email_verified BOOLEAN NOT NULL DEFAULT false,
+  username_confirmed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
   last_login_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
@@ -32,6 +33,23 @@ CREATE TABLE IF NOT EXISTS auth_identities (
   UNIQUE (user_id, provider),
   CHECK (updated_at >= created_at AND last_login_at >= created_at)
 );
+
+CREATE TABLE IF NOT EXISTS oauth_registration_intents (
+  token_hash TEXT PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple')),
+  provider_subject TEXT NOT NULL CHECK (CHAR_LENGTH(provider_subject) BETWEEN 1 AND 255),
+  email TEXT CHECK (email IS NULL OR CHAR_LENGTH(email) <= 320),
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (provider, provider_subject),
+  UNIQUE (user_id),
+  CHECK (expires_at > created_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_registration_intents_expires
+  ON oauth_registration_intents(expires_at);
 
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1382,6 +1400,7 @@ ALTER TABLE game_scoring_resume_events
 ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oauth_registration_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
@@ -1404,11 +1423,12 @@ REVOKE ALL ON game_scoring_resume_events FROM PUBLIC;
 REVOKE ALL ON player_blocks FROM PUBLIC;
 REVOKE ALL ON player_reports FROM PUBLIC;
 REVOKE ALL ON auth_identities FROM PUBLIC;
+REVOKE ALL ON oauth_registration_intents FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
@@ -1416,7 +1436,7 @@ BEGIN
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
@@ -1430,6 +1450,27 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
     GRANT SELECT, INSERT, UPDATE ON auth_identities TO gostone_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_registration_intents TO gostone_app;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'auth_identities'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON auth_identities
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'oauth_registration_intents'
+         AND policyname = 'gostone_app_oauth_registration_access'
+    ) THEN
+      CREATE POLICY gostone_app_oauth_registration_access ON oauth_registration_intents
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
   END IF;
 END
 $$;

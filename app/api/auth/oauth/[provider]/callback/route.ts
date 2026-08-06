@@ -6,7 +6,12 @@ import {
   parseOAuthTransaction,
   type OAuthMode,
 } from "@/lib/auth/oauth";
-import { signInWithOAuthIdentity, type OAuthProvider } from "@/lib/auth/oauthAccountService";
+import {
+  beginOAuthSignIn,
+  OAUTH_REGISTRATION_COOKIE,
+  OAUTH_REGISTRATION_MAX_AGE_SECONDS,
+  type OAuthProvider,
+} from "@/lib/auth/oauthAccountService";
 import {
   consumeIpPolicyRateLimit,
   RATE_LIMIT_POLICIES,
@@ -65,20 +70,49 @@ function clearTransactionCookie(response: NextResponse, provider: OAuthProvider)
 function callbackRedirect(
   provider: OAuthProvider,
   url: URL,
-  sessionToken?: string,
+  credentials: Readonly<{
+    registrationToken?: string;
+    sessionToken?: string;
+  }> = {},
 ): NextResponse {
   // Apple returns to this route with a POST. A 303 intentionally converts the
   // next navigation to GET instead of replaying the provider form to /play.
   const response = NextResponse.redirect(url, 303);
   response.headers.set("Cache-Control", "no-store, max-age=0");
   clearTransactionCookie(response, provider);
-  if (sessionToken) {
-    response.cookies.set(SESSION_COOKIE, sessionToken, {
+  if (credentials.sessionToken) {
+    response.cookies.set(SESSION_COOKIE, credentials.sessionToken, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: SESSION_MAX_AGE_SECONDS,
+      priority: "high",
+    });
+    response.cookies.set(OAUTH_REGISTRATION_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+      priority: "high",
+    });
+  }
+  if (credentials.registrationToken) {
+    response.cookies.set(SESSION_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+      priority: "high",
+    });
+    response.cookies.set(OAUTH_REGISTRATION_COOKIE, credentials.registrationToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: OAUTH_REGISTRATION_MAX_AGE_SECONDS,
       priority: "high",
     });
   }
@@ -199,10 +233,18 @@ async function callback(
       transaction,
       provider === "apple" ? parameters.user : null,
     );
-    const login = await signInWithOAuthIdentity(identity);
+    const login = await beginOAuthSignIn(identity);
+    if (login.kind === "registration_required") {
+      const destination = new URL(
+        localizePathname("/register/username", locale),
+        appOrigin(),
+      );
+      if (returnTo) destination.searchParams.set("returnTo", returnTo);
+      return callbackRedirect(provider, destination, { registrationToken: login.token });
+    }
     const logicalDestination = returnTo ?? (mode === "register" ? "/profile" : "/play");
     const destination = new URL(localizePathname(logicalDestination, locale), appOrigin());
-    return callbackRedirect(provider, destination, login.token);
+    return callbackRedirect(provider, destination, { sessionToken: login.token });
   } catch (error) {
     if (!(error instanceof RateLimitError)) {
       console.error(`${provider} sign-in callback failed:`, error);
