@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize } from "@/lib/game/types";
+import { BoardSizeGlyph } from "./BoardPreview";
 
 type BoardSizeSelectorProps = {
   value: BoardSize;
@@ -11,10 +12,10 @@ type BoardSizeSelectorProps = {
 
 export function BoardSizeSelector({ value, onChange, disabled = false }: BoardSizeSelectorProps) {
   const { dictionary } = useI18n();
-  const sizes: Array<{ value: BoardSize; label: string; pace: string }> = [
-    { value: 9, label: "9×9", pace: dictionary.play.boardQuick },
-    { value: 13, label: "13×13", pace: dictionary.play.boardBalanced },
-    { value: 19, label: "19×19", pace: dictionary.play.boardClassic },
+  const sizes: Array<{ value: BoardSize; label: string }> = [
+    { value: 9, label: "9×9" },
+    { value: 13, label: "13×13" },
+    { value: 19, label: "19×19" },
   ];
   return (
     <div
@@ -31,8 +32,8 @@ export function BoardSizeSelector({ value, onChange, disabled = false }: BoardSi
           onClick={() => onChange(size.value)}
           type="button"
         >
+          <BoardSizeGlyph boardSize={size.value} />
           <strong>{size.label}</strong>
-          <span>{size.pace}</span>
         </button>
       ))}
     </div>
