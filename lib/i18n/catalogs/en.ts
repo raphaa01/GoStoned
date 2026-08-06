@@ -7,7 +7,7 @@ export const en = {
       openGraphDescription: "A focused place to play Go, Baduk and Weiqi online.",
     },
     play: { title: "Play online", description: "Choose a board and find a Go opponent online." },
-    learn: { title: "Learn Go", description: "Learn the essential ideas for a confident first game of Go." },
+    learn: { title: "Learn Go", description: "Start with six interactive Go lessons about territory, liberties, atari, capturing, and connecting." },
     puzzles: { title: "Go puzzles", description: "Solve a daily KataGo challenge and practice more Go problems." },
     review: { title: "Review games", description: "Turn a saved Go game into one clear lesson for the next game." },
     game: { title: "Live game", description: "A live Go game on GoStone." },
