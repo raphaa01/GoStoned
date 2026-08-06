@@ -34,6 +34,7 @@
   --space-16: 64px;
   --space-24: 96px;
   --space-32: 128px;
+  --page-top-space: clamp(28px, 3vw, 44px);
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -97,7 +98,7 @@ body {
 
 .app-content {
   max-width: 1380px;
-  padding: clamp(28px, 3vw, 44px) clamp(24px, 5vw, 72px) 88px;
+  padding: var(--page-top-space) clamp(24px, 5vw, 72px) 88px;
 }
 
 .app-content:has(.home-experience) {
@@ -506,7 +507,7 @@ body {
   left: 50%;
   position: absolute;
   text-align: center;
-  top: clamp(52px, 8.5vh, 84px);
+  top: var(--page-top-space);
   transform: translateX(-50%);
   z-index: 4;
 }
@@ -543,7 +544,7 @@ body {
   mask-image: radial-gradient(ellipse 62% 58% at 50% 56%, #000 42%, transparent 82%);
   pointer-events: none;
   position: absolute;
-  top: clamp(70px, 8.5vh, 94px);
+  top: var(--page-top-space);
   transform: translateX(-50%);
   width: min(1080px, 94vw, calc((100svh - 82px) * 1.32));
   z-index: 1;
@@ -1009,7 +1010,7 @@ body {
 
 .content-hero {
   max-width: 900px;
-  padding: clamp(44px, 7vw, 96px) 0 clamp(54px, 8vw, 100px);
+  padding: 0 0 clamp(54px, 8vw, 100px);
 }
 
 .content-hero h1,
@@ -1295,7 +1296,7 @@ body {
 
 .legal-page > header {
   max-width: 780px;
-  padding: clamp(42px, 7vw, 84px) 0 clamp(36px, 5vw, 58px);
+  padding: 0 0 clamp(36px, 5vw, 58px);
 }
 
 .legal-page > header p {
@@ -1530,7 +1531,7 @@ body {
 }
 
 .page-header {
-  padding-block: 42px 38px;
+  padding-block: 0 38px;
 }
 
 .leaderboard-card {
@@ -1937,12 +1938,16 @@ body {
 
 @media (min-width: 841px) and (max-height: 820px) {
   .hero-stone-stage {
-    top: 58px;
+    top: var(--page-top-space);
     width: min(960px, 92vw, calc((100svh - 82px) * 1.32));
   }
 }
 
 @media (max-width: 840px) {
+  :root {
+    --page-top-space: 32px;
+  }
+
   .sidebar {
     display: none;
   }
@@ -2004,7 +2009,7 @@ body {
   }
 
   .app-content {
-    padding: 32px 24px 60px;
+    padding: var(--page-top-space) 24px 60px;
   }
 
   .app-content:has(.home-experience) {
@@ -2024,7 +2029,7 @@ body {
   }
 
   .home-hero-copy {
-    top: clamp(40px, 6vh, 62px);
+    top: var(--page-top-space);
   }
 
   .hero-stone-stage {
@@ -2072,8 +2077,12 @@ body {
 }
 
 @media (max-width: 620px) {
+  :root {
+    --page-top-space: 24px;
+  }
+
   .app-content {
-    padding: 24px 16px 48px;
+    padding: var(--page-top-space) 16px 48px;
   }
 
   .match-lobby {
@@ -2189,7 +2198,7 @@ body {
   }
 
   .legal-page > header {
-    padding-top: 12px;
+    padding-top: 0;
   }
 
   .privacy-page h1 {
@@ -2224,10 +2233,6 @@ body {
 @media (max-width: 390px) {
   .mobile-nav {
     padding-inline: 10px;
-  }
-
-  .home-hero-copy {
-    top: 32px;
   }
 
   .hero-stone-stage {
@@ -2710,8 +2715,8 @@ body {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-hairline);
-  gap: clamp(20px, 3vw, 42px);
-  grid-template-columns: minmax(0, .72fr) auto minmax(0, 1.28fr);
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   isolation: isolate;
   margin-bottom: 24px;
   min-height: 188px;
@@ -2735,17 +2740,21 @@ body {
 }
 
 .profile-header__primary {
-  align-items: center;
-  display: flex;
-  gap: clamp(18px, 2vw, 26px);
-  grid-column: 2;
+  display: contents;
+}
+
+.profile-header__primary > .profile-avatar-trigger {
+  align-self: center;
+  grid-column: 1;
   justify-self: center;
-  min-width: 0;
 }
 
 .profile-header__identity {
+  align-self: center;
+  grid-column: 2;
+  justify-self: center;
   min-width: 0;
-  text-align: left;
+  text-align: center;
 }
 
 .profile-header__identity .section-kicker {
@@ -3075,6 +3084,7 @@ body {
   }
 
   .profile-header__identity {
+    grid-column: 1;
     text-align: center;
   }
 
