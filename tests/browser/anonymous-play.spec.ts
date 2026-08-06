@@ -658,7 +658,7 @@ async function installApiHarness(
           ok: true,
           actor: PLAYER_KEY,
           matchmaking: matched
-            ? { status: "matched", gameId: GAME_ID, boardSize: 19, timeControl: "rapid" }
+            ? { status: "matched", gameId: GAME_ID, boardSize: 19, timeControl: "blitz" }
             : { status: "idle", gameId: null, boardSize: null, timeControl: null },
         });
         return;
@@ -667,14 +667,14 @@ async function installApiHarness(
         recordJsonContentType(harness, request);
         const body = request.postDataJSON();
         harness.matchmakingBodies.push(body);
-        if (JSON.stringify(body) !== JSON.stringify({ boardSize: 19, timeControl: "rapid" })) {
+        if (JSON.stringify(body) !== JSON.stringify({ boardSize: 19, timeControl: "blitz" })) {
           harness.contractErrors.push(`${requestName(request)} sent ${JSON.stringify(body)}`);
         }
         matched = true;
         await fulfillJson(route, {
           ok: true,
           actor: PLAYER_KEY,
-          matchmaking: { status: "matched", gameId: GAME_ID, boardSize: 19, timeControl: "rapid" },
+          matchmaking: { status: "matched", gameId: GAME_ID, boardSize: 19, timeControl: "blitz" },
         });
         return;
       }
@@ -1432,14 +1432,28 @@ for (const locale of ["en", "de"] as const) {
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
     const size19 = page.getByRole("button", { name: /19×19/ });
     await expect(size19).toHaveAttribute("aria-pressed", "true");
+    const boardPreview = page.locator('.play-board-preview[role="img"]');
+    const previewGrid = boardPreview.locator('svg[data-board-size="19"]');
+    await expect(previewGrid.locator('line[data-axis="vertical"]')).toHaveCount(19);
+    await expect(previewGrid.locator('line[data-axis="horizontal"]')).toHaveCount(19);
+    await expect(previewGrid.locator(".play-board-center-stone")).toHaveAttribute("cx", "50");
+    await expect(previewGrid.locator(".play-board-center-stone")).toHaveAttribute("cy", "50");
     const findOpponent = page.getByRole("button", { name: localeCopy.findOpponent });
     await expect(findOpponent).toBeEnabled();
+    const size13 = page.getByRole("button", { name: /13×13/ });
+    await size13.click();
+    await expect(boardPreview.locator('svg[data-board-size="13"]')).toBeVisible();
+    await expect(boardPreview.locator('line[data-axis="vertical"]')).toHaveCount(13);
+    await expect(boardPreview.locator(".play-board-center-stone")).toHaveAttribute("cx", "50");
+    await expect(boardPreview.locator(".play-board-center-stone")).toHaveAttribute("cy", "50");
+    await size19.click();
+    await expect(previewGrid).toBeVisible();
     await expectControlInsideViewport(page, findOpponent);
     await expectNoDocumentOverflow(page);
 
     await findOpponent.click();
     await expect(page).toHaveURL(new RegExp(`${gamePath.replaceAll("/", "\\/")}$`));
-    expect(harness.matchmakingBodies).toEqual([{ boardSize: 19, timeControl: "rapid" }]);
+    expect(harness.matchmakingBodies).toEqual([{ boardSize: 19, timeControl: "blitz" }]);
 
     const grid = page.getByRole("grid", { name: /19 × 19/ });
     await expect(grid).toBeVisible();
