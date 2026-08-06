@@ -178,116 +178,288 @@ select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(129,182,76
 .score-breakdown dt { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .score-breakdown dd { margin: 5px 0 0; font-weight: 760; }
 
-/* Recording-oriented AI match workspace. The board and every live control fit
-   inside a common laptop viewport without changing the Lab server port. */
-.arena-match-mode {
-  background-color: #0b0e11;
+/* Viewport-bound AI workspace. Both arena modes share one dense layout, and
+   the board consumes only the space left by the controls at every breakpoint. */
+.arena-view-active {
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  background-color: #0b0e11;
   background-image:
     linear-gradient(rgba(129, 182, 76, .025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(129, 182, 76, .025) 1px, transparent 1px);
   background-size: 28px 28px;
 }
-.arena-match-mode .shell { width: min(1480px, calc(100% - 24px)); padding-bottom: 0; }
-.arena-match-mode .topbar { height: 58px; }
-.arena-match-mode .arena-hero {
+.arena-view-active .shell {
+  display: flex;
+  flex-direction: column;
+  width: min(1480px, calc(100% - 24px));
+  height: 100%;
+  padding-bottom: 0;
+}
+.arena-view-active .topbar { flex: 0 0 58px; height: 58px; }
+.arena-view-active #arena-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.arena-view-active .arena-hero {
   display: block;
+  flex: 0 0 auto;
   padding: 14px 2px 12px;
   border-bottom: 1px solid #263039;
 }
-.arena-match-mode .arena-hero h1 {
+.arena-view-active .arena-hero h1 {
   font: 760 27px/1.05 ui-monospace, SFMono-Regular, Consolas, monospace;
   letter-spacing: -.045em;
 }
-.arena-match-mode .arena-hero .eyebrow { margin-bottom: 5px; color: #85d9b0; }
-.arena-match-mode .arena-hero .hero-copy,
-.arena-match-mode .arena-contract { display: none; }
-.arena-match-mode .arena-layout {
-  grid-template-columns: minmax(0, 1fr) 390px;
+.arena-view-active .arena-hero .eyebrow { margin-bottom: 5px; color: #85d9b0; }
+.arena-view-active .arena-hero .hero-copy,
+.arena-view-active .arena-contract { display: none; }
+.arena-view-active .arena-layout {
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 390px);
   gap: 12px;
-  height: calc(100vh - 118px);
-  min-height: 560px;
+  min-height: 0;
   padding: 12px 0;
   overflow: hidden;
 }
-.arena-match-mode .panel {
+.arena-view-active .panel {
   border-color: #303943;
   border-radius: 8px;
   background: #12171b;
   box-shadow: 0 16px 40px #0004;
 }
-.arena-match-mode .kicker,
-.arena-match-mode .field-label,
-.arena-match-mode .arena-game-meta,
-.arena-match-mode .status-badge {
+.arena-view-active .kicker,
+.arena-view-active .field-label,
+.arena-view-active .arena-game-meta,
+.arena-view-active .status-badge {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
-.arena-match-mode .arena-board-panel {
-  height: 100%;
-  min-height: 0;
+.arena-view-active .arena-board-panel {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   padding: 14px;
   overflow: hidden;
 }
-.arena-match-mode .arena-board-heading { margin-bottom: 8px; }
-.arena-match-mode .arena-board-heading h2 { font: 720 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.arena-match-mode .arena-players { margin: 0 0 8px; padding: 8px 11px; border-radius: 5px; background: #0c1013; }
-.arena-match-mode .arena-player strong { font: 700 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.arena-match-mode .board-wrap {
-  width: min(100%, calc(100vh - 280px), 680px);
+.arena-view-active .arena-board-heading { flex: 0 0 auto; margin-bottom: 8px; }
+.arena-view-active .arena-board-heading h2 { font: 720 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-view-active .arena-players { flex: 0 0 auto; margin: 0 0 8px; padding: 8px 11px; border-radius: 5px; background: #0c1013; }
+.arena-view-active .arena-player strong { font: 700 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-view-active .board-wrap {
+  width: min(100%, calc(100dvh - 280px), 680px);
   flex: 0 1 auto;
   border-width: 6px;
   border-radius: 4px;
   box-shadow: 0 12px 30px #0006;
 }
-.arena-match-mode .arena-game-meta { padding-top: 8px; color: #89949d; }
-.arena-match-mode .arena-sidebar {
+.arena-view-active .arena-game-meta { flex: 0 0 auto; padding-top: 8px; color: #89949d; }
+.arena-view-active .arena-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
   height: 100%;
   min-height: 0;
-  grid-template-rows: auto minmax(120px, 1fr) auto;
-  gap: 10px;
   overflow: hidden;
 }
-.arena-match-mode .arena-settings { padding: 13px; }
-.arena-match-mode .arena-settings .panel-heading { margin-bottom: 9px; }
-.arena-match-mode .arena-settings h2 { font: 720 15px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.arena-match-mode .arena-mode { padding: 7px 6px; }
-.arena-match-mode .field-label { margin: 7px 0 4px; font-size: 9px; color: #8e9ba5; text-transform: uppercase; letter-spacing: .06em; }
-.arena-match-mode select { padding: 7px 8px; border-radius: 4px; background: #1b2228; border-color: #394650; font-size: 10px; }
-.arena-match-mode .field-note,
-.arena-match-mode .arena-settings .action-note { display: none; }
-.arena-match-mode .button.wide { margin-top: 9px; padding: 9px 12px; }
-.arena-match-mode .arena-actions { margin-top: 6px; }
-.arena-match-mode .arena-actions .button { padding: 8px 10px; }
-.arena-match-mode .arena-move-panel {
-  min-height: 0;
+.arena-view-active .arena-settings { padding: 13px; }
+.arena-view-active .arena-settings .panel-heading { margin-bottom: 9px; }
+.arena-view-active .arena-settings h2 { font: 720 15px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-view-active .arena-mode { padding: 7px 6px; }
+.arena-view-active .field-label { margin: 7px 0 4px; font-size: 9px; color: #8e9ba5; text-transform: uppercase; letter-spacing: .06em; }
+.arena-view-active select { padding: 7px 8px; border-radius: 4px; background: #1b2228; border-color: #394650; font-size: 10px; }
+.arena-view-active .field-note,
+.arena-view-active .arena-settings .action-note { display: none; }
+.arena-view-active .button.wide { margin-top: 9px; padding: 9px 12px; }
+.arena-view-active .arena-actions { margin-top: 6px; }
+.arena-view-active .arena-actions .button { padding: 8px 10px; }
+.arena-view-active .arena-move-panel {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   padding: 13px;
   overflow: hidden;
 }
-.arena-match-mode .arena-move-panel .panel-heading { margin-bottom: 7px; }
-.arena-match-mode .arena-move-panel h2 { font: 720 14px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.arena-match-mode .arena-move-list { max-height: none; min-height: 0; flex: 1; }
-.arena-match-mode .arena-move-entry { min-height: 29px; grid-template-columns: 22px 14px minmax(0, 1fr) auto; }
-.arena-match-mode .arena-result { padding: 13px; }
-.arena-match-mode .arena-result .kicker { margin-bottom: 6px; }
-.arena-match-mode .arena-result h2 { font: 760 17px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.arena-match-mode .result-summary { margin: 8px 0; font-size: 13px; }
-.arena-match-mode .score-breakdown div { padding: 7px 9px; }
-.arena-match-mode .score-breakdown dd { margin-top: 3px; font-size: 10px; }
-.arena-match-mode .arena-result .agreement-note { display: none; }
-.arena-match-mode.arena-finished .arena-sidebar { grid-template-rows: auto minmax(90px, .65fr) auto; }
+.arena-view-active .arena-move-panel .panel-heading { margin-bottom: 7px; }
+.arena-view-active .arena-move-panel h2 { font: 720 14px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-view-active .arena-move-list { max-height: none; min-height: 0; flex: 1; }
+.arena-view-active .arena-move-entry { min-height: 29px; grid-template-columns: 22px 14px minmax(0, 1fr) auto; }
+.arena-view-active .arena-result { padding: 13px; }
+.arena-view-active .arena-result .kicker { margin-bottom: 6px; }
+.arena-view-active .arena-result h2 { font: 760 17px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.arena-view-active .result-summary { margin: 8px 0; font-size: 13px; }
+.arena-view-active .score-breakdown div { padding: 7px 9px; }
+.arena-view-active .score-breakdown dd { margin-top: 3px; font-size: 10px; }
+.arena-view-active .arena-result .agreement-note { display: none; }
+.arena-view-active.arena-finished .arena-sidebar { grid-template-rows: auto minmax(70px, .65fr) auto; }
 
-@media (max-width: 920px) {
-  .arena-match-mode { overflow: auto; }
-  .arena-match-mode .shell { width: min(100% - 20px, 1240px); padding-bottom: 40px; }
-  .arena-match-mode .arena-layout { height: auto; min-height: 0; grid-template-columns: 1fr; overflow: visible; }
-  .arena-match-mode .arena-board-panel { height: auto; }
-  .arena-match-mode .board-wrap { width: min(100%, 680px); }
-  .arena-match-mode .arena-sidebar { height: auto; overflow: visible; grid-template-columns: 1fr; grid-template-rows: none; }
-  .arena-match-mode .arena-move-list { max-height: 260px; }
+@media (max-height: 620px) {
+  .arena-view-active .topbar { flex-basis: 48px; height: 48px; }
+  .arena-view-active .arena-hero { display: none; }
+  .arena-view-active .arena-layout { padding: 7px 0; }
+}
+
+@media (max-width: 920px) and (orientation: landscape) {
+  .arena-view-active .shell { width: calc(100% - 12px); }
+  .arena-view-active .topbar { flex-basis: 46px; height: 46px; }
+  .arena-view-active .brand-subtitle,
+  .arena-view-active .local-pill { display: none; }
+  .arena-view-active .arena-hero { display: none; }
+  .arena-view-active .arena-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 36vw);
+    gap: 6px;
+    padding: 6px 0;
+  }
+  .arena-view-active .arena-board-panel { padding: 8px; }
+  .arena-view-active .arena-board-heading { display: none; }
+  .arena-view-active .arena-players { margin-bottom: 4px; padding: 5px 8px; }
+  .arena-view-active .board-wrap {
+    width: min(100%, calc(100dvh - 150px));
+    border-width: 4px;
+  }
+  .arena-view-active .arena-game-meta { padding-top: 4px; font-size: 8px; }
+  .arena-view-active .arena-sidebar { grid-template-columns: 1fr; gap: 6px; }
+  .arena-view-active .arena-settings { padding: 8px; }
+  .arena-view-active .arena-settings .panel-heading { display: none; }
+  .arena-view-active .arena-mode { padding: 5px 4px; font-size: 9px; }
+  .arena-view-active .field-label { margin: 3px 0 2px; font-size: 7px; }
+  .arena-view-active select { min-height: 26px; padding: 3px 5px; font-size: 9px; }
+  .arena-view-active .model-row { grid-template-columns: minmax(0, 1fr) 30px; gap: 4px; }
+  .arena-view-active .match-field-grid,
+  .arena-view-active .field-grid { gap: 0 5px; }
+  .arena-view-active .button.wide { margin-top: 5px; padding: 6px 8px; font-size: 10px; }
+  .arena-view-active .arena-actions { gap: 5px; margin-top: 4px; }
+  .arena-view-active .arena-actions .button { padding: 5px 7px; font-size: 9px; }
+  .arena-view-active .arena-move-panel { padding: 7px; }
+  .arena-view-active .arena-move-panel .panel-heading { margin-bottom: 3px; }
+  .arena-view-active .arena-move-entry { min-height: 23px; }
+}
+
+@media (max-width: 920px) and (orientation: portrait) {
+  .arena-view-active .shell { width: calc(100% - 12px); }
+  .arena-view-active .topbar { flex-basis: 50px; height: 50px; }
+  .arena-view-active .brand-subtitle,
+  .arena-view-active .local-pill { display: none; }
+  .arena-view-active .brand { font-size: 16px; }
+  .arena-view-active .lab-tab { padding: 6px 8px; font-size: 10px; }
+  .arena-view-active .arena-hero { display: none; }
+  .arena-view-active .arena-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 0;
+  }
+  .arena-view-active .arena-board-panel { padding: 6px; }
+  .arena-view-active .arena-board-heading { margin-bottom: 3px; }
+  .arena-view-active .arena-board-heading .kicker { display: none; }
+  .arena-view-active .arena-board-heading h2 { font-size: 12px; }
+  .arena-view-active .status-badge { padding: 4px 6px; font-size: 8px; }
+  .arena-view-active .arena-players { margin-bottom: 3px; padding: 4px 6px; gap: 5px; }
+  .arena-view-active .mini-stone { width: 13px; height: 13px; }
+  .arena-view-active .arena-player strong { font-size: 9px; }
+  .arena-view-active .board-wrap {
+    width: min(calc(100vw - 28px), calc(100dvh - 374px), 680px);
+    border-width: 4px;
+  }
+  .arena-view-active .arena-game-meta { padding-top: 3px; gap: 3px 8px; font-size: 8px; }
+  .arena-view-active .arena-sidebar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 5px;
+    height: auto;
+    overflow: visible;
+  }
+  .arena-view-active .arena-settings { padding: 7px; }
+  .arena-view-active .arena-settings .panel-heading { display: none; }
+  .arena-view-active .arena-mode { padding: 5px 4px; font-size: 9px; }
+  .arena-view-active .field-label { margin: 3px 0 2px; font-size: 7px; }
+  .arena-view-active select { min-height: 26px; padding: 3px 5px; font-size: 9px; }
+  .arena-view-active .model-row { grid-template-columns: minmax(0, 1fr) 30px; gap: 4px; }
+  .arena-view-active .match-field-grid,
+  .arena-view-active .field-grid { gap: 0 5px; }
+  .arena-view-active .button.wide { margin-top: 5px; padding: 6px 8px; font-size: 10px; }
+  .arena-view-active .arena-actions { gap: 5px; margin-top: 4px; }
+  .arena-view-active .arena-actions .button { padding: 5px 7px; font-size: 9px; }
+  .arena-view-active .arena-move-panel { max-height: 62px; padding: 6px; }
+  .arena-view-active .arena-move-panel .panel-heading { display: none; }
+  .arena-view-active .arena-move-list { max-height: 48px; }
+  .arena-view-active .arena-move-entry { min-height: 21px; }
+  .arena-view-active .arena-result { max-height: 104px; padding: 7px; overflow: auto; }
+  .arena-view-active .arena-result .kicker { display: none; }
+  .arena-view-active .arena-result h2 { font-size: 12px; }
+  .arena-view-active .result-summary { margin: 4px 0; font-size: 10px; }
+  .arena-view-active .score-breakdown div { padding: 4px 5px; }
+  .arena-view-active:has(#arena-move-panel:not([hidden])) .board-wrap {
+    width: min(calc(100vw - 28px), calc(100dvh - 442px), 680px);
+  }
+  .arena-view-active.arena-finished .board-wrap {
+    width: min(calc(100vw - 28px), calc(100dvh - 548px), 680px);
+  }
+}
+
+/* When browser chrome, zoom, or a very short window leaves less vertical room
+   than the compact arena needs, keep every board edge reachable instead of
+   shrinking a flex item while its square board overflows behind the sidebar. */
+@media (max-width: 920px) and (orientation: portrait) and (max-height: 520px) {
+  .arena-view-active {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .arena-view-active .shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .arena-view-active #arena-view,
+  .arena-view-active .arena-layout {
+    flex: none;
+    overflow: visible;
+  }
+  .arena-view-active .arena-layout {
+    grid-template-rows: auto auto;
+  }
+  .arena-view-active .arena-board-panel,
+  .arena-view-active .arena-sidebar {
+    height: auto;
+    overflow: visible;
+  }
+  .arena-view-active .board-wrap,
+  .arena-view-active:has(#arena-move-panel:not([hidden])) .board-wrap,
+  .arena-view-active.arena-finished .board-wrap {
+    width: min(calc(100vw - 28px), max(180px, calc(100dvh - 180px)), 420px);
+    flex: none;
+  }
+}
+
+@media (max-width: 920px) and (orientation: landscape) and (max-height: 260px) {
+  .arena-view-active {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .arena-view-active .shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .arena-view-active #arena-view,
+  .arena-view-active .arena-layout {
+    flex: none;
+    overflow: visible;
+  }
+  .arena-view-active .arena-board-panel,
+  .arena-view-active .arena-sidebar {
+    height: auto;
+    overflow: visible;
+  }
+  .arena-view-active .arena-sidebar {
+    grid-template-rows: auto auto auto;
+  }
+  .arena-view-active .board-wrap {
+    width: min(100%, max(180px, calc(100dvh - 116px)));
+    flex: none;
+  }
 }
 
 @media (max-width: 900px) {
