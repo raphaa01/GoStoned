@@ -32,14 +32,19 @@ export async function POST(
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.scoringDecision, playerKey);
     const body = await readGameMutationJson(
       request,
-      [["expectedRevision", "claim", "x", "y"]],
+      [
+        ["expectedRevision"],
+        ["expectedRevision", "claim", "x", "y"],
+      ],
     );
     if (
       !Number.isSafeInteger(body.expectedRevision)
       || Number(body.expectedRevision) < 1
-      || (body.claim !== "dead" && body.claim !== "alive")
-      || !Number.isSafeInteger(body.x)
-      || !Number.isSafeInteger(body.y)
+      || (body.claim !== undefined && body.claim !== "dead" && body.claim !== "alive")
+      || (body.x !== undefined && !Number.isSafeInteger(body.x))
+      || (body.y !== undefined && !Number.isSafeInteger(body.y))
+      || ((body.claim === undefined) !== (body.x === undefined))
+      || ((body.claim === undefined) !== (body.y === undefined))
     ) {
       throw invalidGameMutationRequest();
     }
@@ -47,8 +52,10 @@ export async function POST(
       gameId,
       playerKey,
       body.expectedRevision as number,
-      body.claim,
-      { x: body.x as number, y: body.y as number },
+      body.claim === "dead" || body.claim === "alive" ? body.claim : null,
+      Number.isSafeInteger(body.x) && Number.isSafeInteger(body.y)
+        ? { x: body.x as number, y: body.y as number }
+        : null,
     );
     return noStoreJson({ ok: true, actor: playerKey, game });
   } catch (error) {

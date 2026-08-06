@@ -3,6 +3,22 @@ import { query, withReadOnlyTransaction, withTransaction } from "@/lib/db";
 import { GameServiceError } from "./gameServiceError";
 export { GameServiceError } from "./gameServiceError";
 import {
+  applyJapaneseSettlementSuggestion,
+  claimJapaneseWholeBoardRepetition,
+  confirmJapaneseScore,
+  getJapaneseGameState,
+  pollJapaneseGameState,
+  resignJapaneseGame,
+  resetJapaneseScoringSuggestion,
+  resolveJapaneseScoringDeadline,
+  resumeJapanesePlay,
+  setJapaneseDeadGroup,
+  setJapaneseNeutralRegion,
+  submitJapaneseMove,
+  undoJapaneseScoringChange,
+} from "./japaneseGameService";
+import { JAPANESE_1989_RULES_PROFILE } from "./japanesePolicyContract";
+import {
   applyMove,
   boardHash,
   createEmptyBoard,
@@ -20,7 +36,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
-  DEFAULT_RULES_PROFILE,
+  CURRENT_CHINESE_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
@@ -1498,7 +1514,7 @@ async function verifyPollState(
   if (
     loaded.game.version === knownVersion
     && loaded.game.status === "active"
-    && loaded.rules.rulesProfile === DEFAULT_RULES_PROFILE
+    && loaded.rules.rulesProfile === CURRENT_CHINESE_RULES_PROFILE
   ) {
     return {
       needsMutation: false,
@@ -1523,28 +1539,28 @@ async function assertPollParticipant(gameId: string, playerKey: string): Promise
   assertParticipant(game, playerKey);
 }
 
-export async function pollGameState(
+async function pollChineseGameState(
   gameId: string,
   playerKey: string,
   knownVersion: number | null,
 ): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
   if (knownVersion === null) {
-    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+    return { unchanged: false, game: await getChineseGameState(gameId, playerKey) };
   }
   await assertPollParticipant(gameId, playerKey);
   const verified = await withReadOnlyTransaction((client) =>
     verifyPollState(client, gameId, playerKey, knownVersion));
   if (verified.needsMutation) {
-    return { unchanged: false, game: await getGameState(gameId, playerKey) };
+    return { unchanged: false, game: await getChineseGameState(gameId, playerKey) };
   }
   return verified.result;
 }
 
-export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
+async function getChineseGameState(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction((client) => resolveGameState(client, gameId, playerKey));
 }
 
-export async function submitMove(
+async function submitChineseMove(
   gameId: string,
   playerKey: string,
   move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
@@ -1806,7 +1822,7 @@ export async function submitMove(
   });
 }
 
-export async function setDeadGroup(
+async function setChineseDeadGroup(
   gameId: string,
   playerKey: string,
   proposal: { x: number; y: number; dead: boolean; expectedRevision: number },
@@ -1882,7 +1898,7 @@ export async function setDeadGroup(
   });
 }
 
-export async function confirmScore(
+async function confirmChineseScore(
   gameId: string,
   playerKey: string,
   expectedRevision: number,
@@ -1992,7 +2008,7 @@ export async function confirmScore(
   });
 }
 
-export async function resumePlay(
+async function resumeChinesePlay(
   gameId: string,
   playerKey: string,
   expectedRevision: number,
@@ -2070,7 +2086,7 @@ export async function resumePlay(
   });
 }
 
-export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
+async function resignChineseGame(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction(async (client) => {
     let loaded = await loadGame(client, gameId, playerKey, true);
     loaded = await resumeExpiredScoring(client, loaded, new Date()) ?? loaded;
@@ -2115,3 +2131,93 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
     }, now);
   });
 }
+
+async function usesJapaneseService(gameId: string): Promise<boolean> {
+  const result = await query<{ rules_profile: unknown }>(
+    "SELECT rules_profile FROM games WHERE id = $1",
+    [gameId],
+  );
+  return result.rows[0]?.rules_profile === JAPANESE_1989_RULES_PROFILE;
+}
+
+export async function pollGameState(
+  gameId: string,
+  playerKey: string,
+  knownVersion: number | null,
+): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
+  return await usesJapaneseService(gameId)
+    ? pollJapaneseGameState(gameId, playerKey, knownVersion)
+    : pollChineseGameState(gameId, playerKey, knownVersion);
+}
+
+export async function getGameState(gameId: string, playerKey: string): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? getJapaneseGameState(gameId, playerKey)
+    : getChineseGameState(gameId, playerKey);
+}
+
+export async function submitMove(
+  gameId: string,
+  playerKey: string,
+  move: { x?: number; y?: number; isPass?: boolean; expectedVersion: number },
+  options: Parameters<typeof submitChineseMove>[3] = {},
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? submitJapaneseMove(gameId, playerKey, move, options)
+    : submitChineseMove(gameId, playerKey, move, options);
+}
+
+export async function setDeadGroup(
+  gameId: string,
+  playerKey: string,
+  proposal: { x: number; y: number; dead: boolean; expectedRevision: number },
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? setJapaneseDeadGroup(gameId, playerKey, proposal)
+    : setChineseDeadGroup(gameId, playerKey, proposal);
+}
+
+export async function confirmScore(
+  gameId: string,
+  playerKey: string,
+  expectedRevision: number,
+): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? confirmJapaneseScore(gameId, playerKey, expectedRevision)
+    : confirmChineseScore(gameId, playerKey, expectedRevision);
+}
+
+export async function resumePlay(
+  gameId: string,
+  playerKey: string,
+  expectedRevision: number,
+  claim: "dead" | "alive" | null,
+  disputedStone: Position | null,
+): Promise<GameState> {
+  if (await usesJapaneseService(gameId)) {
+    return resumeJapanesePlay(gameId, playerKey, expectedRevision);
+  }
+  if (!claim || !disputedStone) {
+    throw new GameServiceError(
+      "A Chinese scoring dispute requires a marked group.",
+      400,
+      "invalid_dispute_claim",
+    );
+  }
+  return resumeChinesePlay(gameId, playerKey, expectedRevision, claim, disputedStone);
+}
+
+export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
+  return await usesJapaneseService(gameId)
+    ? resignJapaneseGame(gameId, playerKey)
+    : resignChineseGame(gameId, playerKey);
+}
+
+export {
+  applyJapaneseSettlementSuggestion,
+  claimJapaneseWholeBoardRepetition,
+  resetJapaneseScoringSuggestion,
+  resolveJapaneseScoringDeadline,
+  undoJapaneseScoringChange,
+  setJapaneseNeutralRegion,
+};

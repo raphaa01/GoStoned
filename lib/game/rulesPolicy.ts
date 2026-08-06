@@ -1,26 +1,30 @@
-export const LEGACY_IMMEDIATE_AREA_PROFILE = "legacy-immediate-area" as const;
-export const DEFAULT_RULES_PROFILE = "chinese-2002-gostone-v1" as const;
+import { JAPANESE_1989_RULES_PROFILE } from "./japanesePolicyContract";
 
-export type Ruleset = "chinese";
+export const LEGACY_IMMEDIATE_AREA_PROFILE = "legacy-immediate-area" as const;
+export const CURRENT_CHINESE_RULES_PROFILE = "chinese-2002-gostone-v1" as const;
+export const DEFAULT_RULES_PROFILE = JAPANESE_1989_RULES_PROFILE;
+
+export type Ruleset = "chinese" | "japanese";
 export type RulesProfile =
   | typeof LEGACY_IMMEDIATE_AREA_PROFILE
-  | typeof DEFAULT_RULES_PROFILE;
-export type ScoringMethod = "area";
+  | typeof CURRENT_CHINESE_RULES_PROFILE
+  | typeof JAPANESE_1989_RULES_PROFILE;
+export type ScoringMethod = "area" | "territory";
 
 export type RulesPolicy = Readonly<{
   profile: RulesProfile;
   ruleset: Ruleset;
   scoringMethod: ScoringMethod;
-  scoringRule: "chinese-area";
+  scoringRule: "chinese-area" | "japanese-territory-with-prisoners";
   defaultKomi: number;
   supportedKomi: readonly number[];
   supportedHandicaps: readonly number[];
   initialTurn: "black";
-  turnSource: "move-log" | "persisted";
+  turnSource: "move-log" | "persisted" | "japanese-authority";
   scoringLifecycle: "immediate" | "agreement";
   scoringResponseWindowMs: number | null;
-  repetitionRule: "positional-superko";
-  resumeTurnRule: "claim-dependent" | "none";
+  repetitionRule: "positional-superko" | "japanese-simple-ko";
+  resumeTurnRule: "claim-dependent" | "opponent-first" | "none";
 }>;
 
 export type RulesConfiguration = Readonly<{
@@ -76,7 +80,7 @@ const legacyPolicy = Object.freeze({
 } as const satisfies RulesPolicy);
 
 const currentChinesePolicy = Object.freeze({
-  profile: DEFAULT_RULES_PROFILE,
+  profile: CURRENT_CHINESE_RULES_PROFILE,
   ruleset: "chinese",
   scoringMethod: "area",
   scoringRule: "chinese-area",
@@ -91,17 +95,34 @@ const currentChinesePolicy = Object.freeze({
   resumeTurnRule: "claim-dependent",
 } as const satisfies RulesPolicy);
 
+const japanesePolicy = Object.freeze({
+  profile: JAPANESE_1989_RULES_PROFILE,
+  ruleset: "japanese",
+  scoringMethod: "territory",
+  scoringRule: "japanese-territory-with-prisoners",
+  defaultKomi: 6.5,
+  supportedKomi: Object.freeze([6.5]),
+  supportedHandicaps: Object.freeze([0]),
+  initialTurn: "black",
+  turnSource: "japanese-authority",
+  scoringLifecycle: "agreement",
+  scoringResponseWindowMs: 5 * 60 * 1_000,
+  repetitionRule: "japanese-simple-ko",
+  resumeTurnRule: "opponent-first",
+} as const satisfies RulesPolicy);
+
 export const RULES_POLICIES = Object.freeze({
   [LEGACY_IMMEDIATE_AREA_PROFILE]: legacyPolicy,
-  [DEFAULT_RULES_PROFILE]: currentChinesePolicy,
+  [CURRENT_CHINESE_RULES_PROFILE]: currentChinesePolicy,
+  [JAPANESE_1989_RULES_PROFILE]: japanesePolicy,
 } satisfies Record<RulesProfile, RulesPolicy>);
 
 export const DEFAULT_MATCH_RULES = Object.freeze({
-  ruleset: currentChinesePolicy.ruleset,
-  rulesProfile: currentChinesePolicy.profile,
-  scoringMethod: currentChinesePolicy.scoringMethod,
-  komi: currentChinesePolicy.defaultKomi,
-  handicap: currentChinesePolicy.supportedHandicaps[0],
+  ruleset: japanesePolicy.ruleset,
+  rulesProfile: japanesePolicy.profile,
+  scoringMethod: japanesePolicy.scoringMethod,
+  komi: japanesePolicy.defaultKomi,
+  handicap: japanesePolicy.supportedHandicaps[0],
 } satisfies RulesConfiguration);
 
 export function resolveRulesPolicy(profile: unknown): RulesPolicy {

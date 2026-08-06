@@ -14,6 +14,7 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
+  CURRENT_CHINESE_RULES_PROFILE,
   DEFAULT_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesPolicy,
@@ -99,7 +100,7 @@ test("policy dispatch preserves immediate and agreement scoring boundaries", () 
   board[0][0] = "black";
   board[8][8] = "white";
   const legacy = resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE);
-  const current = resolveRulesPolicy(DEFAULT_RULES_PROFILE);
+  const current = resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE);
   const immediate = scoreImmediatePosition(legacy, board, 6.5);
   assert.equal(immediate.scoringRule, "chinese-area");
   assert.deepEqual(immediate.breakdown, scoreChinese(board, 6.5));
@@ -120,13 +121,21 @@ test("policy dispatch preserves immediate and agreement scoring boundaries", () 
   );
 });
 
-test("both current profiles explicitly preserve positional superko", () => {
+test("both Chinese profiles explicitly preserve positional superko", () => {
   const priorHashes = new Set(["seen"]);
-  for (const profile of [LEGACY_IMMEDIATE_AREA_PROFILE, DEFAULT_RULES_PROFILE]) {
+  for (const profile of [LEGACY_IMMEDIATE_AREA_PROFILE, CURRENT_CHINESE_RULES_PROFILE]) {
     const policy = resolveRulesPolicy(profile);
     assert.equal(isRepeatedPositionForbidden(policy, "seen", priorHashes), true);
     assert.equal(isRepeatedPositionForbidden(policy, "new", priorHashes), false);
   }
+  assert.throws(
+    () => isRepeatedPositionForbidden(
+      resolveRulesPolicy(DEFAULT_RULES_PROFILE),
+      "seen",
+      priorHashes,
+    ),
+    UnsupportedRulesPolicyError,
+  );
 });
 
 test("Chinese dispute resumption gives the first move to the player claiming death", () => {
@@ -134,7 +143,7 @@ test("Chinese dispute resumption gives the first move to the player claiming dea
   assert.equal(resumeTurnForClaim("black", "alive"), "white");
   assert.equal(resumeTurnForClaim("white", "dead"), "white");
   assert.equal(resumeTurnForClaim("white", "alive"), "black");
-  const current = resolveRulesPolicy(DEFAULT_RULES_PROFILE);
+  const current = resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE);
   assert.equal(resumeTurnForPolicy(current, "black", "dead"), "black");
   assert.equal(resumeTurnForPolicy(current, "black", "alive"), "white");
   assert.equal(resumeTurnForPolicy(current, "white", "dead"), "white");

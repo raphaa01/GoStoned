@@ -99,6 +99,9 @@ class RequestBoundaryPool {
         rowCount: 1,
       };
     }
+    if (normalized === "SELECT rules_profile FROM games WHERE id = $1") {
+      return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+    }
     throw new Error(`Game service must not be reached: ${normalized}`);
   }
 }

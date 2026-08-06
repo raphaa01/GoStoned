@@ -1029,12 +1029,15 @@ test("move history trust boundary derives positions and rejects contradictory ev
           };
           return { rows: [currentGame], rowCount: 1 };
         }
+        if (sql.includes("SELECT rules_profile FROM games")) {
+          return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+        }
         throw new Error(`Unexpected database statement in resume-history test: ${sql}`);
       },
       release() {},
     };
     const previousPool = globalThis.goStonedDbPool;
-    globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+    globalThis.goStonedDbPool = { query: client.query, connect: async () => client } as unknown as Pool;
 
     try {
       const resumed = await resumePlay(gameId, blackKey, 1, "dead", { x: 8, y: 8 });
@@ -1601,12 +1604,15 @@ test("an expired scoring snapshot records deadline evidence before resuming play
           rowCount: 1,
         };
       }
+      if (sql.includes("SELECT rules_profile FROM games")) {
+        return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+      }
       throw new Error(`Unexpected database statement in deadline-evidence test: ${sql}`);
     },
     release() {},
   };
   const previousPool = globalThis.goStonedDbPool;
-  globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+  globalThis.goStonedDbPool = { query: client.query, connect: async () => client } as unknown as Pool;
 
   let state: GameState;
   try {
@@ -1694,12 +1700,15 @@ test("resume transactions roll back evidence and mutable state together", async 
           if (sql.includes("last_resume_claim = 'deadline'")) {
             throw new Error("game lifecycle write failed");
           }
+          if (sql.includes("SELECT rules_profile FROM games")) {
+            return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+          }
           throw new Error(`Unexpected database statement in evidence-rollback test: ${sql}`);
         },
         release() {},
       };
       const previousPool = globalThis.goStonedDbPool;
-      globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+      globalThis.goStonedDbPool = { query: client.query, connect: async () => client } as unknown as Pool;
 
       try {
         await assert.rejects(
@@ -2488,12 +2497,16 @@ test("second score confirmation rates two database-verified registered players",
       if (sql.includes("UPDATE player_glicko2_ratings")) {
         return { rows: [], rowCount: 1 };
       }
+      if (sql.includes("SELECT rules_profile FROM games")) {
+        return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+      }
       throw new Error(`Unexpected database statement in score finalization test: ${sql}`);
     },
     release() {},
   };
   const previousPool = globalThis.goStonedDbPool;
   globalThis.goStonedDbPool = {
+    query: client.query,
     connect: async () => client,
   } as unknown as Pool;
 
@@ -2591,12 +2604,15 @@ test("rating finalization rolls back partial and contradictory evidence", async 
                 rowCount: 2,
               };
           }
+          if (sql.includes("SELECT rules_profile FROM games")) {
+            return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+          }
           throw new Error(`Unexpected database statement in rating-conflict test: ${sql}`);
         },
         release() {},
       };
       const previousPool = globalThis.goStonedDbPool;
-      globalThis.goStonedDbPool = { connect: async () => client } as unknown as Pool;
+      globalThis.goStonedDbPool = { query: client.query, connect: async () => client } as unknown as Pool;
 
       let rejection: unknown;
       try {
@@ -2668,12 +2684,16 @@ test("a controlled guest can resign to an account without creating rating writes
           rowCount: 1,
         };
       }
+      if (sql.includes("SELECT rules_profile FROM games")) {
+        return { rows: [{ rules_profile: "chinese-2002-gostone-v1" }], rowCount: 1 };
+      }
       throw new Error(`Unexpected database statement in resignation test: ${sql}`);
     },
     release() {},
   };
   const previousPool = globalThis.goStonedDbPool;
   globalThis.goStonedDbPool = {
+    query: client.query,
     connect: async () => client,
   } as unknown as Pool;
 

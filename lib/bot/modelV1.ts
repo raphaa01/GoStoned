@@ -59,7 +59,10 @@ export type GoStoneJapaneseSettlementProposal = Readonly<{
   modelSha256: typeof GOSTONE_BOT_MODEL.artifactSha256;
   authority: "proposal-only";
   boardSize: BoardSize;
+  gameId: string;
+  stoppedBoardHash: string;
   stoppedMoveNumber: number;
+  scoringRevision: number;
   groups: readonly GoStoneSettlementGroup[];
   deadStones: readonly Position[];
   uncertainStones: readonly Position[];
@@ -67,12 +70,19 @@ export type GoStoneJapaneseSettlementProposal = Readonly<{
   score: JapaneseTerritoryScore | null;
 }>;
 
+export type GoStoneSettlementPosition = Readonly<
+  Omit<GoStoneBotPosition, "toMove" | "excludedMoves"> & {
+    stoppedBoardHash: string;
+    scoringRevision: number;
+  }
+>;
+
 export type GoStoneBotWorkerRequest =
   | Readonly<{ id: string; kind: "move"; position: GoStoneBotPosition }>
   | Readonly<{
       id: string;
       kind: "settlement";
-      position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">;
+      position: GoStoneSettlementPosition;
     }>;
 
 export type GoStoneBotWorkerResponse =

@@ -202,7 +202,7 @@ test("production preflight requires the complete resume evidence boundary", () =
 test("participant game service reads ordered evidence and appends before deleting scoring state", () => {
   const insertion = gameService.indexOf("INSERT INTO game_scoring_resume_events");
   const deadlineResume = gameService.indexOf("async function resumeExpiredScoring");
-  const manualResume = gameService.indexOf("export async function resumePlay");
+  const manualResume = gameService.indexOf("async function resumeChinesePlay");
   assert.ok(insertion >= 0 && insertion < deadlineResume);
   for (const start of [deadlineResume, manualResume]) {
     const nextDelete = gameService.indexOf("DELETE FROM game_scoring_state", start);
@@ -211,7 +211,7 @@ test("participant game service reads ordered evidence and appends before deletin
     assert.ok(nextDelete > nextAppend);
   }
   const manualResumeSource = gameService.slice(manualResume);
-  const manualResumeBody = manualResumeSource.slice(0, manualResumeSource.indexOf("export async function resignGame"));
+  const manualResumeBody = manualResumeSource.slice(0, manualResumeSource.indexOf("async function resignChineseGame"));
   assert.equal(manualResumeBody.match(/new Date\(\)/g)?.length, 1);
   assert.ok(manualResumeBody.includes("resumeExpiredScoring(client, loaded, decisionAt)"));
   assert.ok(manualResumeBody.includes("resumedAt: decisionAt"));

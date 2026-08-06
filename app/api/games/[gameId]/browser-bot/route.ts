@@ -51,7 +51,7 @@ export async function POST(
       request,
       [
         ["kind", "modelVersion", "modelSha256", "expectedVersion", "move"],
-        ["kind", "modelVersion", "modelSha256", "expectedRevision", "deadStones"],
+        ["kind", "modelVersion", "modelSha256", "expectedRevision", "suggestion"],
         ["kind", "modelVersion", "modelSha256", "expectedRevision"],
       ],
       MAX_SCORING_PROPOSAL_BODY_BYTES,
@@ -83,7 +83,7 @@ export async function POST(
         modelVersion: body.modelVersion,
         modelSha256: body.modelSha256,
         expectedRevision: Number(body.expectedRevision),
-        deadStones: body.deadStones,
+        suggestion: body.suggestion,
       });
     } else if (body.kind === "confirm") {
       if (!Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) {
