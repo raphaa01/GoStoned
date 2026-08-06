@@ -80,7 +80,7 @@ database code, routes, or UI.
 
 ## Database and rollout
 
-Migration `030_provider_neutral_japanese_rules.sql` activates the profile,
+Migration `032_provider_neutral_japanese_rules.sql` activates the profile,
 persists proposal/resume/deadline/repetition evidence, and installs mutation
 guards. Apply it only through the normal migration command. Do not edit an
 already-applied migration or manually mutate production data.

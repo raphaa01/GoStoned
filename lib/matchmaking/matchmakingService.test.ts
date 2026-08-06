@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Pool } from "pg";
+import { DEFAULT_MATCH_RULES } from "../game/rulesPolicy";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -18,9 +19,9 @@ type StoredQueue = {
   updated_at: Date;
   matchmaking_policy_version: string;
   match_pool: "guest-unrated" | "registered-rated";
-  rules_snapshot: "chinese";
+  rules_snapshot: "chinese" | "japanese";
   rules_version_snapshot: string;
-  scoring_method_snapshot: "area";
+  scoring_method_snapshot: "area" | "territory";
   komi_snapshot: number;
   handicap_snapshot: number;
   rating_snapshot: number | null;
@@ -110,17 +111,17 @@ class MatchmakingPool {
       player_key: playerKey,
       board_size: boardSize,
       time_control: timeControl,
-      rules_profile: "chinese-2002-gostone-v1",
+      rules_profile: DEFAULT_MATCH_RULES.rulesProfile,
       status: "waiting",
       game_id: null,
       created_at: now,
       updated_at: now,
       matchmaking_policy_version: "adaptive-global-glicko-match-v1",
       match_pool: registered ? "registered-rated" : "guest-unrated",
-      rules_snapshot: "chinese",
-      rules_version_snapshot: "chinese-2002-gostone-v1",
-      scoring_method_snapshot: "area",
-      komi_snapshot: 7.5,
+      rules_snapshot: DEFAULT_MATCH_RULES.ruleset,
+      rules_version_snapshot: DEFAULT_MATCH_RULES.rulesProfile,
+      scoring_method_snapshot: DEFAULT_MATCH_RULES.scoringMethod,
+      komi_snapshot: DEFAULT_MATCH_RULES.komi,
       handicap_snapshot: 0,
       rating_snapshot: registered ? 1200 : null,
       rating_deviation_snapshot: registered ? 350 : null,
@@ -144,10 +145,10 @@ class MatchmakingPool {
       black_player_key: blackPlayerKey,
       white_player_key: whitePlayerKey,
       time_control: timeControl,
-      rules: "chinese",
-      rules_profile: "chinese-2002-gostone-v1",
-      scoring_method: "area",
-      komi: 7.5,
+      rules: DEFAULT_MATCH_RULES.ruleset,
+      rules_profile: DEFAULT_MATCH_RULES.rulesProfile,
+      scoring_method: DEFAULT_MATCH_RULES.scoringMethod,
+      komi: DEFAULT_MATCH_RULES.komi,
       handicap: 0,
       to_move: "black",
       main_time_seconds: 900,
@@ -357,9 +358,9 @@ class MatchmakingClient {
           updated_at: now,
           matchmaking_policy_version: String(values[4]),
           match_pool: values[5] as StoredQueue["match_pool"],
-          rules_snapshot: "chinese",
+          rules_snapshot: values[6] as StoredQueue["rules_snapshot"],
           rules_version_snapshot: String(values[7]),
-          scoring_method_snapshot: "area",
+          scoring_method_snapshot: values[8] as StoredQueue["scoring_method_snapshot"],
           komi_snapshot: Number(values[9]),
           handicap_snapshot: Number(values[10]),
           rating_snapshot: registered ? Number(values[11]) : null,
@@ -438,9 +439,9 @@ class MatchmakingClient {
         updated_at: now,
         matchmaking_policy_version: String(values[4]),
         match_pool: values[5] as StoredQueue["match_pool"],
-        rules_snapshot: "chinese",
+        rules_snapshot: values[6] as StoredQueue["rules_snapshot"],
         rules_version_snapshot: String(values[7]),
-        scoring_method_snapshot: "area",
+        scoring_method_snapshot: values[8] as StoredQueue["scoring_method_snapshot"],
         komi_snapshot: Number(values[9]),
         handicap_snapshot: Number(values[10]),
         rating_snapshot: values[11] === null ? null : Number(values[11]),
@@ -916,10 +917,10 @@ test("created games preserve the selected pool and canonical rules tuple", async
   }, {
     boardSize: 13,
     timeControl: "blitz",
-    rules: "chinese",
-    rulesProfile: "chinese-2002-gostone-v1",
-    scoringMethod: "area",
-    komi: 7.5,
+    rules: "japanese",
+    rulesProfile: "japanese-1989-gostone-v1",
+    scoringMethod: "territory",
+    komi: 6.5,
     handicap: 0,
     toMove: "black",
     mainTimeSeconds: 300,

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 const migration = readFileSync(
-  join(process.cwd(), "db/migrations/030_provider_neutral_japanese_rules.sql"),
+  join(process.cwd(), "db/migrations/032_provider_neutral_japanese_rules.sql"),
   "utf8",
 );
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
