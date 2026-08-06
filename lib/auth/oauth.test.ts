@@ -12,7 +12,6 @@ import {
   serializeOAuthTransaction,
   type OAuthTransaction,
 } from "./oauth";
-import { socialUsername, type VerifiedOAuthIdentity } from "./oauthAccountService";
 
 async function withEnvironment<T>(
   values: Record<string, string | undefined>,
@@ -152,27 +151,13 @@ test("the callback rejects mismatched state before contacting a provider", async
   });
 });
 
-test("social usernames are stable, valid, bounded, and provider-specific", () => {
-  const identity: VerifiedOAuthIdentity = {
-    provider: "google",
-    subject: "provider-account-123",
-    email: "Very.Long+Player.Name@example.com",
-    emailVerified: true,
-    displayName: "Very Long Player Name",
-  };
-  const username = socialUsername(identity);
-  assert.equal(username, socialUsername(identity));
-  assert.match(username, /^[a-z0-9_]{3,20}$/);
-  assert.ok(username.length <= 20);
-  assert.notEqual(username, socialUsername({ ...identity, provider: "apple" }));
-  assert.notEqual(username, socialUsername(identity, 1));
-});
-
 test("the canonical schema and numbered migration protect social identities", async () => {
-  const [schema, tableMigration, policyMigration] = await Promise.all([
+  const [schema, tableMigration, policyMigration, registrationMigration, preflight] = await Promise.all([
     readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"),
     readFile(new URL("../../db/migrations/027_social_auth_identities.sql", import.meta.url), "utf8"),
     readFile(new URL("../../db/migrations/030_auth_identities_app_policy.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../db/migrations/031_oauth_registration_intents.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../scripts/check-mvp.ts", import.meta.url), "utf8"),
   ]);
   for (const source of [schema, tableMigration]) {
     assert.match(source, /CREATE TABLE(?: IF NOT EXISTS)? auth_identities/);
@@ -188,4 +173,17 @@ test("the canonical schema and numbered migration protect social identities", as
       /CREATE POLICY gostone_app_server_access ON auth_identities\s+FOR ALL TO gostone_app USING \(true\) WITH CHECK \(true\)/,
     );
   }
+  for (const source of [schema, registrationMigration]) {
+    assert.match(source, /CREATE TABLE(?: IF NOT EXISTS)? oauth_registration_intents/);
+    assert.match(source, /token_hash TEXT PRIMARY KEY/);
+    assert.match(source, /UNIQUE \(provider, provider_subject\)/);
+    assert.match(source, /ALTER TABLE oauth_registration_intents ENABLE ROW LEVEL SECURITY/);
+    assert.match(source, /REVOKE ALL ON oauth_registration_intents FROM PUBLIC/);
+    assert.match(source, /gostone_app_oauth_registration_access/);
+    assert.match(source, /username_confirmed BOOLEAN NOT NULL DEFAULT false/);
+    assert.match(source, /user_id UUID REFERENCES users\(id\) ON DELETE CASCADE/);
+  }
+  assert.match(preflight, /"oauth_registration_intents"/);
+  assert.match(preflight, /oauth_registration_app_policy_is_valid/);
+  assert.match(preflight, /idx_oauth_registration_intents_expires/);
 });

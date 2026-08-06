@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
+import { normalizeUsername } from "./password";
 import { parseStartingStrength } from "@/lib/rating/preferences";
 
 export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 1_024;
@@ -140,6 +141,43 @@ export async function readRegistrationRequest(request: NextRequest) {
   try {
     return {
       ...credentials,
+      startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
+    };
+  } catch {
+    throw new AuthError(
+      "Choose a supported optional starting strength.",
+      400,
+      "invalid_starting_strength",
+    );
+  }
+}
+
+export async function readOAuthRegistrationRequest(request: NextRequest) {
+  const body = await readCredentialBody(request);
+  const fields = Object.keys(body);
+  if (
+    fields.length !== 3
+    || !Object.prototype.hasOwnProperty.call(body, "username")
+    || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
+    || !Object.prototype.hasOwnProperty.call(body, "knownRank")
+  ) {
+    throw new AuthError(
+      "The social registration request has an invalid shape.",
+      400,
+      "invalid_request",
+    );
+  }
+  const username = normalizeUsername(body.username);
+  if (!username) {
+    throw new AuthError(
+      "Username must contain 3–20 letters, numbers, or underscores.",
+      400,
+      "invalid_username",
+    );
+  }
+  try {
+    return {
+      username,
       startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
     };
   } catch {
