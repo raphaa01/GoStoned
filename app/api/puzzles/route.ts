@@ -7,8 +7,12 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
-import { resolvePlayerKey } from "@/lib/auth/requestAuth";
-import { readPuzzleHub } from "@/lib/puzzles/puzzleService";
+import { requireRequestUser, resolvePlayerKey } from "@/lib/auth/requestAuth";
+import {
+  readPuzzleHub,
+  releasePuzzleGenerationDispatch,
+  reservePuzzleGenerationDispatch,
+} from "@/lib/puzzles/puzzleService";
 import { parsePuzzleMode } from "@/lib/puzzles/request";
 import { dispatchKataGoJob, safelyDispatch } from "@/lib/katago/dispatch";
 
@@ -19,12 +23,25 @@ export async function GET(request: NextRequest) {
   try {
     const mode = parsePuzzleMode(request);
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
-    const playerKey = await resolvePlayerKey(request);
+    const playerKey = mode === "practice"
+      ? (await requireRequestUser(request)).playerKey
+      : await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.puzzleRead, playerKey);
     const hub = await readPuzzleHub(playerKey, mode);
     if (hub.status === "generating") {
-      after(() => safelyDispatch(() => dispatchKataGoJob("puzzle")));
+      const targetId = await reservePuzzleGenerationDispatch(mode);
+      if (targetId) {
+        after(() => safelyDispatch(async () => {
+          try {
+            const dispatched = await dispatchKataGoJob("puzzle", targetId);
+            if (!dispatched) await releasePuzzleGenerationDispatch(targetId);
+          } catch (error) {
+            await releasePuzzleGenerationDispatch(targetId);
+            throw error;
+          }
+        }));
+      }
     }
     return noStoreJson({ ok: true, actor: playerKey, ...hub });
   } catch (error) {

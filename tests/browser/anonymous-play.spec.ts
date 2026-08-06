@@ -1562,7 +1562,9 @@ for (const locale of ["en", "de"] as const) {
     const harness = await installApiHarness(page);
     const localeCopy = copy[locale];
     const playPath = locale === "en" ? "/play?size=19" : "/de/play?size=19";
-    const learnPath = locale === "en" ? "/learn" : "/de/learn";
+    const learnDestination = locale === "en"
+      ? "/register?returnTo=%2Flearn"
+      : "/de/register?returnTo=%2Flearn";
 
     await page.goto(playPath);
     const menuButton = page.locator(".mobile-nav > .icon-button");
@@ -1630,7 +1632,7 @@ for (const locale of ["en", "de"] as const) {
     const learnLink = mobileNavigation.getByRole("link", { name: localeCopy.learn, exact: true });
     await learnLink.focus();
     await learnLink.press("Enter");
-    await expect(page).toHaveURL(`${ORIGIN}${learnPath}`);
+    await expect(page).toHaveURL(`${ORIGIN}${learnDestination}`);
     await expect(mobileNavigation).toBeHidden();
     await expectCleanHarness(harness);
   });

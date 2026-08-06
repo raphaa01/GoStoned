@@ -6,7 +6,7 @@ import {
   RATE_LIMIT_POLICIES,
 } from "@/lib/auth/rateLimit";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
-import { resolvePlayerKey } from "@/lib/auth/requestAuth";
+import { getRequestUser, resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { gameMutationRouteError } from "@/lib/game/gameMutationRequest";
 import { attemptPuzzle } from "@/lib/puzzles/puzzleService";
 import {
@@ -26,14 +26,15 @@ export async function POST(request: NextRequest, context: Context) {
     assertPuzzleId(puzzleId);
     assertPuzzleAttemptMetadata(request);
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
-    const playerKey = await resolvePlayerKey(request);
+    const account = await getRequestUser(request);
+    const playerKey = account?.playerKey ?? await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.puzzleAttempt, playerKey);
     const selected = await readPuzzleAttemptBody(request);
     return noStoreJson({
       ok: true,
       actor: playerKey,
-      attempt: await attemptPuzzle(puzzleId, playerKey, selected),
+      attempt: await attemptPuzzle(puzzleId, playerKey, selected, Boolean(account)),
     });
   } catch (error) {
     return gameMutationRouteError(error);

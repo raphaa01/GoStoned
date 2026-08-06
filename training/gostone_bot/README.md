@@ -9,14 +9,14 @@ checkpoints, run state, and generated browser models are ignored by Git.
 1. Start Docker Desktop.
 2. Double-click `Start-GoStone-Training.cmd` in the repository root.
 3. The local control center opens at `http://127.0.0.1:4173`.
-4. Choose a preset and CPU limit, then press **Training starten**.
+4. Choose a preset and CPU limit, then press **Start training**.
 
 ## Test a finished model
 
-1. Let the training reach **Fertig**.
+1. Let the training reach **Complete**.
 2. Restart the Training Lab once if it was already open while these arena files
    were installed.
-3. Open the **Testarena** tab.
+3. Open the **AI Arena** tab.
 4. Select the finished model, board size, nominal Elo profile, and your color.
 5. Press **Neue Testpartie** and play directly on the board.
 
@@ -33,18 +33,18 @@ league has measured their real strength.
 
 ## Compare two model versions live
 
-1. Open **Testarena** and choose **Modell gegen Modell**.
+1. Open **AI Arena** and choose **AI vs AI**.
 2. Select the black and white checkpoints, board size, shared Elo profile, and
-   playback speed.
-3. Press **Live-Vergleich starten**.
+   the AI that should evaluate the final Japanese score, plus playback speed.
+3. Press **Start live match**.
 4. Watch each move appear on the board and in the complete move list. Use
-   **Pausieren** and **Weiter abspielen** whenever you want to inspect a position.
+   **Pause** and **Resume playback** whenever you want to inspect a position.
 
 The browser requests exactly one locally calculated move at a time. A match is
 therefore never simulated invisibly before its result appears. Colors should be
 swapped in a second game when comparing model strength. Two passes trigger a
-Japanese settlement proposal based on the averaged ownership and survival
-outputs of both models. A safety limit ends pathological games that never pass.
+Japanese settlement proposal from the explicitly selected scoring AI. A safety
+limit ends pathological games that never pass.
 
 The browser may be closed while training. Keep the small command window open if
 you want to reopen the page easily. The actual runner is a separate local process;
@@ -56,10 +56,10 @@ The approximately 99 MB KataGo human teacher is checksum-verified and stored in
 
 ## Versions and repeated training
 
-Completed real models are named `GoStone Bot v1`, `GoStone Bot v2`, and so on.
+Completed real models are named `GoStone AI v1`, `GoStone AI v2`, and so on.
 The number is assigned only to a run that reaches the final artifact validation;
 failed runs do not consume a version. Smoke runs are listed separately as
-`GoStone Techniktest` and are never used as the base for a real model.
+`GoStone AI Technical Test` and are never used as the base for a real model.
 
 A new real run uses a fresh random seed and starts with the newest successful
 model weights. It therefore creates different KataGo games and continues learning
@@ -68,7 +68,7 @@ often as Black and White on every board size over a complete 18-game cycle. Real
 9x9, 13x13, and 19x19 games far enough to include actual endgame positions.
 
 More training is not an automatic guarantee of a stronger release. Compare the
-new version with the previous one in fixed test positions and bot games before
+new version with the previous one in fixed test positions and AI games before
 shipping it.
 
 ## Model contract
@@ -93,7 +93,7 @@ league is required before displaying ratings publicly.
 
 The control center supports pause, resume, and safe stop. Completed games are
 stored as independent compressed shards, and every completed epoch has a training
-checkpoint. After a restart, **Fortsetzen** reuses both. If a stop is requested
+checkpoint. After a restart, **Resume** reuses both. If a stop is requested
 inside a game, the already analyzed partial game is retained as valid training
 data.
 
@@ -123,5 +123,5 @@ npm run bot:lab
 ```
 
 Do not copy a generated model into `public/` until fixed endgame positions,
-bot-vs-bot games, pass behavior, and group-settlement confidence have been
+AI-vs-AI games, pass behavior, and group-settlement confidence have been
 evaluated. A successful export proves the technical contract, not playing strength.
