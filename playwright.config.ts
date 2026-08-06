@@ -64,10 +64,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run start -- --hostname ${host} --port ${port}`,
+    command: `npm run build && npm run start -- --hostname ${host} --port ${port}`,
     env: {
       DATABASE_URL: "postgresql://browser-tests:browser-tests@127.0.0.1:1/browser-tests",
-      NEXT_PUBLIC_APP_URL: baseURL,
+      GOOGLE_CLIENT_ID: "browser-test-client",
+      GOOGLE_CLIENT_SECRET: "browser-test-secret",
+      NEXT_PUBLIC_APP_URL: "https://gostone.test",
       NEXT_TELEMETRY_DISABLED: "1",
     },
     reuseExistingServer: false,
