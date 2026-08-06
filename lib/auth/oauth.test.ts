@@ -169,15 +169,23 @@ test("social usernames are stable, valid, bounded, and provider-specific", () =>
 });
 
 test("the canonical schema and numbered migration protect social identities", async () => {
-  const [schema, migration] = await Promise.all([
+  const [schema, tableMigration, policyMigration] = await Promise.all([
     readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"),
     readFile(new URL("../../db/migrations/027_social_auth_identities.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../db/migrations/030_auth_identities_app_policy.sql", import.meta.url), "utf8"),
   ]);
-  for (const source of [schema, migration]) {
+  for (const source of [schema, tableMigration]) {
     assert.match(source, /CREATE TABLE(?: IF NOT EXISTS)? auth_identities/);
     assert.match(source, /PRIMARY KEY \(provider, provider_subject\)/);
     assert.match(source, /UNIQUE \(user_id, provider\)/);
     assert.match(source, /ALTER TABLE auth_identities ENABLE ROW LEVEL SECURITY/);
     assert.match(source, /REVOKE ALL ON auth_identities FROM PUBLIC/);
+  }
+  for (const source of [schema, policyMigration]) {
+    assert.match(source, /policyname = 'gostone_app_server_access'/);
+    assert.match(
+      source,
+      /CREATE POLICY gostone_app_server_access ON auth_identities\s+FOR ALL TO gostone_app USING \(true\) WITH CHECK \(true\)/,
+    );
   }
 });
