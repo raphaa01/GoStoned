@@ -21,6 +21,10 @@ test("activation keeps historical tuples and enables the exact Japanese tuple", 
     "'japanese-1989-gostone-v1'",
     "rules IN ('chinese','japanese')",
     "scoring_method IN ('area','territory')",
+    "matchmaking_queue_adaptive_state_check",
+    "rules_snapshot = 'japanese'",
+    "rules_version_snapshot = 'japanese-1989-gostone-v1'",
+    "scoring_method_snapshot = 'territory'",
   ]) assert.ok(migration.includes(required), required);
 });
 

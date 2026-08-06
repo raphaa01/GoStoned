@@ -4,6 +4,7 @@ import "dotenv/config";
 import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
+import { newGameRulesConfiguration } from "../lib/game/newGameRules";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -18,6 +19,8 @@ const databaseUrl = getDatabaseUrl();
 if (!isUnambiguousLocalDatabase(databaseUrl)) {
   throw new Error("Matchmaking race smoke tests may only mutate a local PostgreSQL database.");
 }
+
+const newGameRules = newGameRulesConfiguration();
 
 const suffix = randomUUID();
 const simultaneous = [`guest:sim-a-${suffix}`, `guest:sim-b-${suffix}`];
@@ -41,10 +44,10 @@ async function assertIsolatedPools() {
        FROM matchmaking_queue
       WHERE board_size = 9
         AND time_control = ANY($1::text[])
-        AND rules_profile = 'chinese-2002-gostone-v1'
-        AND NOT (player_key = ANY($2::text[]))
+        AND rules_profile = $2
+        AND NOT (player_key = ANY($3::text[]))
       LIMIT 1`,
-    [["rapid", "classic"], playerKeys],
+    [["rapid", "classic"], newGameRules.rulesProfile, playerKeys],
   );
   if (result.rows[0]) {
     throw new Error(
@@ -94,8 +97,8 @@ async function verifyContestedCancellation() {
   await query(
     `INSERT INTO matchmaking_queue (
        player_key, board_size, time_control, rules_profile, status, game_id
-     ) VALUES ($1, 9, 'rapid', 'chinese-2002-gostone-v1', 'waiting', NULL)`,
-    [cancellationTarget],
+     ) VALUES ($1, 9, 'rapid', $2, 'waiting', NULL)`,
+    [cancellationTarget, newGameRules.rulesProfile],
   );
   const publisher = await getPool().connect();
   let committed = false;
@@ -117,10 +120,18 @@ async function verifyContestedCancellation() {
          black_periods_remaining, white_periods_remaining, turn_started_at
        ) VALUES (
          9, $1, $2, 'rapid',
-         'chinese', 'chinese-2002-gostone-v1', 'area', 7.5, 0, 'play', 'black',
+         $3, $4, $5, $6, $7, 'play', 'black',
          900, 5, 30, 900000, 900000, 5, 5, NOW()
        ) RETURNING id`,
-      [cancellationTarget, cancellationPeer],
+      [
+        cancellationTarget,
+        cancellationPeer,
+        newGameRules.ruleset,
+        newGameRules.rulesProfile,
+        newGameRules.scoringMethod,
+        newGameRules.komi,
+        newGameRules.handicap,
+      ],
     );
     await publisher.query(
       `UPDATE matchmaking_queue

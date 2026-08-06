@@ -554,7 +554,7 @@ export async function joinMatchmaking(
        SET player_key = EXCLUDED.player_key`,
       [
         playerKey, boardSize, timeControlId, rules.rulesProfile,
-        ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, MATCH_RULES_VERSION,
+        ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, rules.rulesProfile,
         rules.scoringMethod, rules.komi, rules.handicap,
         authority?.rating ?? null, authority?.rating_deviation ?? null,
         authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,
@@ -639,7 +639,7 @@ export async function joinMatchmaking(
           RETURNING *,statement_timestamp() AS evaluation_now`,
         [
           playerKey, boardSize, timeControlId, rules.rulesProfile,
-          ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, MATCH_RULES_VERSION,
+          ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, rules.rulesProfile,
           rules.scoringMethod, rules.komi, rules.handicap,
           authority?.rating ?? null, authority?.rating_deviation ?? null,
           authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,

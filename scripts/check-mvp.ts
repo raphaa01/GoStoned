@@ -447,7 +447,15 @@ const requiredConstraintDefinitions = {
     excludes: [],
   },
   matchmaking_queue_adaptive_state_check: {
-    includes: ["adaptive-global-glicko-match-v1", "registered-rated", "guest-unrated", "glicko2-v1-tau-0.5"],
+    includes: [
+      "adaptive-global-glicko-match-v1",
+      "registered-rated",
+      "guest-unrated",
+      "glicko2-v1-tau-0.5",
+      "chinese-2002-gostone-v1",
+      "japanese-1989-gostone-v1",
+      "territory",
+    ],
     excludes: [],
   },
 } as const;

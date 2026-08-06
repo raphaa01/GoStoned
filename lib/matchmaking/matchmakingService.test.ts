@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Pool } from "pg";
-import { DEFAULT_MATCH_RULES } from "../game/rulesPolicy";
+import { NEW_GAME_RULES_PROFILE_ENV } from "../game/newGameRules";
+import {
+  CURRENT_CHINESE_RULES_PROFILE,
+  DEFAULT_MATCH_RULES,
+} from "../game/rulesPolicy";
 import {
   cancelMatchmaking,
   getMatchmakingStatus,
@@ -927,6 +931,40 @@ test("created games preserve the selected pool and canonical rules tuple", async
     byoYomiPeriods: 3,
     byoYomiSeconds: 20,
   });
+});
+
+test("the creation rollback stores one coherent current Chinese queue tuple", async () => {
+  const previousProfile = process.env[NEW_GAME_RULES_PROFILE_ENV];
+  process.env[NEW_GAME_RULES_PROFILE_ENV] = CURRENT_CHINESE_RULES_PROFILE;
+  try {
+    const pool = new MatchmakingPool();
+    const result = await withPool(pool, () => joinMatchmaking(
+      "guest:rollback",
+      9,
+      "rapid",
+    ));
+    assert.equal(result.status, "waiting");
+    const row = pool.queue.get("guest:rollback");
+    assert.ok(row);
+    assert.deepEqual({
+      rulesProfile: row.rules_profile,
+      rules: row.rules_snapshot,
+      rulesVersion: row.rules_version_snapshot,
+      scoringMethod: row.scoring_method_snapshot,
+      komi: row.komi_snapshot,
+      handicap: row.handicap_snapshot,
+    }, {
+      rulesProfile: CURRENT_CHINESE_RULES_PROFILE,
+      rules: "chinese",
+      rulesVersion: CURRENT_CHINESE_RULES_PROFILE,
+      scoringMethod: "area",
+      komi: 7.5,
+      handicap: 0,
+    });
+  } finally {
+    if (previousProfile === undefined) delete process.env[NEW_GAME_RULES_PROFILE_ENV];
+    else process.env[NEW_GAME_RULES_PROFILE_ENV] = previousProfile;
+  }
 });
 
 test("different pools and corrupt active participants are never selected as opponents", async () => {
