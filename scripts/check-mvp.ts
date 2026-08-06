@@ -656,6 +656,7 @@ async function checkMvp() {
     trigger_signatures: string[];
     trigger_definitions: Record<string, string>;
     rls_tables: string[];
+    auth_identity_app_policy_is_valid: boolean;
     public_has_table_access: boolean;
     client_roles_have_table_access: boolean;
     public_can_execute_guard_functions: boolean;
@@ -792,6 +793,17 @@ async function checkMvp() {
                  AND relation.relrowsecurity
                ORDER BY relation.relname
             ) AS rls_tables,
+            EXISTS (
+              SELECT 1
+                FROM pg_catalog.pg_policies
+               WHERE schemaname = 'public'
+                 AND tablename = 'auth_identities'
+                 AND policyname = 'gostone_app_server_access'
+                 AND cmd = 'ALL'
+                 AND roles = ARRAY['gostone_app']::name[]
+                 AND qual = 'true'
+                 AND with_check = 'true'
+            ) AS auth_identity_app_policy_is_valid,
             EXISTS (
               SELECT 1
                 FROM UNNEST($8::text[]) AS protected_table(table_name)
@@ -1014,6 +1026,11 @@ async function checkMvp() {
   if (absentRls.length > 0) {
     throw new Error(
       `Database client isolation is incomplete. RLS is disabled on: ${absentRls.join(", ")}`,
+    );
+  }
+  if (!row.auth_identity_app_policy_is_valid) {
+    throw new Error(
+      "Database OAuth identity access is incomplete: gostone_app is missing its exact RLS policy.",
     );
   }
   if (row.public_has_table_access) {

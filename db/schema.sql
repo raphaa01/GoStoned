@@ -1430,6 +1430,16 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
     GRANT SELECT, INSERT, UPDATE ON auth_identities TO gostone_app;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'auth_identities'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON auth_identities
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
   END IF;
 END
 $$;
