@@ -48,3 +48,28 @@ test("Japanese scoring has no KataGo dependency or adjudication finish path", ()
   assert.match(service, /source: "manual_initial"/);
   assert.match(service, /decideJapaneseScoringDeadline/);
 });
+
+test("Japanese full reads and version polls resolve elapsed clocks transactionally", () => {
+  const fullRead = service.slice(
+    service.indexOf("export async function getJapaneseGameState"),
+    service.indexOf("export async function pollJapaneseGameState"),
+  );
+  const poll = service.slice(
+    service.indexOf("export async function pollJapaneseGameState"),
+    service.indexOf("export async function submitJapaneseMove"),
+  );
+  const timeout = service.slice(
+    service.indexOf("async function finishJapaneseOnTime"),
+    service.indexOf("function serializeJapaneseGame"),
+  );
+
+  assert.match(fullRead, /withTransaction/);
+  assert.match(fullRead, /loadJapaneseGame\(client, gameId, playerKey, true\)/);
+  assert.match(fullRead, /finishJapaneseOnTime/);
+  assert.match(poll, /japaneseTimedOutColor/);
+  assert.match(poll, /getJapaneseGameState/);
+  assert.match(timeout, /finish_reason='timeout'/);
+  assert.match(timeout, /_time_remaining_ms=0/);
+  assert.match(timeout, /_periods_remaining=0/);
+  assert.match(timeout, /finalizeGameRatings/);
+});

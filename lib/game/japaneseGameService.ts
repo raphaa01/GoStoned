@@ -597,6 +597,69 @@ function gameClock(loaded: LoadedJapaneseGame, now: Date): GameState["clock"] {
   };
 }
 
+function japaneseTimedOutColor(loaded: LoadedJapaneseGame, now: Date): Stone | null {
+  const { game } = loaded;
+  if (game.status !== "active" || game.phase !== "play" || game.to_move === null) {
+    return null;
+  }
+  const color = game.to_move;
+  const clock = advanceClock({
+    mainTimeMs: numeric(game[`${color}_time_remaining_ms`]),
+    periodsRemaining: game[`${color}_periods_remaining`],
+    periodTimeMs: game.byo_yomi_seconds * 1_000,
+    elapsedMs: Math.max(0, now.getTime() - game.turn_started_at.getTime()),
+  });
+  return clock.timedOut ? color : null;
+}
+
+function withUpdatedJapaneseGame(
+  loaded: LoadedJapaneseGame,
+  row: JapaneseGameRow,
+  rated = loaded.game.rated,
+): LoadedJapaneseGame {
+  return {
+    ...loaded,
+    game: {
+      ...row,
+      black_player_name: loaded.game.black_player_name,
+      white_player_name: loaded.game.white_player_name,
+      black_player_is_bot: loaded.game.black_player_is_bot,
+      white_player_is_bot: loaded.game.white_player_is_bot,
+      black_rating: loaded.game.black_rating,
+      black_rating_deviation: loaded.game.black_rating_deviation,
+      white_rating: loaded.game.white_rating,
+      white_rating_deviation: loaded.game.white_rating_deviation,
+      viewer_rating_change: loaded.game.viewer_rating_change,
+      rating_display_preference: loaded.game.rating_display_preference,
+      rated,
+    },
+  };
+}
+
+async function finishJapaneseOnTime(
+  client: PoolClient,
+  loaded: LoadedJapaneseGame,
+  timedOutColor: Stone,
+  now: Date,
+): Promise<GameState> {
+  const { game } = loaded;
+  const winner = timedOutColor === "black" ? "white" : "black";
+  const winnerKey = winner === "black" ? game.black_player_key : game.white_player_key;
+  const updated = await client.query<JapaneseGameRow>(
+    `UPDATE games SET status='finished', phase='play', to_move=NULL,
+        finish_reason='timeout', result=$2, winner_key=$3,
+        ${timedOutColor}_time_remaining_ms=0, ${timedOutColor}_periods_remaining=0,
+        finished_at=$4, updated_at=$4, version=version+1
+      WHERE id=$1 RETURNING *`,
+    [game.id, `${winner === "black" ? "B" : "W"}+T`, winnerKey, now],
+  );
+  const { rated } = await finalizeGameRatings(client, game.id);
+  return serializeJapaneseGame(
+    withUpdatedJapaneseGame(loaded, updated.rows[0], rated),
+    now,
+  );
+}
+
 function serializeJapaneseGame(loaded: LoadedJapaneseGame, now = new Date()): GameState {
   const { game, moves, scoring, resumes } = loaded;
   const score = scoreCurrent(loaded);
@@ -933,8 +996,14 @@ export async function applyJapaneseSettlementSuggestion(
 }
 
 export async function getJapaneseGameState(gameId: string, playerKey: string): Promise<GameState> {
-  return withReadOnlyTransaction(async (client) =>
-    serializeJapaneseGame(await loadJapaneseGame(client, gameId, playerKey)));
+  return withTransaction(async (client) => {
+    const loaded = await loadJapaneseGame(client, gameId, playerKey, true);
+    const now = new Date();
+    const timedOutColor = japaneseTimedOutColor(loaded, now);
+    return timedOutColor === null
+      ? serializeJapaneseGame(loaded, now)
+      : finishJapaneseOnTime(client, loaded, timedOutColor, now);
+  });
 }
 
 export async function pollJapaneseGameState(
@@ -942,16 +1011,24 @@ export async function pollJapaneseGameState(
   playerKey: string,
   knownVersion: number | null,
 ): Promise<{ unchanged: false; game: GameState } | GamePollHeartbeat> {
-  const loaded = await withReadOnlyTransaction((client) => loadJapaneseGame(client, gameId, playerKey));
-  if (knownVersion !== null && loaded.game.version === knownVersion) {
+  if (knownVersion === null) {
+    return { unchanged: false, game: await getJapaneseGameState(gameId, playerKey) };
+  }
+  const loaded = await withReadOnlyTransaction((client) =>
+    loadJapaneseGame(client, gameId, playerKey));
+  const now = new Date();
+  if (japaneseTimedOutColor(loaded, now) !== null) {
+    return { unchanged: false, game: await getJapaneseGameState(gameId, playerKey) };
+  }
+  if (loaded.game.version === knownVersion) {
     return {
       unchanged: true,
       gameId,
       version: loaded.game.version,
-      clock: gameClock(loaded, new Date()),
+      clock: gameClock(loaded, now),
     };
   }
-  return { unchanged: false, game: serializeJapaneseGame(loaded) };
+  return { unchanged: false, game: serializeJapaneseGame(loaded, now) };
 }
 
 export async function submitJapaneseMove(
@@ -980,18 +1057,7 @@ export async function submitJapaneseMove(
       elapsedMs: Math.max(0, now.getTime() - game.turn_started_at.getTime()),
     });
     if (clock.timedOut) {
-      const winner = opposite(color);
-      const winnerKey = winner === "black" ? game.black_player_key : game.white_player_key;
-      const updated = await client.query<JapaneseGameRow>(
-        `UPDATE games SET status='finished', phase='play', to_move=NULL,
-            finish_reason='timeout', result=$2, winner_key=$3,
-            ${color}_time_remaining_ms=0, ${color}_periods_remaining=0,
-            finished_at=$4, updated_at=$4, version=version+1
-          WHERE id=$1 RETURNING *`,
-        [gameId, `${winner === "black" ? "B" : "W"}+T`, winnerKey, now],
-      );
-      const { rated } = await finalizeGameRatings(client, gameId);
-      return { game: serializeJapaneseGame({ ...loaded, game: { ...updated.rows[0], black_player_name: game.black_player_name, white_player_name: game.white_player_name, rated } }, now), boundary: null };
+      return { game: await finishJapaneseOnTime(client, loaded, color, now), boundary: null };
     }
     const isPass = move.isPass === true;
     let nextBoard = loaded.authority.normalPlay.board.map((row) => [...row]);
