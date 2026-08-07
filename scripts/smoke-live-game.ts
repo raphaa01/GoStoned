@@ -209,17 +209,20 @@ async function run() {
   assert.equal(raceBlackMove.game.moveCount, 1);
   assert.equal(raceBlackMove.game.turn, "white");
 
+  // Build a corner enclosure across the two authorized resumptions. The white
+  // stone at (0, 0) keeps a liberty during play and remains valid agreed-dead
+  // material once (0, 1), (1, 1), and (2, 0) close its two-point territory.
   const blackMove = await postMove<{
     actor: string;
     game: { moveCount: number; turn: string };
-  }>(gameId, { x: 2, y: 2 }, black.cookie, black.playerKey);
+  }>(gameId, { x: 2, y: 0 }, black.cookie, black.playerKey);
   assert.equal(blackMove.actor, black.playerKey);
   assert.equal(blackMove.game.moveCount, 1);
   assert.equal(blackMove.game.turn, "white");
 
   const whiteMove = await postMove<{ game: { moveCount: number; turn: string } }>(
     gameId,
-    { x: 3, y: 2 },
+    { x: 0, y: 0 },
     white.cookie,
     white.playerKey,
   );
@@ -261,8 +264,8 @@ async function run() {
   assert.equal(outsiderConfirmation.status, 403);
   for (const [path, body] of [
     [`/api/games/${gameId}/scoring/dead-stones`, {
-      x: 3,
-      y: 2,
+      x: 0,
+      y: 0,
       dead: true,
       expectedRevision: firstScoringRevision,
     }],
@@ -304,12 +307,12 @@ async function run() {
   const challengedProposal = await post<{
     game: { scoring: { revision: number; deadStones: Array<{ x: number; y: number }> } };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: firstScoringRevision,
   }, black.cookie, black.playerKey);
-  assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 0, y: 0 }]);
 
   const resumed = await post<{
     game: { phase: string; turn: string; scoring: null };
@@ -342,7 +345,7 @@ async function run() {
     rules_profile: JAPANESE_1989_RULES_PROFILE,
   }]);
 
-  await postMove(gameId, { x: 4, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { x: 0, y: 1 }, black.cookie, black.playerKey);
   await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
   const restopped = await postMove<{
     game: { phase: string; scoring: { revision: number } };
@@ -376,12 +379,12 @@ async function run() {
       };
     };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: restopped.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(secondProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(secondProposal.game.scoring.deadStones, [{ x: 0, y: 0 }]);
 
   const secondResumed = await post<{
     game: {
@@ -455,11 +458,12 @@ async function run() {
   // decisions that intentionally fill one actor's complete burst allowance.
   await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
-  await postMove(gameId, { x: 5, y: 2 }, white.cookie, white.playerKey);
-  await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
+  await postMove(gameId, { x: 8, y: 8 }, white.cookie, white.playerKey);
+  await postMove(gameId, { x: 1, y: 1 }, black.cookie, black.playerKey);
+  await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
   const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
-  }>(gameId, { isPass: true }, white.cookie, white.playerKey);
+  }>(gameId, { isPass: true }, black.cookie, black.playerKey);
   assert.equal(finalScoring.game.phase, "scoring");
 
   const firstConfirmation = await post<{
@@ -479,12 +483,12 @@ async function run() {
       };
     };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: firstConfirmation.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 0, y: 0 }]);
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
   const confirmations = await Promise.all([
@@ -507,7 +511,7 @@ async function run() {
   );
   const finished = confirmations.find(({ game }) => game.status === "finished")!;
   assert.equal(finished.game.status, "finished");
-  assert.equal(finished.game.moveCount, 10);
+  assert.equal(finished.game.moveCount, 11);
   assert.ok(finished.game.result);
   assert.equal(finished.game.rated, false);
 
