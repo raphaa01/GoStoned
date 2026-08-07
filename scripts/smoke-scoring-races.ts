@@ -8,6 +8,12 @@ import {
   assertSmokeDatabaseIdentity,
   withRollbackOnlyTransaction,
 } from "../lib/smokeDatabase";
+import { ADAPTIVE_MATCH_POLICY_VERSION } from "../lib/matchmaking/adaptiveMatchPolicy";
+import {
+  CURRENT_CHINESE_RULES_PROFILE,
+  resolveRulesPolicy,
+} from "../lib/game/rulesPolicy";
+import { getTimeControl } from "../lib/game/timeControls";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -103,21 +109,86 @@ async function postBodylessGame(
 async function setupScoringFixture(): Promise<ScoringFixture> {
   const black = await createGuest();
   const white = await createGuest();
-  const first = await api("/api/matchmaking", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, black.cookie, black.playerKey);
-  assert.equal(first.response.status, 200);
-  assert.equal(first.body.actor, black.playerKey);
-  const second = await api("/api/matchmaking", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ boardSize: 9, timeControl: "rapid" }),
-  }, white.cookie, white.playerKey);
-  assert.equal(second.response.status, 200);
-  assert.equal(second.body.actor, white.playerKey);
-  const gameId = ((second.body.matchmaking as { gameId: string }).gameId);
+  const rules = resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE);
+  const timeControl = getTimeControl("rapid");
+
+  // This suite deliberately exercises the retained Chinese agreement and
+  // append-only resume ledger. New matchmaking is Japanese by default, so the
+  // rollback fixture must declare its historical rules identity explicitly.
+  const gameId = await withTransaction(async (transaction) => {
+    await assertSmokeDatabaseIdentity(transaction);
+    const inserted = await transaction.query<{
+      id: string;
+      rules: string;
+      rules_profile: string;
+      scoring_method: string;
+      komi: string;
+      handicap: number;
+    }>(
+      `INSERT INTO games (
+         board_size, black_player_key, white_player_key, time_control,
+         rules, rules_profile, scoring_method, komi, handicap, phase, to_move,
+         main_time_seconds, byo_yomi_periods, byo_yomi_seconds,
+         black_time_remaining_ms, white_time_remaining_ms,
+         black_periods_remaining, white_periods_remaining, turn_started_at
+       )
+       VALUES (
+         9, $1, $2, $3,
+         $4, $5, $6, $7, 0, 'play', 'black',
+         $8, $9, $10, $11, $11, $9, $9, NOW()
+       )
+       RETURNING id, rules, rules_profile, scoring_method, komi::text, handicap`,
+      [
+        black.playerKey,
+        white.playerKey,
+        timeControl.id,
+        rules.ruleset,
+        rules.profile,
+        rules.scoringMethod,
+        rules.defaultKomi,
+        timeControl.mainTimeSeconds,
+        timeControl.byoYomiPeriods,
+        timeControl.byoYomiSeconds,
+        timeControl.mainTimeSeconds * 1_000,
+      ],
+    );
+    const game = inserted.rows[0];
+    assert.deepEqual(game, {
+      id: game.id,
+      rules: "chinese",
+      rules_profile: CURRENT_CHINESE_RULES_PROFILE,
+      scoring_method: "area",
+      komi: "7.5",
+      handicap: 0,
+    });
+
+    const queue = await transaction.query(
+      `INSERT INTO matchmaking_queue (
+         player_key, board_size, time_control, rules_profile, status, game_id,
+         matchmaking_policy_version, match_pool, rules_snapshot,
+         rules_version_snapshot, scoring_method_snapshot, komi_snapshot,
+         handicap_snapshot, preference_revision, display_preference_snapshot,
+         bot_match_preference, abandonment_risk, abandonment_policy_version,
+         abandonment_evaluated_at, handicap_preference
+       )
+       SELECT player_key, 9, $2, $3, 'matched', $1,
+              $4, 'guest-unrated', $5, $3, $6, $7, 0, 1, NULL,
+              'never', 'normal', 'abandonment-risk-v1', NOW(), 'even-only'
+         FROM unnest($8::text[]) AS participant(player_key)`,
+      [
+        game.id,
+        timeControl.id,
+        rules.profile,
+        ADAPTIVE_MATCH_POLICY_VERSION,
+        rules.ruleset,
+        rules.scoringMethod,
+        rules.defaultKomi,
+        [black.playerKey, white.playerKey],
+      ],
+    );
+    assert.equal(queue.rowCount, 2);
+    return game.id;
+  });
 
   for (const [guest, move] of [
     [black, { x: 2, y: 2 }],
