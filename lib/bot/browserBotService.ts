@@ -1,13 +1,11 @@
 import { query } from "@/lib/db";
-import { getGroup } from "@/lib/game/goEngine";
 import {
+  applyJapaneseSettlementSuggestion,
   confirmScore,
-  getGameState,
-  setDeadGroup,
   submitMove,
 } from "@/lib/game/gameService";
 import { GameServiceError } from "@/lib/game/gameServiceError";
-import type { GameState, Position } from "@/lib/game/types";
+import type { GameState } from "@/lib/game/types";
 import { GOSTONE_BOT_MODEL, type GoStoneBotMove } from "./modelV1";
 
 type BrowserBotBindingRow = {
@@ -98,34 +96,20 @@ export async function submitBrowserBotMove(input: {
   return updated;
 }
 
-function exactPosition(value: unknown, boardSize: number): Position | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const keys = Object.keys(value);
-  if (keys.length !== 2 || !keys.includes("x") || !keys.includes("y")) return null;
-  const { x, y } = value as Record<string, unknown>;
-  return Number.isInteger(x) && Number.isInteger(y)
-    && Number(x) >= 0 && Number(y) >= 0
-    && Number(x) < boardSize && Number(y) < boardSize
-    ? { x: Number(x), y: Number(y) }
-    : null;
-}
-
-function validateDeadStoneProposal(game: GameState, value: unknown): Position[] {
-  if (!Array.isArray(value) || value.length > game.boardSize * game.boardSize) {
+function assertBoundSettlementSuggestion(value: unknown): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     conflict("The settlement proposal is invalid.");
   }
-  const positions = value.map((candidate) => exactPosition(candidate, game.boardSize));
-  if (positions.some((position) => position === null)) conflict("The settlement proposal is invalid.");
-  const dead = positions as Position[];
-  const keys = new Set(dead.map(({ x, y }) => `${x}:${y}`));
-  if (keys.size !== dead.length) conflict("The settlement proposal contains duplicates.");
-  for (const position of dead) {
-    if (!game.board[position.y][position.x]) conflict("A proposed dead point is empty.");
-    if (getGroup(game.board, position).some(({ x, y }) => !keys.has(`${x}:${y}`))) {
-      conflict("The settlement proposal must contain complete connected groups.");
-    }
+  const provider = (value as Record<string, unknown>).provider;
+  if (!provider || typeof provider !== "object" || Array.isArray(provider)) {
+    conflict("The settlement proposal has no model identity.");
   }
-  return dead;
+  const identity = provider as Record<string, unknown>;
+  if (identity.id !== `browser-worker:${GOSTONE_BOT_MODEL.contractVersion}`
+    || identity.modelVersion !== GOSTONE_BOT_MODEL.modelVersion
+    || identity.artifactSha256 !== GOSTONE_BOT_MODEL.artifactSha256) {
+    conflict("The settlement proposal belongs to another model.", "bot_model_mismatch");
+  }
 }
 
 export async function applyBrowserBotSettlement(input: {
@@ -134,37 +118,17 @@ export async function applyBrowserBotSettlement(input: {
   modelVersion: unknown;
   modelSha256: unknown;
   expectedRevision: number;
-  deadStones: unknown;
+  suggestion: unknown;
 }): Promise<GameState> {
   assertModelIdentity(input.modelVersion, input.modelSha256);
   const binding = await bindingForHuman(input.gameId, input.humanPlayerKey);
-  let game = await getGameState(input.gameId, binding.bot_player_key);
-  if (!game.scoring || game.scoring.revision !== input.expectedRevision) {
-    conflict("The scoring proposal changed.", "scoring_revision_conflict");
-  }
-  const desired = validateDeadStoneProposal(game, input.deadStones);
-  const desiredKeys = new Set(desired.map(({ x, y }) => `${x}:${y}`));
-  const currentKeys = new Set(game.scoring.deadStones.map(({ x, y }) => `${x}:${y}`));
-
-  for (const stone of game.scoring.deadStones) {
-    if (desiredKeys.has(`${stone.x}:${stone.y}`)) continue;
-    game = await setDeadGroup(input.gameId, binding.bot_player_key, {
-      ...stone,
-      dead: false,
-      expectedRevision: game.scoring!.revision,
-    });
-    getGroup(game.board, stone).forEach(({ x, y }) => currentKeys.delete(`${x}:${y}`));
-  }
-  for (const stone of desired) {
-    if (currentKeys.has(`${stone.x}:${stone.y}`)) continue;
-    game = await setDeadGroup(input.gameId, binding.bot_player_key, {
-      ...stone,
-      dead: true,
-      expectedRevision: game.scoring!.revision,
-    });
-    getGroup(game.board, stone).forEach(({ x, y }) => currentKeys.add(`${x}:${y}`));
-  }
-  return game;
+  assertBoundSettlementSuggestion(input.suggestion);
+  return applyJapaneseSettlementSuggestion(
+    input.gameId,
+    binding.bot_player_key,
+    input.expectedRevision,
+    input.suggestion,
+  );
 }
 
 export async function confirmBrowserBotScore(input: {

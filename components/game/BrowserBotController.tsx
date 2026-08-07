@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import {
   generateBrowserBotMove,
-  proposeJapaneseSettlement,
 } from "@/lib/bot/browserBotClient";
+import { proposeBrowserJapaneseSettlement } from "@/lib/bot/browserJapaneseSettlementProvider";
 import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import type { GameState, Position, Stone } from "@/lib/game/types";
@@ -171,18 +171,11 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
     activeAction.current = scoringActionKey;
 
     if (scoringActionKey.startsWith("settlement:")) {
-      void proposeJapaneseSettlement({
-          gameId: snapshot.id,
-          boardSize: snapshot.boardSize,
-          board: snapshot.board,
-          moves: snapshot.moves,
-          komi: snapshot.komi,
-          targetRating: botRating(snapshot, color),
-          gameVersion: snapshot.version,
-        }).then((proposal) => postBotAction(snapshot.id, playerKey, {
+      void proposeBrowserJapaneseSettlement(snapshot, botRating(snapshot, color))
+        .then((suggestion) => postBotAction(snapshot.id, playerKey, {
           kind: "settlement",
           expectedRevision: snapshot.scoring!.revision,
-          deadStones: proposal.deadStones,
+          suggestion,
         })).then((updated) => {
           if (cancelled) return;
           settlementBoard.current = snapshot.scoring!.boardHash;

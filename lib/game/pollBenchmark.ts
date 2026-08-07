@@ -160,7 +160,7 @@ function normalizedSql(text: string): string {
 }
 
 const PARTICIPANT_READ_SQL = `
-  SELECT black_player_key, white_player_key
+  SELECT black_player_key, white_player_key, rules_profile
     FROM games
    WHERE id = $1
 `;

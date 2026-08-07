@@ -42,7 +42,7 @@ function assertBothContain(fragment: string): void {
   assert.ok(migration.includes(fragment), `migration 009 must contain: ${fragment}`);
 }
 
-test("reserves one exact Japanese rules tuple without activating it", () => {
+test("activates one exact Japanese rules tuple while preserving its foundation", () => {
   const tuple = [
     "rules = 'japanese'",
     `rules_profile = '${JAPANESE_1989_RULES_PROFILE}'`,
@@ -52,18 +52,14 @@ test("reserves one exact Japanese rules tuple without activating it", () => {
   ];
   tuple.forEach(assertBothContain);
 
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
-  assert.ok(
-    schema.includes(
-      "CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1'))",
-    ),
-  );
-  assert.ok(schema.includes("CHECK (scoring_method = 'area')"));
-  assert.ok(schema.includes("CHECK (rules = 'chinese')"));
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
+  assert.ok(schema.includes("'japanese-1989-gostone-v1'"));
+  assert.ok(schema.includes("scoring_method = 'territory'"));
+  assert.ok(schema.includes("rules = 'japanese'"));
   assert.equal(migration.includes("DROP CONSTRAINT"), false);
 });
 
-test("keeps both Chinese queue profiles rollout-compatible and Japanese closed", () => {
+test("keeps the persistence foundation rollout-compatible before activation migration", () => {
   assertBothContain("matchmaking_queue_rules_profile_compatibility_check");
   assertBothContain("'legacy-immediate-area'");
   assertBothContain("'chinese-2002-gostone-v1'");

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   DEFAULT_MATCH_RULES,
   DEFAULT_RULES_PROFILE,
+  CURRENT_CHINESE_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveRulesPolicy,
@@ -21,7 +22,7 @@ function stored(overrides: Partial<{
 }> = {}) {
   return {
     ruleset: "chinese",
-    rulesProfile: DEFAULT_RULES_PROFILE,
+    rulesProfile: CURRENT_CHINESE_RULES_PROFILE,
     scoringMethod: "area",
     komi: 7.5,
     handicap: 0,
@@ -38,29 +39,33 @@ function assertPolicyError(
   );
 }
 
-test("registers exactly the two persisted Chinese profiles without a fallback", () => {
+test("registers the Japanese profile and both persisted Chinese profiles without a fallback", () => {
   assert.deepEqual(Object.keys(RULES_POLICIES).sort(), [
     DEFAULT_RULES_PROFILE,
+    CURRENT_CHINESE_RULES_PROFILE,
     LEGACY_IMMEDIATE_AREA_PROFILE,
   ].sort());
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).scoringLifecycle, "agreement");
+  assert.equal(resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE).scoringLifecycle, "agreement");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).scoringLifecycle, "immediate");
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).turnSource, "persisted");
+  assert.equal(resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE).turnSource, "persisted");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).turnSource, "move-log");
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).scoringResponseWindowMs, 600_000);
+  assert.equal(resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE).scoringResponseWindowMs, 600_000);
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).scoringResponseWindowMs, null);
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).resumeTurnRule, "claim-dependent");
+  assert.equal(resolveRulesPolicy(CURRENT_CHINESE_RULES_PROFILE).resumeTurnRule, "claim-dependent");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).resumeTurnRule, "none");
+  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).repetitionRule, "japanese-simple-ko");
+  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).resumeTurnRule, "opponent-first");
+  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).scoringResponseWindowMs, 300_000);
   assert.equal(Object.isFrozen(RULES_POLICIES), true);
   assert.equal(Object.isFrozen(resolveRulesPolicy(DEFAULT_RULES_PROFILE)), true);
 });
 
-test("keeps new matches on the explicit current Chinese policy", () => {
+test("creates new matches with the explicit Japanese 1989 policy", () => {
   assert.deepEqual(DEFAULT_MATCH_RULES, {
-    ruleset: "chinese",
-    rulesProfile: "chinese-2002-gostone-v1",
-    scoringMethod: "area",
-    komi: 7.5,
+    ruleset: "japanese",
+    rulesProfile: "japanese-1989-gostone-v1",
+    scoringMethod: "territory",
+    komi: 6.5,
     handicap: 0,
   });
   assert.equal(Object.isFrozen(DEFAULT_MATCH_RULES), true);
@@ -81,13 +86,12 @@ test("preserves stored legacy komi and parses PostgreSQL numeric strings", () =>
   assert.equal(Object.isFrozen(legacySixPointFive), true);
 });
 
-test("rejects unknown, missing, and future profiles instead of selecting Chinese behavior", () => {
+test("rejects unknown, missing, and future profiles instead of selecting fallback behavior", () => {
   for (const rulesProfile of [
     "",
     null,
     undefined,
     {},
-    "japanese-1989-gostone-v1",
     "chinese-2002-gostone-v2",
   ]) {
     assertPolicyError(
@@ -95,6 +99,20 @@ test("rejects unknown, missing, and future profiles instead of selecting Chinese
       "unsupported_rules_profile",
     );
   }
+  assert.deepEqual(resolveRulesConfiguration({
+    ruleset: "japanese",
+    rulesProfile: "japanese-1989-gostone-v1",
+    scoringMethod: "territory",
+    komi: "6.5",
+    handicap: 0,
+  }), {
+    ruleset: "japanese",
+    rulesProfile: "japanese-1989-gostone-v1",
+    scoringMethod: "territory",
+    komi: 6.5,
+    handicap: 0,
+    policy: resolveRulesPolicy(DEFAULT_RULES_PROFILE),
+  });
 });
 
 test("rejects every ruleset and scoring-method mismatch", () => {

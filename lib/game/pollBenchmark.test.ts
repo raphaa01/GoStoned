@@ -31,7 +31,7 @@ test("classifies every exact poll SQL fingerprint and rejects near misses", () =
     assert.throws(() => classifyPollQuery(`${sqlCase.sql} /* appended */`), /unclassified query/);
   }
   assert.throws(
-    () => classifyPollQuery("SELECT black_player_key, white_player_key, secret FROM games WHERE id = $1"),
+    () => classifyPollQuery("SELECT black_player_key, white_player_key, rules_profile, secret FROM games WHERE id = $1"),
     /unclassified query/,
   );
   assert.throws(

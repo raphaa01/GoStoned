@@ -51,6 +51,7 @@ import type { GamePollResponse, GameState, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { BrowserBotController } from "./BrowserBotController";
+import { JapaneseSettlementSuggestionController } from "./JapaneseSettlementSuggestionController";
 import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
@@ -779,8 +780,35 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }
 
+  async function claimRepetition() {
+    if (!game || !playerKey || !gameInteractionAllowed || busy || !game.repetition?.eligible) return;
+    const requestIdentity = identityAuthority.current.capture();
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}/repetition/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
+        body: JSON.stringify({ expectedVersion: game.version }),
+      });
+      const data = await readApi<{ actor: string; game: GameState }>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
+    } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      setError(localizedApiError(dictionary, requestError, copy.repetitionClaimFailed));
+      reconcileAfterOperation(requestError);
+    } finally {
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
+    }
+  }
+
   async function scoringAction(
-    action: "dead-stones" | "confirm" | "resume",
+    action: "dead-stones" | "neutral-region" | "confirm" | "reset" | "resolve-deadline" | "resume" | "undo",
     body: Record<string, unknown>,
   ) {
     if (!game || !game.scoring || !playerKey || !gameInteractionAllowed || busy) return;
@@ -1212,6 +1240,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
             playerKey={playerKey}
           />
         ) : null}
+        {playerKey && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? (
+          <JapaneseSettlementSuggestionController
+            game={game}
+            onGame={acceptBrowserBotGame}
+            playerKey={playerKey}
+          />
+        ) : null}
         {connectionDescription ? (
           <section className="game-connection-notice" data-state={connectionDataState}>
             <ClockStatusIcon aria-hidden="true" size={18} />
@@ -1249,9 +1284,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
           </div>
           <div className="focused-board-wrap">
             <GoBoard
+              allowNeutralRegionMarks={game.ruleset === "japanese"}
               boardSize={game.boardSize}
               boardState={game.board}
               deadStones={game.scoring?.deadStones}
+              neutralRegionSeeds={game.scoring?.neutralRegionSeeds}
               disabled={!canMove && !canMarkDead}
               interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
               lastMove={(() => {
@@ -1262,6 +1299,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
               })()}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {
+                  if (game.ruleset === "japanese" && game.board[y]?.[x] === null) {
+                    const neutral = !game.scoring.neutralRegionSeeds?.some(
+                      (seed) => seed.x === x && seed.y === y,
+                    );
+                    void scoringAction("neutral-region", { x, y, neutral });
+                    return;
+                  }
                   const dead = !game.scoring.deadStones.some(
                     (stone) => stone.x === x && stone.y === y,
                   );
@@ -1299,7 +1343,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             interactionDisabled={!gameInteractionAllowed}
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
+            onClaimRepetition={claimRepetition}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onResetScoring={() => scoringAction("reset", {})}
+            onResolveDeadline={() => scoringAction("resolve-deadline", {})}
             onResign={() => {
               if (!gameInteractionAllowed) return;
               setError(null);
@@ -1312,6 +1359,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 y: disputedStone.y,
               });
             }}
+            onResumeJapanesePlay={() => scoringAction("resume", {})}
+            onUndoScoring={() => scoringAction("undo", {})}
             playerKey={playerKey}
           />
           <ChatPanel

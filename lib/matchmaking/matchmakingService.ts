@@ -6,8 +6,8 @@ import { botStrengthForRating, GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import { query, withTransaction } from "@/lib/db";
 import {
   DEFAULT_MATCH_RULES,
-  resolveRulesConfiguration,
 } from "@/lib/game/rulesPolicy";
+import { newGameRulesConfiguration } from "@/lib/game/newGameRules";
 import { getTimeControl } from "@/lib/game/timeControls";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import {
@@ -50,9 +50,9 @@ type QueueRow = {
   created_at: Date;
   matchmaking_policy_version?: string | null;
   match_pool?: MatchPool;
-  rules_snapshot?: "chinese";
+  rules_snapshot?: "chinese" | "japanese";
   rules_version_snapshot?: string;
-  scoring_method_snapshot?: "area";
+  scoring_method_snapshot?: "area" | "territory";
   komi_snapshot?: number;
   handicap_snapshot?: number;
   rating_snapshot?: number | null;
@@ -197,10 +197,6 @@ async function matchWaitingPlayerWithBrowserBot(
     boardSize: requester.board_size,
     timeControl: requester.time_control,
   };
-}
-
-function newGameRulesConfiguration() {
-  return resolveRulesConfiguration(DEFAULT_MATCH_RULES);
 }
 
 export function isBoardSize(value: unknown): value is BoardSize {
@@ -558,7 +554,7 @@ export async function joinMatchmaking(
        SET player_key = EXCLUDED.player_key`,
       [
         playerKey, boardSize, timeControlId, rules.rulesProfile,
-        ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, MATCH_RULES_VERSION,
+        ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, rules.rulesProfile,
         rules.scoringMethod, rules.komi, rules.handicap,
         authority?.rating ?? null, authority?.rating_deviation ?? null,
         authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,
@@ -643,7 +639,7 @@ export async function joinMatchmaking(
           RETURNING *,statement_timestamp() AS evaluation_now`,
         [
           playerKey, boardSize, timeControlId, rules.rulesProfile,
-          ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, MATCH_RULES_VERSION,
+          ADAPTIVE_MATCH_POLICY_VERSION, pool, rules.ruleset, rules.rulesProfile,
           rules.scoringMethod, rules.komi, rules.handicap,
           authority?.rating ?? null, authority?.rating_deviation ?? null,
           authority?.algorithm_version ?? null, authority?.rating_updated_at ?? null,

@@ -9,17 +9,18 @@ import {
 } from "./japanesePolicyContract";
 import {
   DEFAULT_RULES_PROFILE,
+  CURRENT_CHINESE_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesPolicy,
   RULES_POLICIES,
   UnsupportedRulesPolicyError,
 } from "./rulesPolicy";
 
-test("documents authentic Japanese semantics without activating a rules profile", () => {
+test("documents the active Japanese rules semantics", () => {
   assert.deepEqual(JAPANESE_1989_POLICY_CONTRACT, {
-    contractId: "japanese-1989-gostone-inactive-v1",
-    futureRulesProfile: "japanese-1989-gostone-v1",
-    activation: "inactive",
+    contractId: "japanese-1989-gostone-contract-v1",
+    rulesProfile: "japanese-1989-gostone-v1",
+    activation: "active",
     ruleset: "japanese",
     scoringMethod: "territory",
     scoringRule: "japanese-territory-with-prisoners",
@@ -74,23 +75,20 @@ test("documents authentic Japanese semantics without activating a rules profile"
   );
 });
 
-test("the inactive contract cannot resolve through the production registry", () => {
+test("the rules profile resolves through the registry but the semantic contract id does not", () => {
   assert.deepEqual(Object.keys(RULES_POLICIES).sort(), [
     DEFAULT_RULES_PROFILE,
+    CURRENT_CHINESE_RULES_PROFILE,
     LEGACY_IMMEDIATE_AREA_PROFILE,
   ].sort());
   assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_CONTRACT_ID), false);
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
   assert.throws(
     () => resolveRulesPolicy(JAPANESE_1989_CONTRACT_ID),
     (error: unknown) => error instanceof UnsupportedRulesPolicyError
       && error.code === "unsupported_rules_profile",
   );
-  assert.throws(
-    () => resolveRulesPolicy(JAPANESE_1989_RULES_PROFILE),
-    (error: unknown) => error instanceof UnsupportedRulesPolicyError
-      && error.code === "unsupported_rules_profile",
-  );
+  assert.equal(resolveRulesPolicy(JAPANESE_1989_RULES_PROFILE).ruleset, "japanese");
 });
 
 function acceptOutcome(outcome: Japanese1989ContractOutcome): void {

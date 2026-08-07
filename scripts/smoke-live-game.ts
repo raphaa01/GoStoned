@@ -5,6 +5,7 @@ import { isUnambiguousLocalDatabase } from "../lib/env";
 import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
+import { JAPANESE_1989_RULES_PROFILE } from "../lib/game/japanesePolicyContract";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -208,17 +209,20 @@ async function run() {
   assert.equal(raceBlackMove.game.moveCount, 1);
   assert.equal(raceBlackMove.game.turn, "white");
 
+  // Build a corner enclosure across the two authorized resumptions. The white
+  // stone at (0, 0) keeps a liberty during play and remains valid agreed-dead
+  // material once (0, 1), (1, 1), and (2, 0) close its two-point territory.
   const blackMove = await postMove<{
     actor: string;
     game: { moveCount: number; turn: string };
-  }>(gameId, { x: 2, y: 2 }, black.cookie, black.playerKey);
+  }>(gameId, { x: 2, y: 0 }, black.cookie, black.playerKey);
   assert.equal(blackMove.actor, black.playerKey);
   assert.equal(blackMove.game.moveCount, 1);
   assert.equal(blackMove.game.turn, "white");
 
   const whiteMove = await postMove<{ game: { moveCount: number; turn: string } }>(
     gameId,
-    { x: 3, y: 2 },
+    { x: 0, y: 0 },
     white.cookie,
     white.playerKey,
   );
@@ -260,15 +264,12 @@ async function run() {
   assert.equal(outsiderConfirmation.status, 403);
   for (const [path, body] of [
     [`/api/games/${gameId}/scoring/dead-stones`, {
-      x: 3,
-      y: 2,
+      x: 0,
+      y: 0,
       dead: true,
       expectedRevision: firstScoringRevision,
     }],
     [`/api/games/${gameId}/scoring/resume`, {
-      x: 3,
-      y: 2,
-      claim: "dead",
       expectedRevision: firstScoringRevision,
     }],
   ] as const) {
@@ -306,50 +307,45 @@ async function run() {
   const challengedProposal = await post<{
     game: { scoring: { revision: number; deadStones: Array<{ x: number; y: number }> } };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: firstScoringRevision,
   }, black.cookie, black.playerKey);
-  assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(challengedProposal.game.scoring.deadStones, [{ x: 0, y: 0 }]);
 
   const resumed = await post<{
     game: { phase: string; turn: string; scoring: null };
   }>(`/api/games/${gameId}/scoring/resume`, {
     expectedRevision: challengedProposal.game.scoring.revision,
-    claim: "alive",
-    x: 3,
-    y: 2,
   }, white.cookie, white.playerKey);
   assert.equal(resumed.game.phase, "play");
   assert.equal(resumed.game.turn, "black");
   assert.equal(resumed.game.scoring, null);
 
-  const resumeEvents = await query<{
+  const resumeAuthorizations = await query<{
+    resumption_number: number;
     scoring_revision: number;
-    resume_claim: string;
-    requested_by_color: string | null;
-    disputed_x: number | null;
-    disputed_y: number | null;
-    resumed_to_move: string;
+    stopped_move_number: number;
+    requested_by_color: string;
+    rules_profile: string;
   }>(
-    `SELECT scoring_revision, resume_claim, requested_by_color,
-            disputed_x, disputed_y, resumed_to_move
-       FROM game_scoring_resume_events
+    `SELECT resumption_number, scoring_revision, stopped_move_number,
+            requested_by_color, rules_profile
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1
-      ORDER BY scoring_revision`,
+      ORDER BY resumption_number`,
     [gameId],
   );
-  assert.deepEqual(resumeEvents.rows, [{
+  assert.deepEqual(resumeAuthorizations.rows, [{
+    resumption_number: 1,
     scoring_revision: challengedProposal.game.scoring.revision,
-    resume_claim: "alive",
+    stopped_move_number: 4,
     requested_by_color: "white",
-    disputed_x: 3,
-    disputed_y: 2,
-    resumed_to_move: "black",
+    rules_profile: JAPANESE_1989_RULES_PROFILE,
   }]);
 
-  await postMove(gameId, { x: 4, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { x: 0, y: 1 }, black.cookie, black.playerKey);
   await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
   const restopped = await postMove<{
     game: { phase: string; scoring: { revision: number } };
@@ -358,7 +354,7 @@ async function run() {
   assert.ok(restopped.game.scoring.revision > challengedProposal.game.scoring.revision);
   const retainedResumeEvidence = await query<{ event_count: number }>(
     `SELECT COUNT(*)::int AS event_count
-       FROM game_scoring_resume_events
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1`,
     [gameId],
   );
@@ -383,12 +379,12 @@ async function run() {
       };
     };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: restopped.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(secondProposal.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(secondProposal.game.scoring.deadStones, [{ x: 0, y: 0 }]);
 
   const secondResumed = await post<{
     game: {
@@ -398,48 +394,46 @@ async function run() {
       lastResume: {
         claim: string;
         requestedBy: string;
-        disputedStone: { x: number; y: number };
+        disputedStone: null;
       };
     };
   }>(`/api/games/${gameId}/scoring/resume`, {
     expectedRevision: secondProposal.game.scoring.revision,
-    claim: "dead",
-    x: 3,
-    y: 2,
   }, black.cookie, black.playerKey);
   assert.equal(secondResumed.game.phase, "play");
-  assert.equal(secondResumed.game.turn, "black");
+  assert.equal(secondResumed.game.turn, "white");
   assert.equal(secondResumed.game.scoring, null);
   assert.deepEqual(secondResumed.game.lastResume, {
-    claim: "dead",
+    claim: "resume",
     requestedBy: "black",
-    disputedStone: { x: 3, y: 2 },
+    disputedStone: null,
   });
 
-  const repeatedResumeEvents = await query<{
+  const repeatedResumeAuthorizations = await query<{
+    resumption_number: number;
     scoring_revision: number;
-    resume_claim: string;
-    requested_by_color: string | null;
-    resumed_to_move: string;
+    stopped_move_number: number;
+    requested_by_color: string;
   }>(
-    `SELECT scoring_revision, resume_claim, requested_by_color, resumed_to_move
-       FROM game_scoring_resume_events
+    `SELECT resumption_number, scoring_revision, stopped_move_number,
+            requested_by_color
+       FROM game_japanese_resume_authorizations
       WHERE game_id = $1
-      ORDER BY scoring_revision`,
+      ORDER BY resumption_number`,
     [gameId],
   );
-  assert.deepEqual(repeatedResumeEvents.rows, [
+  assert.deepEqual(repeatedResumeAuthorizations.rows, [
     {
+      resumption_number: 1,
       scoring_revision: challengedProposal.game.scoring.revision,
-      resume_claim: "alive",
+      stopped_move_number: 4,
       requested_by_color: "white",
-      resumed_to_move: "black",
     },
     {
+      resumption_number: 2,
       scoring_revision: secondProposal.game.scoring.revision,
-      resume_claim: "dead",
+      stopped_move_number: 7,
       requested_by_color: "black",
-      resumed_to_move: "black",
     },
   ]);
 
@@ -448,15 +442,15 @@ async function run() {
       lastResume: {
         claim: string;
         requestedBy: string;
-        disputedStone: { x: number; y: number };
+        disputedStone: null;
       };
       resumeEvents?: unknown;
     };
   }>(`/api/games/${gameId}`, undefined, white.cookie, white.playerKey);
   assert.deepEqual(latestOnly.game.lastResume, {
-    claim: "dead",
+    claim: "resume",
     requestedBy: "black",
-    disputedStone: { x: 3, y: 2 },
+    disputedStone: null,
   });
   assert.equal("resumeEvents" in latestOnly.game, false);
 
@@ -464,7 +458,8 @@ async function run() {
   // decisions that intentionally fill one actor's complete burst allowance.
   await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
-  await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { x: 8, y: 8 }, white.cookie, white.playerKey);
+  await postMove(gameId, { x: 1, y: 1 }, black.cookie, black.playerKey);
   await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
   const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
@@ -488,12 +483,12 @@ async function run() {
       };
     };
   }>(`/api/games/${gameId}/scoring/dead-stones`, {
-    x: 3,
-    y: 2,
+    x: 0,
+    y: 0,
     dead: true,
     expectedRevision: firstConfirmation.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 0, y: 0 }]);
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
   const confirmations = await Promise.all([
@@ -516,7 +511,7 @@ async function run() {
   );
   const finished = confirmations.find(({ game }) => game.status === "finished")!;
   assert.equal(finished.game.status, "finished");
-  assert.equal(finished.game.moveCount, 10);
+  assert.equal(finished.game.moveCount, 11);
   assert.ok(finished.game.result);
   assert.equal(finished.game.rated, false);
 

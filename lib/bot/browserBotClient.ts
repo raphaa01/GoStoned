@@ -5,6 +5,7 @@ import type {
   GoStoneBotWorkerRequest,
   GoStoneBotWorkerResponse,
   GoStoneJapaneseSettlementProposal,
+  GoStoneSettlementPosition,
   GoStoneBotMove,
 } from "./modelV1";
 
@@ -71,7 +72,7 @@ export async function generateBrowserBotMove(
 }
 
 export async function proposeJapaneseSettlement(
-  position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">,
+  position: GoStoneSettlementPosition,
 ): Promise<GoStoneJapaneseSettlementProposal> {
   const response = await requestWorker({
     id: requestId("settlement"),

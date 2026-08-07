@@ -29,6 +29,8 @@ type GoBoardProps = {
   disabled?: boolean;
   interactionMode?: "play" | "mark-dead";
   deadStones?: Position[];
+  neutralRegionSeeds?: Position[];
+  allowNeutralRegionMarks?: boolean;
   lastMove?: Position | null;
   precisionRevision: string;
 };
@@ -55,6 +57,8 @@ export function GoBoard({
   disabled = false,
   interactionMode = "play",
   deadStones = [],
+  neutralRegionSeeds = [],
+  allowNeutralRegionMarks = false,
   lastMove = null,
   precisionRevision,
 }: GoBoardProps) {
@@ -103,6 +107,7 @@ export function GoBoard({
       + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
+  const neutralRegionKeys = new Set(neutralRegionSeeds.map(({ x, y }) => `${x}:${y}`));
   const precisionContext = {
     boardSize,
     disabled,
@@ -392,13 +397,16 @@ export function GoBoard({
               const index = y * boardSize + x;
               const stone = boardState[y]?.[x] ?? null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
+              const markedNeutral = neutralRegionKeys.has(`${x}:${y}`);
               const stoneLabel = stone === "black" ? copy.blackStone : copy.whiteStone;
               const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
               const coordinate = goCoordinate(boardSize, x, y);
               const isLastMove = lastMove?.x === x && lastMove.y === y;
               const isPrecisionPreview = precisionPosition?.x === x && precisionPosition.y === y;
               const actionable =
-                !disabled && (interactionMode === "play" ? !stone : Boolean(stone));
+                !disabled && (interactionMode === "play"
+                  ? !stone
+                  : Boolean(stone) || allowNeutralRegionMarks);
               const moveFocus = (nextIndex: number) => {
                 setFocusIndex(nextIndex);
                 window.requestAnimationFrame(() => buttonRefs.current[nextIndex]?.focus());
@@ -418,7 +426,17 @@ export function GoBoard({
                           isLastMove && copy.lastMoveState,
                         )
                       : interactionMode === "mark-dead"
-                      ? formatBoardLabel(copy.emptyIntersectionLabel, { coordinate })
+                      ? joinBoardLabels(
+                          formatBoardLabel(
+                            markedNeutral
+                              ? copy.restoreNeutralRegionLabel
+                              : allowNeutralRegionMarks
+                                ? copy.markNeutralRegionLabel
+                                : copy.emptyIntersectionLabel,
+                            { coordinate },
+                          ),
+                          markedNeutral && copy.neutralRegionState,
+                        )
                       : stone
                       ? joinBoardLabels(
                           formatBoardLabel(copy.stoneIntersectionLabel, {
@@ -436,9 +454,9 @@ export function GoBoard({
                         )
                   }
                   aria-selected={interactionMode === "mark-dead"
-                    ? stone ? markedDead : undefined
+                    ? stone ? markedDead : markedNeutral || undefined
                     : isPrecisionPreview || undefined}
-                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""}`}
+                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${markedNeutral ? "is-neutral-region" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""}`}
                   key={`${x}-${y}`}
                   onClick={(event) => {
                     if (
@@ -492,6 +510,9 @@ export function GoBoard({
                     <span aria-hidden="true" className="dead-stone-mark">
                       ×
                     </span>
+                  ) : null}
+                  {markedNeutral ? (
+                    <span aria-hidden="true" className="neutral-region-mark">◇</span>
                   ) : null}
                   {isLastMove ? <span aria-hidden="true" className="last-move-mark" /> : null}
                 </button>

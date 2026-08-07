@@ -251,7 +251,7 @@ function validateRulesIdentity(value: unknown): JapaneseSettlementRulesIdentity 
   ) {
     return proposalError(
       "rules_identity_mismatch",
-      "The proposal does not match the inactive Japanese 1989 rules tuple.",
+      "The proposal does not match the active Japanese 1989 rules tuple.",
     );
   }
   return {

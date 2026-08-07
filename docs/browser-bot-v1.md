@@ -16,7 +16,7 @@ Botpartien dürfen `lib/katago/dispatch.ts`, Modal oder den KataGo-Container nic
 aufrufen. Der Browser berechnet den Vorschlag; der Server prüft weiterhin Zug,
 Ko, Uhr, Zugreihenfolge und gespeicherten Spielstand.
 
-## Japanische Endwertung
+## Japanische Endwertung und Partner-Adapter
 
 Der Worker liefert `GoStoneJapaneseSettlementProposal` mit:
 
@@ -28,10 +28,19 @@ Der Worker liefert `GoStoneJapaneseSettlementProposal` mit:
   widerspruchsfrei ausgewertet werden kann.
 
 Die Ausgabe hat immer `authority: "proposal-only"`. Für das japanische Rulebook
-muss der Code den Typ aus `lib/bot/modelV1.ts` verwenden und die abschließende
-Wertung mit `lib/game/japaneseScoring.ts` serverseitig neu berechnen. Niemals
-Ownership-Werte oder den Modellscore als Endergebnis speichern. Die Spieler
-müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
+muss der Adapter `lib/bot/browserJapaneseSettlementProvider.ts` den allgemeinen
+Vertrag `gostone-japanese-settlement-provider-v1` erfüllen. Er bindet jede
+Antwort an Game-ID, Board-Hash, Zugnummer und Scoring-Revision. Die abschließende
+Wertung wird mit `lib/game/japaneseScoring.ts` serverseitig neu berechnet. Niemals
+Ownership-Werte oder den Modellscore als Endergebnis speichern. Beide Spieler
+müssen dieselbe Revision bestätigen oder die Partie fortsetzen.
+
+Das Modell darf ersetzt werden, ohne Regeln, API oder Datenbank anzupassen: Das
+neue Artefakt wird im Worker geladen und ausschließlich im genannten Adapter in
+den allgemeinen Vorschlagsvertrag übersetzt. Ohne Modell entsteht sofort ein
+leerer manueller Vorschlag; Laden, Timeout oder ungültige Modellausgabe blockieren
+die Endwertung nicht. Das Modell entscheidet insbesondere nie ein Spiel nach
+Ablauf der Scoring-Frist.
 
 ## Training und Rating
 

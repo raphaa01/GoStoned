@@ -12,6 +12,7 @@ import {
   type GoStoneBotWorkerRequest,
   type GoStoneBotWorkerResponse,
   type GoStoneJapaneseSettlementProposal,
+  type GoStoneSettlementPosition,
   type GoStoneSettlementGroup,
 } from "@/lib/bot/modelV1";
 
@@ -225,7 +226,7 @@ function sigmoid(value: number): number {
 }
 
 function settlementProposal(
-  position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">,
+  position: GoStoneSettlementPosition,
   ownership: Float32Array,
   survival: Float32Array,
 ): GoStoneJapaneseSettlementProposal {
@@ -293,7 +294,10 @@ function settlementProposal(
     modelSha256: GOSTONE_BOT_MODEL.artifactSha256,
     authority: "proposal-only",
     boardSize: position.boardSize,
+    gameId: position.gameId,
+    stoppedBoardHash: position.stoppedBoardHash,
     stoppedMoveNumber: position.moves.length,
+    scoringRevision: position.scoringRevision,
     groups: proposedGroups.map((group) => ({
       ...group,
       status: group.stones.some((stone) => uncertain.has(positionKey(stone)))
