@@ -11,6 +11,10 @@ const migration = readFileSync(
   join(process.cwd(), "db", "migrations", "032_friend_system.sql"),
   "utf8",
 );
+const foreignKeyIndexes = readFileSync(
+  join(process.cwd(), "db", "migrations", "033_friend_system_foreign_key_indexes.sql"),
+  "utf8",
+);
 const rating = readFileSync(join(process.cwd(), "lib", "rating", "ratingFinalizer.ts"), "utf8");
 const service = readFileSync(join(process.cwd(), "lib", "friends", "friendService.ts"), "utf8");
 
@@ -26,6 +30,9 @@ test("schema and migration persist the complete friend-system contract", () => {
   }
   assert.match(schema, /friendly_game_rating_event_guard/);
   assert.match(migration, /friendly_game_rating_event_guard/);
+  assert.match(foreignKeyIndexes, /friend_messages\(sender_id\)/);
+  assert.match(foreignKeyIndexes, /friend_game_invites\(friendship_id\)/);
+  assert.match(foreignKeyIndexes, /friend_game_invites\(game_id\)/);
 });
 
 test("friendly games are unconditionally excluded before rating evidence is created", () => {

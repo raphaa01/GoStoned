@@ -554,6 +554,9 @@ CREATE INDEX IF NOT EXISTS friend_messages_unread
   ON friend_messages(friendship_id, sender_id, id)
   WHERE read_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS friend_messages_sender
+  ON friend_messages(sender_id);
+
 CREATE TABLE IF NOT EXISTS friend_game_invites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   friendship_id UUID NOT NULL REFERENCES friendships(id) ON DELETE CASCADE,
@@ -589,6 +592,13 @@ CREATE INDEX IF NOT EXISTS friend_game_invites_participant_activity
 
 CREATE INDEX IF NOT EXISTS friend_game_invites_inviter_activity
   ON friend_game_invites(inviter_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_friendship
+  ON friend_game_invites(friendship_id);
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_game
+  ON friend_game_invites(game_id)
+  WHERE game_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS player_blocks (
   blocker_key TEXT NOT NULL,
