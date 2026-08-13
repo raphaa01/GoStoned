@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +20,7 @@ from .generate import (
 from .model import GoStoneStudent, StudentConfig
 from .runtime import StopRequested
 from .settlement import propose_settlement, score_japanese
-from .train import MAX_MODEL_BYTES, split_training_archives, train_student
+from .train import MAX_MODEL_BYTES, _atomic_torch_save, split_training_archives, train_student
 
 
 def write_training_archive(path: Path, positions: int = 4) -> None:
@@ -62,6 +64,28 @@ class BoardEncodingTests(unittest.TestCase):
 
 
 class StudentModelTests(unittest.TestCase):
+    def test_atomic_checkpoint_retries_transient_windows_file_locks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "training-progress.pt"
+            real_replace = os.replace
+            attempts = 0
+
+            def intermittently_locked(source: Path, destination: Path) -> None:
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise PermissionError(13, "checkpoint is temporarily locked", str(destination))
+                real_replace(source, destination)
+
+            with (
+                mock.patch("training.gostone_bot.train.os.replace", side_effect=intermittently_locked),
+                mock.patch("training.gostone_bot.train.time.sleep"),
+            ):
+                _atomic_torch_save({"value": 42}, checkpoint)
+
+            self.assertEqual(attempts, 3)
+            self.assertEqual(torch.load(checkpoint, weights_only=True)["value"], 42)
+
     def test_whole_katago_games_are_held_out_for_quality_checks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -115,6 +139,49 @@ class StudentModelTests(unittest.TestCase):
             self.assertTrue(result.is_file())
             resumed = torch.load(output / "training-progress.pt", weights_only=True)
             self.assertEqual(resumed["completed_epochs"], 1)
+            self.assertEqual(resumed["completed_batches_in_epoch"], 0)
+
+    def test_resume_advances_a_fully_saved_epoch_without_dividing_by_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "sample.npz"
+            output = root / "output"
+            write_training_archive(data, 4)
+            train_student(
+                data=data,
+                output_dir=output,
+                epochs=1,
+                batch_size=2,
+                learning_rate=3e-4,
+                channels=8,
+                blocks=1,
+                seed=17,
+                resume=True,
+            )
+            checkpoint = output / "training-progress.pt"
+            saved = torch.load(checkpoint, weights_only=True)
+            saved.update(epoch_index=0, completed_epochs=0, completed_batches_in_epoch=2)
+            torch.save(saved, checkpoint)
+            completed: list[tuple[int, dict[str, float]]] = []
+
+            result = train_student(
+                data=data,
+                output_dir=output,
+                epochs=2,
+                batch_size=2,
+                learning_rate=3e-4,
+                channels=8,
+                blocks=1,
+                seed=17,
+                resume=True,
+                on_epoch=lambda epoch, _total, metrics: completed.append((epoch, metrics)),
+            )
+
+            self.assertTrue(result.is_file())
+            self.assertEqual(completed[0], (1, {}))
+            self.assertEqual(completed[1][0], 2)
+            resumed = torch.load(checkpoint, weights_only=True)
+            self.assertEqual(resumed["completed_epochs"], 2)
             self.assertEqual(resumed["completed_batches_in_epoch"], 0)
 
     def test_model_outputs_and_rank_profiles_fit_the_hard_limit(self) -> None:

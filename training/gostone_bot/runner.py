@@ -154,8 +154,8 @@ def run(run_dir: Path) -> None:
                 phase_progress=fraction,
                 overall_progress=_overall("training", fraction),
                 completed_epochs=epoch,
-                metrics=metrics,
                 message=f"Epoch {epoch}/{total} completed.",
+                **({"metrics": metrics} if metrics else {}),
             )
 
         def on_batch(epoch: int, total_epochs: int, batch: int, total_batches: int) -> None:

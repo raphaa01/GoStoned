@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import random
+import time
 from pathlib import Path
 from collections.abc import Sequence
 from typing import Callable
@@ -163,7 +164,14 @@ def _atomic_torch_save(value: object, path: Path) -> None:
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         torch.save(value, temporary)
-        temporary.replace(path)
+        for attempt in range(10):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(min(0.1 * (2**attempt), 1.0))
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -298,6 +306,27 @@ def train_student(
         totals = {key: 0.0 for key in ("loss", "policy", "value", "score", "ownership", "survival")}
         batches = 0
         total_batches = len(loader)
+        if epoch == start_epoch and start_batch >= total_batches:
+            _atomic_torch_save(
+                {
+                    "config": config.as_dict(),
+                    "state_dict": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch_index": epoch + 1,
+                    "completed_epochs": epoch + 1,
+                    "completed_batches_in_epoch": 0,
+                    "loss_weights": effective_weights,
+                },
+                progress_checkpoint,
+            )
+            print(
+                f"epoch {epoch + 1}/{epochs}: all {total_batches} batches were already saved; advancing",
+                flush=True,
+            )
+            if on_epoch:
+                on_epoch(epoch + 1, epochs, {})
+            start_batch = 0
+            continue
         for batch_index, batch in enumerate(loader):
             if epoch == start_epoch and batch_index < start_batch:
                 continue
