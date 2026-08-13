@@ -54,8 +54,9 @@ Pure questions, explanations, reviews, and other read-only tasks do not require 
 6. Create a clear, descriptive commit.
 7. Push the branch with `git push -u origin <branch-name>`.
 8. Create a draft pull request against `main` when GitHub access is available.
-9. Never merge the pull request automatically.
-10. Report the branch, commit, validation results, pull-request link, and any remaining problems.
+9. Merge a pull request only when the user explicitly requests that exact merge; never infer merge authorization from a general implementation or deployment request.
+10. Before merging, confirm that the pull request is mergeable, resolve failures caused by the current change, and report any known pre-existing or unrelated failing checks. Never bypass branch protection or force a merge unless the user explicitly requests that action after the risk has been reported.
+11. Report the branch, commit, validation results, pull-request link, merge result, and any remaining problems.
 
 ### Git safety
 
