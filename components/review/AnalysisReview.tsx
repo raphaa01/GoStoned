@@ -8,6 +8,12 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
+import {
+  fixedColorScoreLead,
+  fixedColorWinrates,
+  formatWinrate,
+  moveExplanation,
+} from "@/lib/analysis/presentation";
 import { replayMoves } from "@/lib/game/goEngine";
 import type { GameState } from "@/lib/game/types";
 import { AnalysisBoard } from "./AnalysisBoard";
@@ -54,6 +60,12 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const result = analysis?.result ?? null;
   const current = result?.moves[selectedMove - 1] ?? null;
   const board = useMemo(() => game ? replayMoves(game.boardSize, game.moves.slice(0, selectedMove)) : null, [game, selectedMove]);
+  const boardBefore = useMemo(
+    () => game ? replayMoves(game.boardSize, game.moves.slice(0, Math.max(0, selectedMove - 1))) : null,
+    [game, selectedMove],
+  );
+  const winrates = current ? fixedColorWinrates(current) : null;
+  const scoreLead = current ? fixedColorScoreLead(current) : null;
   if (loading || !user) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
   if (error && !game) return <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>;
   if (!game || !board) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
@@ -75,7 +87,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p>{copy.job} {analysis.id.slice(0, 8)}</p></section>
       ) : analysis.status === "failed" ? (
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
-      ) : current && result ? (
+      ) : current && result && boardBefore && winrates && scoreLead ? (
         <>
           <main className={styles.reviewMain}>
             <section className={styles.boardPanel}>
@@ -90,17 +102,32 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
 
             <aside className={styles.insightPanel}>
               <div className={`${styles.classification} ${styles[current.classification]}`}><Sparkles /><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
-              <p className={styles.explanation}>{current.explanation[locale]}</p>
+              <div className={styles.explanationBlock}>
+                <span>{copy.explanation}</span>
+                <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
+              </div>
               <div className={styles.metrics}>
-                <article><span>{copy.winChance}</span><strong>{Math.round(current.winrateAfter * 100)}%</strong><small>−{(current.winrateLoss * 100).toFixed(1)}%</small></article>
-                <article><span>{copy.score}</span><strong>{current.scoreLeadAfter > 0 ? "+" : ""}{current.scoreLeadAfter.toFixed(1)}</strong><small>−{current.scoreLoss.toFixed(1)}</small></article>
+                <article className={styles.winrateMetric}>
+                  <span>{copy.winChance}</span>
+                  <div className={styles.winrateValues}>
+                    <strong><i className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} {formatWinrate(winrates.black)}</strong>
+                    <strong><i className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} {formatWinrate(winrates.white)}</strong>
+                  </div>
+                  <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
+                  <small>{copy.winChanceNote}</small>
+                </article>
+                <article className={styles.scoreMetric}>
+                  <span>{copy.score}</span>
+                  <strong>{scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +{scoreLead.points.toFixed(1)}</strong>
+                  <small>{copy.afterMove.replaceAll("{move}", String(selectedMove))}</small>
+                </article>
               </div>
               <section className={styles.alternatives}>
                 <h2>{copy.alternatives}</h2>
                 {current.alternatives.map((alternative, index) => (
                   <article key={`${current.moveNumber}:${alternative.move}`}>
                     <span>{index + 1}</span><strong>{alternative.move}</strong>
-                    <div><b>{Math.round(alternative.winrate * 100)}%</b><small>{alternative.scoreLead > 0 ? "+" : ""}{alternative.scoreLead.toFixed(1)} · {alternative.visits} {copy.visits}</small></div>
+                    <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b><small>{alternative.scoreLead > 0 ? "+" : ""}{alternative.scoreLead.toFixed(1)} · {alternative.visits} {copy.visits}</small></div>
                   </article>
                 ))}
               </section>

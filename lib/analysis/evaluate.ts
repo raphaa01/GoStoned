@@ -8,6 +8,7 @@ import {
   type MoveAnalysis,
   type MoveClassification,
 } from "./types";
+import { normalizeWinrate } from "./presentation";
 
 export function classifyMove(winrateLoss: number, bestMove: boolean, uniqueness: number): MoveClassification {
   if (bestMove && winrateLoss <= 0.01 && uniqueness >= 0.08) return "brilliant";
@@ -100,18 +101,19 @@ export function buildGameAnalysis(
     const ranked = [...before.moveInfos].sort((a, b) => a.order - b.order);
     const best = ranked[0];
     const second = ranked[1];
-    const actualWinrate = moverPerspective(after.rootInfo.winrate, after.rootInfo.currentPlayer, played.color);
+    const actualWinrate = moverPerspective(normalizeWinrate(after.rootInfo.winrate), after.rootInfo.currentPlayer, played.color);
     const actualScore = moverScore(after.rootInfo.scoreLead, after.rootInfo.currentPlayer, played.color);
-    const loss = Math.max(0, best.winrate - actualWinrate);
+    const bestWinrate = normalizeWinrate(best.winrate);
+    const loss = Math.max(0, bestWinrate - actualWinrate);
     const scoreLoss = Math.max(0, best.scoreLead - actualScore);
-    const uniqueness = second ? Math.max(0, best.winrate - second.winrate) : 0;
+    const uniqueness = second ? Math.max(0, bestWinrate - normalizeWinrate(second.winrate)) : 0;
     const classification = classifyMove(loss, best.move.toLowerCase() === played.move.toLowerCase(), uniqueness);
     return {
       moveNumber: index + 1,
       color: played.color,
       playedMove: played.move,
       classification,
-      winrateBefore: before.rootInfo.winrate,
+      winrateBefore: normalizeWinrate(before.rootInfo.winrate),
       winrateAfter: actualWinrate,
       winrateLoss: loss,
       scoreLeadBefore: before.rootInfo.scoreLead,
@@ -120,7 +122,7 @@ export function buildGameAnalysis(
       bestMove: best.move,
       alternatives: ranked.slice(0, 3).map((candidate) => ({
         move: candidate.move,
-        winrate: candidate.winrate,
+        winrate: normalizeWinrate(candidate.winrate),
         scoreLead: candidate.scoreLead,
         visits: candidate.visits,
         pv: candidate.pv,
