@@ -20,6 +20,7 @@ type TerminalFinishReason =
 
 type TerminalGameRow = QueryResultRow & {
   id: string;
+  game_type: "matchmaking" | "friendly";
   status: "active" | "finished";
   black_player_key: string;
   white_player_key: string;
@@ -231,13 +232,24 @@ export async function finalizeGameRatings(
   gameId: string,
 ): Promise<RatingFinalizationResult> {
   const game = (await client.query<TerminalGameRow>(
-    `SELECT id,status,black_player_key,white_player_key,winner_key,
+    `SELECT id,game_type,status,black_player_key,white_player_key,winner_key,
             finish_reason,result,finished_at
        FROM games WHERE id=$1 FOR UPDATE`,
     [gameId],
   )).rows[0];
   if (!game) return conflict("The terminal game is missing during rating finalization.");
   const terminal = classifyTerminal(game);
+
+  if (game.game_type === "friendly") {
+    const friendlyEvidence = await client.query(
+      `SELECT 1 FROM game_glicko2_rating_events WHERE game_id=$1 LIMIT 1`,
+      [gameId],
+    );
+    if (friendlyEvidence.rowCount !== 0) {
+      return conflict("A friendly game must not contain rating evidence.");
+    }
+    return { rated: false, kind: "unrated" };
+  }
 
   const existing = await client.query<ExistingEventRow>(
     `SELECT player_key,outcome_kind,algorithm_version,opponent_kind

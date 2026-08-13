@@ -34,6 +34,8 @@ test("account onboarding returns only to protected account features", () => {
   assert.equal(safeAccountReturnPath("/fr/learn"), "/learn");
   assert.equal(safeAccountReturnPath("/profile"), "/profile");
   assert.equal(safeAccountReturnPath("/de/profile"), "/profile");
+  assert.equal(safeAccountReturnPath("/friends"), "/friends");
+  assert.equal(safeAccountReturnPath("/de/friends"), "/friends");
   assert.equal(safeAccountReturnPath("/review"), "/review");
   assert.equal(safeAccountReturnPath(`/ja/review/${gameId}`), `/review/${gameId}`);
   assert.equal(safeAccountReturnPath("/play"), null);

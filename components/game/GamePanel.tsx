@@ -7,6 +7,7 @@ import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
+import { getFriendsCopy } from "@/lib/i18n/friends";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { PlayerClock } from "./PlayerClock";
 
@@ -48,6 +49,7 @@ export function GamePanel({
 }: GamePanelProps) {
   const { dictionary, locale } = useI18n();
   const copy = dictionary.game;
+  const friendsCopy = getFriendsCopy(locale);
   const rulesSummary = localizedRulesSummary(game, dictionary);
   const [selectedGroupKey, setSelectedGroupKey] = useState("");
   const yourColor: Stone | null = game.blackPlayerKey === playerKey
@@ -113,6 +115,7 @@ export function GamePanel({
       <div className="game-meta-strip">
         <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
         <span>{dictionary.timeControls[game.timeControl].name}</span>
+        {game.gameType === "friendly" ? <span>{friendsCopy.friendlyGame}</span> : null}
         <span>{game.phase === "scoring" ? copy.scoring : `${copy.move} ${game.moveCount}`}</span>
       </div>
 

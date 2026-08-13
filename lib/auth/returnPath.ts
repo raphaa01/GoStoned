@@ -42,6 +42,7 @@ export function safeAccountReturnPath(
   if (!logicalPath) return null;
   return logicalPath === "/learn"
     || logicalPath === "/profile"
+    || logicalPath === "/friends"
     || logicalPath === "/review"
     || REVIEW_GAME_PATH.test(logicalPath)
     ? logicalPath

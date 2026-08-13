@@ -52,6 +52,7 @@ import type {
 
 type GameRow = {
   id: string;
+  game_type: "matchmaking" | "friendly";
   board_size: BoardSize;
   black_player_key: string;
   white_player_key: string;
@@ -766,7 +767,7 @@ async function loadGame(
   const execute = <T extends QueryResultRow>(text: string, values: readonly unknown[]) =>
     client ? client.query<T>(text, [...values]) : query<T>(text, values);
   const gameResult = await execute<GameRow>(
-    `SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
+    `SELECT g.id, g.game_type, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
             g.status, g.phase, g.to_move, g.consecutive_passes, g.scoring_revision,
             g.result, g.finish_reason, g.last_resume_claim, g.last_resume_by,
             g.last_resume_x, g.last_resume_y, g.komi, g.rules, g.rules_profile,
@@ -813,7 +814,8 @@ async function loadGame(
                   FALSE
                 ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
               )
-              ELSE g.black_player_key <> g.white_player_key
+              ELSE g.game_type <> 'friendly'
+                AND g.black_player_key <> g.white_player_key
                 AND (
                   (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                   OR (
@@ -1228,6 +1230,7 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     : null;
   return {
     id: game.id,
+    gameType: game.game_type,
     boardSize: game.board_size,
     blackPlayerKey: game.black_player_key,
     whitePlayerKey: game.white_player_key,

@@ -37,6 +37,7 @@ function clock(overrides: Partial<GameClockState> = {}): GameClockState {
 function gameState(): GameState {
   return {
     id: "game one",
+    gameType: "matchmaking",
     boardSize: 9,
     blackPlayerKey: "guest:black",
     whitePlayerKey: "guest:white",

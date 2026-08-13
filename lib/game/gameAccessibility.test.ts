@@ -8,6 +8,7 @@ import type { GameState } from "./types";
 function game(overrides: Partial<GameState> = {}): GameState {
   return {
     id: "game-1",
+    gameType: "matchmaking",
     boardSize: 9,
     blackPlayerKey: "black",
     whitePlayerKey: "white",

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, X } from "lucide-react";
+import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -10,6 +10,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingLabel } from "@/components/rating/RatingLabel";
+import { getFriendsCopy } from "@/lib/i18n/friends";
 import { isRouteActive } from "@/lib/i18n/routing";
 
 export function Navbar() {
@@ -17,6 +18,7 @@ export function Navbar() {
   const router = useRouter();
   const { user, logout, rating } = useAuth();
   const { dictionary, href, locale } = useI18n();
+  const friendsCopy = getFriendsCopy(locale);
   const [open, setOpen] = useState(false);
   const learnHref = useAccountFeatureHref("/learn");
   const reviewHref = useAccountFeatureHref("/review");
@@ -28,6 +30,7 @@ export function Navbar() {
     { destination: reviewHref, path: "/review", label: dictionary.nav.review, icon: Search },
     { destination: href("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
     { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
+    { destination: href("/friends"), path: "/friends", label: friendsCopy.nav, icon: Users },
     { destination: href(user ? "/profile" : "/login"), path: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
   ];
 

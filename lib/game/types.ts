@@ -37,6 +37,7 @@ export type StoredMove = {
 
 export type GameState = {
   id: string;
+  gameType: "matchmaking" | "friendly";
   boardSize: BoardSize;
   blackPlayerKey: string;
   whitePlayerKey: string;
