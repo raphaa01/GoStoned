@@ -5,10 +5,13 @@
 Für Botzüge und Vorschläge zur japanischen Endwertung ist ausschließlich
 `GOSTONE_BOT_MODEL` aus `lib/bot/modelV1.ts` maßgeblich. Das aktuelle Artefakt ist:
 
-- Modell: `public/bot-models/gostone-japanese-v1.onnx`
-- Version: `v1`
-- SHA-256: `bacd6e1cdb783278aadce51b1b6db8ab4848512a723d00a5f69de94ecc151a08`
+- Modell: `public/bot-models/gostone-japanese-v4.onnx`
+- Version: `v4`
+- SHA-256: `24252f2845699aeb1b2a42e461bab1197d13f322e68e964ea0ebd9b974ccef61`
 - Regeln/Training: Japanisch, Komi 6,5
+- Training: 72 KataGo-Partien, 10.603 Positionen und 30 Epochen
+- Qualität: 11,8 % besserer kombinierter Holdout-Wert als v3, keine gemessene
+  Regression eines Ausgabekopfs
 - Browserlaufzeit: `workers/browser/gostoneBot.worker.ts`
 - Servergrenze: `app/api/games/[gameId]/browser-bot/route.ts`
 
@@ -36,7 +39,7 @@ müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
 ## Training und Rating
 
 Der Strength-Kanal bildet nominal 600 bis 2100 Ratingpunkte ab. Das Artefakt ist
-versioniert; ein späteres Modell wird als `v2` neben `v1` veröffentlicht und
+versioniert; ein späteres Modell wird mit einer neuen Version neben v4 veröffentlicht und
 bekommt eine neue SHA-256-ID. Bereits begonnene Partien behalten ihre gebundene
 Modellversion. Nominale Stärken ersetzen keine Kalibrierungsliga: Ein Profil darf
 erst als gewerteter Gegner veröffentlicht werden, wenn die bestehenden

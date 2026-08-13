@@ -1,0 +1,42 @@
+{
+  "contractVersion": "gostone-browser-bot-v1",
+  "model": "GoStoneJapaneseStudent",
+  "displayName": "GoStone AI v4",
+  "version": "v4",
+  "artifact": "gostone-japanese-v4.onnx",
+  "sha256": "24252f2845699aeb1b2a42e461bab1197d13f322e68e964ea0ebd9b974ccef61",
+  "bytes": 6776540,
+  "rules": "japanese",
+  "komi": 6.5,
+  "training": {
+    "games": 72,
+    "positions": 10603,
+    "epochs": 30,
+    "baseModelVersion": "v3",
+    "qualityGateApproved": true,
+    "compositeHoldoutImprovement": 0.11800459329228147,
+    "validationGames": 14
+  },
+  "input": {
+    "name": "features",
+    "shape": [1, 12, 19, 19],
+    "strengthPlane": 7,
+    "strengthRange": [0, 1],
+    "nominalRatingRange": [600, 2100]
+  },
+  "outputs": {
+    "policy": "policy_logits",
+    "value": "value",
+    "score": "score",
+    "ownership": "ownership",
+    "survival": "survival_logits"
+  },
+  "settlement": {
+    "contractVersion": "gostone-japanese-settlement-v1",
+    "authority": "proposal-only",
+    "deadThreshold": 0.25,
+    "aliveThreshold": 0.75,
+    "neutralOwnershipThreshold": 0.35
+  },
+  "calibration": "Nominal strength targets require a completed calibration league before ratings are published."
+}
