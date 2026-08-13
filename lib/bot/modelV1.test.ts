@@ -7,10 +7,18 @@ import { pathToFileURL } from "node:url";
 import * as ort from "onnxruntime-web/wasm";
 import { botStrengthForRating, GOSTONE_BOT_MODEL } from "./modelV1";
 
-test("the published v1 artifact matches the immutable browser model contract", async () => {
-  const artifact = await readFile(join(process.cwd(), "public", "bot-models", "gostone-japanese-v1.onnx"));
+test("the published v4 artifact matches the immutable browser model contract", async () => {
+  const artifact = await readFile(join(process.cwd(), "public", "bot-models", "gostone-japanese-v4.onnx"));
+  const metadata = JSON.parse(await readFile(
+    join(process.cwd(), "public", "bot-models", "gostone-japanese-v4.json"),
+    "utf8",
+  )) as Record<string, unknown>;
   assert.equal(artifact.byteLength, GOSTONE_BOT_MODEL.artifactBytes);
   assert.equal(createHash("sha256").update(artifact).digest("hex"), GOSTONE_BOT_MODEL.artifactSha256);
+  assert.equal(metadata.version, GOSTONE_BOT_MODEL.modelVersion);
+  assert.equal(metadata.sha256, GOSTONE_BOT_MODEL.artifactSha256);
+  assert.equal(metadata.bytes, GOSTONE_BOT_MODEL.artifactBytes);
+  assert.equal((metadata.training as { qualityGateApproved?: unknown }).qualityGateApproved, true);
 });
 
 test("rating strength is bounded and monotonic across the trained range", () => {
@@ -21,13 +29,13 @@ test("rating strength is bounded and monotonic across the trained range", () => 
   assert.equal(botStrengthForRating(9_999), 1);
 });
 
-test("the v1 ONNX graph accepts the browser feature contract", async () => {
+test("the v4 ONNX graph accepts the browser feature contract", async () => {
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.wasmPaths = new URL(
     "./",
     pathToFileURL(join(process.cwd(), "node_modules", "onnxruntime-web", "dist", "placeholder")),
   ).href;
-  const artifact = await readFile(join(process.cwd(), "public", "bot-models", "gostone-japanese-v1.onnx"));
+  const artifact = await readFile(join(process.cwd(), "public", "bot-models", "gostone-japanese-v4.onnx"));
   const session = await ort.InferenceSession.create(artifact, { executionProviders: ["wasm"] });
   const features = new Float32Array(12 * 19 * 19);
   for (let y = 5; y < 14; y += 1) {

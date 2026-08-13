@@ -20,6 +20,9 @@ test("normal bot gameplay never dispatches KataGo or Modal work", async () => {
   }
   const matchmaking = await source("app", "api", "matchmaking", "route.ts");
   assert.match(matchmaking, /allowOnDemandBot:\s*true/);
+  const matchmakingService = await source("lib", "matchmaking", "matchmakingService.ts");
+  assert.match(matchmakingService, /CALIBRATED_BOT_FALLBACK_SECONDS\s*=\s*10/);
+  assert.match(matchmakingService, /GOSTONE_BOT_MODEL\.modelVersion/);
   assert.doesNotMatch(await source("workers", "katago", "index.ts"), /runBotLoop|activeBotGame/);
   assert.doesNotMatch(await source("workers", "katago", "once.ts"), /case\s+["']bot["']|runBotOnce/);
   assert.doesNotMatch(await source("modal_worker", "app.py"), /process_bot|["']bot["']\s*:/);
@@ -30,7 +33,7 @@ test("the Japanese rulebook handoff names the exact proposal-only model boundary
   const handoff = await source("docs", "browser-bot-v1.md");
   assert.match(agents, /GOSTONE_BOT_MODEL/);
   assert.match(agents, /proposal-only/);
-  assert.match(handoff, /gostone-japanese-v1\.onnx/);
+  assert.match(handoff, /gostone-japanese-v4\.onnx/);
   assert.match(handoff, /japaneseScoring\.ts/);
   assert.match(handoff, /Modal[\s\S]*nicht[\s\S]*aufrufen/);
 });

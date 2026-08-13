@@ -144,7 +144,9 @@ function chooseMove(position: GoStoneBotPosition, policy: Float32Array): GoStone
   const maximum = pool[0].logit;
   const weights = pool.map(({ logit }) => Math.exp((logit - maximum) / temperature));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
-  let cursor = deterministicUnit(`${position.gameId}:${position.gameVersion}:v1`) * total;
+  let cursor = deterministicUnit(
+    `${position.gameId}:${position.gameVersion}:${GOSTONE_BOT_MODEL.modelVersion}`,
+  ) * total;
   for (let index = 0; index < pool.length; index += 1) {
     cursor -= weights[index];
     if (cursor <= 0) return pool[index].move;
@@ -158,7 +160,7 @@ function numericOutput(
 ): Float32Array {
   const value = outputs[name];
   if (!value || !(value.data instanceof Float32Array)) {
-    throw new Error(`The GoStone v1 model output ${name} is missing.`);
+    throw new Error(`The GoStone ${GOSTONE_BOT_MODEL.modelVersion} model output ${name} is missing.`);
   }
   return value.data;
 }

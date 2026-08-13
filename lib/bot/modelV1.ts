@@ -4,10 +4,10 @@ import type { JapaneseTerritoryScore } from "@/lib/game/japaneseScoring";
 export const GOSTONE_BOT_MODEL = Object.freeze({
   contractVersion: "gostone-browser-bot-v1" as const,
   modelName: "GoStoneJapaneseStudent" as const,
-  modelVersion: "v1" as const,
-  artifactUrl: "/bot-models/gostone-japanese-v1.onnx" as const,
+  modelVersion: "v4" as const,
+  artifactUrl: "/bot-models/gostone-japanese-v4.onnx" as const,
   artifactBytes: 6_776_540,
-  artifactSha256: "bacd6e1cdb783278aadce51b1b6db8ab4848512a723d00a5f69de94ecc151a08" as const,
+  artifactSha256: "24252f2845699aeb1b2a42e461bab1197d13f322e68e964ea0ebd9b974ccef61" as const,
   runtimeBaseUrl: "/bot-runtime/ort-1.27.0/" as const,
   rules: "japanese" as const,
   komi: 6.5 as const,
