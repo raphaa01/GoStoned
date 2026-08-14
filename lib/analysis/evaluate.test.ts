@@ -50,3 +50,31 @@ test("compares a played move with KataGo alternatives from the mover perspective
   assert.match(result.moves[0].explanation.de, /C3 ist stärker als E5/);
   assert.equal(result.summary.inaccuracy, 1);
 });
+
+test("accepts legacy percentage-scaled KataGo winrates without producing 10000 percent", () => {
+  const input: AnalysisInput = {
+    contractVersion: 1,
+    gameId: "00000000-0000-4000-8000-000000000002",
+    gameVersion: 2,
+    boardSize: 9,
+    komi: 7.5,
+    rules: "chinese",
+    moves: [{ color: "black", move: "E5" }],
+  };
+  const turns: KataGoTurnResult[] = [
+    {
+      turnNumber: 0,
+      rootInfo: { currentPlayer: "B", visits: 50, winrate: 55, scoreLead: 1 },
+      moveInfos: [{ move: "C3", order: 0, visits: 50, winrate: 60, scoreLead: 2, pv: ["C3"] }],
+    },
+    {
+      turnNumber: 1,
+      rootInfo: { currentPlayer: "W", visits: 50, winrate: 52, scoreLead: 0 },
+      moveInfos: [{ move: "E5", order: 0, visits: 50, winrate: 52, scoreLead: 0, pv: ["E5"] }],
+    },
+  ];
+  const result = buildGameAnalysis(input, turns, { version: "test", model: "test", visitsPerTurn: 50 });
+  assert.equal(result.moves[0].winrateBefore, 0.55);
+  assert.equal(result.moves[0].winrateAfter, 0.48);
+  assert.equal(result.moves[0].alternatives[0].winrate, 0.6);
+});
