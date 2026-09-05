@@ -2159,7 +2159,7 @@ a {
 
 .result-modal {
   border-top: 4px solid var(--green);
-  max-width: 470px;
+  max-width: 420px;
   overflow: hidden;
 }
 
@@ -2177,7 +2177,7 @@ a {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 13px;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: 54px minmax(0, 1fr);
   padding: 22px 22px 20px;
 }
 
@@ -2336,6 +2336,35 @@ a {
   line-height: 1.45;
   margin: 7px 0 0;
   text-align: center;
+}
+
+.result-score-summary {
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: 1fr 1fr;
+  margin: 8px 20px 16px;
+  overflow: hidden;
+}
+
+.result-score-summary span {
+  align-items: center;
+  background: #302e2b;
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 13px;
+}
+
+.result-score-summary small {
+  color: var(--muted-2);
+  font-size: 10px;
+}
+
+.result-score-summary strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 .result-primary {
@@ -3944,7 +3973,7 @@ a {
 
   .result-modal-header {
     gap: 10px;
-    grid-template-columns: 46px minmax(0, 1fr) auto;
+    grid-template-columns: 46px minmax(0, 1fr);
     padding: 18px 15px;
   }
 

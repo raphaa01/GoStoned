@@ -4,7 +4,7 @@ test("keeps the primary homepage action visible and proportionally anchored", as
   await page.goto("/");
 
   const hero = page.locator(".home-hero");
-  const startPlay = page.getByRole("link", { name: "Start Play" });
+  const startPlay = page.getByRole("link", { name: "Start a game" });
 
   await expect(hero).toBeVisible();
   await expect(startPlay).toBeVisible();

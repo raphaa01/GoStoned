@@ -1008,7 +1008,7 @@ body {
 
 .chapter-stone,
 .lesson-stone,
-.review-key-move {
+.review-stone {
   border-radius: 50%;
   position: absolute;
   transform: translate(-50%, -50%);
@@ -1151,41 +1151,39 @@ body {
   z-index: 4;
 }
 
-.chapter-visual--review::after {
-  background: rgb(71 117 99 / .12);
-  border: 1px solid rgb(71 117 99 / .25);
-  content: "";
-  inset: 10% 10% 50% 50%;
+.review-stone {
+  height: 10%;
+  width: 10%;
+}
+
+.review-stone--black {
+  background: radial-gradient(circle at 31% 24%, #555a54, #151714 47%, #050605 80%);
+  box-shadow: 0 7px 12px rgb(48 35 19 / .24);
+}
+
+.review-stone--white {
+  background: radial-gradient(circle at 31% 24%, white, #f1eee7 56%, #bbb5aa);
+  box-shadow: 0 7px 12px rgb(48 35 19 / .18);
+}
+
+.review-stone--one { left: 40%; top: 40%; }
+.review-stone--two { left: 50%; top: 30%; }
+.review-stone--three { left: 60%; top: 40%; }
+.review-stone--four { left: 50%; top: 50%; }
+.review-stone--five { left: 40%; top: 50%; }
+.review-stone--six { left: 60%; top: 50%; }
+.review-stone--seven { left: 50%; top: 60%; }
+
+.review-stone--seven span {
+  align-items: center;
+  color: var(--color-ink);
+  display: flex;
+  font-size: clamp(10px, 1.15vw, 15px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  inset: 0;
+  justify-content: center;
   position: absolute;
-}
-
-.review-path {
-  border-radius: 999px;
-  height: 2px;
-  left: 20%;
-  position: absolute;
-  top: 62%;
-  transform-origin: left center;
-  width: 56%;
-}
-
-.review-path--played {
-  background: var(--color-ink);
-  transform: rotate(-20deg);
-}
-
-.review-path--alternative {
-  border-top: 2px dashed var(--color-oxide);
-  transform: rotate(14deg);
-}
-
-.review-key-move {
-  background: var(--color-oxide);
-  box-shadow: 0 0 0 7px rgb(255 253 249 / .78);
-  height: 5%;
-  left: 20%;
-  top: 60%;
-  width: 5%;
 }
 
 .platform-status {
@@ -2383,6 +2381,19 @@ body {
 .result-facts span,
 .result-score-details {
   background: var(--color-canvas-deep);
+}
+
+.result-score-summary {
+  background: var(--color-line);
+  border-color: var(--color-line);
+}
+
+.result-score-summary span {
+  background: var(--color-surface-raised);
+}
+
+.result-score-summary small {
+  color: var(--color-text-muted);
 }
 
 .result-player-list > div.is-winner {
