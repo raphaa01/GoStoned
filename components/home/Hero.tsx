@@ -172,9 +172,15 @@ export function Hero() {
 
         <section className="home-chapter home-chapter--review" aria-labelledby="home-review-title">
           <div className="chapter-visual chapter-visual--review" aria-hidden="true">
-            <span className="review-path review-path--played" />
-            <span className="review-path review-path--alternative" />
-            <span className="review-key-move" />
+            <span className="review-stone review-stone--black review-stone--one" />
+            <span className="review-stone review-stone--black review-stone--two" />
+            <span className="review-stone review-stone--black review-stone--three" />
+            <span className="review-stone review-stone--black review-stone--four" />
+            <span className="review-stone review-stone--white review-stone--five" />
+            <span className="review-stone review-stone--white review-stone--six" />
+            <span className="review-stone review-stone--white review-stone--seven">
+              <span>42</span>
+            </span>
           </div>
           <div className="chapter-copy">
             <span className="section-kicker">{copy.reviewChapterKicker}</span>

@@ -6,7 +6,6 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
 import type { GameState } from "@/lib/game/types";
 import { localizedGameResult } from "@/lib/game/gameAccessibility";
-import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 
 type GameResultModalProps = {
@@ -30,7 +29,6 @@ export function GameResultModal({
 }: GameResultModalProps) {
   const { dictionary, locale } = useI18n();
   const copy = dictionary.game;
-  const rulesSummary = localizedRulesSummary(game, dictionary);
   const titleId = useId();
   const descriptionId = useId();
   const playAgainButton = useRef<HTMLButtonElement>(null);
@@ -55,14 +53,6 @@ export function GameResultModal({
   const won = game.winnerKey === playerKey;
   const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
   const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
-  const deadCounts = (game.scoring?.deadStones ?? []).reduce(
-    (counts, { x, y }) => {
-      const color = game.board[y]?.[x];
-      if (color) counts[color] += 1;
-      return counts;
-    },
-    { black: 0, white: 0 },
-  );
 
   return (
     <ModalDialog
@@ -80,13 +70,8 @@ export function GameResultModal({
           <div>
             <span className="result-modal-kicker">{copy.complete}</span>
             <h2 id={titleId}>{outcome}</h2>
-            <p id={descriptionId}>
-              {localizedGameResult(game.result, copy)} {game.rated
-                ? copy.ratedResultSaved
-                : copy.unratedResultSaved}
-            </p>
+            <p id={descriptionId}>{localizedGameResult(game.result, copy)}</p>
           </div>
-          <strong className="result-code">{game.result ?? copy.draw}</strong>
         </div>
 
         <div className="result-player-list">
@@ -120,32 +105,10 @@ export function GameResultModal({
           </p>
         ) : null}
 
-        <div className="result-facts">
-          <span><small>{copy.board}</small><strong>{game.boardSize}×{game.boardSize}</strong></span>
-          <span><small>{copy.moves}</small><strong>{game.moveCount}</strong></span>
-          <span><small>{copy.clock}</small><strong>{dictionary.timeControls[game.timeControl].name}</strong></span>
-        </div>
-
         {game.finishReason === "score" && game.scoring ? (
-          <section className="result-score-details" aria-label={copy.agreedDetails}>
-            <div>
-              <span><small>{copy.blackTotal}</small><strong>{game.scoring.preview.black}</strong></span>
-              <span><small>{copy.whiteTotal}</small><strong>{game.scoring.preview.white}</strong></span>
-            </div>
-            <div>
-              <span>
-                <small>{copy.blackStonesTerritory}</small>
-                <strong>{game.scoring.preview.blackStones} · {game.scoring.preview.blackTerritory}</strong>
-              </span>
-              <span>
-                <small>{copy.whiteStonesTerritory}</small>
-                <strong>{game.scoring.preview.whiteStones} · {game.scoring.preview.whiteTerritory}</strong>
-              </span>
-            </div>
-            <p>
-              {rulesSummary} · {copy.neutral.toLocaleLowerCase()} {game.scoring.preview.neutralPoints}, {copy.sharedEqually}
-              {" · "}{copy.dead.toLocaleLowerCase()}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
-            </p>
+          <section className="result-score-summary" aria-label={copy.agreedDetails}>
+            <span><small>{copy.black}</small><strong>{game.scoring.preview.black}</strong></span>
+            <span><small>{copy.white}</small><strong>{game.scoring.preview.white}</strong></span>
           </section>
         ) : null}
 

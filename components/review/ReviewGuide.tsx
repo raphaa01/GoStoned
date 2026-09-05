@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BrainCircuit, Gamepad2, Sparkles } from "lucide-react";
+import { ArrowRight, Gamepad2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -38,15 +38,10 @@ export function ReviewGuide() {
   return (
     <div className={styles.hub}>
       <header className={styles.hero}>
-        <span className="section-kicker"><Sparkles size={15} /> {copy.kicker}</span>
+        <span className="section-kicker">{copy.kicker}</span>
         <h1>{copy.title}</h1>
         <p>{copy.description}</p>
       </header>
-
-      <section className={styles.trustGrid}>
-        <article><BrainCircuit /><div><strong>{copy.engine}</strong><p>{copy.engineBody}</p></div></article>
-        <article><Sparkles /><div><strong>{copy.labels}</strong><p>{copy.labelsBody}</p></div></article>
-      </section>
 
       {user ? (
         <section className={styles.gamePicker} aria-labelledby="review-games-title">
