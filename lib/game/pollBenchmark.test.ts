@@ -42,6 +42,7 @@ test("classifies every exact poll SQL fingerprint and rejects near misses", () =
     ({ statement, locking }) => statement === "game_read" && !locking,
   )!.sql;
   assert.ok(gameRead.includes("'Guest '"));
+  assert.ok(gameRead.includes("g.game_type <> 'friendly'"));
   assert.throws(
     () => classifyPollQuery(gameRead.replace("'Guest '", "'guest '")),
     /unclassified query/,

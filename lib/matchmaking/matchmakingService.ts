@@ -478,6 +478,10 @@ export async function joinMatchmaking(
       [`matchmaking-pool:v1:${boardSize}:${timeControlId}:${rules.rulesProfile}`],
     );
     await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`active-game-player:v1:${playerKey}`],
+    );
+    await client.query(
       `WITH stale_waiting AS MATERIALIZED (
          SELECT queued.player_key
            FROM matchmaking_queue AS queued

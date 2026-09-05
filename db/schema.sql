@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS games (
   white_player_key TEXT NOT NULL,
   winner_key TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'finished')),
+  game_type TEXT NOT NULL DEFAULT 'matchmaking'
+    CHECK (game_type IN ('matchmaking', 'friendly')),
   result TEXT,
   komi NUMERIC(4,1) NOT NULL DEFAULT 7.5,
   rules TEXT NOT NULL DEFAULT 'chinese',
@@ -506,6 +508,98 @@ CREATE TABLE IF NOT EXISTS game_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS friendships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  addressee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  responded_at TIMESTAMPTZ,
+  CHECK (requester_id <> addressee_id),
+  CHECK (updated_at >= created_at),
+  CHECK (
+    (status = 'pending' AND responded_at IS NULL)
+    OR (status = 'accepted' AND responded_at IS NOT NULL)
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS friendships_unique_pair
+  ON friendships (
+    LEAST(requester_id::text, addressee_id::text),
+    GREATEST(requester_id::text, addressee_id::text)
+  );
+
+CREATE INDEX IF NOT EXISTS friendships_addressee_pending
+  ON friendships(addressee_id, created_at DESC)
+  WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS friendships_requester_status
+  ON friendships(requester_id, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS friend_messages (
+  id BIGSERIAL PRIMARY KEY,
+  friendship_id UUID NOT NULL REFERENCES friendships(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL CHECK (CHAR_LENGTH(BTRIM(message)) BETWEEN 1 AND 500),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  read_at TIMESTAMPTZ,
+  CHECK (read_at IS NULL OR read_at >= created_at)
+);
+
+CREATE INDEX IF NOT EXISTS friend_messages_conversation
+  ON friend_messages(friendship_id, id DESC);
+
+CREATE INDEX IF NOT EXISTS friend_messages_unread
+  ON friend_messages(friendship_id, sender_id, id)
+  WHERE read_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS friend_messages_sender
+  ON friend_messages(sender_id);
+
+CREATE TABLE IF NOT EXISTS friend_game_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  friendship_id UUID NOT NULL REFERENCES friendships(id) ON DELETE CASCADE,
+  inviter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  invitee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
+  time_control TEXT NOT NULL CHECK (time_control IN ('blitz', 'rapid', 'classic')),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'declined', 'cancelled', 'expired')),
+  game_id UUID REFERENCES games(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  responded_at TIMESTAMPTZ,
+  CHECK (inviter_id <> invitee_id),
+  CHECK (expires_at > created_at),
+  CHECK (
+    (status = 'pending' AND responded_at IS NULL AND game_id IS NULL)
+    OR (status = 'accepted' AND responded_at IS NOT NULL AND game_id IS NOT NULL)
+    OR (status IN ('declined', 'cancelled', 'expired')
+        AND responded_at IS NOT NULL AND game_id IS NULL)
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS friend_game_invites_one_pending_pair
+  ON friend_game_invites(
+    LEAST(inviter_id::TEXT, invitee_id::TEXT),
+    GREATEST(inviter_id::TEXT, invitee_id::TEXT)
+  )
+  WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_participant_activity
+  ON friend_game_invites(invitee_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_inviter_activity
+  ON friend_game_invites(inviter_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_friendship
+  ON friend_game_invites(friendship_id);
+
+CREATE INDEX IF NOT EXISTS friend_game_invites_game
+  ON friend_game_invites(game_id)
+  WHERE game_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS player_blocks (
   blocker_key TEXT NOT NULL,
   blocked_key TEXT NOT NULL,
@@ -573,8 +667,23 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS white_periods_remaining INT NOT NULL 
 ALTER TABLE games ADD COLUMN IF NOT EXISTS turn_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE games ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 0;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE games ADD COLUMN IF NOT EXISTS game_type TEXT NOT NULL DEFAULT 'matchmaking';
 ALTER TABLE games ALTER COLUMN komi SET DEFAULT 7.5;
 ALTER TABLE moves ADD COLUMN IF NOT EXISTS board_hash TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'games_game_type_check'
+       AND conrelid = 'public.games'::regclass
+  ) THEN
+    ALTER TABLE games
+      ADD CONSTRAINT games_game_type_check
+      CHECK (game_type IN ('matchmaking', 'friendly'));
+  END IF;
+END
+$$;
 
 DO $$
 BEGIN
@@ -1410,6 +1519,9 @@ ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE guest_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friend_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friend_game_invites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_scoring_state ENABLE ROW LEVEL SECURITY;
@@ -1424,24 +1536,30 @@ REVOKE ALL ON player_blocks FROM PUBLIC;
 REVOKE ALL ON player_reports FROM PUBLIC;
 REVOKE ALL ON auth_identities FROM PUBLIC;
 REVOKE ALL ON oauth_registration_intents FROM PUBLIC;
+REVOKE ALL ON friendships, friend_messages, friend_game_invites FROM PUBLIC;
+REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
+      friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
       game_japanese_scoring_state,
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM anon;
+    REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
+      friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,
       game_scoring_state, game_dead_stones, game_scoring_resume_events,
       game_japanese_scoring_state,
       game_japanese_dead_stones, game_japanese_neutral_region_seeds FROM authenticated;
+    REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM authenticated;
   END IF;
 END
 $$;
@@ -1451,6 +1569,39 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
     GRANT SELECT, INSERT, UPDATE ON auth_identities TO gostone_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_registration_intents TO gostone_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE
+      ON friendships, friend_messages, friend_game_invites TO gostone_app;
+    GRANT USAGE, SELECT ON SEQUENCE friend_messages_id_seq TO gostone_app;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'friendships'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON friendships
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'friend_messages'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON friend_messages
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'friend_game_invites'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON friend_game_invites
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
 
     IF NOT EXISTS (
       SELECT 1 FROM pg_catalog.pg_policies
@@ -3125,3 +3276,23 @@ BEGIN
   END IF;
 END
 $browser_bot_access$;
+
+-- Friendly games are deliberately outside every rating pool. Keep that
+-- invariant at the database boundary as well as in the finalizer.
+CREATE OR REPLACE FUNCTION public.reject_friendly_game_rating_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.games WHERE id=NEW.game_id AND game_type='friendly') THEN
+    RAISE EXCEPTION 'Friendly games cannot produce rating evidence.' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS friendly_game_rating_event_guard ON game_glicko2_rating_events;
+CREATE TRIGGER friendly_game_rating_event_guard
+  BEFORE INSERT ON game_glicko2_rating_events
+  FOR EACH ROW EXECUTE FUNCTION public.reject_friendly_game_rating_event();

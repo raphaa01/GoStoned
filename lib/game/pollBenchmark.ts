@@ -166,7 +166,7 @@ const PARTICIPANT_READ_SQL = `
 `;
 
 const GAME_READ_SQL = `
-  SELECT g.id, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
+  SELECT g.id, g.game_type, g.board_size, g.black_player_key, g.white_player_key, g.winner_key,
          g.status, g.phase, g.to_move, g.consecutive_passes, g.scoring_revision,
          g.result, g.finish_reason, g.last_resume_claim, g.last_resume_by,
          g.last_resume_x, g.last_resume_y, g.komi, g.rules, g.rules_profile,
@@ -213,7 +213,8 @@ const GAME_READ_SQL = `
                FALSE
              ) FROM game_glicko2_rating_events event WHERE event.game_id = g.id
            )
-           ELSE g.black_player_key <> g.white_player_key
+           ELSE g.game_type <> 'friendly'
+             AND g.black_player_key <> g.white_player_key
              AND (
                (black_user.id IS NOT NULL AND white_user.id IS NOT NULL)
                OR (
@@ -280,7 +281,7 @@ const DEAD_STONES_READ_SQL = `
 `;
 
 const RATING_GAME_READ_SQL = `
-  SELECT id,status,black_player_key,white_player_key,winner_key,
+  SELECT id,game_type,status,black_player_key,white_player_key,winner_key,
          finish_reason,result,finished_at
     FROM games WHERE id=$1 FOR UPDATE
 `;

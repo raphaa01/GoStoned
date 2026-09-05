@@ -30,6 +30,7 @@ class FakeRatingDatabase {
   finishReason = "resignation";
   result = "B+R";
   winnerKey: string | null = blackKey;
+  gameType: "matchmaking" | "friendly" = "matchmaking";
   calibratedBot = false;
   private lockTail = Promise.resolve();
 
@@ -44,6 +45,7 @@ class FakeRatingDatabase {
           return {
             rows: [{
               id: gameId,
+              game_type: this.gameType,
               status: "finished",
               black_player_key: blackKey,
               white_player_key: whiteKey,
@@ -65,6 +67,9 @@ class FakeRatingDatabase {
             })),
             rowCount: this.events.length,
           };
+        }
+        if (sql.includes("FROM game_glicko2_rating_events") && sql.includes("LIMIT 1")) {
+          return { rows: this.events.length ? [{}] : [], rowCount: this.events.length ? 1 : 0 };
         }
         if (sql.includes("AS player_key") && sql.includes("FROM users")) {
           const rows = [blackKey, whiteKey]
@@ -177,6 +182,37 @@ test("guest games remain unrated and cannot create global state or evidence", as
 
   assert.deepEqual(await database.run(), { rated: false, kind: "unrated" });
   assert.equal(database.events.length, 0);
+  assert.equal(database.updateCount, 0);
+});
+
+test("friendly games between registered accounts never create rating state or evidence", async () => {
+  const database = new FakeRatingDatabase();
+  database.gameType = "friendly";
+
+  assert.deepEqual(await database.run(), { rated: false, kind: "unrated" });
+  assert.equal(database.events.length, 0);
+  assert.equal(database.updateCount, 0);
+  assert.equal(database.states.get(blackKey)?.count, 0);
+  assert.equal(database.states.get(whiteKey)?.count, 0);
+});
+
+test("friendly games fail closed if rating evidence somehow already exists", async () => {
+  const database = new FakeRatingDatabase();
+  database.gameType = "friendly";
+  database.events.push({
+    sql: "",
+    player_key: blackKey,
+    outcome_kind: "win",
+    algorithm_version: "glicko2-v1-tau-0.5",
+    opponent_kind: "registered_human",
+    values: [],
+  });
+
+  await assert.rejects(database.run(), (error: unknown) => {
+    assert.ok(error instanceof GameServiceError);
+    assert.equal(error.code, "rating_history_conflict");
+    return true;
+  });
   assert.equal(database.updateCount, 0);
 });
 

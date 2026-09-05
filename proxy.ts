@@ -26,6 +26,7 @@ export const config = {
     "/login/:path*",
     "/register/:path*",
     "/profile/:path*",
+    "/friends/:path*",
     "/impressum/:path*",
     "/game/:path*",
   ],

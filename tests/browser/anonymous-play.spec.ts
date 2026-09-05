@@ -229,6 +229,7 @@ function seededGame(): GameState {
 function createGame(scenario: GameScenario = "empty"): GameState {
   const game: GameState = {
     id: GAME_ID,
+    gameType: "matchmaking",
     boardSize: 19,
     blackPlayerKey: PLAYER_KEY,
     whitePlayerKey: OPPONENT_KEY,

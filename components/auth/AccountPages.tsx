@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { FriendsHub } from "@/components/friends/FriendsHub";
 import { LearningGuide } from "@/components/learn/LearningGuide";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { AnalysisReview } from "@/components/review/AnalysisReview";
@@ -10,6 +11,11 @@ import type { Locale } from "@/lib/i18n/config";
 export async function AccountProfilePage({ locale }: { locale: Locale }) {
   await requireAccountPage("/profile", locale);
   return <AppShell><ProfileView /></AppShell>;
+}
+
+export async function AccountFriendsPage({ locale }: { locale: Locale }) {
+  await requireAccountPage("/friends", locale);
+  return <AppShell><FriendsHub /></AppShell>;
 }
 
 export async function AccountLearnPage({ locale }: { locale: Locale }) {
