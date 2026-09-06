@@ -17,6 +17,7 @@ import {
 import {
   ADAPTIVE_MATCH_POLICY_VERSION,
   evaluateAdaptiveMatch,
+  humanOpponentPreferredOverBot,
   rankAdaptiveMatchCandidates,
   type AdaptiveMatchEntry,
   type MatchPool,
@@ -709,6 +710,10 @@ export async function joinMatchmaking(
                 )
                 + LEAST(200::numeric,
                     0.35 * (q.rating_deviation_snapshot + $8::numeric))
+              OR (
+                $10::timestamptz IS NOT NULL
+                AND $10::timestamptz <= statement_timestamp()
+              )
             )
           ORDER BY q.created_at, q.player_key
           LIMIT 8
@@ -719,6 +724,7 @@ export async function joinMatchmaking(
           requester.rating_snapshot ?? 0,
           requester.rating_deviation_snapshot ?? 350,
           requester.created_at,
+          requester.bot_fallback_not_before ?? null,
         ],
       );
     const evaluationNowMs = opponentResult.rows[0]?.evaluation_now?.getTime()
@@ -729,8 +735,10 @@ export async function joinMatchmaking(
       opponentResult.rows.map(adaptiveEntry),
       () => ({ nowMs: evaluationNowMs, blockedEitherDirection: false }),
     );
+    const botFallbackReady = requester.bot_fallback_not_before instanceof Date
+      && requester.bot_fallback_not_before.getTime() <= evaluationNowMs;
     for (const rankedCandidate of ranked) {
-      if (!rankedCandidate.evaluation.eligible) continue;
+      if (!humanOpponentPreferredOverBot(rankedCandidate.evaluation, botFallbackReady)) continue;
       const candidate = opponentResult.rows.find(
         (row) => row.player_key === rankedCandidate.candidate.playerKey,
       );
@@ -743,7 +751,7 @@ export async function joinMatchmaking(
         adaptiveEntry(requester), adaptiveEntry(candidate),
         { nowMs: evaluationNowMs, blockedEitherDirection: false },
       );
-      if (!finalEvaluation.eligible) continue;
+      if (!humanOpponentPreferredOverBot(finalEvaluation, botFallbackReady)) continue;
       opponent = candidate;
       break;
     }

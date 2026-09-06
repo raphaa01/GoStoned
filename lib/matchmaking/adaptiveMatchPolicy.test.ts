@@ -4,6 +4,7 @@ import {
   ADAPTIVE_MATCH_POLICY_VERSION,
   evaluateAdaptiveMatch,
   rankAdaptiveMatchCandidates,
+  humanOpponentPreferredOverBot,
   type AdaptiveMatchEntry,
   type ExactMatchConfiguration,
   type RegisteredMatchEntry,
@@ -225,6 +226,43 @@ test("candidate ranking is deterministic and keeps ineligible candidates last", 
     "user:blocked",
   ]);
   assert.equal(Object.isFrozen(ranked), true);
+});
+
+test("an exact-settings human is preferred over a bot across every board and clock", async (t) => {
+  for (const boardSize of [9, 13, 19] as const) {
+    for (const timeControl of ["blitz", "rapid", "classic"] as const) {
+      await t.test(`${boardSize}x${boardSize} ${timeControl}`, () => {
+        const exactConfiguration = { ...configuration, boardSize, timeControl };
+        const evaluation = evaluateAdaptiveMatch(
+          registered("user:lower", {
+            configuration: exactConfiguration,
+            globalRating: 600,
+            ratingDeviation: 80,
+            waitingSinceMs: now - 10_000,
+          }),
+          registered("user:higher", {
+            configuration: exactConfiguration,
+            globalRating: 2100,
+            ratingDeviation: 80,
+            waitingSinceMs: now - 10_000,
+          }),
+          { nowMs: now, blockedEitherDirection: false },
+        );
+
+        assert.deepEqual(evaluation.reasons, ["rating-window"]);
+        assert.equal(humanOpponentPreferredOverBot(evaluation, false), false);
+        assert.equal(humanOpponentPreferredOverBot(evaluation, true), true);
+      });
+    }
+  }
+
+  const blocked = evaluateAdaptiveMatch(
+    registered("user:lower", { globalRating: 600, waitingSinceMs: now - 10_000 }),
+    registered("user:higher", { globalRating: 2100, waitingSinceMs: now - 10_000 }),
+    { nowMs: now, blockedEitherDirection: true },
+  );
+  assert.deepEqual(blocked.reasons, ["blocked", "rating-window"]);
+  assert.equal(humanOpponentPreferredOverBot(blocked, true), false);
 });
 
 test("invalid temporal, rating, uncertainty, and latency inputs fail closed", () => {
