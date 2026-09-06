@@ -76,6 +76,16 @@ export type AdaptiveMatchEvaluation = Readonly<{
   recommendedGame: "even" | "verified-handicap-review";
 }>;
 
+export function humanOpponentPreferredOverBot(
+  evaluation: AdaptiveMatchEvaluation,
+  botFallbackReady: boolean,
+): boolean {
+  if (evaluation.eligible) return true;
+  return botFallbackReady
+    && evaluation.reasons.length === 1
+    && evaluation.reasons[0] === "rating-window";
+}
+
 export type AdaptiveMatchContext = Readonly<{
   nowMs: number;
   blockedEitherDirection: boolean;
