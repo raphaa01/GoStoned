@@ -109,7 +109,59 @@ type CancellationOptions = {
 };
 
 const CALIBRATED_BOT_FALLBACK_SECONDS = 10;
+const GUEST_BROWSER_BOT_RATING = 1200;
+const GUEST_BROWSER_BOT_RATING_DEVIATION = 350;
 const MATCH_RULES_VERSION = DEFAULT_MATCH_RULES.rulesProfile;
+
+export function isBrowserBotFallbackReady(input: {
+  allowOnDemandBot: boolean;
+  status: "waiting" | "matched";
+  matchPool?: MatchPool;
+  ratingSnapshot?: unknown;
+  ratingDeviationSnapshot?: unknown;
+  fallbackNotBefore?: Date | null;
+  now?: Date;
+}): boolean {
+  const supportedPool = input.matchPool === "registered-rated"
+    || input.matchPool === "guest-unrated";
+  const registeredRatingIsValid = input.matchPool !== "registered-rated"
+    || (
+      Number.isFinite(Number(input.ratingSnapshot))
+      && Number.isFinite(Number(input.ratingDeviationSnapshot))
+      && input.ratingSnapshot !== null
+      && input.ratingSnapshot !== undefined
+      && input.ratingDeviationSnapshot !== null
+      && input.ratingDeviationSnapshot !== undefined
+    );
+  return input.allowOnDemandBot
+    && input.status === "waiting"
+    && supportedPool
+    && registeredRatingIsValid
+    && input.fallbackNotBefore instanceof Date
+    && input.now instanceof Date
+    && input.fallbackNotBefore <= input.now;
+}
+
+export function browserBotTargetForQueue(input: {
+  ratingSnapshot?: unknown;
+  ratingDeviationSnapshot?: unknown;
+}): { rating: number; ratingDeviation: number } {
+  const parsedRating = input.ratingSnapshot === null || input.ratingSnapshot === undefined
+    ? GUEST_BROWSER_BOT_RATING
+    : Number(input.ratingSnapshot);
+  const parsedRatingDeviation = input.ratingDeviationSnapshot === null
+    || input.ratingDeviationSnapshot === undefined
+    ? GUEST_BROWSER_BOT_RATING_DEVIATION
+    : Number(input.ratingDeviationSnapshot);
+  const rating = Number.isFinite(parsedRating) ? parsedRating : GUEST_BROWSER_BOT_RATING;
+  const ratingDeviation = Number.isFinite(parsedRatingDeviation)
+    ? parsedRatingDeviation
+    : GUEST_BROWSER_BOT_RATING_DEVIATION;
+  return {
+    rating: Math.max(600, Math.min(2_100, Math.round(rating))),
+    ratingDeviation: Math.max(80, Math.min(350, Math.round(ratingDeviation))),
+  };
+}
 
 async function matchWaitingPlayerWithBrowserBot(
   client: PoolClient,
@@ -125,11 +177,12 @@ async function matchWaitingPlayerWithBrowserBot(
     || requester.handicap_snapshot !== rules.handicap
   ) throw new Error("The queued rules snapshot changed before browser bot matching.");
   const timeControl = getTimeControl(requester.time_control);
-  const targetRating = Math.max(600, Math.min(2_100, Math.round(Number(requester.rating_snapshot))));
-  const targetDeviation = Math.max(
-    80,
-    Math.min(350, Math.round(Number(requester.rating_deviation_snapshot))),
-  );
+  const target = browserBotTargetForQueue({
+    ratingSnapshot: requester.rating_snapshot,
+    ratingDeviationSnapshot: requester.rating_deviation_snapshot,
+  });
+  const targetRating = target.rating;
+  const targetDeviation = target.ratingDeviation;
   const identitySeed = `${requester.player_key}:${requester.created_at.toISOString()}:${GOSTONE_BOT_MODEL.modelVersion}`;
   const botPlayerKey = `bot:${randomUUID()}`;
   const botIsBlack = deterministicUnit(`${identitySeed}:color`) < 0.5;
@@ -171,8 +224,8 @@ async function matchWaitingPlayerWithBrowserBot(
     `UPDATE matchmaking_queue
         SET status='matched',game_id=$1,updated_at=NOW()
       WHERE player_key=$2 AND status='waiting' AND game_id IS NULL
-        AND matchmaking_policy_version=$3 AND match_pool='registered-rated'`,
-    [gameId, requester.player_key, ADAPTIVE_MATCH_POLICY_VERSION],
+        AND matchmaking_policy_version=$3 AND match_pool=$4`,
+    [gameId, requester.player_key, ADAPTIVE_MATCH_POLICY_VERSION, requester.match_pool],
   );
   if (publication.rowCount !== 1) {
     throw new Error("Matchmaking changed before the browser bot game could be published.");
@@ -314,18 +367,15 @@ async function matchWaitingPlayerWithCalibratedBot(
   allowOnDemandBot: boolean,
 ): Promise<MatchmakingStatus | null> {
   const now = requester.evaluation_now;
-  if (
-    !allowOnDemandBot
-    || requester.status !== "waiting"
-    || requester.match_pool !== "registered-rated"
-    || requester.rating_snapshot === null
-    || requester.rating_snapshot === undefined
-    || requester.rating_deviation_snapshot === null
-    || requester.rating_deviation_snapshot === undefined
-    || !(requester.bot_fallback_not_before instanceof Date)
-    || !(now instanceof Date)
-    || requester.bot_fallback_not_before > now
-  ) return null;
+  if (!isBrowserBotFallbackReady({
+    allowOnDemandBot,
+    status: requester.status,
+    matchPool: requester.match_pool,
+    ratingSnapshot: requester.rating_snapshot,
+    ratingDeviationSnapshot: requester.rating_deviation_snapshot,
+    fallbackNotBefore: requester.bot_fallback_not_before,
+    now,
+  })) return null;
 
   const configuration: BotGameConfiguration = {
     boardSize: requester.board_size,
@@ -338,10 +388,12 @@ async function matchWaitingPlayerWithCalibratedBot(
   // The paid/server KataGo profile path is deliberately bypassed. Normal bot
   // matches always bind the versioned browser-local GoStone model.
   const rows: ActiveBotProfileRow[] = [];
-  const selection = selectNearestCalibratedBot({
-    globalRating: Number(requester.rating_snapshot),
-    ratingDeviation: Number(requester.rating_deviation_snapshot),
-  }, configuration, rows.map(calibratedBotCandidate), requester.handicap_preference ?? "even-only");
+  const selection = requester.match_pool === "registered-rated"
+    ? selectNearestCalibratedBot({
+        globalRating: Number(requester.rating_snapshot),
+        ratingDeviation: Number(requester.rating_deviation_snapshot),
+      }, configuration, rows.map(calibratedBotCandidate), requester.handicap_preference ?? "even-only")
+    : null;
   if (!selection) return matchWaitingPlayerWithBrowserBot(client, requester, configuration);
   const selectedRow = rows.find(({ profile_id }) => profile_id === selection.profile.profileId);
   if (!selectedRow) throw new Error("The selected calibrated bot profile disappeared.");

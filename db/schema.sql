@@ -3177,7 +3177,9 @@ CREATE TABLE IF NOT EXISTS game_browser_bot_bindings (
   game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE RESTRICT,
   bot_player_key TEXT NOT NULL CHECK (bot_player_key LIKE 'bot:%'),
   bot_color TEXT NOT NULL CHECK (bot_color IN ('black','white')),
-  human_player_key TEXT NOT NULL CHECK (human_player_key LIKE 'user:%'),
+  human_player_key TEXT NOT NULL CHECK (
+    human_player_key LIKE 'user:%' OR human_player_key LIKE 'guest:%'
+  ),
   model_contract_version TEXT NOT NULL CHECK (model_contract_version = 'gostone-browser-bot-v1'),
   model_version TEXT NOT NULL CHECK (model_version ~ '^v[1-9][0-9]*$'),
   model_sha256 TEXT NOT NULL CHECK (model_sha256 ~ '^[0-9a-f]{64}$'),
