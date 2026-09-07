@@ -32,7 +32,8 @@ test("analysis quota is account-bound and premium-ready", () => {
     schema.replaceAll("\r\n", "\n").includes(quotaMigration.replaceAll("\r\n", "\n").trim()),
     "Canonical schema must contain migration 035.",
   );
-  assert.match(analysisService, /SELECT analysis_unlimited[\s\S]+FOR UPDATE/);
-  assert.match(analysisService, /requested_by_user_id = \$1[\s\S]+INTERVAL '7 days'/);
+  assert.match(analysisService, /SELECT COALESCE\([\s\S]+FOR UPDATE/);
+  assert.match(analysisService, /to_jsonb\(users\)[\s\S]+analysis_unlimited/);
+  assert.match(analysisService, /requested_by_key = \$1[\s\S]+INTERVAL '7 days'/);
   assert.match(analysisService, /existing && existing\.status !== "failed"/);
 });
