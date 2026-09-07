@@ -1,6 +1,7 @@
 /* GoStone 2026 visual system ------------------------------------------------ */
 :root {
   color-scheme: light;
+  --font-serif: "Iowan Old Style", Baskerville, "Times New Roman", serif;
   --color-canvas: #f5f2eb;
   --color-canvas-deep: #eee9df;
   --color-surface: #faf8f3;
@@ -5617,4 +5618,351 @@ body {
   .result-modal-header, .result-player-list, .result-secondary-actions { padding-inline: 20px; }
   .result-score-summary { margin-inline: 20px; }
   .result-primary { margin-inline: 20px; width: calc(100% - 40px); }
+}
+
+/* Visual refinement -------------------------------------------------------
+   Product pages borrow the homepage's quiet board geometry and material
+   palette without turning every heading into a marketing hero. */
+.hero-edge { display: block; }
+
+.page-header,
+.friends-hero,
+.legal-page > header {
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  isolation: isolate;
+  margin-bottom: clamp(30px, 4vw, 46px);
+  min-height: 0;
+  overflow: visible;
+  padding: clamp(44px, 6vw, 72px) 0 clamp(24px, 3vw, 34px) 24px;
+  position: relative;
+}
+
+.page-header::before,
+.friends-hero::before,
+.legal-page > header::before {
+  background: linear-gradient(to bottom, var(--color-moss) 0 70%, var(--color-oxide) 70% 100%);
+  border-radius: 999px;
+  bottom: 30px;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: clamp(50px, 6.5vw, 76px);
+  width: 3px;
+}
+
+.page-header::after,
+.friends-hero::after,
+.legal-page > header::after {
+  background:
+    linear-gradient(rgb(87 67 41 / .1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(87 67 41 / .1) 1px, transparent 1px);
+  background-size: 22px 22px;
+  content: "";
+  height: 66px;
+  mask-image: linear-gradient(90deg, transparent, #000);
+  opacity: .72;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: min(24vw, 250px);
+  z-index: -1;
+}
+
+.page-header h1,
+.friends-hero h1,
+.legal-page h1,
+.not-found-page h1,
+.auth-card h1,
+.profile-header__identity h1 {
+  font-family: var(--font-serif);
+  font-size: clamp(43px, 5vw, 64px);
+  font-weight: 400;
+  letter-spacing: -.052em;
+  line-height: .96;
+}
+
+/* Leaderboard: a single ranking sheet with a crisp information rhythm. */
+.leaderboard-card {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / .68), rgb(250 247 240 / .84)),
+    var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgb(61 47 29 / .06);
+  overflow: hidden;
+  padding: clamp(22px, 3vw, 34px);
+  position: relative;
+}
+
+.leaderboard-card::before {
+  background: linear-gradient(90deg, var(--color-moss) 0 62%, var(--color-oxide) 62% 72%, transparent 72%);
+  content: "";
+  height: 3px;
+  inset: 0 0 auto;
+  position: absolute;
+}
+
+.leaderboard-title {
+  border: 0;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: clamp(19px, 2.2vw, 25px);
+  letter-spacing: -.02em;
+  padding: 2px 0 5px;
+}
+
+.leaderboard-title strong { font-weight: 600; }
+.leaderboard-method { margin: 4px 0 22px; max-width: 850px; }
+
+.leaderboard-viewer {
+  background: color-mix(in srgb, var(--color-moss-soft) 56%, var(--color-surface-raised));
+  border: 1px solid color-mix(in srgb, var(--color-moss) 30%, var(--color-line));
+  border-radius: 9px;
+  margin: 0 0 18px;
+  padding: 13px 16px;
+}
+
+.leaderboard-table {
+  border-top: 1px solid var(--color-line);
+  margin-top: 4px;
+}
+
+.leaderboard-table th,
+.leaderboard-table td { padding-block: 15px; }
+.leaderboard-table tbody tr { transition: background var(--duration-fast) ease; }
+.leaderboard-table tbody tr:hover { background: rgb(71 117 99 / .055); }
+.leaderboard-snapshot { margin-top: 16px; }
+
+/* Friends: title stays open; utility areas share one warm paper surface. */
+.friends-hero {
+  align-items: center;
+  background: transparent;
+  border-radius: 0;
+}
+
+.friends-hero::after { display: block; }
+
+.friends-summary {
+  background: var(--color-ink);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgb(28 27 23 / .1);
+  color: var(--color-surface-raised);
+  display: grid;
+  grid-template-columns: auto auto;
+  height: auto;
+  padding: 10px 15px 10px 12px;
+  width: auto;
+}
+
+.friends-summary strong {
+  align-items: center;
+  background: var(--color-surface-raised);
+  border-radius: 50%;
+  color: var(--color-ink);
+  display: flex;
+  font-size: 15px;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.friends-summary span {
+  font-size: 11px;
+  margin: 0 0 0 9px;
+  max-width: none;
+}
+
+.player-search,
+.friends-card {
+  background: rgb(255 253 249 / .7);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgb(61 47 29 / .045);
+}
+
+.player-search {
+  border-top: 3px solid var(--color-moss);
+  padding: clamp(20px, 2.8vw, 28px);
+}
+
+.player-search__field {
+  background: var(--color-canvas);
+  border-radius: 7px;
+}
+
+.friends-card > header {
+  border-bottom: 1px solid var(--color-line);
+  padding: 18px 20px 15px;
+}
+
+.friends-card > header h2 {
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 600;
+}
+
+.friend-row,
+.friend-request,
+.game-invite { padding-inline: 20px; }
+.friend-row:hover { background: rgb(71 117 99 / .045); }
+.friends-empty { border: 0; padding-inline: 20px; }
+
+/* End of game: one strong outcome, two players, one next action. */
+.result-modal {
+  --result-accent: var(--color-moss);
+  background: var(--color-surface-raised);
+  border: 1px solid rgb(255 255 255 / .74);
+  border-radius: 16px;
+  box-shadow: 0 28px 90px rgb(0 0 0 / .26);
+  max-width: 570px;
+  overflow: hidden;
+  position: relative;
+}
+
+.result-modal.is-loss { --result-accent: var(--color-oxide); }
+.result-modal.is-draw { --result-accent: var(--color-text-muted); }
+
+.result-modal::before {
+  background: var(--result-accent);
+  content: "";
+  height: 4px;
+  inset: 0 0 auto;
+  position: absolute;
+  z-index: 2;
+}
+
+.result-modal-header {
+  align-items: center;
+  background:
+    radial-gradient(circle at 83% 44%, rgb(71 117 99 / .08), transparent 25%),
+    linear-gradient(135deg, var(--color-canvas), var(--color-surface-raised));
+  border-bottom: 1px solid var(--color-line);
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 70px;
+  padding: 34px 32px 28px;
+}
+
+.result-modal-header > div { min-width: 0; width: 100%; }
+
+.result-modal-header::after {
+  background:
+    radial-gradient(circle at 35% 28%, rgb(255 255 255 / .38), transparent 24%),
+    var(--result-accent);
+  border: 7px solid rgb(255 253 249 / .82);
+  border-radius: 50%;
+  box-shadow: 0 9px 20px rgb(37 30 22 / .15);
+  content: "";
+  height: 62px;
+  justify-self: end;
+  width: 62px;
+}
+
+.result-modal-header h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(36px, 6vw, 48px);
+  font-weight: 600;
+  letter-spacing: -.045em;
+  line-height: .95;
+  margin: 0 0 10px;
+}
+
+.result-modal-header p {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 360px;
+}
+
+.result-player-list { gap: 0; padding: 14px 32px 6px; }
+
+.result-player-list > div {
+  border-radius: 0;
+  gap: 14px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: 12px 4px;
+}
+
+.result-player-list > div.is-winner {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-moss-soft) 70%, transparent), transparent 78%);
+  box-shadow: inset 3px 0 var(--color-moss);
+  padding-left: 15px;
+}
+
+.result-player-list .player-stone { height: 38px; width: 38px; }
+.result-player-list strong { font-size: 17px; }
+.result-player-list small { font-size: 11px; }
+
+.result-player-list b {
+  background: transparent;
+  border: 1px solid rgb(71 117 99 / .28);
+  border-radius: 999px;
+  color: var(--color-moss-strong);
+  padding: 5px 8px;
+}
+
+.result-rating-change {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 4px 32px 14px;
+}
+
+.result-score-summary {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  margin: 8px 32px 16px;
+}
+
+.result-score-summary span { background: transparent; }
+.result-primary { border-radius: 7px; margin: 8px 32px 0; width: calc(100% - 64px); }
+.result-secondary-actions { padding: 12px 32px 26px; }
+
+@media (max-width: 760px) {
+  .hero-edge { display: none; }
+
+  .page-header,
+  .friends-hero,
+  .legal-page > header {
+    padding: 34px 0 21px 18px;
+  }
+
+  .page-header::before,
+  .friends-hero::before,
+  .legal-page > header::before { bottom: 22px; top: 39px; }
+
+  .page-header h1,
+  .friends-hero h1,
+  .legal-page h1 { font-size: 43px; }
+
+  .leaderboard-card { border-radius: 9px; padding: 19px 15px; }
+  .friends-grid { gap: 22px; }
+}
+
+@media (max-width: 620px) {
+  .friends-hero { align-items: center; }
+  .friends-hero::after { display: none; }
+  .friends-summary { display: grid; }
+  .friends-summary span { display: none; }
+  .friends-summary strong { background: transparent; color: white; height: 24px; width: 24px; }
+
+  .result-modal { border-radius: 14px 14px 9px 9px; }
+  .result-modal-header {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 50px;
+    padding: 26px 20px 21px;
+  }
+  .result-modal-header::after { border-width: 5px; height: 46px; width: 46px; }
+  .result-modal-header h2 { font-size: 36px; }
+  .result-modal-header p { font-size: 13px; }
+  .result-player-list { padding: 10px 20px 4px; }
+  .result-player-list > div { grid-template-columns: 38px minmax(0, 1fr) auto; }
+  .result-rating-change { margin-inline: 20px; }
+  .result-score-summary { margin-inline: 20px; }
+  .result-primary { margin-inline: 20px; width: calc(100% - 40px); }
+  .result-secondary-actions { padding-inline: 20px; }
 }

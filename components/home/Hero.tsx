@@ -79,6 +79,9 @@ export function Hero() {
   return (
     <div className="home-experience">
       <section className="home-hero" aria-labelledby="home-title">
+        <span aria-hidden="true" className="hero-edge hero-edge--left">{copy.edgeLeft}</span>
+        <span aria-hidden="true" className="hero-edge hero-edge--right">{copy.edgeRight}</span>
+
         <div className="home-hero-copy">
           <h1 id="home-title"><span lang="ja">{copy.heroJapanese}</span></h1>
           <p className="hero-worlds-line">{copy.heroWorlds.replace(/[.!?。！？]+$/, "")}</p>
