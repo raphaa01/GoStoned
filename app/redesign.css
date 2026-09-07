@@ -5966,3 +5966,51 @@ body {
   .result-primary { margin-inline: 20px; width: calc(100% - 40px); }
   .result-secondary-actions { padding-inline: 20px; }
 }
+
+/* Unified page headings ---------------------------------------------------
+   Match the restrained beginner-course header across product pages. */
+.page-header,
+.friends-hero,
+.legal-page > header {
+  border: 0;
+  isolation: auto;
+  margin-bottom: clamp(30px, 5vw, 58px);
+  overflow: visible;
+  padding: clamp(32px, 5vw, 62px) 0 0;
+}
+
+.page-header::before,
+.page-header::after,
+.friends-hero::before,
+.friends-hero::after,
+.legal-page > header::before,
+.legal-page > header::after { display: none; }
+
+.content-hero h1,
+.page-header h1,
+.friends-hero h1,
+.legal-page h1,
+.not-found-page h1,
+.auth-card h1,
+.profile-header__identity h1 {
+  font-family: inherit;
+  font-size: clamp(44px, 6vw, 72px);
+  font-weight: 540;
+  letter-spacing: -.055em;
+  line-height: .98;
+  margin: 0;
+}
+
+@media (max-width: 620px) {
+  .page-header,
+  .friends-hero,
+  .legal-page > header { margin-bottom: 32px; padding-top: 24px; }
+
+  .content-hero h1,
+  .page-header h1,
+  .friends-hero h1,
+  .legal-page h1,
+  .not-found-page h1,
+  .auth-card h1,
+  .profile-header__identity h1 { font-size: clamp(40px, 12vw, 52px); }
+}
