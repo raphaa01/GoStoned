@@ -78,7 +78,7 @@ export const fr = {
   },
   "home": {
     "heroJapanese": "一手一世界",
-    "heroWorlds": "JOUEZ AU GO EN LIGNE.",
+    "heroWorlds": "Jouez au Go en ligne",
     "startPlay": "Commencer à jouer",
     "edgeLeft": "9×9 · 13×13 · 19×19",
     "edgeRight": "BADUK · WEIQI · GO",

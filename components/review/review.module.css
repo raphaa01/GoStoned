@@ -131,3 +131,44 @@
   .explanationBlock { min-height: 0; padding: 18px 16px; }
   .winrateValues { justify-content: flex-start; gap: 18px; }
 }
+
+/* Review is a Go analysis surface, not a marketing landing page. */
+.hub { gap: 28px; padding: 48px 32px 84px; }
+.hero { border-bottom: 1px solid var(--color-line); max-width: none; padding-bottom: 24px; }
+.hero h1 { font-size: clamp(36px, 4vw, 52px); font-weight: 560; letter-spacing: -.045em; line-height: 1; margin: 0; }
+.gamePicker { background: transparent; border: 0; border-radius: 0; border-top: 1px solid var(--color-line); padding: 0; }
+.sectionHeading { align-items: baseline; padding: 20px 0 12px; }
+.sectionHeading h2 { font-size: 22px; margin: 0; }
+.sectionHeading a { color: var(--color-text-muted); font-size: 14px; text-underline-offset: 4px; }
+.gameRow { padding-inline: 0; }
+.result { background: transparent; border-radius: 0; height: auto; min-width: 28px; width: auto; }
+.empty, .loading { border-top: 1px solid var(--color-line); padding: 36px 0; text-align: left; }
+
+.engineBadge { background: transparent; border-radius: 0; color: var(--color-text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; padding: 0; }
+.reviewMain { gap: clamp(24px, 3vw, 44px); grid-template-columns: minmax(430px, 1.18fr) minmax(340px, .82fr); }
+.boardPanel, .insightPanel { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.boardPanel { background: transparent; padding: 0; }
+.board { filter: drop-shadow(0 12px 18px rgb(69 48 25 / .12)); }
+.moveControls button { background: transparent; border-radius: 2px; }
+.insightPanel { border-left: 1px solid var(--color-line); }
+.classification { background: transparent; grid-template-columns: 1fr auto; padding: 14px 0 14px 24px; }
+.classification span { font-size: 1rem; }
+.explanationBlock { min-height: 130px; padding: 20px 0 20px 24px; }
+.explanationBlock > span, .metrics article > span { color: var(--color-text-muted); font-size: .72rem; letter-spacing: 0; text-transform: none; }
+.metrics article { background: transparent; padding: 17px 0 17px 24px; }
+.winrateBar { border-radius: 0; height: 5px; }
+.alternatives { padding: 20px 0 22px 24px; }
+.moveStrip { border: 0; border-block: 1px solid var(--color-line); border-radius: 0; box-shadow: none; gap: 0; padding: 0; }
+.moveStrip button { background: transparent; border-radius: 0; border-right: 1px solid var(--color-line); }
+.moveStrip button[aria-current="step"] { background: transparent; border-color: var(--color-line); box-shadow: inset 0 -3px currentColor; }
+.reviewStatus h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); }
+
+@media (max-width: 900px) {
+  .hub { padding: 32px 22px 64px; }
+  .insightPanel { border-left: 0; border-top: 1px solid var(--color-line); }
+}
+@media (max-width: 620px) {
+  .hub { padding: 28px 16px 64px; }
+  .hero h1 { font-size: 38px; }
+  .engineBadge { font-size: .65rem; }
+}

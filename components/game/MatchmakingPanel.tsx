@@ -61,7 +61,7 @@ export function MatchmakingPanel({
   const waitingDescription = copy.lookingForPlayer
     .replace("{board}", `${boardSize}×${boardSize}`)
     .replace("{time}", selectedTime.name);
-  const showConnectionState = !ready || waiting || Boolean(error);
+  const showConnectionState = waiting || Boolean(error) || terminal || connectionKind === "reconnecting";
 
   return (
     <section className="play-matchmaking">
@@ -78,7 +78,9 @@ export function MatchmakingPanel({
         ) : (
           <>
             <strong>{presentedConnectionLabel}</strong>
-            {presentedConnectionDescription ? <span>{presentedConnectionDescription}</span> : null}
+            {presentedConnectionDescription && (terminal || Boolean(error))
+              ? <span>{presentedConnectionDescription}</span>
+              : null}
           </>
         )}
       </p>

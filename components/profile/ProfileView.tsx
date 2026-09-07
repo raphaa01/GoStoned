@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
@@ -172,7 +171,6 @@ export function ProfileView() {
           <span aria-hidden="true" className="profile-avatar-trigger__edit"><Pencil size={12} strokeWidth={2.2} /></span>
         </button>
         <div className="profile-header__identity">
-          <span className="section-kicker">{copy.playerProfile}</span>
           <h1>{user.displayName}</h1>
           {hasDistinctHandle ? <p className="profile-header__handle">@{user.username}</p> : null}
         </div>
@@ -185,9 +183,7 @@ export function ProfileView() {
     {avatarPickerOpen ? (
       <section aria-labelledby={avatarPickerTitleId} className="profile-avatar-picker" id={avatarPickerId}>
         <div className="profile-avatar-picker__heading">
-          <span className="section-kicker">{copy.changeAvatar}</span>
           <h2 id={avatarPickerTitleId}>{copy.avatarPickerTitle}</h2>
-          <p>{copy.avatarPickerDescription}</p>
         </div>
         <fieldset className="profile-avatar-options">
           <legend className="sr-only">{copy.avatarPickerTitle}</legend>
@@ -247,7 +243,7 @@ export function ProfileView() {
       <section aria-label={copy.ratingsLabel} className="profile-performance">
         <div className="profile-performance__main">
           <article className="profile-rating-band">
-            <span className="profile-rating-band__eyebrow"><Activity aria-hidden="true" size={16} /> {copy.globalRating}</span>
+            <span className="profile-rating-band__eyebrow">{copy.globalRating}</span>
             <RatingLabel
               locale={locale}
               preference={preferences.displayPreference}
@@ -261,7 +257,7 @@ export function ProfileView() {
           </article>
           <div className="profile-rating-plot">
             <header>
-              <div><span className="section-kicker">{copy.globalPerformance}</span><h2>{copy.ratingOverTime}</h2></div>
+              <h2>{copy.ratingOverTime}</h2>
               <span className="profile-period">{copy.last30Days}</span>
             </header>
             <RatingHistoryChart currentRating={rating.rating} history={history} preference={preferences.displayPreference} />
@@ -276,7 +272,7 @@ export function ProfileView() {
     </> : null}
 
     <section className="profile-history" id="game-history">
-      <div className="profile-history__heading"><div><span className="section-kicker">{copy.history}</span><h2>{copy.recentGames}</h2></div><span>{recentGames.length} {copy.shown}</span></div>
+      <div className="profile-history__heading"><h2>{copy.recentGames}</h2><span>{recentGames.length} {copy.shown}</span></div>
       {recentGames.length ? <div className="profile-history__list">{recentGames.slice(0, 12).map((game) => {
         const resultLabel = game.result === "win" ? copy.victory : game.result === "loss" ? copy.defeat : game.result === "draw" ? copy.draw : copy.noResult;
         const presented = getRecentGameRatingPresentation(game);

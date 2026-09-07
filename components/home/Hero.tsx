@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import { getPreviewPlayerCount } from "@/lib/stats/playerCountPreview";
 
 type PublicActivityCount = number | "under_5";
 type PlatformSummary = {
@@ -61,14 +60,6 @@ export function Hero() {
   const displayCount = (count: PublicActivityCount | undefined) => count === "under_5"
     ? copy.fewerThanFive
     : count ?? "–";
-  const waitingStatus = summaryState.kind === "loading"
-    ? copy.heroActivityLoading
-    : summaryState.kind === "unavailable"
-      ? copy.heroActivityUnavailable
-      : copy.heroActivityReady.replace(
-        "{count}",
-        String(getPreviewPlayerCount(summaryState.summary.recentlyWaitingPlayers)),
-      );
   const activityStatus = summary
     ? copy.activityDefinition.replace(
       "{time}",
@@ -88,12 +79,9 @@ export function Hero() {
   return (
     <div className="home-experience">
       <section className="home-hero" aria-labelledby="home-title">
-        <span aria-hidden="true" className="hero-edge hero-edge--left">{copy.edgeLeft}</span>
-        <span aria-hidden="true" className="hero-edge hero-edge--right">{copy.edgeRight}</span>
-
         <div className="home-hero-copy">
           <h1 id="home-title"><span lang="ja">{copy.heroJapanese}</span></h1>
-          <p className="hero-worlds-line">{copy.heroWorlds}</p>
+          <p className="hero-worlds-line">{copy.heroWorlds.replace(/[.!?。！？]+$/, "")}</p>
         </div>
 
         <div aria-hidden="true" className="hero-stone-stage">
@@ -114,9 +102,6 @@ export function Hero() {
           <Link className="button button--primary button--lg hero-start" href={href("/play")}>
             {copy.startPlay} <ArrowRight aria-hidden="true" size={20} />
           </Link>
-          <p aria-atomic="true" aria-live="polite" className="hero-live-status" role="status">
-            <span aria-hidden="true" className="live-dot" /> {waitingStatus}
-          </p>
         </div>
       </section>
 
@@ -128,19 +113,17 @@ export function Hero() {
             <span className="chapter-ripple" />
           </div>
           <div className="chapter-copy">
-            <span className="section-kicker">{copy.playChapterKicker}</span>
-            <h2 id="home-play-title">{copy.playChapterTitle}</h2>
+            <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
             <p>{copy.playChapterBody}</p>
-            <Link className="chapter-link" href={href("/play")}>{copy.playChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={href("/play")}>{copy.playChapterAction}</Link>
           </div>
         </section>
 
         <section className="home-chapter home-chapter--learn" aria-labelledby="home-learn-title">
           <div className="chapter-copy">
-            <span className="section-kicker">{copy.learnChapterKicker}</span>
-            <h2 id="home-learn-title">{copy.learnChapterTitle}</h2>
+            <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
             <p>{copy.learnChapterBody}</p>
-            <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction}</Link>
           </div>
           <div className="chapter-visual chapter-visual--lesson" aria-hidden="true">
             <span className="lesson-stone lesson-stone--one" />
@@ -153,10 +136,9 @@ export function Hero() {
 
         <section className="home-chapter home-chapter--puzzles" aria-labelledby="home-puzzles-title">
           <div className="chapter-copy">
-            <span className="section-kicker">{copy.puzzlesChapterKicker}</span>
-            <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle}</h2>
+            <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
             <p>{copy.puzzlesChapterBody}</p>
-            <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction}</Link>
           </div>
           <div className="chapter-visual chapter-visual--puzzles" aria-hidden="true">
             <span className="puzzle-stone puzzle-stone--black puzzle-stone--one" />
@@ -183,21 +165,19 @@ export function Hero() {
             </span>
           </div>
           <div className="chapter-copy">
-            <span className="section-kicker">{copy.reviewChapterKicker}</span>
-            <h2 id="home-review-title">{copy.reviewChapterTitle}</h2>
+            <h2 id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
             <p>{copy.reviewChapterBody}</p>
-            <Link className="chapter-link" href={reviewHref}>{copy.reviewChapterAction} <ArrowRight size={17} /></Link>
+            <Link className="chapter-link" href={reviewHref}>{copy.reviewChapterAction}</Link>
           </div>
         </section>
 
         <section className="platform-status" aria-labelledby="home-progress-title">
           <div className="platform-status-heading">
             <div>
-              <span className="section-kicker">{copy.progressChapterKicker}</span>
-              <h2 id="home-progress-title">{copy.progressChapterTitle}</h2>
+              <h2 id="home-progress-title">{copy.progressChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.progressChapterBody}</p>
             </div>
-            <Link href={profileHref}>{copy.progressChapterAction} <ArrowRight size={17} /></Link>
+            <Link href={profileHref}>{copy.progressChapterAction}</Link>
           </div>
 
           <div className="platform-metrics">
@@ -210,7 +190,7 @@ export function Hero() {
             <p
               aria-atomic="true"
               aria-live="polite"
-              className="platform-activity-note"
+              className={`platform-activity-note${summary ? "" : " sr-only"}`}
               ref={statusRef}
               role="status"
               tabIndex={-1}

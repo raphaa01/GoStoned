@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, KeyRound, LoaderCircle, UserRound } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useId, useRef, useState } from "react";
@@ -102,7 +102,6 @@ export function AuthForm({
   if (user && !reauthenticate) {
     return (
       <section className="auth-card auth-card--signed-in">
-        <span className="auth-icon"><UserRound size={24} /></span>
         <h1>{dictionary.auth.alreadyLoggedIn}</h1>
         <p>{dictionary.auth.continueAs} <strong>{user.displayName}</strong>.</p>
         <Link className="button button--primary button--lg" href={href("/play")}>{dictionary.auth.findGame}</Link>
@@ -140,19 +139,12 @@ export function AuthForm({
   ) : null;
   return (
     <section className="auth-card">
-      <span className="section-kicker">{registering ? dictionary.auth.newPlayer : dictionary.auth.welcomeBack}</span>
       <h1>{registering ? dictionary.auth.createTitle : dictionary.auth.loginTitle}</h1>
-      <p>
-        {registering
-          ? dictionary.auth.createDescription
-          : dictionary.auth.loginDescription}
-      </p>
 
       <form className="auth-form" onSubmit={submit}>
         <label>
           <span>{dictionary.auth.username}</span>
           <span className="input-wrap">
-            <UserRound size={18} />
             <input
               aria-describedby={registering
                 ? `${usernameHintId}${error?.fields.includes("username") ? ` ${errorId}` : ""}`
@@ -179,7 +171,6 @@ export function AuthForm({
         <label>
           <span>{dictionary.auth.password}</span>
           <span className="input-wrap">
-            <KeyRound size={18} />
             <input
               aria-describedby={error?.fields.includes("password") ? errorId : undefined}
               aria-invalid={error?.fields.includes("password") || undefined}
@@ -224,7 +215,6 @@ export function AuthForm({
               <label>
                 <span className="sr-only">{dictionary.auth.startingStrength}</span>
                 <span className="input-wrap">
-                  <Gauge size={18} />
                   <select
                     aria-label={dictionary.auth.startingStrength}
                     onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}

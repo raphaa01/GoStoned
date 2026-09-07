@@ -538,8 +538,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
 
           <section className="play-pace-column" aria-labelledby="play-pace-title">
             <header className="play-pace-heading">
-              <span>{copy.timeControl}</span>
-              <h1 id="play-pace-title">{copy.choosePace}</h1>
+              <h1 id="play-pace-title">{copy.timeControl}</h1>
             </header>
             <TimeControlSelector
               disabled={busy || queueStatus === "waiting" || !actionReady}

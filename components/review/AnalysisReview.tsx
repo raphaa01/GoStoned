@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BrainCircuit, LoaderCircle, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, LoaderCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -75,13 +75,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       <header className={styles.reviewHeader}>
         <Link href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
         <div><span>{game.blackPlayerName} · {game.whitePlayerName}</span><strong>{game.boardSize}×{game.boardSize} · {game.result}</strong></div>
-        {result ? <span className={styles.engineBadge}><BrainCircuit size={16} /> {result.engine.name} {result.engine.version}</span> : null}
+        {result ? <span className={styles.engineBadge}>{result.engine.name} {result.engine.version}</span> : null}
       </header>
 
       {!analysis ? (
         <section className={styles.reviewStatus}>
-          <BrainCircuit size={42} /><h1>{copy.reviewTitle}</h1><p>{game.moveCount} {copy.move.toLowerCase()}</p>
-          <button className="button button--primary button--lg" onClick={() => void load("POST")} type="button"><Sparkles size={18} /> {copy.start}</button>
+          <h1>{copy.reviewTitle.replace(/[.!?。！？]+$/, "")}</h1><p>{game.moveCount} {copy.move.toLowerCase()}</p>
+          <button className="button button--primary button--lg" onClick={() => void load("POST")} type="button">{copy.start}</button>
         </section>
       ) : analysis.status === "queued" || analysis.status === "running" ? (
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p>{copy.job} {analysis.id.slice(0, 8)}</p></section>
@@ -101,7 +101,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             </section>
 
             <aside className={styles.insightPanel}>
-              <div className={`${styles.classification} ${styles[current.classification]}`}><Sparkles /><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
+              <div className={`${styles.classification} ${styles[current.classification]}`}><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
               <div className={styles.explanationBlock}>
                 <span>{copy.explanation}</span>
                 <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>

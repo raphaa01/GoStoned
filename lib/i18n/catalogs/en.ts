@@ -44,7 +44,7 @@ export const en = {
   },
   home: {
     heroJapanese: "一手一世界",
-    heroWorlds: "PLAY GO ONLINE.",
+    heroWorlds: "Play Go online",
     startPlay: "Start a game",
     edgeLeft: "9×9 · 13×13 · 19×19",
     edgeRight: "BADUK · WEIQI · GO",

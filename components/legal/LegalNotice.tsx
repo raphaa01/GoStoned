@@ -11,9 +11,7 @@ export function LegalNotice({ locale }: { locale: Locale }) {
     <AppShell>
       <article className="legal-page">
         <header>
-          <span className="section-kicker">{copy.kicker}</span>
           <h1>{copy.title}</h1>
-          <p>{copy.subtitle}</p>
         </header>
 
         <div className="legal-sections">

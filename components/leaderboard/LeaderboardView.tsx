@@ -1,6 +1,6 @@
 "use client";
 
-import { Medal, Trophy } from "lucide-react";
+import { Medal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -108,15 +108,11 @@ export function LeaderboardView() {
   return (
     <>
       <header className="page-header">
-        <div>
-          <span className="section-kicker">{copy.kicker}</span>
-          <h1>{copy.title}</h1>
-          <p>{copy.description}</p>
-        </div>
+        <h1>{dictionary.nav.leaderboard}</h1>
       </header>
 
       <section className="leaderboard-card">
-        <div className="leaderboard-title"><Trophy aria-hidden="true" size={20} /><strong>{copy.globalScope} · {copy.players}</strong></div>
+        <div className="leaderboard-title"><strong>{copy.globalScope} · {copy.players}</strong></div>
         <p className="leaderboard-method">{copy.ratingMethod}</p>
         {user && viewerRating ? (
           <aside

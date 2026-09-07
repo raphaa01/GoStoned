@@ -3,14 +3,7 @@
 import {
   ArrowLeft,
   ArrowRight,
-  BrainCircuit,
-  CalendarDays,
   Check,
-  Crosshair,
-  HeartPulse,
-  Puzzle,
-  Sparkles,
-  TimerReset,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -251,10 +244,10 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   const categories = [
-    { id: "life_and_death" as const, icon: HeartPulse, title: copy.lifeAndDeath, body: copy.lifeAndDeathDescription },
-    { id: "tesuji" as const, icon: Sparkles, title: copy.tesuji, body: copy.tesujiDescription },
-    { id: "capturing_race" as const, icon: Crosshair, title: copy.capturingRace, body: copy.capturingRaceDescription },
-    { id: "endgame" as const, icon: TimerReset, title: copy.endgame, body: copy.endgameDescription },
+    { id: "life_and_death" as const, title: copy.lifeAndDeath },
+    { id: "tesuji" as const, title: copy.tesuji },
+    { id: "capturing_race" as const, title: copy.capturingRace },
+    { id: "endgame" as const, title: copy.endgame },
   ];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
@@ -266,19 +259,15 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   return (
     <div className={styles.page}>
       <header className={styles.hero}>
-        <span className="section-kicker"><BrainCircuit size={15} /> {copy.kicker}</span>
-        <h1>{copy.title}</h1>
-        <p>{copy.description}</p>
+        <h1>{dictionary.nav.puzzles}</h1>
       </header>
 
       <div aria-label={copy.title} className={styles.tabs} role="tablist">
         <button aria-selected={mode === "daily"} className={mode === "daily" ? styles.activeTab : ""} onClick={() => changeMode("daily")} role="tab" type="button">
-          <CalendarDays size={18} />
-          <span><strong>{copy.daily}</strong><small>{copy.dailyDescription}</small></span>
+          <strong>{copy.daily}</strong>
         </button>
         <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading} onClick={() => changeMode("practice")} role="tab" type="button">
-          <Puzzle size={18} />
-          <span><strong>{copy.practice}</strong><small>{copy.practiceDescription}</small></span>
+          <strong>{copy.practice}</strong>
         </button>
       </div>
 
@@ -292,17 +281,13 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
         <section className={styles.catalog} aria-labelledby="puzzle-category-title">
           <div className={styles.catalogHeader}>
             <h2 id="puzzle-category-title">{copy.chooseCategory}</h2>
-            <p>{copy.categoryDescription}</p>
           </div>
           <div className={styles.categoryGrid}>
             {categories.map((category) => {
               const ready = puzzles.filter((entry) => entry.category === category.id).length;
-              const Icon = category.icon;
               return (
                 <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
-                  <span className={styles.categoryIcon}><Icon size={22} /></span>
                   <strong>{category.title}</strong>
-                  <p>{category.body}</p>
                   <small>{copy.catalogProgress.replace("{ready}", String(ready)).replace("{total}", String(expected))}</small>
                 </button>
               );
@@ -310,7 +295,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
           </div>
         </section>
       ) : hub?.status === "generating" || !puzzle || !displayBoard ? (
-        <div className={styles.state} role="status"><BrainCircuit size={28} /><h2>{copy.generating}</h2><p>{copy.generatingBody}</p></div>
+        <div className={styles.state} role="status"><h2>{copy.generating}</h2></div>
       ) : (
         <>
           {mode === "practice" ? (
@@ -345,9 +330,8 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
             <aside className={styles.panel}>
               <div>
-                <span className="section-kicker">{mode === "daily" ? copy.daily : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
+                <span className={styles.problemLabel}>{mode === "daily" ? copy.daily : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
                 <h2>{puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>
-                <p className={styles.engineNote}>{copy.engineNote}</p>
               </div>
 
               {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}
