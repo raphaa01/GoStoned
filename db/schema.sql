@@ -3298,3 +3298,13 @@ DROP TRIGGER IF EXISTS friendly_game_rating_event_guard ON game_glicko2_rating_e
 CREATE TRIGGER friendly_game_rating_event_guard
   BEFORE INSERT ON game_glicko2_rating_events
   FOR EACH ROW EXECUTE FUNCTION public.reject_friendly_game_rating_event();
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS analysis_unlimited BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE game_analysis_jobs
+  ADD COLUMN IF NOT EXISTS requested_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_game_analysis_jobs_requester
+  ON game_analysis_jobs(requested_by_user_id, created_at DESC)
+  WHERE requested_by_user_id IS NOT NULL;
