@@ -5328,3 +5328,290 @@ body {
     padding: 25px 20px 20px;
   }
 }
+
+/* Sitewide product pages --------------------------------------------------
+   Compact, functional page furniture keeps the homepage atmosphere without
+   repeating its marketing composition on every tool. */
+
+.page-header,
+.friends-hero,
+.legal-page > header {
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 28px;
+  padding: 48px 0 24px;
+}
+
+.page-header h1,
+.friends-hero h1,
+.legal-page h1,
+.not-found-page h1,
+.auth-card h1 {
+  font-family: inherit;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 560;
+  letter-spacing: -.045em;
+  line-height: 1;
+  margin: 0;
+}
+
+/* Play: the board and settings are the page. */
+.play-experience {
+  align-items: start;
+  gap: clamp(34px, 5vw, 72px);
+  grid-template-columns: minmax(360px, 1.08fr) minmax(360px, .92fr);
+  min-height: 0;
+  padding: 48px 0 80px;
+}
+
+.play-board-preview {
+  box-shadow: 0 2px 2px rgb(48 35 19 / .08), 0 12px 28px rgb(48 35 19 / .1);
+}
+
+.play-board-column .size-selector button {
+  gap: 0;
+  min-height: 48px;
+}
+
+.play-pace-column {
+  justify-content: flex-start;
+  padding-left: clamp(28px, 4vw, 58px);
+  padding-top: 2px;
+}
+
+.play-pace-heading {
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 0;
+  padding-bottom: 18px;
+}
+
+.play-pace-heading h1 {
+  font-family: inherit;
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 590;
+  letter-spacing: -.035em;
+  line-height: 1.05;
+}
+
+.play-pace-column .time-selector {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.play-pace-column .time-selector button {
+  grid-template-columns: minmax(0, 1fr) 12px;
+  min-height: 72px;
+  padding: 14px 4px;
+}
+
+.play-pace-column .time-selector button.is-selected {
+  background: transparent;
+  box-shadow: inset 3px 0 var(--color-moss);
+  padding-left: 16px;
+}
+
+.play-pace-column .time-selector strong {
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.play-match-status {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid var(--color-line-strong);
+  border-radius: 0;
+  padding: 7px 10px;
+}
+
+.play-match-action {
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 680;
+  min-height: 56px;
+}
+
+/* Leaderboard: one classic table, not a dashboard card. */
+.leaderboard-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.leaderboard-title {
+  border-bottom: 1px solid var(--color-line);
+  padding: 0 0 12px;
+}
+
+.leaderboard-method {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin: 10px 0 20px;
+}
+
+.leaderboard-viewer {
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+}
+
+.leaderboard-table table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Friends: compact lists with hierarchy supplied by rules, not cards. */
+.friends-page {
+  gap: 28px;
+  padding-top: 0;
+}
+
+.friends-hero {
+  align-items: end;
+  background: transparent;
+  border-radius: 0;
+  min-height: 0;
+}
+
+.friends-hero::after { display: none; }
+.friends-summary {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  border-radius: 0;
+  height: auto;
+  padding-left: 22px;
+  width: auto;
+}
+.friends-summary strong { font-size: 24px; }
+.friends-summary span { margin-top: 4px; max-width: none; }
+
+.player-search,
+.friends-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.player-search { border-bottom: 1px solid var(--color-line); padding: 0 0 24px; }
+.player-search__field { border-radius: 2px; }
+.friends-grid { gap: 36px; }
+.friends-side-stack { gap: 36px; }
+.friends-card > header { padding: 0 0 12px; }
+.friends-card > header h2 { font-size: 19px; }
+.friends-empty { border-top: 1px solid var(--color-line); padding: 22px 0; }
+.friend-row, .friend-request, .game-invite { border-radius: 0; }
+
+/* Profile: rating data stays dense and typographic. */
+.profile-header {
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  padding: 38px 0 24px;
+}
+.profile-header::before { display: none; }
+.profile-header__identity h1 { font-family: inherit; font-size: clamp(34px, 4vw, 48px); font-weight: 570; }
+.profile-avatar-picker,
+.profile-performance,
+.profile-history {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.profile-avatar-picker { border-block: 1px solid var(--color-line); }
+.profile-rating-band { background: var(--color-ink); border-radius: 2px; }
+.profile-rating-band::before { display: none; }
+.profile-rating-band__eyebrow { letter-spacing: .04em; text-transform: none; }
+.profile-rating-plot { border: 1px solid var(--color-line); border-radius: 0; }
+.profile-performance .profile-metrics { border: 1px solid var(--color-line); border-radius: 0; }
+.profile-performance .profile-metrics article { background: transparent; }
+.profile-history { border-top: 1px solid var(--color-line); padding-inline: 0; }
+
+/* Account pages: forms do not need landing-page copy or floating cards. */
+.auth-page {
+  align-items: start;
+  min-height: calc(100svh - 170px);
+  padding-top: clamp(38px, 7vh, 76px);
+}
+
+.auth-card,
+.profile-guest {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 440px;
+  padding: 26px 0 42px;
+}
+
+.auth-card h1 { font-size: clamp(34px, 4vw, 46px); margin-bottom: 28px; }
+.input-wrap { background: transparent; border-radius: 2px; grid-template-columns: 1fr; }
+.input-wrap input,
+.input-wrap select { padding-left: 14px; }
+.auth-social-button { border-radius: 2px; }
+.auth-submit { border-radius: 2px; }
+
+/* Legal and missing pages use document typography, not a campaign hero. */
+.legal-page { max-width: 900px; }
+.legal-page > header { max-width: none; }
+.legal-page h1 { font-size: clamp(36px, 4vw, 52px); }
+.legal-sections { gap: 0; }
+.legal-section {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 26px 0 34px;
+}
+.not-found-page { padding-block: 72px; }
+
+/* End of game: outcome, players, score, actions. Nothing decorative. */
+.modal-backdrop--result { backdrop-filter: none; background: rgb(20 20 18 / .64); }
+.result-modal {
+  border: 0;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / .22);
+  max-width: 560px;
+}
+.result-modal-header { background: transparent; border-bottom: 1px solid var(--color-line); padding: 28px 28px 20px; }
+.result-modal-header h2 { font-size: 34px; margin: 0 0 6px; }
+.result-player-list { padding: 12px 28px; }
+.result-player-list > div { border-radius: 0; padding-inline: 0; }
+.result-player-list > div.is-winner { background: transparent; box-shadow: inset 3px 0 var(--color-moss); padding-left: 14px; }
+.result-player-list b { background: transparent; border-radius: 0; color: var(--color-moss-strong); }
+.result-score-summary { background: transparent; border: 0; border-block: 1px solid var(--color-line); border-radius: 0; margin-inline: 28px; }
+.result-score-summary span { background: transparent; }
+.result-primary { border-radius: 2px; margin: 12px 28px 0; width: calc(100% - 56px); }
+.result-secondary-actions { padding: 14px 28px 24px; }
+
+.hero-worlds-line { text-transform: none; }
+.learn-course__intro h1 { font-size: clamp(36px, 4vw, 52px); }
+
+@media (max-width: 960px) {
+  .play-experience { grid-template-columns: 1fr; }
+  .play-pace-column { border-left: 0; border-top: 1px solid var(--color-line); max-width: 620px; padding: 28px 0 0; width: 100%; }
+}
+
+@media (max-width: 620px) {
+  .page-header,
+  .friends-hero,
+  .legal-page > header { margin-bottom: 22px; padding: 28px 0 18px; }
+  .page-header h1,
+  .friends-hero h1,
+  .legal-page h1 { font-size: 38px; }
+  .play-experience { gap: 28px; padding: 28px 0 64px; }
+  .play-board-column .size-selector button { min-height: 44px; }
+  .play-pace-column .time-selector button { min-height: 66px; }
+  .friends-hero { align-items: start; }
+  .friends-summary { border-left: 0; border-top: 1px solid var(--color-line); padding: 12px 0 0; }
+  .friends-grid { gap: 30px; }
+  .profile-header { padding-top: 28px; }
+  .auth-page { padding-top: 24px; }
+  .result-modal-header, .result-player-list, .result-secondary-actions { padding-inline: 20px; }
+  .result-score-summary { margin-inline: 20px; }
+  .result-primary { margin-inline: 20px; width: calc(100% - 40px); }
+}

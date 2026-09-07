@@ -2,7 +2,6 @@
 
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { BoardSize } from "@/lib/game/types";
-import { BoardSizeGlyph } from "./BoardPreview";
 
 type BoardSizeSelectorProps = {
   value: BoardSize;
@@ -32,7 +31,6 @@ export function BoardSizeSelector({ value, onChange, disabled = false }: BoardSi
           onClick={() => onChange(size.value)}
           type="button"
         >
-          <BoardSizeGlyph boardSize={size.value} />
           <strong>{size.label}</strong>
         </button>
       ))}

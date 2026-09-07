@@ -279,7 +279,7 @@ export function FriendsHub() {
   return (
     <div className="friends-page">
       <header className="friends-hero">
-        <div><span className="section-kicker">{copy.kicker}</span><h1>{copy.title}</h1><p>{copy.description}</p></div>
+        <h1>{copy.title}</h1>
         <div className="friends-summary" aria-label={copy.friendsTitle}>
           <strong>{dashboard.friends.length}</strong><span>{copy.friendsTitle}</span>
         </div>
@@ -311,7 +311,7 @@ export function FriendsHub() {
 
       <div className="friends-grid">
         <section className="friends-card friends-card--list" aria-labelledby="friends-list-title">
-          <header><div><span className="section-kicker">{copy.online}</span><h2 id="friends-list-title">{copy.friendsTitle}</h2></div><Users aria-hidden="true" /></header>
+          <header><h2 id="friends-list-title">{copy.friendsTitle}</h2></header>
           {dashboard.friends.length === 0 ? <p className="friends-empty">{copy.noFriends}</p> : (
             <div className="friends-list">{dashboard.friends.map((friend) => (
               <article className="friend-row" key={friend.friendshipId}>
@@ -332,7 +332,7 @@ export function FriendsHub() {
 
         <div className="friends-side-stack">
           <section className="friends-card" aria-labelledby="requests-title">
-            <header><h2 id="requests-title">{copy.requestsTitle}</h2><UserPlus aria-hidden="true" /></header>
+            <header><h2 id="requests-title">{copy.requestsTitle}</h2></header>
             {dashboard.requests.length === 0 ? <p className="friends-empty">{copy.noRequests}</p> : dashboard.requests.map((request) => (
               <article className="friend-request" key={request.friendshipId}>
                 <ProfileAvatar size="xs" style={request.avatarStyle} />
@@ -345,7 +345,7 @@ export function FriendsHub() {
           </section>
 
           <section className="friends-card" aria-labelledby="invites-title">
-            <header><h2 id="invites-title">{copy.invitesTitle}</h2><Gamepad2 aria-hidden="true" /></header>
+            <header><h2 id="invites-title">{copy.invitesTitle}</h2></header>
             {dashboard.invites.length === 0 ? <p className="friends-empty">{copy.noInvites}</p> : dashboard.invites.map((invite) => (
               <article className="game-invite" key={invite.id}>
                 <div><strong>{formatFriendsText(invite.direction === "incoming" ? copy.invitedYou : copy.youInvited, { name: invite.otherPlayerName })}</strong><span>{invite.boardSize}×{invite.boardSize} · {dictionary.timeControls[invite.timeControl].shortLabel}</span><small><Clock3 size={13} /> {copy.expiresSoon}</small></div>

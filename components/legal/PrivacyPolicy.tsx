@@ -11,9 +11,7 @@ export function PrivacyPolicy({ locale }: { locale: Locale }) {
     <AppShell>
       <article className="legal-page privacy-page">
         <header>
-          <span className="section-kicker">{copy.kicker}</span>
           <h1>{copy.title}</h1>
-          <p>{copy.subtitle}</p>
           <p className="privacy-updated">
             {copy.updatedLabel}: <time dateTime="2026-07-31">{copy.updated}</time>
           </p>

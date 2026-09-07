@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowRight, Gamepad2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -38,16 +37,14 @@ export function ReviewGuide() {
   return (
     <div className={styles.hub}>
       <header className={styles.hero}>
-        <span className="section-kicker">{copy.kicker}</span>
-        <h1>{copy.title}</h1>
-        <p>{copy.description}</p>
+        <h1>{dictionary.nav.review}</h1>
       </header>
 
       {user ? (
         <section className={styles.gamePicker} aria-labelledby="review-games-title">
           <div className={styles.sectionHeading}>
-            <div><span className="section-kicker">{copy.kicker}</span><h2 id="review-games-title">{copy.recent}</h2></div>
-            <Link className="button button--secondary" href={href("/play")}><Gamepad2 size={17} /> {copy.play}</Link>
+            <h2 id="review-games-title">{copy.recent}</h2>
+            <Link href={href("/play")}>{copy.play}</Link>
           </div>
           {!loaded ? <div className={styles.loading} role="status">…</div> : games.length === 0 ? (
             <p className={styles.empty}>{copy.empty}</p>
@@ -57,7 +54,7 @@ export function ReviewGuide() {
                 <Link className={styles.gameRow} href={href(`/review/${game.gameId}`)} key={game.gameId}>
                   <span className={`${styles.result} ${styles[game.result]}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}</span>
                   <span><strong>{game.boardSize}×{game.boardSize} {copy.versus} {game.opponentName}</strong><small>{new Date(game.finishedAt).toLocaleDateString(locale)} · {game.gameResult ?? copy.finished}</small></span>
-                  <span className={styles.open}>{copy.analyze} <ArrowRight size={17} /></span>
+                  <span className={styles.open}>{copy.analyze}</span>
                 </Link>
               ))}
             </div>

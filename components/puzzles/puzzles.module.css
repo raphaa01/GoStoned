@@ -445,3 +445,144 @@
     padding: 18px;
   }
 }
+
+/* Product-first puzzle layout: the board and problem data replace the old landing-page cards. */
+.page {
+  gap: 28px;
+  max-width: 1240px;
+  padding: 48px 32px 84px;
+}
+
+.hero {
+  border-bottom: 1px solid var(--color-line);
+  max-width: none;
+  padding-bottom: 24px;
+}
+
+.hero h1 {
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 560;
+  letter-spacing: -.045em;
+  margin: 0;
+}
+
+.tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  display: flex;
+  gap: 28px;
+  padding: 0;
+}
+
+.tabs button {
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  min-height: 48px;
+  padding: 0 2px 12px;
+}
+
+.tabs .activeTab {
+  background: transparent;
+  border-bottom-color: var(--color-moss);
+  box-shadow: none;
+}
+
+.catalog {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+  padding: 0;
+}
+
+.catalogHeader { padding: 22px 0 12px; }
+.catalogHeader h2 { font-size: 23px; margin: 0; }
+
+.categoryGrid {
+  gap: 0;
+  margin-top: 0;
+}
+
+.categoryGrid > button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  display: flex;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 16px 28px 16px 0;
+}
+
+.categoryGrid > button:nth-child(odd) { border-right: 1px solid var(--color-line); }
+.categoryGrid > button:nth-child(even) { padding-left: 28px; }
+.categoryGrid > button:hover { border-color: var(--color-line); color: var(--color-moss-strong); transform: none; }
+.categoryGrid strong { font-size: 17px; }
+.categoryGrid small { color: var(--color-text-muted); margin: 0; }
+
+.collectionBar {
+  background: transparent;
+  border: 0;
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+  padding-inline: 0;
+}
+
+.collectionBar nav button,
+.pager button {
+  background: transparent;
+  border-radius: 2px;
+}
+
+.collectionBar nav button[aria-current="step"] {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: white;
+}
+
+.workspace { gap: clamp(28px, 4vw, 58px); grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+.boardColumn { background: transparent; border: 0; border-radius: 0; padding: 0; }
+.positionMeta > span:last-child { background: transparent; border-radius: 0; padding: 0; }
+
+.panel {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  border-radius: 0;
+  padding: 6px 0 6px 28px;
+}
+
+.problemLabel { color: var(--color-moss-strong); font-size: 12px; font-weight: 650; }
+.panel h2 { margin-top: 8px; }
+.incorrect, .continue, .error, .solution { background: transparent; border-left: 3px solid currentColor; border-radius: 0; padding: 10px 12px; }
+.incorrect { color: #8b5c21; }
+.continue, .solution { color: var(--color-moss-strong); }
+.error { color: var(--color-danger); }
+.solution h3 { color: var(--color-ink); }
+.solution p { color: var(--color-ink-soft); }
+
+.state {
+  background: transparent;
+  border: 0;
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+  min-height: 180px;
+}
+
+@media (max-width: 900px) {
+  .panel { border-left: 0; border-top: 1px solid var(--color-line); padding: 24px 0 0; }
+}
+
+@media (max-width: 620px) {
+  .page { padding: 28px 16px 64px; }
+  .hero h1 { font-size: 38px; }
+  .tabs { display: flex; }
+  .categoryGrid > button,
+  .categoryGrid > button:nth-child(odd),
+  .categoryGrid > button:nth-child(even) { border-right: 0; min-height: 64px; padding: 14px 0; }
+  .boardColumn { margin-inline: -16px; }
+  .positionMeta { padding-inline: 16px; }
+}

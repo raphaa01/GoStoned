@@ -1,6 +1,5 @@
 "use client";
 
-import { Eye, Home, Minus, RotateCcw, Trophy, XCircle } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -52,8 +51,6 @@ export function GameResultModal({
   const draw = !game.winnerKey;
   const won = game.winnerKey === playerKey;
   const outcome = draw ? copy.draw : won ? copy.victory : copy.defeat;
-  const OutcomeIcon = draw ? Minus : won ? Trophy : XCircle;
-
   return (
     <ModalDialog
       backdropClassName="modal-backdrop--result"
@@ -66,9 +63,7 @@ export function GameResultModal({
       titleId={titleId}
     >
         <div className="result-modal-header">
-          <span className="result-modal-icon"><OutcomeIcon size={27} /></span>
           <div>
-            <span className="result-modal-kicker">{copy.complete}</span>
             <h2 id={titleId}>{outcome}</h2>
             <p id={descriptionId}>{localizedGameResult(game.result, copy)}</p>
           </div>
@@ -119,15 +114,14 @@ export function GameResultModal({
           ref={playAgainButton}
           type="button"
         >
-          <RotateCcw size={18} />
           {copy.findAnother}
         </button>
         <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
           {exiting ? dictionary.common.pleaseWait : ""}
         </span>
         <div className="result-secondary-actions">
-          <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button"><Eye size={16} /> {copy.viewBoard}</button>
-          <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button"><Home size={16} /> {copy.home}</button>
+          <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">{copy.viewBoard}</button>
+          <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button">{copy.home}</button>
         </div>
     </ModalDialog>
   );

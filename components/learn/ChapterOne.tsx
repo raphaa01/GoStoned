@@ -186,7 +186,7 @@ export function ChapterOne() {
         <header className="learn-course__header">
           <div className="learn-course__intro">
             <span className="section-kicker">{copy.kicker}</span>
-            <h1 id="beginner-lesson-title">{copy.title}</h1>
+            <h1 id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
             <p>{copy.description}</p>
           </div>
 
@@ -254,7 +254,7 @@ export function ChapterOne() {
           <div className="lesson-workspace__lesson-panel">
             <div className="lesson-copy">
               <span className="lesson-copy__eyebrow">{copy.stepLabel} {activeIndex + 1} / {CHAPTER_ONE_LESSONS.length}</span>
-              <h2>{lesson.title}</h2>
+              <h2>{lesson.title.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{lesson.summary}</p>
             </div>
 

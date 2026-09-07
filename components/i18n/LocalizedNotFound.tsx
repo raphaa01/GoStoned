@@ -9,7 +9,6 @@ export function LocalizedNotFound() {
   return (
     <AppShell>
       <section className="not-found-page">
-        <span className="section-kicker">{dictionary.notFound.kicker}</span>
         <h1>{dictionary.notFound.title}</h1>
         <p>{dictionary.notFound.description}</p>
         <Link className="button button--primary" href={href("/")}>
