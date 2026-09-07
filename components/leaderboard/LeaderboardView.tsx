@@ -108,7 +108,7 @@ export function LeaderboardView() {
   return (
     <>
       <header className="page-header">
-        <h1>{dictionary.nav.leaderboard}</h1>
+        <h1 className="product-page-title">{dictionary.nav.leaderboard}</h1>
       </header>
 
       <section className="leaderboard-card">

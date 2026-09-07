@@ -20,7 +20,7 @@ import {
   joinBoardLabels,
   moveBoardFocus,
 } from "@/lib/game/boardAccessibility";
-import type { Board, Position } from "@/lib/game/types";
+import type { Board, Position, Stone } from "@/lib/game/types";
 
 type GoBoardProps = {
   boardSize: 9 | 13 | 19;
@@ -30,6 +30,7 @@ type GoBoardProps = {
   interactionMode?: "play" | "mark-dead";
   deadStones?: Position[];
   lastMove?: Position | null;
+  pendingMove?: (Position & { color: Stone }) | null;
   precisionRevision: string;
 };
 
@@ -56,6 +57,7 @@ export function GoBoard({
   interactionMode = "play",
   deadStones = [],
   lastMove = null,
+  pendingMove = null,
   precisionRevision,
 }: GoBoardProps) {
   const { dictionary, locale } = useI18n();
@@ -390,7 +392,14 @@ export function GoBoard({
           <div aria-rowindex={y + 1} key={`row-${y}`} role="row">
             {gridLines.map((__, x) => {
               const index = y * boardSize + x;
-              const stone = boardState[y]?.[x] ?? null;
+              const serverStone = boardState[y]?.[x] ?? null;
+              const pendingStone = !serverStone
+                && pendingMove?.x === x
+                && pendingMove.y === y
+                  ? pendingMove.color
+                  : null;
+              const stone = serverStone ?? pendingStone;
+              const isPendingMove = pendingStone !== null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
               const stoneLabel = stone === "black" ? copy.blackStone : copy.whiteStone;
               const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
@@ -438,7 +447,7 @@ export function GoBoard({
                   aria-selected={interactionMode === "mark-dead"
                     ? stone ? markedDead : undefined
                     : isPrecisionPreview || undefined}
-                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""}`}
+                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""} ${isPendingMove ? "is-pending-move" : ""}`}
                   key={`${x}-${y}`}
                   onClick={(event) => {
                     if (

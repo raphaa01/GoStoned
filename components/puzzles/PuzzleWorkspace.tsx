@@ -259,7 +259,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   return (
     <div className={styles.page}>
       <header className={styles.hero}>
-        <h1>{dictionary.nav.puzzles}</h1>
+        <h1 className="product-page-title">{dictionary.nav.puzzles}</h1>
       </header>
 
       <div aria-label={copy.title} className={styles.tabs} role="tablist">

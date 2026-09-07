@@ -47,7 +47,7 @@ import {
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
 import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
-import type { GamePollResponse, GameState, Stone } from "@/lib/game/types";
+import type { GamePollResponse, GameState, Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { BrowserBotController } from "./BrowserBotController";
@@ -74,6 +74,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [game, setGame] = useState<GameState | null>(null);
   const [messages, setMessages] = useState<GameMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
@@ -164,6 +165,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     blockReadGeneration.current += 1;
     resultShownForGame.current = null;
     setGame(null);
+    setPendingMove(null);
     setMessages([]);
     setChatAvailable(false);
     setChatPolicyUnavailable(false);
@@ -716,6 +718,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const requestIdentity = identityAuthority.current.capture();
     const operationToken = moveOperationLatch.acquire();
     if (!operationToken) return;
+    if (
+      !move.isPass
+      && typeof move.x === "number"
+      && typeof move.y === "number"
+      && game.turn
+    ) {
+      setPendingMove({ x: move.x, y: move.y, color: game.turn });
+    }
     setBusy(true);
     setError(null);
     try {
@@ -745,6 +755,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         moveOperationLatch.release(operationToken)
         && identityAuthority.current.isCurrent(requestIdentity)
       ) {
+        setPendingMove(null);
         setBusy(false);
       }
     }
@@ -1260,6 +1271,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   ? { x: move.x, y: move.y }
                   : null;
               })()}
+              pendingMove={pendingMove}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {
                   const dead = !game.scoring.deadStones.some(

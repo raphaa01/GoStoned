@@ -4208,6 +4208,15 @@ body {
   }
 }
 
+/* Learn, review, puzzles, and leaderboard share one restrained title scale. */
+.product-page-title.product-page-title {
+  font-family: inherit;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 540;
+  letter-spacing: -.055em;
+  line-height: .98;
+}
+
 @media (max-width: 390px) {
   .mobile-nav {
     padding-inline: 10px;
