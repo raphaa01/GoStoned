@@ -2597,6 +2597,10 @@ body {
     --page-top-space: 32px;
   }
 
+  .hero-actions {
+    bottom: max(52px, env(safe-area-inset-bottom));
+  }
+
   .sidebar {
     display: none;
   }
@@ -2872,7 +2876,6 @@ body {
   .hero-ripple--two { width: 320px; }
 
   .hero-actions {
-    bottom: max(26px, env(safe-area-inset-bottom));
     width: calc(100vw - 32px);
   }
 
