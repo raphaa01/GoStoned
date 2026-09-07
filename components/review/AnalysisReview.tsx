@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import { readApi } from "@/lib/client/api";
+import { ApiRequestError, readApi } from "@/lib/client/api";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
 import {
@@ -29,9 +29,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const [analysis, setAnalysis] = useState<AnalysisJobView | null>(null);
   const [selectedMove, setSelectedMove] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [quotaRetryAt, setQuotaRetryAt] = useState<Date | null>(null);
+  const [supportPrice, setSupportPrice] = useState<number | null>(null);
 
   const load = useCallback(async (method: "GET" | "POST" = "GET") => {
     if (!user) return;
+    if (method === "POST") setRequesting(true);
     try {
       const response = await fetch(`/api/games/${gameId}/analysis`, {
         method,
@@ -43,7 +47,19 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       setAnalysis(body.analysis);
       setError(null);
     } catch (requestError) {
+      if (
+        method === "POST"
+        && requestError instanceof ApiRequestError
+        && requestError.code === "analysis_weekly_limit"
+      ) {
+        const retryAfter = requestError.retryAfterSeconds ?? 7 * 24 * 60 * 60;
+        setQuotaRetryAt(new Date(Date.now() + retryAfter * 1_000));
+        setError(null);
+        return;
+      }
       setError(requestError instanceof Error ? requestError.message : copy.failed);
+    } finally {
+      if (method === "POST") setRequesting(false);
     }
   }, [copy.failed, gameId, user]);
 
@@ -66,6 +82,9 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   );
   const winrates = current ? fixedColorWinrates(current) : null;
   const scoreLead = current ? fixedColorScoreLead(current) : null;
+  const quotaReset = quotaRetryAt
+    ? new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(quotaRetryAt)
+    : null;
   if (loading || !user) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
   if (error && !game) return <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>;
   if (!game || !board) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
@@ -78,13 +97,45 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         {result ? <span className={styles.engineBadge}>{result.engine.name} {result.engine.version}</span> : null}
       </header>
 
-      {!analysis ? (
+      {quotaReset ? (
+        <section className={styles.quotaPage}>
+          <div className={styles.quotaIntro}>
+            <span>{copy.limitKicker}</span>
+            <h1>{copy.limitTitle}</h1>
+            <p>{copy.limitBody}</p>
+            <strong>{copy.limitReset.replaceAll("{date}", quotaReset)}</strong>
+          </div>
+          <fieldset className={styles.supportPoll}>
+            <legend>{copy.supportTitle}</legend>
+            <p>{copy.supportBody}</p>
+            <span>{copy.supportQuestion}</span>
+            <div>
+              {[3, 5, 8, 12].map((price) => (
+                <button
+                  aria-pressed={supportPrice === price}
+                  key={price}
+                  onClick={() => setSupportPrice(price)}
+                  type="button"
+                >
+                  {price} €
+                </button>
+              ))}
+            </div>
+            {supportPrice !== null ? <small>{copy.supportThanks}</small> : null}
+          </fieldset>
+          <Link className={styles.quotaBack} href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
+        </section>
+      ) : !analysis ? (
         <section className={styles.reviewStatus}>
-          <h1>{copy.reviewTitle.replace(/[.!?。！？]+$/, "")}</h1><p>{game.moveCount} {copy.move.toLowerCase()}</p>
-          <button className="button button--primary button--lg" onClick={() => void load("POST")} type="button">{copy.start}</button>
+          <h1>{copy.readyTitle}</h1>
+          <p>{copy.readyDetails.replaceAll("{moves}", String(game.moveCount))}</p>
+          <p className={styles.analysisNote}>{copy.startNote}</p>
+          <button className="button button--primary button--lg" disabled={requesting} onClick={() => void load("POST")} type="button">
+            {requesting ? <LoaderCircle className={styles.spin} size={18} /> : null}{copy.start}
+          </button>
         </section>
       ) : analysis.status === "queued" || analysis.status === "running" ? (
-        <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p>{copy.job} {analysis.id.slice(0, 8)}</p></section>
+        <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p className={styles.analysisNote}>{copy.runningNote}</p></section>
       ) : analysis.status === "failed" ? (
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
       ) : current && result && boardBefore && winrates && scoreLead ? (
