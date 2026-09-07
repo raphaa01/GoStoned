@@ -101,7 +101,10 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
   const input = analysisInput(game);
   const row = await withTransaction(async (client) => {
     const accountResult = await client.query<AnalysisAccountRow>(
-      `SELECT analysis_unlimited
+      `SELECT COALESCE(
+                (to_jsonb(users) ->> 'analysis_unlimited')::boolean,
+                false
+              ) AS analysis_unlimited
          FROM users
         WHERE id = $1
         FOR UPDATE`,
@@ -132,9 +135,9 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
                   )))
                 )::int AS retry_after_seconds
            FROM game_analysis_jobs
-          WHERE requested_by_user_id = $1
+          WHERE requested_by_key = $1
             AND created_at > statement_timestamp() - INTERVAL '7 days'`,
-        [userId],
+        [playerKey],
       );
       const usage = usageResult.rows[0];
       if (usage && usage.used >= 1) {
@@ -144,8 +147,8 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
 
     const result = await client.query<AnalysisJobRow>(
       `INSERT INTO game_analysis_jobs
-         (game_id, game_version, requested_by_key, requested_by_user_id, status, input)
-       VALUES ($1, $2, $3, $4, 'queued', $5::jsonb)
+         (game_id, game_version, requested_by_key, status, input)
+       VALUES ($1, $2, $3, 'queued', $4::jsonb)
        ON CONFLICT (game_id, game_version) DO UPDATE
          SET status = CASE
                WHEN game_analysis_jobs.status = 'failed' THEN 'queued'
@@ -182,7 +185,7 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
              updated_at = NOW()
        RETURNING id, game_id, game_version, status, attempts, result, error_code,
                  created_at, started_at, completed_at`,
-      [game.id, game.version, playerKey, userId, JSON.stringify(input)],
+      [game.id, game.version, playerKey, JSON.stringify(input)],
     );
     const queued = result.rows[0];
     if (!queued) throw new Error("Analysis job did not return a result.");

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ApiRequestError, readApi } from "@/lib/client/api";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
 import {
@@ -57,11 +58,11 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         setError(null);
         return;
       }
-      setError(requestError instanceof Error ? requestError.message : copy.failed);
+      setError(localizedApiError(dictionary, requestError, copy.failed));
     } finally {
       if (method === "POST") setRequesting(false);
     }
-  }, [copy.failed, gameId, user]);
+  }, [copy.failed, dictionary, gameId, user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -97,7 +98,20 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         {result ? <span className={styles.engineBadge}>{result.engine.name} {result.engine.version}</span> : null}
       </header>
 
-      {quotaReset ? (
+      {error ? (
+        <section className={styles.reviewStatus}>
+          <p role="alert">{error}</p>
+          <button
+            className="button button--primary"
+            disabled={requesting}
+            onClick={() => void load(analysis ? "GET" : "POST")}
+            type="button"
+          >
+            {requesting ? <LoaderCircle className={styles.spin} size={17} /> : <RotateCcw size={17} />}
+            {copy.retry}
+          </button>
+        </section>
+      ) : quotaReset ? (
         <section className={styles.quotaPage}>
           <div className={styles.quotaIntro}>
             <span>{copy.limitKicker}</span>
