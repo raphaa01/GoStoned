@@ -186,7 +186,7 @@ export function ChapterOne() {
         <header className="learn-course__header">
           <div className="learn-course__intro">
             <span className="section-kicker">{copy.kicker}</span>
-            <h1 id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
+            <h1 className="product-page-title" id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
             <p>{copy.description}</p>
           </div>
 

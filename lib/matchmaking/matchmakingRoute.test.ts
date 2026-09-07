@@ -9,6 +9,7 @@ import {
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import {
+  assertEmptyMatchmakingMutationBody,
   assertMatchmakingMutationMetadata,
   MAX_MATCHMAKING_MUTATION_BODY_BYTES,
   readMatchmakingJoinRequest,
@@ -284,6 +285,12 @@ test("matchmaking join parser accepts the exact client payload with a JSON chars
     timeControl: "rapid",
     boardSize: 9,
   });
+});
+
+test("browser-style empty DELETE streams are accepted for queue cancellation", async () => {
+  const deleteRequest = request("", true, "DELETE");
+  assert.doesNotThrow(() => assertMatchmakingMutationMetadata(deleteRequest, "none"));
+  await assert.doesNotReject(() => assertEmptyMatchmakingMutationBody(deleteRequest));
 });
 
 test("current PlayWorkspace join payload reaches the matchmaking service boundary", async () => {

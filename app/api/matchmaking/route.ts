@@ -16,6 +16,7 @@ import {
   joinMatchmaking,
 } from "@/lib/matchmaking/matchmakingService";
 import {
+  assertEmptyMatchmakingMutationBody,
   assertMatchmakingMutationMetadata,
   invalidMatchmakingRequest,
   matchmakingMutationRouteError,
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     assertMatchmakingMutationMetadata(request, "none");
+    await assertEmptyMatchmakingMutationBody(request);
     consumeEphemeralIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.protectedIdentityLookup);
     const playerKey = await resolvePlayerKey(request);
     assertExpectedPlayer(request, playerKey);

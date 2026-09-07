@@ -37,7 +37,7 @@ export function ReviewGuide() {
   return (
     <div className={styles.hub}>
       <header className={styles.hero}>
-        <h1>{dictionary.nav.review}</h1>
+        <h1 className="product-page-title">{dictionary.nav.review}</h1>
       </header>
 
       {user ? (

@@ -99,6 +99,19 @@ test("move submission binds the rendered version and uses an owned synchronous l
   assert.doesNotMatch(revision, /clock|lastSuccessAt|observedAt|retryAt/);
 });
 
+test("a played stone is rendered optimistically while the server confirms it", () => {
+  const room = source("components/game/GameRoom.tsx");
+  const board = source("components/game/GoBoard.tsx");
+  const move = section(room, "async function makeMove", "async function resign");
+  assert.ok(
+    move.indexOf("setPendingMove({ x: move.x, y: move.y, color: game.turn })")
+      < move.indexOf("await fetch"),
+  );
+  assert.match(move, /setPendingMove\(null\)[\s\S]+setBusy\(false\)/);
+  assert.match(room, /pendingMove=\{pendingMove\}/);
+  assert.match(board, /const stone = serverStone \?\? pendingStone/);
+});
+
 test("precision placement and version conflicts have English and German copy", () => {
   for (const path of ["lib/i18n/catalogs/en.ts", "lib/i18n/catalogs/de.ts"]) {
     const catalogue = source(path);
