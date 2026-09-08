@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   DEFAULT_MATCH_RULES,
   DEFAULT_RULES_PROFILE,
+  CHINESE_2002_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveRulesPolicy,
@@ -21,7 +22,7 @@ function stored(overrides: Partial<{
 }> = {}) {
   return {
     ruleset: "chinese",
-    rulesProfile: DEFAULT_RULES_PROFILE,
+    rulesProfile: CHINESE_2002_RULES_PROFILE,
     scoringMethod: "area",
     komi: 7.5,
     handicap: 0,
@@ -38,29 +39,30 @@ function assertPolicyError(
   );
 }
 
-test("registers exactly the two persisted Chinese profiles without a fallback", () => {
+test("registers legacy Chinese, current Chinese, and current Japanese profiles", () => {
   assert.deepEqual(Object.keys(RULES_POLICIES).sort(), [
+    CHINESE_2002_RULES_PROFILE,
     DEFAULT_RULES_PROFILE,
     LEGACY_IMMEDIATE_AREA_PROFILE,
   ].sort());
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).scoringLifecycle, "agreement");
+  assert.equal(resolveRulesPolicy(CHINESE_2002_RULES_PROFILE).scoringLifecycle, "agreement");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).scoringLifecycle, "immediate");
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).turnSource, "persisted");
+  assert.equal(resolveRulesPolicy(CHINESE_2002_RULES_PROFILE).turnSource, "persisted");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).turnSource, "move-log");
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).scoringResponseWindowMs, 600_000);
+  assert.equal(resolveRulesPolicy(CHINESE_2002_RULES_PROFILE).scoringResponseWindowMs, 600_000);
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).scoringResponseWindowMs, null);
-  assert.equal(resolveRulesPolicy(DEFAULT_RULES_PROFILE).resumeTurnRule, "claim-dependent");
+  assert.equal(resolveRulesPolicy(CHINESE_2002_RULES_PROFILE).resumeTurnRule, "claim-dependent");
   assert.equal(resolveRulesPolicy(LEGACY_IMMEDIATE_AREA_PROFILE).resumeTurnRule, "none");
   assert.equal(Object.isFrozen(RULES_POLICIES), true);
   assert.equal(Object.isFrozen(resolveRulesPolicy(DEFAULT_RULES_PROFILE)), true);
 });
 
-test("keeps new matches on the explicit current Chinese policy", () => {
+test("creates new matches with the Japanese territory policy", () => {
   assert.deepEqual(DEFAULT_MATCH_RULES, {
-    ruleset: "chinese",
-    rulesProfile: "chinese-2002-gostone-v1",
-    scoringMethod: "area",
-    komi: 7.5,
+    ruleset: "japanese",
+    rulesProfile: "japanese-1989-gostone-v1",
+    scoringMethod: "territory",
+    komi: 6.5,
     handicap: 0,
   });
   assert.equal(Object.isFrozen(DEFAULT_MATCH_RULES), true);
@@ -87,7 +89,6 @@ test("rejects unknown, missing, and future profiles instead of selecting Chinese
     null,
     undefined,
     {},
-    "japanese-1989-gostone-v1",
     "chinese-2002-gostone-v2",
   ]) {
     assertPolicyError(

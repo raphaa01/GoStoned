@@ -143,9 +143,22 @@ export function scoreAgreementPosition(
 export function isRepeatedPositionForbidden(
   policy: RulesPolicy,
   nextHash: string,
-  priorHashes: ReadonlySet<string>,
+  priorHashes: readonly string[] | ReadonlySet<string>,
 ): boolean {
-  if (policy.repetitionRule === "positional-superko") return priorHashes.has(nextHash);
+  if (policy.repetitionRule === "positional-superko") {
+    return priorHashes instanceof Set
+      ? priorHashes.has(nextHash)
+      : new Set(priorHashes).has(nextHash);
+  }
+  if (policy.repetitionRule === "simple-ko") {
+    if (!Array.isArray(priorHashes)) {
+      throw new UnsupportedRulesPolicyError(
+        "rules_policy_mismatch",
+        "Simple ko requires ordered position history.",
+      );
+    }
+    return priorHashes.length >= 2 && priorHashes[priorHashes.length - 2] === nextHash;
+  }
   throw new UnsupportedRulesPolicyError(
     "rules_policy_mismatch",
     "This repetition rule is not supported by the engine.",
@@ -163,6 +176,9 @@ export function resumeTurnForPolicy(
   claim: "dead" | "alive",
 ): Stone {
   if (policy.resumeTurnRule !== "claim-dependent") {
+    if (policy.resumeTurnRule === "opponent-first") {
+      return requester === "black" ? "white" : "black";
+    }
     throw new UnsupportedRulesPolicyError(
       "rules_policy_mismatch",
       "This rules profile does not permit agreement disputes.",
@@ -171,6 +187,6 @@ export function resumeTurnForPolicy(
   return resumeTurnForClaim(requester, claim);
 }
 
-export function scoringDeadlineExpired(expiresAt: Date, now: Date): boolean {
-  return expiresAt.getTime() <= now.getTime();
+export function scoringDeadlineExpired(expiresAt: Date | null, now: Date): boolean {
+  return expiresAt !== null && expiresAt.getTime() <= now.getTime();
 }

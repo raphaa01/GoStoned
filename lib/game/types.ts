@@ -65,6 +65,7 @@ export type GameState = {
   consecutivePasses: number;
   scoringRevision: number;
   scoring: GameScoringState | null;
+  takeback?: GameTakebackRequest | null;
   lastResume: {
     claim: "dead" | "alive" | "deadline";
     requestedBy: Stone | null;
@@ -88,9 +89,30 @@ export type GameScoringState = {
   deadStones: Position[];
   blackConfirmed: boolean;
   whiteConfirmed: boolean;
-  preview: ChineseAreaScore;
+  preview: ChineseAreaScore | JapaneseTerritoryPreview;
   finalizedAt: string | null;
-  expiresAt: string;
+  expiresAt: string | null;
+};
+
+export type GameTakebackRequest = {
+  moveNumber: number;
+  requestedBy: Stone;
+  createdAt: string;
+};
+
+export type JapaneseTerritoryPreview = {
+  black: number;
+  white: number;
+  livingBlackStones: number;
+  livingWhiteStones: number;
+  blackTerritory: number;
+  whiteTerritory: number;
+  blackPrisoners: number;
+  whitePrisoners: number;
+  neutralPoints: number;
+  winner: Stone | null;
+  margin: number;
+  result: string;
 };
 
 export type PlayerClockState = {

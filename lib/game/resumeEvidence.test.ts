@@ -211,7 +211,7 @@ test("participant game service reads ordered evidence and appends before deletin
     assert.ok(nextDelete > nextAppend);
   }
   const manualResumeSource = gameService.slice(manualResume);
-  const manualResumeBody = manualResumeSource.slice(0, manualResumeSource.indexOf("export async function resignGame"));
+  const manualResumeBody = manualResumeSource.slice(0, manualResumeSource.indexOf("function assertExpectedGameVersion"));
   assert.equal(manualResumeBody.match(/new Date\(\)/g)?.length, 1);
   assert.ok(manualResumeBody.includes("resumeExpiredScoring(client, loaded, decisionAt)"));
   assert.ok(manualResumeBody.includes("resumedAt: decisionAt"));

@@ -259,14 +259,17 @@ export const zh = {
   },
   "rules": {
     "rulesets": {
-      "chinese": "中文"
+      "chinese": "中国规则",
+      "japanese": "日本规则"
     },
     "profiles": {
       "legacy-immediate-area": "传统即时结算",
-      "chinese-2002-gostone-v1": "2002 · GoStone v1"
+      "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1"
     },
     "methods": {
-      "area": "区域"
+      "area": "面积",
+      "territory": "地"
     },
     "komi": "贴目",
     "handicap": "让子"
@@ -400,6 +403,7 @@ export const zh = {
     "recordBody": "走法由服务器检查，已完成的游戏将保留其结果。按比分达成一致的游戏也会保留该评分协议。这些事实是你自己复盘的起点；GoStone不会将虚构的引擎判断作为分析呈现。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "无法加载游戏。",
     "moveFailed": "落子失败。",
     "resignFailed": "无法投子认输。",

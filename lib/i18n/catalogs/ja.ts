@@ -259,14 +259,17 @@ export const ja = {
   },
   "rules": {
     "rulesets": {
-      "chinese": "中国語"
+      "chinese": "中国ルール",
+      "japanese": "日本ルール"
     },
     "profiles": {
       "legacy-immediate-area": "従来の即時計算",
-      "chinese-2002-gostone-v1": "2002 · GoStone v1"
+      "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1"
     },
     "methods": {
-      "area": "エリア"
+      "area": "面積",
+      "territory": "地"
     },
     "komi": "コミ",
     "handicap": "ハンディキャップ"
@@ -400,6 +403,7 @@ export const ja = {
     "recordBody": "手はサーバーによってチェックされ、終了した対局はその結果が保持されます。スコアで合意された対局も、そのスコア合意が保持されます。これらの事実が自身のレビューの出発点です。GoStoneは分析として架空のエンジン判断を提示することはありません。"
   },
   "game": {
+    ...en.game,
     "loadFailed": "対局を読み込めませんでした。",
     "moveFailed": "手の実行に失敗しました。",
     "resignFailed": "投了できませんでした。",

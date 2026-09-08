@@ -420,7 +420,7 @@ function freezeStoppedState(moveNumber: number, boardHash: string): JapaneseStop
 }
 
 /**
- * Adds turn and pass-pass/resume authority to the dormant Japanese normal-play
+ * Adds turn and pass-pass/resume authority to the Japanese normal-play
  * replay. A resume authorization is immutable evidence for one exact stopped
  * board; its requester's opponent receives the first move after resumption.
  * Settlement proposals and results deliberately remain outside this boundary.

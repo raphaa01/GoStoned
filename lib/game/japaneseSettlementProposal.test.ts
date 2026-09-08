@@ -340,7 +340,7 @@ test("every supported proposal input is bound to the digest", () => {
   }
 });
 
-test("rules identity accepts only the exact dormant Japanese tuple", () => {
+test("rules identity accepts only the exact active Japanese tuple", () => {
   const baseline = goldenProposal();
   const invalidRules = [
     { ...baseline.rulesIdentity, rules: "chinese" },
@@ -360,7 +360,7 @@ test("rules identity accepts only the exact dormant Japanese tuple", () => {
     }),
     GOLDEN_HASH,
   );
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
 });
 
 test("accepts supported board sizes and PostgreSQL integer boundaries", () => {

@@ -167,13 +167,17 @@ export function GamePanel({
             <span><small>{copy.white}</small><strong>{activeScoring.preview.white}</strong></span>
           </div>
           <span className="scoring-note">
-            {rulesSummary} · {copy.neutralShared}
-            <br />
-            {copy.respondBy}{" "}
-            <time dateTime={activeScoring.expiresAt}>
-              {new Date(activeScoring.expiresAt).toISOString().slice(11, 16)} UTC
-            </time>
-            ; {copy.autoResume}
+            {rulesSummary}
+            {activeScoring.expiresAt ? (
+              <>
+                <br />
+                {copy.respondBy}{" "}
+                <time dateTime={activeScoring.expiresAt}>
+                  {new Date(activeScoring.expiresAt).toISOString().slice(11, 16)} UTC
+                </time>
+                ; {copy.autoResume}
+              </>
+            ) : null}
           </span>
           <p>
             {copy.yourConfirmation}: <strong>{youConfirmed ? copy.confirmed : copy.waiting}</strong>
@@ -182,14 +186,19 @@ export function GamePanel({
           </p>
           <details className="scoring-breakdown">
             <summary>{copy.scoreBreakdown}</summary>
+            {"blackStones" in activeScoring.preview ? (
+              <>
+                <span>{copy.black}: {activeScoring.preview.blackStones} {copy.stones} + {activeScoring.preview.blackTerritory} {copy.territory}</span>
+                <span>{copy.white}: {activeScoring.preview.whiteStones} {copy.stones} + {activeScoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}</span>
+              </>
+            ) : (
+              <>
+                <span>{copy.black}: {activeScoring.preview.blackTerritory} {copy.territory} + {activeScoring.preview.blackPrisoners} {copy.prisoners}</span>
+                <span>{copy.white}: {activeScoring.preview.whiteTerritory} {copy.territory} + {activeScoring.preview.whitePrisoners} {copy.prisoners} + {game.komi} {dictionary.rules.komi}</span>
+              </>
+            )}
             <span>
-              {copy.black}: {activeScoring.preview.blackStones} {copy.stones} + {activeScoring.preview.blackTerritory} {copy.territory}
-            </span>
-            <span>
-              {copy.white}: {activeScoring.preview.whiteStones} {copy.stones} + {activeScoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
-            </span>
-            <span>
-              {copy.neutral}: {activeScoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+              {copy.neutral}: {activeScoring.preview.neutralPoints}{game.ruleset === "chinese" ? `, ${copy.sharedEqually}` : ""} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
             </span>
           </details>
           <label className="scoring-dispute-picker">
@@ -251,14 +260,15 @@ export function GamePanel({
               <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
               <span>
                 {scoring.deadStones.length} {copy.dead.toLocaleLowerCase()} {scoring.deadStones.length === 1 ? copy.stone : copy.stones}
-                {" · "}{rulesSummary} · {copy.neutralShared}
+                {" · "}{rulesSummary}{game.ruleset === "chinese" ? ` · ${copy.neutralShared}` : ""}
               </span>
+              {"blackStones" in scoring.preview ? (
+                <span>{copy.black}: {scoring.preview.blackStones} {copy.stones} + {scoring.preview.blackTerritory} {copy.territory}{" · "}{copy.white}: {scoring.preview.whiteStones} {copy.stones} + {scoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}</span>
+              ) : (
+                <span>{copy.black}: {scoring.preview.blackTerritory} {copy.territory} + {scoring.preview.blackPrisoners} {copy.prisoners}{" · "}{copy.white}: {scoring.preview.whiteTerritory} {copy.territory} + {scoring.preview.whitePrisoners} {copy.prisoners} + {game.komi} {dictionary.rules.komi}</span>
+              )}
               <span>
-                {copy.black}: {scoring.preview.blackStones} {copy.stones} + {scoring.preview.blackTerritory} {copy.territory}
-                {" · "}{copy.white}: {scoring.preview.whiteStones} {copy.stones} + {scoring.preview.whiteTerritory} {copy.territory} + {game.komi} {dictionary.rules.komi}
-              </span>
-              <span>
-                {copy.neutral}: {scoring.preview.neutralPoints}, {copy.sharedEqually} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
+                {copy.neutral}: {scoring.preview.neutralPoints}{game.ruleset === "chinese" ? `, ${copy.sharedEqually}` : ""} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
               </span>
             </div>
           ) : null}

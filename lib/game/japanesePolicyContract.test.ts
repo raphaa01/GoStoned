@@ -9,17 +9,18 @@ import {
 } from "./japanesePolicyContract";
 import {
   DEFAULT_RULES_PROFILE,
+  CHINESE_2002_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesPolicy,
   RULES_POLICIES,
   UnsupportedRulesPolicyError,
 } from "./rulesPolicy";
 
-test("documents authentic Japanese semantics without activating a rules profile", () => {
+test("documents the active authentic Japanese semantics", () => {
   assert.deepEqual(JAPANESE_1989_POLICY_CONTRACT, {
-    contractId: "japanese-1989-gostone-inactive-v1",
+    contractId: "japanese-1989-gostone-contract-v1",
     futureRulesProfile: "japanese-1989-gostone-v1",
-    activation: "inactive",
+    activation: "active",
     ruleset: "japanese",
     scoringMethod: "territory",
     scoringRule: "japanese-territory-with-prisoners",
@@ -74,23 +75,20 @@ test("documents authentic Japanese semantics without activating a rules profile"
   );
 });
 
-test("the inactive contract cannot resolve through the production registry", () => {
+test("the contract id is not a profile while the Japanese profile is active", () => {
   assert.deepEqual(Object.keys(RULES_POLICIES).sort(), [
+    CHINESE_2002_RULES_PROFILE,
     DEFAULT_RULES_PROFILE,
     LEGACY_IMMEDIATE_AREA_PROFILE,
   ].sort());
   assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_CONTRACT_ID), false);
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
   assert.throws(
     () => resolveRulesPolicy(JAPANESE_1989_CONTRACT_ID),
     (error: unknown) => error instanceof UnsupportedRulesPolicyError
       && error.code === "unsupported_rules_profile",
   );
-  assert.throws(
-    () => resolveRulesPolicy(JAPANESE_1989_RULES_PROFILE),
-    (error: unknown) => error instanceof UnsupportedRulesPolicyError
-      && error.code === "unsupported_rules_profile",
-  );
+  assert.equal(resolveRulesPolicy(JAPANESE_1989_RULES_PROFILE).ruleset, "japanese");
 });
 
 function acceptOutcome(outcome: Japanese1989ContractOutcome): void {
