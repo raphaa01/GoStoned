@@ -23,6 +23,7 @@ import {
   type PuzzleVariation,
 } from "@/lib/puzzles/types";
 import { curatedPuzzle } from "@/lib/puzzles/curatedCatalog";
+import { dailyPuzzleForDate } from "@/lib/puzzles/dailyCatalog";
 import type { KataGoEngine } from "./engine";
 
 type PuzzleJob = {
@@ -60,6 +61,9 @@ type PuzzlePosition = {
   sourceMoveNumber: number;
   sourceCandidates?: string[];
   localMoves?: string[];
+  puzzleCategory?: PuzzleCategory;
+  rankKyu?: number;
+  collectionOrder?: number;
 };
 
 export type PuzzleLoopState = { activeJobId: string | null };
@@ -143,12 +147,13 @@ async function sourceFromGame(job: PuzzleJob): Promise<PuzzlePosition | null> {
   };
 }
 
-function categoryPosition(job: PuzzleJob): PuzzlePosition {
-  if (!job.category || !job.collection_order) {
-    throw new Error("Categorized puzzle job is incomplete.");
-  }
+function catalogPosition(
+  job: PuzzleJob,
+  catalog: ReturnType<typeof curatedPuzzle>,
+  metadata: { category: PuzzleCategory; rankKyu: number; collectionOrder: number },
+): PuzzlePosition {
   if (job.board_size !== 13) throw new Error("Curated puzzles require a 13x13 board.");
-  const curated = curatedPuzzle(job.category, job.collection_order);
+  const curated = catalog;
   const board = curated.board;
   const visited = new Set<string>();
   for (let y = 0; y < job.board_size; y += 1) {
@@ -191,7 +196,31 @@ function categoryPosition(job: PuzzleJob): PuzzlePosition {
     localMoves: curated.localRegion
       .filter((point) => board[point.y][point.x] === null)
       .map((point) => toGtpCoordinate(13, { ...point, isPass: false })),
+    puzzleCategory: metadata.category,
+    rankKyu: metadata.rankKyu,
+    collectionOrder: metadata.collectionOrder,
   };
+}
+
+function categoryPosition(job: PuzzleJob): PuzzlePosition {
+  if (!job.category || !job.collection_order || !job.rank_kyu) {
+    throw new Error("Categorized puzzle job is incomplete.");
+  }
+  return catalogPosition(job, curatedPuzzle(job.category, job.collection_order), {
+    category: job.category,
+    rankKyu: job.rank_kyu,
+    collectionOrder: job.collection_order,
+  });
+}
+
+function dailyPosition(job: PuzzleJob): PuzzlePosition {
+  if (!job.target_date) throw new Error("Daily puzzle job has no target date.");
+  const daily = dailyPuzzleForDate(job.target_date);
+  return catalogPosition(job, daily, {
+    category: daily.category,
+    rankKyu: daily.rankKyu,
+    collectionOrder: daily.cycleOrder,
+  });
 }
 
 function syntheticPosition(job: PuzzleJob): PuzzlePosition {
@@ -392,6 +421,53 @@ function categoryExplanation(
   } satisfies LocalizedText;
 }
 
+function categorySolutionExplanation(
+  category: PuzzleCategory,
+  move: string,
+  reply: string | null,
+): LocalizedText {
+  const sequence = reply ? `${move}–${reply}` : move;
+  const copy = {
+    life_and_death: {
+      en: `${sequence} starts the locally verified sequence at the vital point of the eye space.`,
+      de: `${sequence} beginnt die lokal geprüfte Folge am vitalen Punkt des Augenraums.`,
+      fr: `${sequence} lance la séquence vérifiée localement au point vital de l'espace d'yeux.`,
+      es: `${sequence} inicia la secuencia verificada localmente en el punto vital del espacio de ojos.`,
+      zh: `${sequence} 从眼位要点开始了经过局部验证的变化。`,
+      ja: `${sequence} は眼形の急所から始まる、局所的に検証された手順です。`,
+      ko: `${sequence}는 눈 모양의 급소에서 시작하는 국지 검증 수순입니다.`,
+    },
+    tesuji: {
+      en: `${sequence} is the locally verified forcing order; playing elsewhere loses the tactical timing.`,
+      de: `${sequence} ist die lokal geprüfte zwingende Reihenfolge; ein Zug anderswo verliert das taktische Timing.`,
+      fr: `${sequence} est l'ordre forcé vérifié localement ; jouer ailleurs perd le bon timing tactique.`,
+      es: `${sequence} es el orden forzado verificado localmente; jugar en otro lugar pierde el momento táctico.`,
+      zh: `${sequence} 是经过局部验证的强制次序；脱先会错过战术时机。`,
+      ja: `${sequence} は局所的に検証された強制手順で、他所に打つと手筋の機を逃します。`,
+      ko: `${sequence}는 국지 검증된 강제 수순이며, 다른 곳에 두면 전술적 타이밍을 놓칩니다.`,
+    },
+    capturing_race: {
+      en: `${sequence} takes the key liberty in the locally verified capturing race.`,
+      de: `${sequence} nimmt die entscheidende Freiheit im lokal geprüften Fangrennen.`,
+      fr: `${sequence} prend la liberté décisive dans la course de capture vérifiée localement.`,
+      es: `${sequence} toma la libertad clave en la carrera de captura verificada localmente.`,
+      zh: `${sequence} 抢到了经过局部验证的对杀关键气。`,
+      ja: `${sequence} は局所的に検証された攻め合いで重要なダメを取ります。`,
+      ko: `${sequence}는 국지 검증된 수상전에서 핵심 활로를 차지합니다.`,
+    },
+    endgame: {
+      en: `${sequence} begins the locally verified forcing yose sequence and keeps the initiative.`,
+      de: `${sequence} beginnt die lokal geprüfte zwingende Yose-Folge und bewahrt die Initiative.`,
+      fr: `${sequence} lance la séquence de yose forcée vérifiée localement et conserve l'initiative.`,
+      es: `${sequence} inicia la secuencia de yose forzada verificada localmente y mantiene la iniciativa.`,
+      zh: `${sequence} 开始了经过局部验证的强制官子次序，并保持先手。`,
+      ja: `${sequence} は局所的に検証された強制ヨセの手順を始め、先手を保ちます。`,
+      ko: `${sequence}는 국지 검증된 강제 끝내기 수순을 시작하며 선수를 지킵니다.`,
+    },
+  }[category];
+  return copy satisfies LocalizedText;
+}
+
 function buildVariation(
   job: PuzzleJob,
   board: Board,
@@ -449,6 +525,12 @@ async function completePuzzle(
   const variation = variationOverride === undefined
     ? buildVariation(job, position.board, toPlay, candidates)
     : variationOverride;
+  const category = position.puzzleCategory ?? job.category;
+  const rankKyu = position.rankKyu ?? job.rank_kyu;
+  const collectionOrder = position.collectionOrder ?? job.collection_order;
+  const solutionExplanation = category
+    ? categorySolutionExplanation(category, best.move, variation?.mainLine[1]?.move ?? null)
+    : explanation(best, second, job.board_size);
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO puzzles (
        kind, daily_date, board_size, to_play, position_moves, board,
@@ -477,16 +559,16 @@ async function completePuzzle(
         scoreLead: candidate.scoreLead,
         winrate: candidate.winrate,
       }))),
-      catalogDifficulty(job.rank_kyu, gap),
-      JSON.stringify(explanation(best, second, job.board_size)),
+      catalogDifficulty(rankKyu, gap),
+      JSON.stringify(solutionExplanation),
       engineVersion,
       modelName,
       visits,
       position.sourceGameId,
       position.sourceMoveNumber,
-      job.category,
-      job.rank_kyu,
-      job.collection_order,
+      category,
+      rankKyu,
+      collectionOrder,
       variation ? JSON.stringify(variation) : null,
     ],
   );
@@ -520,7 +602,7 @@ async function ensurePuzzleInventory(): Promise<void> {
     );
     const today = day.rows[0];
     if (!today) return;
-    const dailySize: BoardSize = 9;
+    const dailySize: BoardSize = 13;
     await client.query(
       `INSERT INTO puzzle_generation_jobs (kind, target_date, board_size)
        VALUES ('daily', $1, $2)
@@ -602,7 +684,8 @@ async function analyzeCuratedPuzzle(
 ): Promise<{ best: KataGoMoveInfo; candidates: KataGoMoveInfo[]; variation: PuzzleVariation }> {
   const solutions = position.sourceCandidates;
   const localMoves = position.localMoves;
-  if (!job.category || !solutions?.length || !localMoves?.length) {
+  const category = position.puzzleCategory ?? job.category;
+  if (!category || !solutions?.length || !localMoves?.length) {
     throw new Error("Curated puzzle metadata is incomplete.");
   }
   const localAnalysis = await engine.analyzeCurrent(
@@ -619,7 +702,13 @@ async function analyzeCuratedPuzzle(
   );
   const localCandidates = sortedStoneCandidates(localAnalysis);
   const accepted = new Set(solutions.map((move) => move.toLowerCase()));
-  let best = localCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
+  const localBest = localCandidates[0];
+  if (job.kind === "daily" && (!localBest || !accepted.has(localBest.move.toLowerCase()))) {
+    throw new Error("KataGo did not confirm the catalog answer as the strongest local move.");
+  }
+  let best = job.kind === "daily"
+    ? localBest
+    : localCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
   let mainLine = best
     ? lineFromCandidate(position.board, "black", best, job.board_size, 3)
     : [];
@@ -686,7 +775,7 @@ async function analyzeCuratedPuzzle(
     (candidate) => candidate.move.toLowerCase() !== best!.move.toLowerCase(),
   )];
   const variation = buildVariation(
-    job,
+    { ...job, category },
     position.board,
     "black",
     candidates,
@@ -704,10 +793,12 @@ async function generatePuzzle(
   engineVersion: string,
   modelName: string,
 ): Promise<void> {
-  const position = job.category
-    ? syntheticPosition(job)
-    : await sourceFromGame(job) ?? syntheticPosition(job);
-  if (job.category) {
+  const position = job.kind === "daily"
+    ? dailyPosition(job)
+    : job.category
+      ? categoryPosition(job)
+      : await sourceFromGame(job) ?? syntheticPosition(job);
+  if (job.kind === "daily" || job.category) {
     const curated = await analyzeCuratedPuzzle(engine, job, position, visits);
     const point = fromGtpCoordinate(job.board_size, curated.best.move);
     if (point.x === undefined || point.y === undefined) {

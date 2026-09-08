@@ -55,6 +55,7 @@ export class KataGoEngine {
   private readonly pending = new Map<string, PendingQuery>();
   private stderrTail = "";
   private lastError: string | null = null;
+  private closing = false;
 
   constructor(options: { binary: string; model: string; config: string }) {
     this.process = spawn(options.binary, [
@@ -75,6 +76,7 @@ export class KataGoEngine {
       this.rejectAll(error);
     });
     this.process.once("exit", (code, signal) => {
+      if (this.closing && code === 0) return;
       const error = new Error(`KataGo stopped unexpectedly (${code ?? signal ?? "unknown"}). ${this.stderrTail}`);
       this.lastError = error.message;
       console.error(error.message);
@@ -224,6 +226,7 @@ export class KataGoEngine {
   }
 
   close() {
+    this.closing = true;
     this.process.stdin.end();
   }
 

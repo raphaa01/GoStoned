@@ -6,6 +6,7 @@ const schema = readFileSync(new URL("../../db/schema.sql", import.meta.url), "ut
 const migration = readFileSync(new URL("../../db/migrations/019_katago_puzzles.sql", import.meta.url), "utf8");
 const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_variation_training.sql", import.meta.url), "utf8");
 const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curated_puzzle_board_guard.sql", import.meta.url), "utf8");
+const dailyCycleMigration = readFileSync(new URL("../../db/migrations/036_daily_puzzle_cycle.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
@@ -33,6 +34,13 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
     schema.replaceAll("\r\n", "\n").includes(boardGuardMigration.replaceAll("\r\n", "\n")),
     "Canonical schema must contain migration 022 exactly.",
   );
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").includes(dailyCycleMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must contain migration 036 exactly.",
+  );
+  assert.match(worker, /job\.kind === "daily"\s*\? dailyPosition\(job\)/);
+  assert.match(worker, /KataGo did not confirm the catalog answer as the strongest local move/);
+  assert.match(dailyCycleMigration, /collection_order BETWEEN 1 AND 20/);
 });
 
 test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {
