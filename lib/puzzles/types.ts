@@ -11,6 +11,7 @@ export const PUZZLE_CATEGORIES = [
 ] as const;
 export type PuzzleCategory = typeof PUZZLE_CATEGORIES[number];
 export const PUZZLES_PER_CATEGORY = 10;
+export const DAILY_PUZZLE_CYCLE_LENGTH = 20;
 export const PUZZLE_KYU_LADDER = [30, 28, 26, 24, 22, 20, 19, 18, 17, 15] as const;
 
 export type PuzzlePly = {
@@ -64,6 +65,7 @@ export type PuzzleHub = {
   mode: PuzzleKind;
   puzzles: PuzzleView[];
   expectedPerCategory: number;
+  dailyCycleLength: number;
 };
 
 export type PuzzleAttemptResult = {

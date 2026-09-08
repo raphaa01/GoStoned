@@ -7,6 +7,7 @@ import type { Board, BoardSize, Stone } from "@/lib/game/types";
 import { SUPPORTED_LOCALES, type LocalizedText } from "@/lib/i18n/config";
 import {
   PUZZLE_CATEGORIES,
+  DAILY_PUZZLE_CYCLE_LENGTH,
   PUZZLE_KYU_LADDER,
   PUZZLES_PER_CATEGORY,
   type PuzzleAttemptResult,
@@ -195,6 +196,7 @@ export async function readPuzzleHub(
     mode,
     puzzles: result.rows.map(view),
     expectedPerCategory: PUZZLES_PER_CATEGORY,
+    dailyCycleLength: DAILY_PUZZLE_CYCLE_LENGTH,
   };
 }
 
@@ -203,7 +205,7 @@ export async function reservePuzzleGenerationDispatch(mode: PuzzleKind): Promise
     if (mode === "daily") {
       await client.query(
         `INSERT INTO puzzle_generation_jobs (kind, target_date, board_size)
-         VALUES ('daily', CURRENT_DATE, 9)
+         VALUES ('daily', CURRENT_DATE, 13)
          ON CONFLICT (target_date) WHERE kind = 'daily' DO NOTHING`,
       );
     } else {

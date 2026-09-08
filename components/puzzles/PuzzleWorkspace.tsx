@@ -86,6 +86,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       mode: data.mode,
       puzzles: data.puzzles,
       expectedPerCategory: data.expectedPerCategory,
+      dailyCycleLength: data.dailyCycleLength,
     } satisfies PuzzleHub;
   }, [mode, playerKey, user]);
 
@@ -244,17 +245,19 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   const categories = [
-    { id: "life_and_death" as const, title: copy.lifeAndDeath },
-    { id: "tesuji" as const, title: copy.tesuji },
-    { id: "capturing_race" as const, title: copy.capturingRace },
-    { id: "endgame" as const, title: copy.endgame },
+    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription },
+    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription },
+    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription },
+    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription },
   ];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
+  const puzzleCategoryCopy = categories.find((entry) => entry.id === puzzle?.category);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
   const explanation = puzzle?.solution?.explanation[locale];
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
   const expected = hub?.expectedPerCategory ?? 10;
+  const dailyCycleLength = hub?.dailyCycleLength ?? 20;
 
   return (
     <div className={styles.page}>
@@ -330,8 +333,12 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
             <aside className={styles.panel}>
               <div>
-                <span className={styles.problemLabel}>{mode === "daily" ? copy.daily : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
-                <h2>{puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>
+                <span className={styles.problemLabel}>{mode === "daily"
+                  ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
+                  : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
+                <h2>{mode === "daily" && puzzleCategoryCopy
+                  ? puzzleCategoryCopy.description
+                  : puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>
               </div>
 
               {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}

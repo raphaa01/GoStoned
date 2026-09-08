@@ -23,6 +23,7 @@
     "bot:lab": "python -m training.gostone_bot.control_center",
     "bot:lab:smoke": "python -m training.gostone_bot.control_center --no-browser",
     "test:puzzles-local": "tsx scripts/smoke-katago-puzzles.ts",
+    "validate:puzzles-katago": "tsx scripts/validate-daily-puzzle-catalog.ts",
     "test:live": "tsx scripts/smoke-live-game.ts",
     "test:matchmaking-races": "tsx scripts/smoke-matchmaking-races.ts",
     "test:migration-recovery": "tsx scripts/smoke-migration-recovery.ts",
