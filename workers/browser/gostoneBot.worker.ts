@@ -1,9 +1,19 @@
 /// <reference lib="webworker" />
 
 import * as ort from "onnxruntime-web/wasm";
-import { applyMove, boardHash, getGroup, replayMovesWithPrisoners } from "@/lib/game/goEngine";
+import {
+  applyMove,
+  boardHash,
+  getGroup,
+  getNeighbors,
+  replayMovesWithPrisoners,
+} from "@/lib/game/goEngine";
 import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import type { Board, Position, Stone } from "@/lib/game/types";
+import {
+  classifySettlementGroup,
+  ownershipSurvivalProbability,
+} from "@/lib/bot/settlementClassification";
 import {
   botStrengthForRating,
   GOSTONE_BOT_MODEL,
@@ -226,6 +236,34 @@ function sigmoid(value: number): number {
   return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, value))));
 }
 
+function groupShape(
+  board: Board,
+  stones: readonly Position[],
+  emptyRegions: ReturnType<typeof territoryOwners>["regions"],
+): Readonly<{ libertyCount: number; enclosedEyeCount: number }> {
+  const groupKeys = new Set(stones.map(positionKey));
+  const liberties = new Set<string>();
+  for (const stone of stones) {
+    for (const neighbor of getNeighbors(board, stone)) {
+      if (board[neighbor.y][neighbor.x] === null) liberties.add(positionKey(neighbor));
+    }
+  }
+
+  const enclosedEyeCount = emptyRegions.filter((region) => {
+    let touchesGroup = false;
+    for (const point of region.points) {
+      for (const neighbor of getNeighbors(board, point)) {
+        if (board[neighbor.y][neighbor.x] === null) continue;
+        const neighborKey = positionKey(neighbor);
+        if (!groupKeys.has(neighborKey)) return false;
+        touchesGroup = true;
+      }
+    }
+    return touchesGroup;
+  }).length;
+  return { libertyCount: liberties.size, enclosedEyeCount };
+}
+
 function settlementProposal(
   position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">,
   ownership: Float32Array,
@@ -234,16 +272,28 @@ function settlementProposal(
   const boardGroups = groups(position.board);
   const candidateDead = new Set<string>();
   const uncertain = new Set<string>();
-  const proposedGroups: GoStoneSettlementGroup[] = boardGroups.map((group) => {
-    const probability = group.stones.reduce(
+  const emptyRegions = territoryOwners(position.board).regions;
+  const classifiedGroups: GoStoneSettlementGroup[] = boardGroups.map((group) => {
+    const modelSurvival = group.stones.reduce(
       (sum, stone) => sum + sigmoid(activeValue(survival, position.boardSize, stone)),
       0,
     ) / group.stones.length;
-    const status = probability <= GOSTONE_BOT_MODEL.settlement.deadThreshold ? "dead"
-      : probability >= GOSTONE_BOT_MODEL.settlement.aliveThreshold ? "alive" : "uncertain";
+    const ownershipSurvival = group.stones.reduce(
+      (sum, stone) => sum + ownershipSurvivalProbability(
+        group.color,
+        activeValue(ownership, position.boardSize, stone),
+      ),
+      0,
+    ) / group.stones.length;
+    const classified = classifySettlementGroup({
+      modelSurvival,
+      ownershipSurvival,
+      ...groupShape(position.board, group.stones, emptyRegions),
+    });
+    const { status } = classified;
     if (status === "dead") group.stones.forEach((stone) => candidateDead.add(positionKey(stone)));
     if (status === "uncertain") group.stones.forEach((stone) => uncertain.add(positionKey(stone)));
-    return { ...group, status, survival: probability };
+    return { ...group, status, survival: classified.survival };
   });
 
   let changed = true;
@@ -265,6 +315,15 @@ function settlementProposal(
     }
   }
 
+  const proposedGroups = classifiedGroups.map((group) => {
+    if (
+      group.status !== "dead"
+      || group.stones.every((stone) => candidateDead.has(positionKey(stone)))
+    ) {
+      return group;
+    }
+    return { ...group, status: "uncertain" as const };
+  });
   const deadStones = boardGroups.flatMap((group) =>
     group.stones.filter((stone) => candidateDead.has(positionKey(stone))));
   const scored = position.board.map((row, y) => row.map((stone, x) =>
@@ -277,16 +336,18 @@ function settlementProposal(
     .map((region) => region.points[0]);
   const prisoners = replayMovesWithPrisoners(position.boardSize, [...position.moves]).prisoners;
   let score: ReturnType<typeof scoreJapaneseTerritory> | null = null;
-  try {
-    score = scoreJapaneseTerritory({
-      board: position.board,
-      prisoners,
-      deadStones,
-      agreedNeutralRegionSeeds: neutralRegionSeeds,
-      komi: position.komi,
-    });
-  } catch {
-    // Ambiguous life/death stays a proposal. The server and both players remain authoritative.
+  if (uncertain.size === 0) {
+    try {
+      score = scoreJapaneseTerritory({
+        board: position.board,
+        prisoners,
+        deadStones,
+        agreedNeutralRegionSeeds: neutralRegionSeeds,
+        komi: position.komi,
+      });
+    } catch {
+      // Ambiguous life/death stays a proposal. The server and both players remain authoritative.
+    }
   }
 
   return {

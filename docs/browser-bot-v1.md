@@ -30,6 +30,12 @@ Der Worker liefert `GoStoneJapaneseSettlementProposal` mit:
 - einer lokalen japanischen Territory-Score-Vorschau, soweit die Position
   widerspruchsfrei ausgewertet werden kann.
 
+Die Gruppenklassifikation kombiniert den stärker gewichteten Ownership-Kopf mit
+dem Survival-Kopf. Zwei vollständig eingeschlossene Augen schützen eine Gruppe
+vor einer falschen Tot-Markierung; Gruppen mit wenigen Freiheiten werden nur bei
+zusätzlicher gegnerischer Ownership-Evidenz als tot vorgeschlagen. Solange eine
+Gruppe unklar bleibt, darf keine scheinpräzise Punktzahl ausgegeben werden.
+
 Die Ausgabe hat immer `authority: "proposal-only"`. Für das japanische Rulebook
 muss der Code den Typ aus `lib/bot/modelV1.ts` verwenden und die abschließende
 Wertung mit `lib/game/japaneseScoring.ts` serverseitig neu berechnen. Niemals

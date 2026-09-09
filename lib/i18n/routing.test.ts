@@ -183,11 +183,20 @@ test("rules summaries use persisted game parameters and localized labels", () =>
   } as const;
   assert.equal(
     localizedRulesSummary(parameters, en),
-    "Chinese 2002 · GoStone v1 · area · 7.5 komi · Handicap 2",
+    "Chinese · area · 7.5 komi · Handicap 2",
   );
   assert.equal(
     localizedRulesSummary(parameters, de),
-    "Chinesisch 2002 · GoStone v1 · Fläche · 7.5 Komi · Vorgabe 2",
+    "Chinesisch · Fläche · 7.5 Komi · Vorgabe 2",
+  );
+  assert.equal(
+    localizedRulesSummary({
+      ruleset: "japanese",
+      scoringMethod: "territory",
+      komi: 6.5,
+      handicap: 0,
+    }, de),
+    "Japanisch · Gebiet · 6.5 Komi",
   );
 });
 
