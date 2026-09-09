@@ -374,6 +374,8 @@ Lokale und Preview-Builds benötigen keine aktive Datenbankverbindung. Der
 Production-Build prüft vor dem Next.js-Build lesend, ob Matchmaking, japanische
 Wertung und Rücknahmen auf dem erwarteten Migrationsstand sind. Bei Schema-Drift
 wird das Deployment gestoppt und die letzte funktionierende Version bleibt online.
+Der Check verwendet ausschließlich sichtbare Katalog-Metadaten und benötigt keinen
+Lesezugriff auf die RLS-geschützte Migrationstabelle.
 
 Vor dem Produktionsstart kann die vollständige Konfiguration einschließlich
 SSL-Verbindung, Migrationen und Impressumsangaben geprüft werden:
