@@ -1359,7 +1359,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
         <aside className="focused-game-side">
           {game.status === "active" && game.phase === "play" ? (
-            <section className="game-panel scoring-controls game-tools-panel" aria-label={copy.gameTools}>
+            <section className="game-panel game-tools-panel" aria-label={copy.gameTools}>
               <div className="game-actions">
                 <button disabled={estimateBusy} onClick={() => void estimateJapaneseScore()} type="button">
                   <Calculator size={18} /> {estimateBusy ? copy.estimatingScore : copy.estimateScore}
