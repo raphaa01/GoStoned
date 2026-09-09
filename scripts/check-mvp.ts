@@ -322,8 +322,12 @@ const requiredConstraintDefinitions = {
     excludes: [],
   },
   matchmaking_queue_rules_profile_compatibility_check: {
-    includes: ["legacy-immediate-area", "chinese-2002-gostone-v1"],
-    excludes: ["japanese-1989-gostone-v1"],
+    includes: [
+      "legacy-immediate-area",
+      "chinese-2002-gostone-v1",
+      "japanese-1989-gostone-v1",
+    ],
+    excludes: [],
   },
   player_blocks_pkey: {
     includes: ["PRIMARY KEY (blocker_key, blocked_key)"],
@@ -432,7 +436,16 @@ const requiredConstraintDefinitions = {
     excludes: [],
   },
   matchmaking_queue_adaptive_state_check: {
-    includes: ["adaptive-global-glicko-match-v1", "registered-rated", "guest-unrated", "glicko2-v1-tau-0.5"],
+    includes: [
+      "adaptive-global-glicko-match-v1",
+      "registered-rated",
+      "guest-unrated",
+      "glicko2-v1-tau-0.5",
+      "rules_snapshot = 'japanese'::text",
+      "rules_version_snapshot = 'japanese-1989-gostone-v1'::text",
+      "scoring_method_snapshot = 'territory'::text",
+      "komi_snapshot = 6.5",
+    ],
     excludes: [],
   },
 } as const;
@@ -1083,9 +1096,9 @@ async function checkMvp() {
       throw new Error(`Database guard function definition is unsafe: ${name}`);
     }
   }
-  if (!row.rules_profile_default?.includes("legacy-immediate-area")) {
+  if (!row.rules_profile_default?.includes("japanese-1989-gostone-v1")) {
     throw new Error(
-      "Migration 008 is not rollout-safe: games.rules_profile must keep the legacy default during the expand phase.",
+      "Migration 037 is incomplete: games.rules_profile must default to Japanese scoring.",
     );
   }
   if (!row.ssl) {

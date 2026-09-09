@@ -339,7 +339,9 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
 ## Vercel deployen
 
 1. Das GitHub-Repository in Vercel importieren.
-2. Framework „Next.js“ verwenden; Build Command bleibt `npm run build`.
+2. Framework „Next.js“ verwenden. `vercel.json` startet für Production vor dem
+   Next.js-Build automatisch den lesenden Schema-Check; Preview-Builds bleiben
+   datenbankfrei.
 3. In „Environment Variables“ folgende Werte hinterlegen:
    - `DATABASE_URL`: Supabase Transaction Pooler, normalerweise Port `6543`
    - `DATABASE_POOL_MAX=3`
@@ -368,7 +370,10 @@ Keine produktive URL und kein Passwort gehören in `.env.example`, Git oder eine
 4. Vor dem ersten Deployment die Migrationen gegen Supabase ausführen.
 5. Deploy starten und anschließend `/api/health`, `/api/db-health` und einen Test mit zwei Browsern prüfen.
 
-Der Build benötigt keine aktive Datenbankverbindung. API-Routen laufen mit der Node.js Runtime und verbinden sich erst bei einer Anfrage mit PostgreSQL.
+Lokale und Preview-Builds benötigen keine aktive Datenbankverbindung. Der
+Production-Build prüft vor dem Next.js-Build lesend, ob Matchmaking, japanische
+Wertung und Rücknahmen auf dem erwarteten Migrationsstand sind. Bei Schema-Drift
+wird das Deployment gestoppt und die letzte funktionierende Version bleibt online.
 
 Vor dem Produktionsstart kann die vollständige Konfiguration einschließlich
 SSL-Verbindung, Migrationen und Impressumsangaben geprüft werden:
