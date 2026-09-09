@@ -259,14 +259,17 @@ export const ko = {
   },
   "rules": {
     "rulesets": {
-      "chinese": "중국어"
+      "chinese": "중국식",
+      "japanese": "일본식"
     },
     "profiles": {
       "legacy-immediate-area": "레거시 즉시 점수 계산",
-      "chinese-2002-gostone-v1": "2002 · GoStone v1"
+      "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1"
     },
     "methods": {
-      "area": "영역"
+      "area": "면적",
+      "territory": "집"
     },
     "komi": "고미",
     "handicap": "핸디캡"
@@ -400,6 +403,7 @@ export const ko = {
     "recordBody": "착수는 서버에서 확인되며, 완료된 게임은 결과를 보존합니다. 점수로 합의된 게임도 해당 점수 합의를 보존합니다. 이러한 사실들이 여러분의 검토 출발점이 됩니다; GoStone은 분석으로서 발명된 엔진 판단을 제시하지 않습니다."
   },
   "game": {
+    ...en.game,
     "loadFailed": "게임을 불러올 수 없습니다.",
     "moveFailed": "착수가 실패했습니다.",
     "resignFailed": "기권할 수 없습니다.",

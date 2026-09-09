@@ -10,6 +10,10 @@ const migration = readFileSync(
   join(process.cwd(), "db/migrations/009_japanese_persistence_foundation.sql"),
   "utf8",
 );
+const activationMigration = readFileSync(
+  join(process.cwd(), "db/migrations/037_japanese_rules_and_takebacks.sql"),
+  "utf8",
+);
 const matchmakingService = readFileSync(
   join(process.cwd(), "lib/matchmaking/matchmakingService.ts"),
   "utf8",
@@ -42,7 +46,7 @@ function assertBothContain(fragment: string): void {
   assert.ok(migration.includes(fragment), `migration 009 must contain: ${fragment}`);
 }
 
-test("reserves one exact Japanese rules tuple without activating it", () => {
+test("activates the reserved Japanese rules tuple for new games", () => {
   const tuple = [
     "rules = 'japanese'",
     `rules_profile = '${JAPANESE_1989_RULES_PROFILE}'`,
@@ -52,18 +56,18 @@ test("reserves one exact Japanese rules tuple without activating it", () => {
   ];
   tuple.forEach(assertBothContain);
 
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
   assert.ok(
     schema.includes(
-      "CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1'))",
+      "'japanese-1989-gostone-v1'",
     ),
   );
-  assert.ok(schema.includes("CHECK (scoring_method = 'area')"));
-  assert.ok(schema.includes("CHECK (rules = 'chinese')"));
-  assert.equal(migration.includes("DROP CONSTRAINT"), false);
+  assert.ok(activationMigration.includes("DROP CONSTRAINT IF EXISTS games_rules_check"));
+  assert.ok(activationMigration.includes("scoring_method IN ('area', 'territory')"));
+  assert.ok(activationMigration.includes("rules IN ('chinese', 'japanese')"));
 });
 
-test("keeps both Chinese queue profiles rollout-compatible and Japanese closed", () => {
+test("keeps historical profiles compatible and opens Japanese matchmaking", () => {
   assertBothContain("matchmaking_queue_rules_profile_compatibility_check");
   assertBothContain("'legacy-immediate-area'");
   assertBothContain("'chinese-2002-gostone-v1'");
@@ -79,12 +83,7 @@ test("keeps both Chinese queue profiles rollout-compatible and Japanese closed",
   assert.ok(matchmakingService.includes("rules_profile = $4,"));
   assert.ok(matchmakingService.includes("AND q.rules_profile = $3"));
   assert.ok(matchmakingService.includes("rules_profile = $2"));
-  assert.equal(
-    tableDefinition(schema, "matchmaking_queue").includes(
-      "japanese-1989-gostone-v1",
-    ),
-    false,
-  );
+  assert.ok(schema.includes("'japanese-1989-gostone-v1'"));
 });
 
 test("persists Japanese agreement evidence in a separate protected table family", () => {
@@ -234,7 +233,7 @@ test("adds tuple constraints after idempotent schema upgrades", () => {
   );
 });
 
-test("production preflight requires the complete dormant persistence contract", () => {
+test("production preflight requires the complete Japanese persistence contract", () => {
   for (const required of [
     "game_japanese_scoring_state",
     "game_japanese_dead_stones",

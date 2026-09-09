@@ -259,14 +259,17 @@ export const fr = {
   },
   "rules": {
     "rulesets": {
-      "chinese": "Chinois"
+      "chinese": "Chinois",
+      "japanese": "Japonais"
     },
     "profiles": {
       "legacy-immediate-area": "comptage immédiat hérité",
-      "chinese-2002-gostone-v1": "2002 · GoStone v1"
+      "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1"
     },
     "methods": {
-      "area": "zone"
+      "area": "zone",
+      "territory": "territoire"
     },
     "komi": "komi",
     "handicap": "Handicap"
@@ -400,6 +403,7 @@ export const fr = {
     "recordBody": "Les coups sont vérifiés par le serveur, et les parties terminées conservent leur résultat. Les parties acceptées par score conservent également cet accord de score. Ces faits sont le point de départ de votre propre révision ; GoStone ne présente pas un jugement d'ordinateur inventé comme analyse."
   },
   "game": {
+    ...en.game,
     "loadFailed": "Impossible de charger la partie.",
     "moveFailed": "Le coup a échoué.",
     "resignFailed": "Impossible de se rendre.",

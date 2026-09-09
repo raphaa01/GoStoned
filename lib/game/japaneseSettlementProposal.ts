@@ -251,7 +251,7 @@ function validateRulesIdentity(value: unknown): JapaneseSettlementRulesIdentity 
   ) {
     return proposalError(
       "rules_identity_mismatch",
-      "The proposal does not match the inactive Japanese 1989 rules tuple.",
+      "The proposal does not match the Japanese 1989 rules tuple.",
     );
   }
   return {
@@ -382,8 +382,8 @@ function validateNeutralRegionSeeds(
 }
 
 /**
- * Serializes exact Japanese settlement evidence without activating the dormant
- * rules profile. Territory, group, seki, and life/death semantics remain owned
+ * Serializes exact Japanese settlement evidence for the active rules profile.
+ * Territory, group, seki, and life/death semantics remain owned
  * by the Japanese scoring engine; this boundary validates evidence identity.
  */
 export function serializeJapaneseSettlementProposalV1(

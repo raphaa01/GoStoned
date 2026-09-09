@@ -77,7 +77,7 @@ function expectPhaseError(
   });
 }
 
-test("derives ordinary turn and pass authority without activating Japanese play", () => {
+test("derives ordinary turn and pass authority for active Japanese play", () => {
   const empty = replayJapanesePhaseAuthority(9, [], []);
   assert.deepEqual(empty.state, {
     phase: "play",
@@ -100,7 +100,7 @@ test("derives ordinary turn and pass authority without activating Japanese play"
   assert.equal(authority.contractId, JAPANESE_1989_CONTRACT_ID);
   assert.equal(authority.rulesProfile, JAPANESE_1989_RULES_PROFILE);
   assert.equal(authority.scope, "normal-play-phase-authority");
-  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), false);
+  assert.equal(Object.hasOwn(RULES_POLICIES, JAPANESE_1989_RULES_PROFILE), true);
 });
 
 test("requires alternating normal-play turns", () => {

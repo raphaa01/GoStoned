@@ -408,7 +408,7 @@ async function run() {
     y: 2,
   }, black.cookie, black.playerKey);
   assert.equal(secondResumed.game.phase, "play");
-  assert.equal(secondResumed.game.turn, "black");
+  assert.equal(secondResumed.game.turn, "white");
   assert.equal(secondResumed.game.scoring, null);
   assert.deepEqual(secondResumed.game.lastResume, {
     claim: "dead",
@@ -439,7 +439,7 @@ async function run() {
       scoring_revision: secondProposal.game.scoring.revision,
       resume_claim: "dead",
       requested_by_color: "black",
-      resumed_to_move: "black",
+      resumed_to_move: "white",
     },
   ]);
 
@@ -464,11 +464,11 @@ async function run() {
   // decisions that intentionally fill one actor's complete burst allowance.
   await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
-  await postMove(gameId, { x: 5, y: 2 }, black.cookie, black.playerKey);
-  await postMove(gameId, { isPass: true }, white.cookie, white.playerKey);
+  await postMove(gameId, { x: 3, y: 3 }, white.cookie, white.playerKey);
+  await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
   const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
-  }>(gameId, { isPass: true }, black.cookie, black.playerKey);
+  }>(gameId, { isPass: true }, white.cookie, white.playerKey);
   assert.equal(finalScoring.game.phase, "scoring");
 
   const firstConfirmation = await post<{
@@ -493,7 +493,7 @@ async function run() {
     dead: true,
     expectedRevision: firstConfirmation.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }, { x: 3, y: 3 }]);
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
   const confirmations = await Promise.all([

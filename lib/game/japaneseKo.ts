@@ -305,8 +305,7 @@ function applyJapaneseSimpleKoMove(
  * in positionHistory for later no-result adjudication; it is not rejected as
  * positional superko. This is intentionally a board-legality audit, not a
  * complete game audit: turn and scoring-resume authorization require an
- * immutable phase-event stream before the dormant Japanese profile can be
- * activated. Every persisted board hash is nevertheless recomputed here and
+ * immutable phase-event stream. Every persisted board hash is nevertheless recomputed here and
  * must match, including the unchanged hash recorded for a pass.
  */
 export function replayJapaneseNormalPlayBoardLegality(

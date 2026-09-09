@@ -7,6 +7,7 @@ import {
   boardHash,
   createEmptyBoard,
   getGroup,
+  replayMovesWithPrisoners,
 } from "./goEngine";
 import { advanceClock, restingClock, type ClockAdvance } from "./goClock";
 import { MAX_PERSISTED_GAME_VERSION } from "./gamePolling";
@@ -20,7 +21,6 @@ import {
   toggleDeadGroup,
 } from "./scoring";
 import {
-  DEFAULT_RULES_PROFILE,
   LEGACY_IMMEDIATE_AREA_PROFILE,
   resolveRulesConfiguration,
   resolveScoringConfiguration,
@@ -34,6 +34,12 @@ import {
   type ChineseAreaComputation,
   type ScoredOutcome,
 } from "./scoreContract";
+import { scoreJapaneseTerritory } from "./japaneseScoring";
+import {
+  JapaneseNormalPlayReplayError,
+  replayJapaneseNormalPlayBoardLegality,
+  type JapanesePersistedMove,
+} from "./japaneseKo";
 import {
   finalizeGameRatings,
 } from "@/lib/rating/ratingFinalizer";
@@ -45,6 +51,7 @@ import type {
   GamePollHeartbeat,
   GameState,
   Position,
+  JapaneseTerritoryPreview,
   Stone,
   StoredMove,
   TimeControlId,
@@ -96,6 +103,9 @@ type GameRow = {
   version: number;
   started_at: Date;
   finished_at: Date | null;
+  takeback_move_number: number | null;
+  takeback_requested_by_color: Stone | null;
+  takeback_created_at: Date | null;
 };
 
 type MoveRow = {
@@ -134,7 +144,7 @@ type ValidatedResumeEvent = Readonly<{
   boardHash: string;
   stoppedMoveNumber: number;
   fallbackToMove: Stone;
-  scoringExpiresAt: Date;
+  scoringExpiresAt: Date | null;
   claim: ResumeClaim;
   requestedBy: Stone | null;
   disputedStone: Position | null;
@@ -175,7 +185,7 @@ type ScoringRow = {
   komi: string | number;
   handicap: number;
   fallback_to_move: Stone;
-  expires_at: Date;
+  expires_at: Date | null;
   black_confirmed_revision: number | null;
   white_confirmed_revision: number | null;
   black_confirmed_at: Date | null;
@@ -200,6 +210,12 @@ type DeadStoneRow = Position & {
   color: Stone;
 };
 
+type TakebackRow = {
+  move_number: number;
+  requested_by_color: Stone;
+  created_at: Date;
+};
+
 type LoadedGame = {
   game: GameRow;
   rules: ResolvedRulesConfiguration;
@@ -208,6 +224,7 @@ type LoadedGame = {
   positionHistory: readonly string[];
   scoring: ScoringRow | null;
   deadRows: DeadStoneRow[];
+  takeback: TakebackRow | null;
 };
 
 function storedRulesConfiguration(input: {
@@ -531,7 +548,9 @@ function validateResumeEventRow(
     || handicap !== rules.handicap
     || !isStone(fallbackToMove)
     || !isStone(resumedToMove)
-    || !isValidDate(scoringExpiresAt)
+    || (rules.policy.scoringResponseWindowMs === null
+      ? scoringExpiresAt !== null
+      : !isValidDate(scoringExpiresAt))
     || !isValidDate(resumedAt)
     || (claim !== "dead" && claim !== "alive" && claim !== "deadline")
     || (previous !== null && (
@@ -544,7 +563,8 @@ function validateResumeEventRow(
 
   if (claim === "deadline") {
     if (
-      requestedBy !== null
+      !isValidDate(scoringExpiresAt)
+      || requestedBy !== null
       || x !== null
       || y !== null
       || resumedToMove !== fallbackToMove
@@ -555,9 +575,11 @@ function validateResumeEventRow(
   } else if (
     !isStone(requestedBy)
     || !hasDisputedStone
-    || resumedAt.getTime() >= scoringExpiresAt.getTime()
-    || (claim === "dead" && resumedToMove !== requestedBy)
-    || (claim === "alive" && resumedToMove === requestedBy)
+    || (isValidDate(scoringExpiresAt) && resumedAt.getTime() >= scoringExpiresAt.getTime())
+    || (rules.policy.resumeTurnRule === "claim-dependent"
+      && ((claim === "dead" && resumedToMove !== requestedBy)
+        || (claim === "alive" && resumedToMove === requestedBy)))
+    || (rules.policy.resumeTurnRule === "opponent-first" && resumedToMove === requestedBy)
   ) {
     return moveHistoryMismatch();
   }
@@ -567,7 +589,7 @@ function validateResumeEventRow(
     boardHash: row.board_hash,
     stoppedMoveNumber,
     fallbackToMove,
-    scoringExpiresAt,
+    scoringExpiresAt: isValidDate(scoringExpiresAt) ? scoringExpiresAt : null,
     claim,
     requestedBy: isStone(requestedBy) ? requestedBy : null,
     disputedStone: hasDisputedStone ? { x: Number(x), y: Number(y) } : null,
@@ -598,7 +620,6 @@ function replayStoredMoveRows(
 
   let board = createEmptyBoard(boardSize);
   const positionHistory: string[] = [boardHash(board)];
-  const priorHashes = new Set<string>(positionHistory);
   let phase: "play" | "scoring" = "play";
   let turn: Stone = "black";
   let consecutivePasses: 0 | 1 | 2 = 0;
@@ -646,11 +667,10 @@ function replayStoredMoveRows(
       (storedHash === null && policy.profile !== LEGACY_IMMEDIATE_AREA_PROFILE)
       || (storedHash !== null && storedHash !== replayedHash)
       || (!row.is_pass
-        && isRepeatedPositionForbidden(policy, replayedHash, priorHashes))
+        && isRepeatedPositionForbidden(policy, replayedHash, positionHistory))
     ) {
       return moveHistoryMismatch();
     }
-    priorHashes.add(replayedHash);
     positionHistory.push(replayedHash);
 
     if (policy.turnSource === "move-log") continue;
@@ -776,6 +796,9 @@ async function loadGame(
             g.black_time_remaining_ms, g.white_time_remaining_ms,
             g.black_periods_remaining, g.white_periods_remaining,
             g.turn_started_at, g.version, g.started_at, g.finished_at,
+            takeback.move_number AS takeback_move_number,
+            takeback.requested_by_color AS takeback_requested_by_color,
+            takeback.created_at AS takeback_created_at,
             COALESCE(
               CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
               NULLIF(BTRIM(black_user.display_name), ''),
@@ -844,6 +867,7 @@ async function loadGame(
        LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
        LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
        LEFT JOIN game_browser_bot_bindings browser_binding ON browser_binding.game_id = g.id
+       LEFT JOIN game_takeback_requests takeback ON takeback.game_id = g.id
        LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
        LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
        LEFT JOIN game_glicko2_rating_events viewer_event
@@ -879,6 +903,9 @@ async function loadGame(
         [gameId, Math.floor(movesResult.rows.length / 2) + 1],
       )).rows
     : [];
+  if (rules.ruleset === "japanese") {
+    assertJapaneseBoardLegality(game.board_size, movesResult.rows);
+  }
   const replay = replayStoredMoveRows(game.board_size, movesResult.rows, rules, resumeRows);
 
   const scoringResult = await execute<ScoringRow>(
@@ -886,6 +913,14 @@ async function loadGame(
     [gameId],
   );
   let scoring: ScoringRow | null = scoringResult.rows[0] ?? null;
+  const takeback = game.takeback_move_number && game.takeback_requested_by_color
+    && isValidDate(game.takeback_created_at)
+    ? {
+        move_number: game.takeback_move_number,
+        requested_by_color: game.takeback_requested_by_color,
+        created_at: game.takeback_created_at,
+      }
+    : null;
   const rawGame = game;
   const rawScoring = scoring;
   let deadRows: DeadStoneRow[] = [];
@@ -908,6 +943,7 @@ async function loadGame(
         positionHistory: replay.positionHistory,
         scoring,
         deadRows,
+        takeback,
       },
       replay.board,
     );
@@ -926,6 +962,7 @@ async function loadGame(
     positionHistory: replay.positionHistory,
     scoring,
     deadRows,
+    takeback,
   };
   if (scoring) {
     validateScoringSnapshot(loaded, replay.board);
@@ -1026,10 +1063,81 @@ function serializeGameClock(
 
 function scoringSnapshotMismatch(): never {
   throw new GameServiceError(
-    "The stored score does not match its Chinese area-scoring contract.",
+    "The stored score does not match its rules contract.",
     500,
     "scoring_snapshot_mismatch",
   );
+}
+
+function japanesePersistedMoves(rows: MoveRow[]): JapanesePersistedMove[] {
+  return rows.map((move) => {
+    if (typeof move.board_hash !== "string") return moveHistoryMismatch();
+    return { ...mapMoves([move])[0], boardHash: move.board_hash };
+  });
+}
+
+function assertJapaneseBoardLegality(boardSize: BoardSize, rows: MoveRow[]): void {
+  try {
+    replayJapaneseNormalPlayBoardLegality(boardSize, japanesePersistedMoves(rows));
+  } catch (error) {
+    if (error instanceof JapaneseNormalPlayReplayError) return moveHistoryMismatch();
+    throw error;
+  }
+}
+
+type AgreementScore = Readonly<{
+  preview: ChineseAreaScore | JapaneseTerritoryPreview;
+  outcome: ScoredOutcome;
+}>;
+
+function resultForOutcome(outcome: ScoredOutcome): string {
+  if (outcome.kind === "jigo") return "Jigo";
+  return `${outcome.winner === "black" ? "B" : "W"}+${outcome.margin}`;
+}
+
+function calculateAgreementScore(
+  loaded: LoadedGame,
+  board: Board,
+  deadStones: Position[],
+): AgreementScore {
+  if (loaded.rules.policy.scoringRule === "chinese-area") {
+    const computation = scoreAgreementPosition(
+      loaded.rules.policy,
+      board,
+      deadStones,
+      loaded.rules.komi,
+    );
+    return {
+      preview: requireChineseAreaBreakdown(computation),
+      outcome: computation.outcome,
+    };
+  }
+  const replay = replayMovesWithPrisoners(loaded.game.board_size, mapMoves(loaded.moveRows));
+  const score = scoreJapaneseTerritory({
+    board,
+    prisoners: replay.prisoners,
+    deadStones,
+    agreedNeutralRegionSeeds: [],
+    komi: loaded.rules.komi,
+  });
+  const outcome = score.outcome;
+  return {
+    outcome,
+    preview: {
+      black: score.blackTotal,
+      white: score.whiteTotal,
+      livingBlackStones: score.livingBlackStones,
+      livingWhiteStones: score.livingWhiteStones,
+      blackTerritory: score.blackTerritory,
+      whiteTerritory: score.whiteTerritory,
+      blackPrisoners: score.blackPrisonersFinal,
+      whitePrisoners: score.whitePrisonersFinal,
+      neutralPoints: score.damePoints + score.territoryExcludedByAgreement,
+      winner: outcome.kind === "jigo" ? null : outcome.winner,
+      margin: outcome.kind === "jigo" ? 0 : outcome.margin,
+      result: resultForOutcome(outcome),
+    },
+  };
 }
 
 function requireChineseAreaBreakdown(computation: ChineseAreaComputation): ChineseAreaScore {
@@ -1040,19 +1148,6 @@ function requireChineseAreaBreakdown(computation: ChineseAreaComputation): Chine
 function winnerKeyForScoredOutcome(game: GameRow, outcome: ScoredOutcome): string | null {
   if (outcome.kind === "jigo") return null;
   return outcome.winner === "black" ? game.black_player_key : game.white_player_key;
-}
-
-function sameChineseAreaScore(left: ChineseAreaScore, right: ChineseAreaScore): boolean {
-  return left.black === right.black
-    && left.white === right.white
-    && left.blackStones === right.blackStones
-    && left.whiteStones === right.whiteStones
-    && left.blackTerritory === right.blackTerritory
-    && left.whiteTerritory === right.whiteTerritory
-    && left.neutralPoints === right.neutralPoints
-    && left.winner === right.winner
-    && left.margin === right.margin
-    && left.result === right.result;
 }
 
 function assertScoringBoardMatches(
@@ -1160,27 +1255,61 @@ function storedFinalScore(scoring: ScoringRow, komi: number): ChineseAreaComputa
   }
 }
 
+function storedAgreementScore(
+  loaded: LoadedGame,
+  scoring: ScoringRow,
+): AgreementScore | null {
+  if (loaded.rules.policy.scoringRule === "chinese-area") {
+    const computation = storedFinalScore(scoring, loaded.rules.komi);
+    return computation ? { preview: computation.breakdown, outcome: computation.outcome } : null;
+  }
+  const fields = finalScoreFields(scoring);
+  if (fields.every((value) => value === null)) return null;
+  if (fields.some((value) => value === null)) return scoringSnapshotMismatch();
+  const black = Number(scoring.black_total);
+  const white = Number(scoring.white_total);
+  const outcome: ScoredOutcome = black === white
+    ? { kind: "jigo" }
+    : { kind: "points", winner: black > white ? "black" : "white", margin: Math.abs(black - white) };
+  return {
+    outcome,
+    preview: {
+      black,
+      white,
+      livingBlackStones: scoring.black_stones!,
+      livingWhiteStones: scoring.white_stones!,
+      blackTerritory: scoring.black_territory!,
+      whiteTerritory: scoring.white_territory!,
+      blackPrisoners: black - scoring.black_territory!,
+      whitePrisoners: white - scoring.white_territory! - loaded.rules.komi,
+      neutralPoints: scoring.neutral_points!,
+      winner: outcome.kind === "jigo" ? null : outcome.winner,
+      margin: outcome.kind === "jigo" ? 0 : outcome.margin,
+      result: scoring.result!,
+    },
+  };
+}
+
+function sameAgreementScore(left: AgreementScore, right: AgreementScore): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 type ValidatedScoringSnapshot = Readonly<{
   deadStones: Position[];
-  expectedComputation: ChineseAreaComputation;
-  storedComputation: ChineseAreaComputation | null;
+  expectedComputation: AgreementScore;
+  storedComputation: AgreementScore | null;
 }>;
 
 function validateScoringSnapshot(
   loaded: LoadedGame,
   board: Board,
 ): ValidatedScoringSnapshot {
-  const { game, rules, scoring, deadRows } = loaded;
+  const { game, scoring, deadRows } = loaded;
   if (!scoring) return scoringSnapshotMismatch();
   if (game.scoring_revision !== scoring.revision) return scoringSnapshotMismatch();
   const deadStones = validateScoringPosition(loaded, board);
-  const expectedComputation = scoreAgreementPosition(
-    rules.policy,
-    board,
-    deadStones,
-    rules.komi,
-  );
-  const storedComputation = storedFinalScore(scoring, rules.komi);
+  const expectedComputation = calculateAgreementScore(loaded, board, deadStones);
+  const storedComputation = storedAgreementScore(loaded, scoring);
   const isFinalScore = game.status === "finished" && game.finish_reason === "score";
   if ((storedComputation !== null) !== isFinalScore) return scoringSnapshotMismatch();
   const confirmationCount = scoringConfirmationCount(scoring);
@@ -1195,9 +1324,9 @@ function validateScoringSnapshot(
       || confirmationCount !== 2
       || game.finished_at === null
       || game.to_move !== null
-      || storedComputation.breakdown.result !== game.result
+      || storedComputation.preview.result !== game.result
       || winnerKeyForScoredOutcome(game, storedComputation.outcome) !== game.winner_key
-      || !sameChineseAreaScore(storedComputation.breakdown, expectedComputation.breakdown)
+      || !sameAgreementScore(storedComputation, expectedComputation)
       || scoring.scored_board_hash !== boardHash(removeDeadStones(board, deadStones))
       || scoring.black_dead_stones !== storedDeadCounts.black
       || scoring.white_dead_stones !== storedDeadCounts.white
@@ -1225,8 +1354,8 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
   const validatedScoring = scoring ? validateScoringSnapshot(loaded, board) : null;
   const deadStones = validatedScoring?.deadStones ?? [];
   const preview = scoring
-    ? validatedScoring?.storedComputation?.breakdown
-      ?? requireChineseAreaBreakdown(validatedScoring!.expectedComputation)
+    ? validatedScoring?.storedComputation?.preview
+      ?? validatedScoring!.expectedComputation.preview
     : null;
   return {
     id: game.id,
@@ -1273,7 +1402,12 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
       whiteConfirmed: scoring.white_confirmed_revision === scoring.revision,
       preview: preview!,
       finalizedAt: scoring.finalized_at?.toISOString() ?? null,
-      expiresAt: scoring.expires_at.toISOString(),
+      expiresAt: scoring.expires_at?.toISOString() ?? null,
+    } : null,
+    takeback: loaded.takeback ? {
+      moveNumber: loaded.takeback.move_number,
+      requestedBy: loaded.takeback.requested_by_color,
+      createdAt: loaded.takeback.created_at.toISOString(),
     } : null,
     version: game.version,
     startedAt: game.started_at.toISOString(),
@@ -1309,6 +1443,9 @@ async function finishOnTime(
   now: Date,
 ): Promise<GameState> {
   const { game } = loaded;
+  if (loaded.takeback) {
+    await client.query("DELETE FROM game_takeback_requests WHERE game_id = $1", [game.id]);
+  }
   const winnerKey = timedOutColor === "black" ? game.white_player_key : game.black_player_key;
   const winnerColor = timedOutColor === "black" ? "W" : "B";
   const updated = await client.query<GameRow>(
@@ -1324,7 +1461,7 @@ async function finishOnTime(
       RETURNING *`,
     [game.id, `${winnerColor}+T`, winnerKey, timedOutColor, now],
   );
-  const nextLoaded = withUpdatedGame(loaded, updated.rows[0]);
+  const nextLoaded = { ...withUpdatedGame(loaded, updated.rows[0]), takeback: null };
   const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
   return serializeGame({
     ...nextLoaded,
@@ -1501,7 +1638,7 @@ async function verifyPollState(
   if (
     loaded.game.version === knownVersion
     && loaded.game.status === "active"
-    && loaded.rules.rulesProfile === DEFAULT_RULES_PROFILE
+    && loaded.rules.rulesProfile !== LEGACY_IMMEDIATE_AREA_PROFILE
   ) {
     return {
       needsMutation: false,
@@ -1587,6 +1724,13 @@ export async function submitMove(
     if (game.status !== "active") {
       throw new GameServiceError("This game is already finished.", 409, "game_finished");
     }
+    if (loaded.takeback) {
+      throw new GameServiceError(
+        "Answer the pending takeback request before playing.",
+        409,
+        "takeback_pending",
+      );
+    }
     const color = currentTurn(game, moveRows, rules.policy);
     if (game.phase !== "play" || !color) {
       throw new GameServiceError("Agree on the score or resume play first.", 409, "game_in_scoring");
@@ -1615,8 +1759,7 @@ export async function submitMove(
       }
       nextBoard = result.board;
       nextHash = boardHash(result.board);
-      const previousHashes = new Set(positionHistory);
-      if (isRepeatedPositionForbidden(rules.policy, nextHash, previousHashes)) {
+      if (isRepeatedPositionForbidden(rules.policy, nextHash, positionHistory)) {
         throw new GameServiceError(
           "Illegal move: this position repeats an earlier board.",
           409,
@@ -1626,6 +1769,20 @@ export async function submitMove(
     }
 
     const nextMoveNumber = moveRows.length + 1;
+    if (rules.ruleset === "japanese") {
+      assertJapaneseBoardLegality(game.board_size, [
+        ...moveRows,
+        {
+          move_number: nextMoveNumber,
+          color,
+          x: isPass ? null : move.x!,
+          y: isPass ? null : move.y!,
+          is_pass: isPass,
+          board_hash: nextHash,
+          created_at: now,
+        },
+      ]);
+    }
     const inserted = await client.query<MoveRow>(
       `INSERT INTO moves (game_id, move_number, color, x, y, is_pass, board_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1704,13 +1861,9 @@ export async function submitMove(
         }, now);
       }
       const responseWindowMs = rules.policy.scoringResponseWindowMs;
-      if (responseWindowMs === null) {
-        throw new GameServiceError(
-          "The rules profile does not support agreement scoring.",
-          500,
-          "rules_configuration_unsupported",
-        );
-      }
+      const expiresAt = responseWindowMs === null
+        ? null
+        : new Date(now.getTime() + responseWindowMs);
       const revision = game.scoring_revision + 1;
       await client.query(
         `INSERT INTO game_scoring_state (
@@ -1729,7 +1882,7 @@ export async function submitMove(
           rules.komi,
           rules.handicap,
           opposite(color),
-          new Date(now.getTime() + responseWindowMs),
+          expiresAt,
         ],
       );
       const updated = await client.query<GameRow>(
@@ -1762,7 +1915,7 @@ export async function submitMove(
         komi: rules.komi,
         handicap: rules.handicap,
         fallback_to_move: opposite(color),
-        expires_at: new Date(now.getTime() + responseWindowMs),
+        expires_at: expiresAt,
         black_confirmed_revision: null,
         white_confirmed_revision: null,
         black_confirmed_at: null,
@@ -1934,13 +2087,8 @@ export async function confirmScore(
 
     const board = stoppedBoard(nextLoaded, nextLoaded.scoring);
     const deadStones = nextLoaded.deadRows.map(({ x, y }) => ({ x, y }));
-    const computation = scoreAgreementPosition(
-      nextLoaded.rules.policy,
-      board,
-      deadStones,
-      nextLoaded.rules.komi,
-    );
-    const score = requireChineseAreaBreakdown(computation);
+    const computation = calculateAgreementScore(nextLoaded, board, deadStones);
+    const score = computation.preview;
     const winnerKey = winnerKeyForScoredOutcome(loaded.game, computation.outcome);
     const deadCounts = nextLoaded.deadRows.reduce(
       (counts, stone) => ({ ...counts, [stone.color]: counts[stone.color] + 1 }),
@@ -1961,8 +2109,8 @@ export async function confirmScore(
       [
         loaded.game.id,
         boardHash(scoredBoard),
-        score.blackStones,
-        score.whiteStones,
+        "blackStones" in score ? score.blackStones : score.livingBlackStones,
+        "whiteStones" in score ? score.whiteStones : score.livingWhiteStones,
         score.blackTerritory,
         score.whiteTerritory,
         score.neutralPoints,
@@ -2073,6 +2221,146 @@ export async function resumePlay(
   });
 }
 
+function assertExpectedGameVersion(game: GameRow, expectedVersion: number): void {
+  if (
+    !Number.isSafeInteger(expectedVersion)
+    || expectedVersion < 0
+    || expectedVersion > MAX_PERSISTED_GAME_VERSION
+  ) {
+    throw new GameServiceError(
+      "A valid expected game version is required.",
+      400,
+      "invalid_game_mutation_request",
+    );
+  }
+  if (game.version !== expectedVersion) {
+    throw new GameServiceError(
+      "The game changed. Review the latest position.",
+      409,
+      "game_version_conflict",
+    );
+  }
+}
+
+async function acceptTakeback(
+  client: PoolClient,
+  loaded: LoadedGame & { takeback: TakebackRow },
+  now: Date,
+): Promise<GameState> {
+  const latest = loaded.moveRows.at(-1);
+  const request = loaded.takeback;
+  if (!latest || latest.move_number !== request.move_number || latest.color !== request.requested_by_color) {
+    throw new GameServiceError("The requested move is no longer the latest move.", 409, "takeback_stale");
+  }
+  await client.query(
+    "DELETE FROM game_takeback_requests WHERE game_id = $1",
+    [loaded.game.id],
+  );
+  await client.query(
+    "DELETE FROM moves WHERE game_id = $1 AND move_number = $2",
+    [loaded.game.id, latest.move_number],
+  );
+  const remainingRows = loaded.moveRows.slice(0, -1);
+  const replay = replayMovesWithPrisoners(loaded.game.board_size, mapMoves(remainingRows));
+  const consecutivePasses = remainingRows.at(-1)?.is_pass ? 1 : 0;
+  const updated = await client.query<GameRow>(
+    `UPDATE games
+        SET phase = 'play', to_move = $2, consecutive_passes = $3,
+            turn_started_at = $4, updated_at = $4, version = version + 1
+      WHERE id = $1
+      RETURNING *`,
+    [loaded.game.id, request.requested_by_color, consecutivePasses, now],
+  );
+  return serializeGame({
+    ...withUpdatedGame(loaded, updated.rows[0]),
+    moveRows: remainingRows,
+    board: replay.board,
+    positionHistory: replay.positionHistory,
+    takeback: null,
+  }, now);
+}
+
+export async function requestTakeback(
+  gameId: string,
+  playerKey: string,
+  expectedVersion: number,
+): Promise<GameState> {
+  return withTransaction(async (client) => {
+    const loaded = await loadGame(client, gameId, playerKey, true);
+    assertExpectedGameVersion(loaded.game, expectedVersion);
+    if (loaded.game.status !== "active" || loaded.game.phase !== "play") {
+      throw new GameServiceError("Takebacks are only available during play.", 409, "takeback_unavailable");
+    }
+    if (loaded.takeback) {
+      throw new GameServiceError("A takeback request is already pending.", 409, "takeback_pending");
+    }
+    const requester = playerColor(loaded.game, playerKey);
+    const latest = loaded.moveRows.at(-1);
+    if (
+      !latest
+      || latest.color !== requester
+      || currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy) !== opposite(requester)
+    ) {
+      throw new GameServiceError(
+        "A takeback can only be requested immediately after your own move.",
+        409,
+        "takeback_unavailable",
+      );
+    }
+    const now = new Date();
+    const inserted = await client.query<TakebackRow>(
+      `INSERT INTO game_takeback_requests (game_id, move_number, requested_by_color, created_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING move_number, requested_by_color, created_at`,
+      [loaded.game.id, latest.move_number, requester, now],
+    );
+    const updated = await client.query<GameRow>(
+      "UPDATE games SET updated_at = $2, version = version + 1 WHERE id = $1 RETURNING *",
+      [loaded.game.id, now],
+    );
+    const pendingLoaded = {
+      ...withUpdatedGame(loaded, updated.rows[0]),
+      takeback: inserted.rows[0],
+    };
+    const opponentIsBot = requester === "black"
+      ? loaded.game.white_player_is_bot
+      : loaded.game.black_player_is_bot;
+    return opponentIsBot
+      ? acceptTakeback(client, pendingLoaded, now)
+      : serializeGame(pendingLoaded, now);
+  });
+}
+
+export async function respondToTakeback(
+  gameId: string,
+  playerKey: string,
+  expectedVersion: number,
+  accept: boolean,
+): Promise<GameState> {
+  return withTransaction(async (client) => {
+    const loaded = await loadGame(client, gameId, playerKey, true);
+    assertExpectedGameVersion(loaded.game, expectedVersion);
+    if (!loaded.takeback) {
+      throw new GameServiceError("There is no pending takeback request.", 409, "takeback_unavailable");
+    }
+    const responder = playerColor(loaded.game, playerKey);
+    if (responder === loaded.takeback.requested_by_color) {
+      throw new GameServiceError("Only the opponent can answer this request.", 403, "takeback_not_opponent");
+    }
+    if (accept !== true && accept !== false) {
+      throw new GameServiceError("A takeback decision is required.", 400, "invalid_game_mutation_request");
+    }
+    const now = new Date();
+    if (accept) return acceptTakeback(client, loaded as LoadedGame & { takeback: TakebackRow }, now);
+    await client.query("DELETE FROM game_takeback_requests WHERE game_id = $1", [loaded.game.id]);
+    const updated = await client.query<GameRow>(
+      "UPDATE games SET updated_at = $2, version = version + 1 WHERE id = $1 RETURNING *",
+      [loaded.game.id, now],
+    );
+    return serializeGame({ ...withUpdatedGame(loaded, updated.rows[0]), takeback: null }, now);
+  });
+}
+
 export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
   return withTransaction(async (client) => {
     let loaded = await loadGame(client, gameId, playerKey, true);
@@ -2096,6 +2384,9 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
     if (loaded.scoring) {
       await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [game.id]);
     }
+    if (loaded.takeback) {
+      await client.query("DELETE FROM game_takeback_requests WHERE game_id = $1", [game.id]);
+    }
     const updated = await client.query<GameRow>(
       `UPDATE games
           SET status = 'finished', phase = 'play', to_move = NULL,
@@ -2110,6 +2401,7 @@ export async function resignGame(gameId: string, playerKey: string): Promise<Gam
       ...withUpdatedGame(loaded, updated.rows[0]),
       scoring: null,
       deadRows: [],
+      takeback: null,
     };
     const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
     return serializeGame({

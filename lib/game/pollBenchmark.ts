@@ -175,6 +175,9 @@ const GAME_READ_SQL = `
          g.black_time_remaining_ms, g.white_time_remaining_ms,
          g.black_periods_remaining, g.white_periods_remaining,
          g.turn_started_at, g.version, g.started_at, g.finished_at,
+         takeback.move_number AS takeback_move_number,
+         takeback.requested_by_color AS takeback_requested_by_color,
+         takeback.created_at AS takeback_created_at,
          COALESCE(
            CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
            NULLIF(BTRIM(black_user.display_name), ''),
@@ -243,6 +246,7 @@ const GAME_READ_SQL = `
     LEFT JOIN game_bots game_bot ON game_bot.game_id = g.id
     LEFT JOIN game_calibrated_bot_bindings calibrated_binding ON calibrated_binding.game_id = g.id
     LEFT JOIN game_browser_bot_bindings browser_binding ON browser_binding.game_id = g.id
+    LEFT JOIN game_takeback_requests takeback ON takeback.game_id = g.id
     LEFT JOIN player_glicko2_ratings black_rating ON black_rating.player_key = g.black_player_key
     LEFT JOIN player_glicko2_ratings white_rating ON white_rating.player_key = g.white_player_key
     LEFT JOIN game_glicko2_rating_events viewer_event

@@ -259,14 +259,17 @@ export const es = {
   },
   "rules": {
     "rulesets": {
-      "chinese": "Chino"
+      "chinese": "Chino",
+      "japanese": "Japonés"
     },
     "profiles": {
       "legacy-immediate-area": "puntuación inmediata heredada",
-      "chinese-2002-gostone-v1": "2002 · GoStone v1"
+      "chinese-2002-gostone-v1": "2002 · GoStone v1",
+      "japanese-1989-gostone-v1": "1989 · GoStone v1"
     },
     "methods": {
-      "area": "área"
+      "area": "área",
+      "territory": "territorio"
     },
     "komi": "komi",
     "handicap": "Ventaja"
@@ -400,6 +403,7 @@ export const es = {
     "recordBody": "Las jugadas son verificadas por el servidor, y los juegos completados conservan su resultado. Los juegos acordados por puntuación también conservan ese acuerdo de puntuación. Estos hechos son el punto de partida para tu propia revisión; GoStone no presenta un juicio de motor inventado como análisis."
   },
   "game": {
+    ...en.game,
     "loadFailed": "No se pudo cargar el juego.",
     "moveFailed": "La jugada falló.",
     "resignFailed": "No se pudo rendir.",

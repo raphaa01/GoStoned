@@ -254,8 +254,11 @@ async function assertLegacyDeploymentWindowCompatibility() {
   const black = await createGuest();
   const white = await createGuest();
   const inserted = await query<{ id: string; rules_profile: string }>(
-    `INSERT INTO games (board_size, black_player_key, white_player_key)
-     VALUES (9, $1, $2)
+    `INSERT INTO games (
+       board_size, black_player_key, white_player_key,
+       rules, rules_profile, scoring_method, komi
+     )
+     VALUES (9, $1, $2, 'chinese', 'legacy-immediate-area', 'area', 6.5)
      RETURNING id, rules_profile`,
     [black.playerKey, white.playerKey],
   );
@@ -508,7 +511,7 @@ async function run() {
   assert.equal(resignedGame.rated, false);
   await assertNoGuestLedgerEvent(confirmResign);
 
-  const deadline = await setupScoringFixture();
+  const timelessScoring = await setupScoringFixture();
   await assertRejectedMutationRollsBack(
     `UPDATE game_scoring_state
           SET scored_board_hash = board_hash,
@@ -524,56 +527,32 @@ async function run() {
               result = 'B+73.5',
               finalized_at = NOW()
         WHERE game_id = $1`,
-    [deadline.gameId],
+    [timelessScoring.gameId],
   );
-  // Production scoring deadlines originate as JS Dates. Match that millisecond
-  // precision so the evidence snapshot survives a node-postgres round trip.
-  const deadlineStartedAt = new Date(Date.now() - 2_000);
-  const deadlineExpiresAt = new Date(Date.now() - 1_000);
-  await query(
-    `UPDATE game_scoring_state
-        SET started_at = $2,
-            expires_at = $3
-      WHERE game_id = $1`,
-    [deadline.gameId, deadlineStartedAt, deadlineExpiresAt],
+  const persistedDeadline = await query<{ expires_at: Date | null }>(
+    "SELECT expires_at FROM game_scoring_state WHERE game_id = $1",
+    [timelessScoring.gameId],
   );
-  const expiredState = await api(
-    `/api/games/${deadline.gameId}`,
+  assert.deepEqual(persistedDeadline.rows, [{ expires_at: null }]);
+  const stillScoring = await api(
+    `/api/games/${timelessScoring.gameId}`,
     { method: "GET" },
-    deadline.black.cookie,
-    deadline.black.playerKey,
+    timelessScoring.black.cookie,
+    timelessScoring.black.playerKey,
   );
-  assert.equal(expiredState.response.status, 200);
-  const resumed = expiredState.body.game as {
+  assert.equal(stillScoring.response.status, 200);
+  const unresolved = stillScoring.body.game as {
     status: string;
     phase: string;
-    turn: string;
-    scoring: null;
-    lastResume: { claim: string };
+    scoring: { expiresAt: null };
   };
-  assert.equal(resumed.status, "active");
-  assert.equal(resumed.phase, "play");
-  assert.equal(resumed.turn, "black");
-  assert.equal(resumed.scoring, null);
-  assert.equal(resumed.lastResume.claim, "deadline");
-  assert.deepEqual(await resumeEvents(deadline.gameId), [{
-    scoring_revision: deadline.revision,
-    resume_claim: "deadline",
-    requested_by_color: null,
-    resumed_to_move: "black",
-  }]);
-  const deadlineRetry = await api(
-    `/api/games/${deadline.gameId}`,
-    { method: "GET" },
-    deadline.white.cookie,
-    deadline.white.playerKey,
-  );
-  assert.equal(deadlineRetry.response.status, 200);
-  assert.equal((deadlineRetry.body.game as { phase: string }).phase, "play");
-  assert.equal((await resumeEvents(deadline.gameId)).length, 1);
+  assert.equal(unresolved.status, "active");
+  assert.equal(unresolved.phase, "scoring");
+  assert.equal(unresolved.scoring.expiresAt, null);
+  assert.deepEqual(await resumeEvents(timelessScoring.gameId), []);
 
   console.log(
-    "Legacy rollout compatibility, scoring races, immutable resume evidence, unrated guest results, deadline recovery, and DB constraints passed.",
+    "Legacy rollout compatibility, Japanese scoring races, immutable resume evidence, unrated guest results, timeless agreement, and DB constraints passed.",
   );
 }
 

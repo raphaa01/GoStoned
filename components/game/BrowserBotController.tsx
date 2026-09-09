@@ -82,6 +82,7 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
   const moveActionKey = currentBotColor
     && game.status === "active"
     && game.phase === "play"
+    && !game.takeback
     && game.turn === currentBotColor
     ? `move:${game.id}:${game.version}`
     : null;

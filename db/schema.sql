@@ -61,15 +61,15 @@ CREATE TABLE IF NOT EXISTS games (
   game_type TEXT NOT NULL DEFAULT 'matchmaking'
     CHECK (game_type IN ('matchmaking', 'friendly')),
   result TEXT,
-  komi NUMERIC(4,1) NOT NULL DEFAULT 7.5,
-  rules TEXT NOT NULL DEFAULT 'chinese',
+  komi NUMERIC(4,1) NOT NULL DEFAULT 6.5,
+  rules TEXT NOT NULL DEFAULT 'japanese',
   phase TEXT NOT NULL DEFAULT 'play' CHECK (phase IN ('play', 'scoring')),
   to_move TEXT DEFAULT 'black' CHECK (to_move IN ('black', 'white')),
   consecutive_passes INT NOT NULL DEFAULT 0 CHECK (consecutive_passes BETWEEN 0 AND 2),
   scoring_revision INT NOT NULL DEFAULT 0 CHECK (scoring_revision >= 0),
-  rules_profile TEXT NOT NULL DEFAULT 'legacy-immediate-area'
-    CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1')),
-  scoring_method TEXT NOT NULL DEFAULT 'area' CHECK (scoring_method = 'area'),
+  rules_profile TEXT NOT NULL DEFAULT 'japanese-1989-gostone-v1'
+    CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1', 'japanese-1989-gostone-v1')),
+  scoring_method TEXT NOT NULL DEFAULT 'territory' CHECK (scoring_method IN ('area', 'territory')),
   handicap INT NOT NULL DEFAULT 0 CHECK (handicap = 0),
   finish_reason TEXT CHECK (finish_reason IN ('score', 'resignation', 'timeout', 'legacy_score')),
   last_resume_claim TEXT,
@@ -118,9 +118,9 @@ CREATE TABLE IF NOT EXISTS game_scoring_state (
   board_hash TEXT NOT NULL,
   stopped_move_number INT NOT NULL CHECK (stopped_move_number >= 2),
   revision INT NOT NULL CHECK (revision > 0),
-  rules TEXT NOT NULL CHECK (rules = 'chinese'),
-  rules_profile TEXT NOT NULL CHECK (rules_profile = 'chinese-2002-gostone-v1'),
-  scoring_method TEXT NOT NULL CHECK (scoring_method = 'area'),
+  rules TEXT NOT NULL CHECK (rules IN ('chinese', 'japanese')),
+  rules_profile TEXT NOT NULL CHECK (rules_profile IN ('chinese-2002-gostone-v1', 'japanese-1989-gostone-v1')),
+  scoring_method TEXT NOT NULL CHECK (scoring_method IN ('area', 'territory')),
   komi NUMERIC(4,1) NOT NULL,
   handicap INT NOT NULL CHECK (handicap = 0),
   fallback_to_move TEXT NOT NULL CHECK (fallback_to_move IN ('black', 'white')),
@@ -192,7 +192,26 @@ CREATE TABLE IF NOT EXISTS game_dead_stones (
   PRIMARY KEY (game_id, x, y)
 );
 
--- Retain the scoring snapshot and decision that caused Chinese agreement
+CREATE TABLE IF NOT EXISTS game_takeback_requests (
+  game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  move_number INT NOT NULL CHECK (move_number > 0),
+  requested_by_color TEXT NOT NULL CHECK (requested_by_color IN ('black', 'white')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE game_takeback_requests ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON game_takeback_requests FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON game_takeback_requests FROM authenticated;
+  END IF;
+END
+$$;
+
+-- Retain the scoring snapshot and decision that caused agreement
 -- scoring to resume play. The current game row keeps the latest summary for
 -- API compatibility; compatible application versions append each later
 -- scoring resumption here without inventing history for older games.
@@ -246,8 +265,7 @@ CREATE TABLE IF NOT EXISTS game_scoring_resume_events (
 -- fallback turn. A future service must either settle by mutual agreement or
 -- resume actual play with the requester's opponent moving first.
 -- proposal_hash is the lowercase SHA-256 of the versioned canonical
--- japanese-settlement-proposal-v1 serialization defined by the inactive
--- policy contract; activation must implement and recompute that serializer.
+-- japanese-settlement-proposal-v1 serialization defined by the policy contract.
 CREATE TABLE IF NOT EXISTS game_japanese_scoring_state (
   game_id UUID PRIMARY KEY,
   board_hash TEXT NOT NULL,
@@ -437,7 +455,7 @@ CREATE TABLE IF NOT EXISTS matchmaking_queue (
   board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
   time_control TEXT NOT NULL DEFAULT 'rapid'
     CHECK (time_control IN ('blitz', 'rapid', 'classic')),
-  rules_profile TEXT NOT NULL DEFAULT 'chinese-2002-gostone-v1',
+  rules_profile TEXT NOT NULL DEFAULT 'japanese-1989-gostone-v1',
   status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'matched')),
   game_id UUID REFERENCES games(id) ON DELETE SET NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -3354,5 +3372,116 @@ ALTER TABLE puzzles
       AND variation ? 'version'
       AND variation ? 'mainLine'
       AND variation ? 'refutations'
+    )
+  );
+
+-- Current rules activation. Historical Chinese rows retain their exact tuple;
+-- new application writes use Japanese territory scoring.
+ALTER TABLE games
+  ALTER COLUMN komi SET DEFAULT 6.5,
+  ALTER COLUMN rules SET DEFAULT 'japanese',
+  ALTER COLUMN rules_profile SET DEFAULT 'japanese-1989-gostone-v1',
+  ALTER COLUMN scoring_method SET DEFAULT 'territory';
+
+ALTER TABLE matchmaking_queue
+  DROP CONSTRAINT IF EXISTS matchmaking_queue_rules_profile_compatibility_check;
+ALTER TABLE matchmaking_queue
+  ADD CONSTRAINT matchmaking_queue_rules_profile_compatibility_check CHECK (
+    rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1', 'japanese-1989-gostone-v1')
+  );
+ALTER TABLE matchmaking_queue
+  ALTER COLUMN rules_profile SET DEFAULT 'japanese-1989-gostone-v1';
+
+ALTER TABLE matchmaking_queue
+  DROP CONSTRAINT IF EXISTS matchmaking_queue_adaptive_state_check;
+ALTER TABLE matchmaking_queue
+  ADD CONSTRAINT matchmaking_queue_adaptive_state_check CHECK (
+    matchmaking_policy_version IS NULL
+    OR COALESCE((
+      matchmaking_policy_version = 'adaptive-global-glicko-match-v1'
+      AND (
+        (rules_snapshot = 'chinese' AND scoring_method_snapshot = 'area')
+        OR (
+          rules_snapshot = 'japanese'
+          AND rules_version_snapshot = 'japanese-1989-gostone-v1'
+          AND scoring_method_snapshot = 'territory'
+          AND komi_snapshot = 6.5
+          AND handicap_snapshot = 0
+        )
+      )
+      AND LENGTH(rules_version_snapshot) BETWEEN 1 AND 120
+      AND komi_snapshot IS NOT NULL
+      AND handicap_snapshot >= 0
+      AND preference_revision > 0
+      AND bot_match_preference IN ('never', 'calibrated-rated-after-wait')
+      AND abandonment_risk IN ('normal', 'elevated', 'restricted')
+      AND abandonment_policy_version = 'abandonment-risk-v1'
+      AND abandonment_evaluated_at IS NOT NULL
+      AND handicap_preference IN ('even-only', 'verified-handicap-ok')
+      AND (
+        (match_pool = 'registered-rated'
+         AND player_key LIKE 'user:%'
+         AND display_preference_snapshot IN ('rank-primary','rating-primary','both')
+         AND rating_snapshot BETWEEN -10000 AND 10000
+         AND rating_deviation_snapshot > 0 AND rating_deviation_snapshot <= 10000
+         AND rating_algorithm_version = 'glicko2-v1-tau-0.5'
+         AND rating_state_updated_at IS NOT NULL)
+        OR
+        (match_pool = 'guest-unrated'
+         AND player_key LIKE 'guest:%'
+         AND rating_snapshot IS NULL
+         AND rating_deviation_snapshot IS NULL
+         AND display_preference_snapshot IS NULL
+         AND rating_algorithm_version IS NULL
+         AND rating_state_updated_at IS NULL
+         AND bot_match_preference = 'never')
+      )
+      AND (
+        (reliable_latency_ms IS NULL AND latency_evidence_version IS NULL
+         AND latency_observed_at IS NULL)
+        OR
+        (reliable_latency_ms BETWEEN 0 AND 2000
+         AND latency_evidence_version = 'server-rtt-v1'
+         AND latency_observed_at IS NOT NULL)
+      )
+    ), FALSE)
+  );
+
+ALTER TABLE game_scoring_state ALTER COLUMN expires_at DROP NOT NULL;
+
+ALTER TABLE game_scoring_resume_events DROP CONSTRAINT IF EXISTS game_scoring_resume_events_rules_check;
+ALTER TABLE game_scoring_resume_events DROP CONSTRAINT IF EXISTS game_scoring_resume_events_rules_profile_check;
+ALTER TABLE game_scoring_resume_events DROP CONSTRAINT IF EXISTS game_scoring_resume_events_scoring_method_check;
+ALTER TABLE game_scoring_resume_events DROP CONSTRAINT IF EXISTS game_scoring_resume_events_komi_check;
+ALTER TABLE game_scoring_resume_events DROP CONSTRAINT IF EXISTS game_scoring_resume_events_claim_shape_check;
+ALTER TABLE game_scoring_resume_events ALTER COLUMN scoring_expires_at DROP NOT NULL;
+ALTER TABLE game_scoring_resume_events
+  ADD CONSTRAINT game_scoring_resume_events_rules_check CHECK (rules IN ('chinese', 'japanese')),
+  ADD CONSTRAINT game_scoring_resume_events_rules_profile_check CHECK (
+    rules_profile IN ('chinese-2002-gostone-v1', 'japanese-1989-gostone-v1')
+  ),
+  ADD CONSTRAINT game_scoring_resume_events_scoring_method_check CHECK (scoring_method IN ('area', 'territory')),
+  ADD CONSTRAINT game_scoring_resume_events_komi_check CHECK (komi IN (6.5, 7.5)),
+  ADD CONSTRAINT game_scoring_resume_events_claim_shape_check CHECK (
+    (
+      resume_claim IN ('dead', 'alive')
+      AND requested_by_color IS NOT NULL
+      AND disputed_x IS NOT NULL AND disputed_y IS NOT NULL
+      AND (
+        (rules = 'chinese' AND scoring_expires_at IS NOT NULL
+          AND resumed_at < scoring_expires_at
+          AND ((resume_claim = 'dead' AND resumed_to_move = requested_by_color)
+            OR (resume_claim = 'alive' AND resumed_to_move <> requested_by_color)))
+        OR (rules = 'japanese' AND scoring_expires_at IS NULL
+          AND resumed_to_move <> requested_by_color)
+      )
+    )
+    OR (
+      resume_claim = 'deadline'
+      AND requested_by_color IS NULL
+      AND disputed_x IS NULL AND disputed_y IS NULL
+      AND resumed_to_move = fallback_to_move
+      AND scoring_expires_at IS NOT NULL
+      AND scoring_expires_at <= resumed_at
     )
   );

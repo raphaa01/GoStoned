@@ -31,10 +31,10 @@ async function run(): Promise<void> {
     const game = await client.query<{ id: string }>(
       `INSERT INTO games
          (board_size,black_player_key,white_player_key,winner_key,status,result,
-          rules,phase,to_move,rules_profile,scoring_method,handicap,finish_reason,
+          rules,phase,to_move,rules_profile,scoring_method,komi,handicap,finish_reason,
           finished_at)
        VALUES (9,$1,$2,$1,'finished','B+R','chinese','play',NULL,
-               'chinese-2002-gostone-v1','area',0,'resignation',statement_timestamp())
+               'chinese-2002-gostone-v1','area',7.5,0,'resignation',statement_timestamp())
        RETURNING id::text`,
       [blackKey, whiteKey],
     );
@@ -43,10 +43,10 @@ async function run(): Promise<void> {
     const guestGame = await client.query<{ id: string }>(
       `INSERT INTO games
          (board_size,black_player_key,white_player_key,winner_key,status,result,
-          rules,phase,to_move,rules_profile,scoring_method,handicap,finish_reason,
+          rules,phase,to_move,rules_profile,scoring_method,komi,handicap,finish_reason,
           finished_at)
        VALUES (9,$1,$2,$1,'finished','B+R','chinese','play',NULL,
-               'chinese-2002-gostone-v1','area',0,'resignation',statement_timestamp())
+               'chinese-2002-gostone-v1','area',7.5,0,'resignation',statement_timestamp())
        RETURNING id::text`,
       [`guest:${randomUUID()}`, `guest:${randomUUID()}`],
     );

@@ -21,9 +21,11 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - Live-Partien über eine deploybare Polling-API
 - auswählbare Blitz-, Rapid- und Classic-Uhren mit japanischem Byo-yomi
 - serverseitige Zeitmessung und automatisch gespeicherter Sieg auf Zeit
-- serverseitige Zugreihenfolge, Captures, Suicide- und Superko-Prüfung
+- serverseitige Zugreihenfolge, Captures, Suicide- und japanische Ko-Prüfung
 - Pass, pausierte Wertungsphase nach zwei Pässen, beiderseitige
-  Totstein-Bestätigung, Wiederaufnahme und Chinese Area Scoring
+  Totstein-Bestätigung, Wiederaufnahme und japanische Gebietswertung
+- kostenlose lokale GoStone-v4-Spielstandsschätzung und beidseitig bestätigte
+  Zugrücknahme in Ranglisten- und Freundschaftspartien
 - dauerhaft gespeicherte Spiele, Züge, Ergebnisse und Statistiken
 - responsive Desktop- und Mobile-Oberfläche
 - lokale PostgreSQL-Datenbank mit Docker
@@ -172,8 +174,16 @@ markierte Gruppe tot ist, spielt bei der Wiederaufnahme zuerst. Wer diese
 Tot-Markierung bestreitet, lässt deshalb die Gegenseite zuerst spielen. Bleibt
 die Wertungsphase zehn Minuten lang ungelöst, setzt GoStone die Partie ohne
 Wertung automatisch in der normalen Zugreihenfolge fort. Japanische Wertung,
-alternative chinesische Regelprofile und Handicap-Platzierung sind noch nicht
-freigeschaltet.
+alternative chinesische Regelprofile und Handicap-Platzierung waren in diesem
+Zwischenschritt noch nicht freigeschaltet.
+
+Migration `037_japanese_rules_and_takebacks.sql` aktiviert für neue Ranglisten-
+und Freundschaftspartien das Profil `japanese-1989-gostone-v1` mit 6,5 Komi,
+Gebiet plus Gefangenen, Simple Ko und beiderseitiger Endstellungsbestätigung.
+Chinesische Altpartien behalten ihr gespeichertes Profil. Die Wertungsphase
+läuft nicht automatisch ab. Außerdem speichert die Migration genau eine offene
+Zugrücknahme-Anfrage pro Partie; erst die Zustimmung des Gegners entfernt den
+letzten Zug. Gegen den lokalen Browser-Bot wird die Anfrage automatisch angenommen.
 
 Bereits vor Migration 008 gestartete oder beendete Partien behalten dagegen
 das Profil `legacy-immediate-area`. Das gilt auch für Partien, die eine noch

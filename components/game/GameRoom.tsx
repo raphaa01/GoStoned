@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, RefreshCw, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import { Calculator, Check, LogIn, LogOut, RefreshCw, ShieldCheck, Undo2, Wifi, WifiOff, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -51,6 +51,8 @@ import type { GamePollResponse, GameState, Position, Stone } from "@/lib/game/ty
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { BrowserBotController } from "./BrowserBotController";
+import { proposeJapaneseSettlement } from "@/lib/bot/browserBotClient";
+import type { GoStoneJapaneseSettlementProposal } from "@/lib/bot/modelV1";
 import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
@@ -76,6 +78,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [busy, setBusy] = useState(false);
   const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [estimate, setEstimate] = useState<GoStoneJapaneseSettlementProposal | null>(null);
+  const [estimateBusy, setEstimateBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
   const [identityChanged, setIdentityChanged] = useState(false);
@@ -166,6 +170,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     resultShownForGame.current = null;
     setGame(null);
     setPendingMove(null);
+    setEstimate(null);
     setMessages([]);
     setChatAvailable(false);
     setChatPolicyUnavailable(false);
@@ -677,7 +682,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       && game.status === "active"
       && game.phase === "play"
       && game.turn === yourColor,
-    ) && gameInteractionAllowed && !busy;
+    ) && gameInteractionAllowed && !busy && !game?.takeback;
   const canMarkDead = Boolean(
     game
     && yourColor
@@ -822,6 +827,55 @@ export function GameRoom({ gameId }: { gameId: string }) {
         return;
       }
       setError(localizedApiError(dictionary, requestError, copy.scoringFailed));
+      reconcileAfterOperation(requestError);
+    } finally {
+      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
+    }
+  }
+
+  async function estimateJapaneseScore() {
+    if (!game || estimateBusy) return;
+    setEstimateBusy(true);
+    setError(null);
+    try {
+      setEstimate(await proposeJapaneseSettlement({
+        gameId: game.id,
+        boardSize: game.boardSize,
+        board: game.board,
+        moves: game.moves,
+        komi: game.komi,
+        targetRating: Number(yourColor === "black" ? game.blackRating : game.whiteRating) || 1_200,
+        gameVersion: game.version,
+      }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : copy.estimateFailed);
+    } finally {
+      setEstimateBusy(false);
+    }
+  }
+
+  async function takebackAction(action: "request" | "respond", accept?: boolean) {
+    if (!game || !playerKey || !gameInteractionAllowed || busy) return;
+    const requestIdentity = identityAuthority.current.capture();
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}/takeback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: playerKey,
+        },
+        body: JSON.stringify({ action, ...(accept === undefined ? {} : { accept }), expectedVersion: game.version }),
+      });
+      const data = await readApi<{ actor: string; game: GameState }>(response);
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      assertResponseActor(data.actor, playerKey);
+      setEstimate(null);
+      acceptGameResponse({ game: data.game }, Date.now(), requestIdentity);
+    } catch (requestError) {
+      if (!identityAuthority.current.isCurrent(requestIdentity)) return;
+      setError(localizedApiError(dictionary, requestError, copy.takebackFailed));
       reconcileAfterOperation(requestError);
     } finally {
       if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
@@ -1304,6 +1358,50 @@ export function GameRoom({ gameId }: { gameId: string }) {
         </section>
 
         <aside className="focused-game-side">
+          {game.status === "active" && game.phase === "play" ? (
+            <section className="game-panel game-tools-panel" aria-label={copy.gameTools}>
+              <div className="game-actions">
+                <button disabled={estimateBusy} onClick={() => void estimateJapaneseScore()} type="button">
+                  <Calculator size={18} /> {estimateBusy ? copy.estimatingScore : copy.estimateScore}
+                </button>
+                {!game.takeback ? (
+                  <button
+                    disabled={busy || !yourColor || game.moves.at(-1)?.color !== yourColor || game.turn === yourColor}
+                    onClick={() => void takebackAction("request")}
+                    type="button"
+                  >
+                    <Undo2 size={18} /> {copy.requestTakeback}
+                  </button>
+                ) : game.takeback.requestedBy === yourColor ? (
+                  <span>{copy.takebackWaiting}</span>
+                ) : (
+                  <>
+                    <button disabled={busy} onClick={() => void takebackAction("respond", true)} type="button">
+                      <Check size={18} /> {copy.acceptTakeback}
+                    </button>
+                    <button disabled={busy} onClick={() => void takebackAction("respond", false)} type="button">
+                      <X size={18} /> {copy.declineTakeback}
+                    </button>
+                  </>
+                )}
+              </div>
+              {estimate ? (
+                <div className="final-score-summary">
+                  <strong>{copy.japaneseEstimate}</strong>
+                  {estimate.score ? (
+                    <>
+                      <span>{copy.black} {estimate.score.blackTotal} · {copy.white} {estimate.score.whiteTotal}</span>
+                      <span>{estimate.score.outcome.kind === "jigo" ? copy.draw : `${estimate.score.outcome.winner === "black" ? copy.black : copy.white} +${estimate.score.outcome.margin}`}</span>
+                    </>
+                  ) : <span>{copy.estimateUnclear}</span>}
+                  <span>{copy.localEstimateNote}</span>
+                  {estimate.uncertainStones.length > 0 ? (
+                    <span>{copy.uncertainGroups.replace("{count}", String(estimate.groups.filter((group) => group.status === "uncertain").length))}</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           <GamePanel
             busy={busy}
             clockObservedAt={clockObservedAt}
