@@ -11,7 +11,7 @@ const GAME_ID = "33333333-3333-4333-8333-333333333333";
 const copy = {
   en: {
     agreedDetails: "Agreed scoring details",
-    agreedScore: "Agreed Chinese area score",
+    agreedScore: "Agreed final score",
     cancel: "Cancel",
     challengeDead: "Resume play to challenge a dead mark",
     chatMessage: "Chat message",
@@ -47,7 +47,7 @@ const copy = {
   },
   de: {
     agreedDetails: "Vereinbarte Wertungsdetails",
-    agreedScore: "Vereinbarte chinesische Flächenwertung",
+    agreedScore: "Vereinbarte Endwertung",
     cancel: "Abbrechen",
     challengeDead: "Weiterspielen und Tot-Markierung anfechten",
     chatMessage: "Chatnachricht",
