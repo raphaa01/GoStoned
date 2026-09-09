@@ -1394,7 +1394,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
                       <span>{estimate.score.outcome.kind === "jigo" ? copy.draw : `${estimate.score.outcome.winner === "black" ? copy.black : copy.white} +${estimate.score.outcome.margin}`}</span>
                     </>
                   ) : <span>{copy.estimateUnclear}</span>}
-                  <span>{copy.localEstimateNote}</span>
                   {estimate.uncertainStones.length > 0 ? (
                     <span>{copy.uncertainGroups.replace("{count}", String(estimate.groups.filter((group) => group.status === "uncertain").length))}</span>
                   ) : null}

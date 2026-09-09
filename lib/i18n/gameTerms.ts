@@ -3,7 +3,7 @@ import type { Dictionary } from "./dictionary";
 
 type RulesParameters = Pick<
   GameState,
-  "ruleset" | "rulesProfile" | "scoringMethod" | "komi" | "handicap"
+  "ruleset" | "scoringMethod" | "komi" | "handicap"
 >;
 
 export function localizedRulesSummary(
@@ -12,7 +12,7 @@ export function localizedRulesSummary(
 ): string {
   const rules = dictionary.rules;
   const parts = [
-    `${rules.rulesets[game.ruleset]} ${rules.profiles[game.rulesProfile]}`,
+    rules.rulesets[game.ruleset],
     rules.methods[game.scoringMethod],
     `${game.komi} ${rules.komi}`,
   ];

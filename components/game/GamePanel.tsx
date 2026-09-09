@@ -1,9 +1,10 @@
 "use client";
 
 import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
+import { replayMovesWithPrisoners } from "@/lib/game/goEngine";
 import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
@@ -51,6 +52,10 @@ export function GamePanel({
   const copy = dictionary.game;
   const friendsCopy = getFriendsCopy(locale);
   const rulesSummary = localizedRulesSummary(game, dictionary);
+  const prisoners = useMemo(
+    () => replayMovesWithPrisoners(game.boardSize, game.moves).prisoners,
+    [game.boardSize, game.moves],
+  );
   const [selectedGroupKey, setSelectedGroupKey] = useState("");
   const yourColor: Stone | null = game.blackPlayerKey === playerKey
     ? "black"
@@ -100,6 +105,7 @@ export function GamePanel({
         <div className="game-player-name">
           <strong>{game.whitePlayerName}</strong>
           <span>{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
+          <span>{copy.prisoners}: {prisoners.capturedBlackByWhite}</span>
           {game.whiteRating !== null && game.whiteRating !== undefined
             ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}
@@ -148,6 +154,7 @@ export function GamePanel({
         <div className="game-player-name">
           <strong>{game.blackPlayerName}</strong>
           <span>{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
+          <span>{copy.prisoners}: {prisoners.capturedWhiteByBlack}</span>
           {game.blackRating !== null && game.blackRating !== undefined
             ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}
