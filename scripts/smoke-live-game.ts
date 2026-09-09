@@ -464,7 +464,7 @@ async function run() {
   // decisions that intentionally fill one actor's complete burst allowance.
   await new Promise((resolve) => setTimeout(resolve, scoringDecisionWindowMs + 250));
 
-  await postMove(gameId, { x: 5, y: 2 }, white.cookie, white.playerKey);
+  await postMove(gameId, { x: 3, y: 3 }, white.cookie, white.playerKey);
   await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
   const finalScoring = await postMove<{
     game: { phase: string; scoring: { revision: number } };
@@ -493,7 +493,7 @@ async function run() {
     dead: true,
     expectedRevision: firstConfirmation.game.scoring.revision,
   }, white.cookie, white.playerKey);
-  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }]);
+  assert.deepEqual(marked.game.scoring.deadStones, [{ x: 3, y: 2 }, { x: 3, y: 3 }]);
   assert.equal(marked.game.scoring.blackConfirmed, false);
 
   const confirmations = await Promise.all([
