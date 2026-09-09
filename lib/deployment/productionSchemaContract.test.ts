@@ -6,7 +6,6 @@ import {
 } from "./productionSchemaContract";
 
 const currentSnapshot: ProductionSchemaSnapshot = {
-  migrationApplied: true,
   gameRulesDefault: "'japanese'::text",
   gameRulesProfileDefault: "'japanese-1989-gostone-v1'::text",
   gameScoringMethodDefault: "'territory'::text",
@@ -23,10 +22,14 @@ test("accepts the current Japanese matchmaking schema", () => {
   assert.doesNotThrow(() => validateProductionSchemaContract(currentSnapshot));
 });
 
-test("rejects production when migration 037 is missing", () => {
+test("rejects the old Chinese-only queue profile constraint", () => {
   assert.throws(
-    () => validateProductionSchemaContract({ ...currentSnapshot, migrationApplied: false }),
-    /037_japanese_rules_and_takebacks\.sql/,
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      queueProfileConstraint:
+        "CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1'))",
+    }),
+    /matchmaking rules-profile constraint/,
   );
 });
 

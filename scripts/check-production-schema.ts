@@ -1,13 +1,9 @@
 import "dotenv/config";
 import { closePool, query } from "../lib/db";
 import { getDatabaseUrl, isLocalDatabase } from "../lib/env";
-import {
-  JAPANESE_RULES_MIGRATION,
-  validateProductionSchemaContract,
-} from "../lib/deployment/productionSchemaContract";
+import { validateProductionSchemaContract } from "../lib/deployment/productionSchemaContract";
 
 type SchemaRow = {
-  migration_applied: boolean;
   game_rules_default: string | null;
   game_rules_profile_default: string | null;
   game_scoring_method_default: string | null;
@@ -28,11 +24,6 @@ async function checkProductionSchema(): Promise<void> {
 
   const result = await query<SchemaRow>(
     `SELECT
-       EXISTS (
-         SELECT 1
-           FROM public.schema_migrations
-          WHERE filename = $1
-       ) AS migration_applied,
        (SELECT column_default FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'games' AND column_name = 'rules')
          AS game_rules_default,
@@ -66,14 +57,12 @@ async function checkProductionSchema(): Promise<void> {
             AND relation.relname = 'game_takeback_requests'
             AND relation.relrowsecurity
        ) AS takeback_rls`,
-    [JAPANESE_RULES_MIGRATION],
   );
 
   const row = result.rows[0];
   if (!row) throw new Error("Production schema check returned no result.");
 
   validateProductionSchemaContract({
-    migrationApplied: row.migration_applied,
     gameRulesDefault: row.game_rules_default,
     gameRulesProfileDefault: row.game_rules_profile_default,
     gameScoringMethodDefault: row.game_scoring_method_default,

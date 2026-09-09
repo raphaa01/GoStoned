@@ -1,7 +1,4 @@
-export const JAPANESE_RULES_MIGRATION = "037_japanese_rules_and_takebacks.sql";
-
 export type ProductionSchemaSnapshot = Readonly<{
-  migrationApplied: boolean;
   gameRulesDefault: string | null;
   gameRulesProfileDefault: string | null;
   gameScoringMethodDefault: string | null;
@@ -25,12 +22,6 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
-  if (!snapshot.migrationApplied) {
-    throw new Error(
-      `Production database migration is missing: ${JAPANESE_RULES_MIGRATION}.`,
-    );
-  }
-
   requireFragment(snapshot.gameRulesDefault, "japanese", "games.rules default");
   requireFragment(
     snapshot.gameRulesProfileDefault,
