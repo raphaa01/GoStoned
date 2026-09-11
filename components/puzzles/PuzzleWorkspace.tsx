@@ -254,7 +254,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const puzzleCategoryCopy = categories.find((entry) => entry.id === puzzle?.category);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
-  const explanation = puzzle?.solution?.explanation[locale];
+  const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
   const expected = hub?.expectedPerCategory ?? 10;
   const dailyCycleLength = hub?.dailyCycleLength ?? 20;
@@ -345,7 +345,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
               {feedback === "incorrect" ? (
                 <div className={styles.incorrect} role="status">
                   <strong>{copy.incorrect}</strong>
-                  {branchExplanation ? <p>{branchExplanation[locale]}</p> : null}
+                  {branchExplanation ? <p>{branchExplanation[locale] ?? branchExplanation.en}</p> : null}
                   {branchLine ? <button className="button button--secondary" onClick={clearTransientState} type="button">{copy.retryVariation}</button> : null}
                 </div>
               ) : null}

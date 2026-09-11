@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import type { GameState, Stone, StoredMove } from "../../lib/game/types";
 import { scoreChineseAgreement, toggleDeadGroup } from "../../lib/game/scoring";
+import { ky } from "../../lib/i18n/catalogs/ky";
+import { getFriendsCopy } from "../../lib/i18n/friends";
 
 const ORIGIN = "http://127.0.0.1:3100";
 const EXPECTED_PLAYER_HEADER = "x-gostone-expected-player";
@@ -10,12 +12,13 @@ const GAME_ID = "33333333-3333-4333-8333-333333333333";
 
 const copy = {
   en: {
+    analyze: "Analyze this game",
     agreedDetails: "Agreed scoring details",
     agreedScore: "Agreed final score",
     cancel: "Cancel",
-    challengeDead: "Resume play to challenge a dead mark",
+    challengeDead: "Continue play: group is alive",
     chatMessage: "Chat message",
-    confirmScore: "Confirm score",
+    confirmScore: "Confirm final score",
     confirmed: "confirmed",
     defeat: "Defeat",
     disputeResumed: "Play resumed to resolve a marked-group dispute on the board.",
@@ -41,17 +44,18 @@ const copy = {
     startNewSession: "Start a new guest session",
     syncDelayed: "Sync delayed",
     unavailable: "Game unavailable",
-    viewBoard: "View board",
+    viewBoard: "Review the board",
     waiting: "waiting",
     yourTurn: "Your turn",
   },
   de: {
+    analyze: "Partie analysieren",
     agreedDetails: "Vereinbarte Wertungsdetails",
     agreedScore: "Vereinbarte Endwertung",
     cancel: "Abbrechen",
-    challengeDead: "Weiterspielen und Tot-Markierung anfechten",
+    challengeDead: "Weiterspielen: Gruppe lebt",
     chatMessage: "Chatnachricht",
-    confirmScore: "Wertung bestätigen",
+    confirmScore: "Endwertung bestätigen",
     confirmed: "bestätigt",
     defeat: "Niederlage",
     disputeResumed: "Das Spiel wurde fortgesetzt, um eine markierte Gruppe auf dem Brett zu klären.",
@@ -77,7 +81,7 @@ const copy = {
     startNewSession: "Neue Gastsitzung starten",
     syncDelayed: "Abgleich verzögert",
     unavailable: "Partie nicht verfügbar",
-    viewBoard: "Brett ansehen",
+    viewBoard: "Brett noch einmal ansehen",
     waiting: "wartet",
     yourTurn: "Du bist am Zug",
   },
@@ -567,7 +571,11 @@ async function installApiHarness(
       && url.origin === ORIGIN
       && url.searchParams.has("_rsc")
       && request.failure()?.errorText === "net::ERR_ABORTED";
-    if (cancelledNextPrefetch) return;
+    const cancelledGamePollDuringNavigation = request.method() === "GET"
+      && url.origin === ORIGIN
+      && url.pathname === `/api/games/${GAME_ID}`
+      && request.failure()?.errorText === "net::ERR_ABORTED";
+    if (cancelledNextPrefetch || cancelledGamePollDuringNavigation) return;
     const observed = {
       errorText: request.failure()?.errorText ?? "unknown failure",
       method: request.method(),
@@ -1209,7 +1217,11 @@ for (const locale of ["en", "de"] as const) {
     });
     await expect(findAnother).toBeFocused();
     await expectControlInsideViewport(page, findAnother, false, 24);
+    const analyze = result.getByRole("button", { name: localeCopy.analyze, exact: true });
+    await expect(analyze).toBeVisible();
+    await expectControlInsideViewport(page, analyze, false, 24);
     await expect(result.getByRole("region", { name: localeCopy.agreedDetails })).toBeVisible();
+    await expect(result.getByRole("button", { name: localeCopy.analyze, exact: true })).toBeVisible();
     await expectNoDocumentOverflow(page);
     await result.getByRole("button", { name: localeCopy.viewBoard, exact: true }).click();
     await expect(result).toBeHidden();
@@ -1223,6 +1235,7 @@ for (const locale of ["en", "de"] as const) {
       name: localeCopy.challengeDead,
       exact: true,
     });
+    await page.locator(".scoring-dispute summary").click();
     await expectControlInsideViewport(page, challengeDead, true, 24);
     await challengeDead.click();
     await expect.poll(() => harness.scoringBodies.resume.length).toBe(1);
@@ -1684,7 +1697,7 @@ test("language switch preserves the play route, query, and fragment", async ({ p
 
   await page.goto("/play?size=19&source=browser#queue");
   let languageMenu = page.getByRole("button", { name: "Choose language: English" });
-  if (testInfo.project.name === "chromium-320-touch") {
+  if ((page.viewportSize()?.width ?? 0) <= 1180) {
     const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
     await page.locator(".mobile-nav > .icon-button").click();
     await expect(mobileNavigation).toBeVisible();
@@ -1702,6 +1715,39 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   await expect(page).toHaveURL(`${ORIGIN}/de/play?size=19&source=browser#queue`);
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.getByRole("button", { name: /19×19/ })).toHaveAttribute("aria-pressed", "true");
+  await expectNoDocumentOverflow(page);
+  await expectCleanHarness(harness);
+});
+
+test("Kyrgyz play and the tablet language menu stay translated and separated", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "Tablet width covers the reported collision.");
+  const harness = await installApiHarness(page);
+  const friends = getFriendsCopy("ky");
+
+  await page.goto("/ky/play");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ky");
+  await expect(page.getByRole("button", { name: ky.play.findOpponent, exact: true })).toBeVisible();
+
+  await page.locator(".mobile-nav > .icon-button").click();
+  const navigation = page.getByRole("navigation", { name: ky.nav.mobileLabel });
+  const friendsLink = navigation.getByRole("link", { name: friends.nav, exact: true });
+  const language = navigation.getByRole("button", {
+    name: `${ky.language.switcherLabel}: Кыргызча`,
+    exact: true,
+  });
+  await language.click();
+  const popover = navigation.getByRole("menu", { name: ky.language.switcherLabel });
+  await expect(popover).toBeVisible();
+  const [friendsBox, languageBox, popoverBox] = await Promise.all([
+    friendsLink.boundingBox(),
+    language.boundingBox(),
+    popover.boundingBox(),
+  ]);
+  expect(friendsBox).not.toBeNull();
+  expect(languageBox).not.toBeNull();
+  expect(popoverBox).not.toBeNull();
+  expect(friendsBox!.y + friendsBox!.height).toBeLessThanOrEqual(languageBox!.y + 1);
+  expect(popoverBox!.y).toBeGreaterThanOrEqual(languageBox!.y + languageBox!.height - 1);
   await expectNoDocumentOverflow(page);
   await expectCleanHarness(harness);
 });

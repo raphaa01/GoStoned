@@ -1,4 +1,5 @@
 import type { Position, Stone } from "@/lib/game/types";
+import { kyChapterOne } from "@/lib/i18n/catalogs/ky";
 import type { Locale } from "@/lib/i18n/config";
 
 export const CHAPTER_ONE_LESSON_IDS = ["place", "liberties", "capture", "escape", "connect", "territory"] as const;
@@ -266,7 +267,9 @@ const de: ChapterOneCopy = {
 };
 
 export function chapterOneCopy(locale: Locale): ChapterOneCopy {
-  return locale === "de" ? de : en;
+  if (locale === "de") return de;
+  if (locale === "ky") return kyChapterOne;
+  return en;
 }
 
 export function lessonPositionKey(position: Position): string {

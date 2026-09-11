@@ -1,3 +1,4 @@
+import { kyFriends } from "./catalogs/ky";
 import type { Locale } from "./config";
 
 const enFriends = {
@@ -143,7 +144,9 @@ const deFriends: FriendsCopy = {
 };
 
 export function getFriendsCopy(locale: Locale): FriendsCopy {
-  return locale === "de" ? deFriends : enFriends;
+  if (locale === "de") return deFriends;
+  if (locale === "ky") return kyFriends;
+  return enFriends;
 }
 
 export function formatFriendsText(template: string, values: Record<string, string | number>): string {

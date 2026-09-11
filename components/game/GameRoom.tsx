@@ -1041,7 +1041,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }
 
-  async function clearFinishedGame(destination: "/" | "/play") {
+  async function clearFinishedGame(destination: "/" | "/play" | `/review/${string}`) {
     if (connectionStateRef.current.kind === "session_expired") {
       recoverExpiredSession();
       return;
@@ -1360,45 +1360,48 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <aside className="focused-game-side">
           {game.status === "active" && game.phase === "play" ? (
             <section className="game-panel game-tools-panel" aria-label={copy.gameTools}>
-              <div className="game-actions">
-                <button disabled={estimateBusy} onClick={() => void estimateJapaneseScore()} type="button">
-                  <Calculator size={18} /> {estimateBusy ? copy.estimatingScore : copy.estimateScore}
-                </button>
-                {!game.takeback ? (
-                  <button
-                    disabled={busy || !yourColor || game.moves.at(-1)?.color !== yourColor || game.turn === yourColor}
-                    onClick={() => void takebackAction("request")}
-                    type="button"
-                  >
-                    <Undo2 size={18} /> {copy.requestTakeback}
+              <details className="game-tools-disclosure">
+                <summary>{copy.gameTools}</summary>
+                <div className="game-actions">
+                  <button disabled={estimateBusy} onClick={() => void estimateJapaneseScore()} type="button">
+                    <Calculator size={18} /> {estimateBusy ? copy.estimatingScore : copy.estimateScore}
                   </button>
-                ) : game.takeback.requestedBy === yourColor ? (
-                  <span>{copy.takebackWaiting}</span>
-                ) : (
-                  <>
-                    <button disabled={busy} onClick={() => void takebackAction("respond", true)} type="button">
-                      <Check size={18} /> {copy.acceptTakeback}
+                  {!game.takeback ? (
+                    <button
+                      disabled={busy || !yourColor || game.moves.at(-1)?.color !== yourColor || game.turn === yourColor}
+                      onClick={() => void takebackAction("request")}
+                      type="button"
+                    >
+                      <Undo2 size={18} /> {copy.requestTakeback}
                     </button>
-                    <button disabled={busy} onClick={() => void takebackAction("respond", false)} type="button">
-                      <X size={18} /> {copy.declineTakeback}
-                    </button>
-                  </>
-                )}
-              </div>
-              {estimate ? (
-                <div className="final-score-summary">
-                  <strong>{copy.japaneseEstimate}</strong>
-                  {estimate.score ? (
+                  ) : game.takeback.requestedBy === yourColor ? (
+                    <span>{copy.takebackWaiting}</span>
+                  ) : (
                     <>
-                      <span>{copy.black} {estimate.score.blackTotal} · {copy.white} {estimate.score.whiteTotal}</span>
-                      <span>{estimate.score.outcome.kind === "jigo" ? copy.draw : `${estimate.score.outcome.winner === "black" ? copy.black : copy.white} +${estimate.score.outcome.margin}`}</span>
+                      <button disabled={busy} onClick={() => void takebackAction("respond", true)} type="button">
+                        <Check size={18} /> {copy.acceptTakeback}
+                      </button>
+                      <button disabled={busy} onClick={() => void takebackAction("respond", false)} type="button">
+                        <X size={18} /> {copy.declineTakeback}
+                      </button>
                     </>
-                  ) : <span>{copy.estimateUnclear}</span>}
-                  {estimate.uncertainStones.length > 0 ? (
-                    <span>{copy.uncertainGroups.replace("{count}", String(estimate.groups.filter((group) => group.status === "uncertain").length))}</span>
-                  ) : null}
+                  )}
                 </div>
-              ) : null}
+                {estimate ? (
+                  <div className="final-score-summary">
+                    <strong>{copy.japaneseEstimate}</strong>
+                    {estimate.score ? (
+                      <>
+                        <span>{copy.black} {estimate.score.blackTotal} · {copy.white} {estimate.score.whiteTotal}</span>
+                        <span>{estimate.score.outcome.kind === "jigo" ? copy.draw : `${estimate.score.outcome.winner === "black" ? copy.black : copy.white} +${estimate.score.outcome.margin}`}</span>
+                      </>
+                    ) : <span>{copy.estimateUnclear}</span>}
+                    {estimate.uncertainStones.length > 0 ? (
+                      <span>{copy.uncertainGroups.replace("{count}", String(estimate.groups.filter((group) => group.status === "uncertain").length))}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </details>
             </section>
           ) : null}
           <GamePanel
@@ -1495,6 +1498,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <GameResultModal
         finalFocusRef={boardStatus}
         game={game}
+        onAnalyze={() => clearFinishedGame(`/review/${game.id}`)}
         onHome={() => clearFinishedGame("/")}
         onPlayAgain={() => clearFinishedGame("/play")}
         onViewBoard={() => setShowResult(false)}

@@ -28,6 +28,7 @@ test("recognizes only supported locale values", () => {
   assert.equal(isLocale("zh"), true);
   assert.equal(isLocale("ja"), true);
   assert.equal(isLocale("ko"), true);
+  assert.equal(isLocale("ky"), true);
   assert.equal(isLocale("it"), false);
   assert.equal(isLocale("../de"), false);
 });

@@ -1,3 +1,4 @@
+import { kyPrivacy } from "./catalogs/ky";
 import type { Locale, LocalizedText } from "./config";
 
 type LocalizedSection = {
@@ -475,10 +476,11 @@ const rights = {
 };
 
 function localize(locale: Locale, value: LocalizedText): string {
-  return value[locale];
+  return value[locale] ?? value.en;
 }
 
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
+  if (locale === "ky") return kyPrivacy;
   return {
     kicker: localize(locale, heading.kicker),
     title: localize(locale, heading.title),
