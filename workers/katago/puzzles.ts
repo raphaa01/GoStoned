@@ -300,6 +300,7 @@ function explanation(
   const regionZh = { corner: "角部", side: "边上", center: "中央", pass: "棋盘" }[region];
   const regionJa = { corner: "隅", side: "辺", center: "中央", pass: "盤上" }[region];
   const regionKo = { corner: "귀", side: "변", center: "중앙", pass: "바둑판" }[region];
+  const regionKy = { corner: "бурчта", side: "четте", center: "борбордо", pass: "тактада" }[region];
   const points = gap.toFixed(1);
   if (gap < 0.05) {
     return {
@@ -310,6 +311,7 @@ function explanation(
       zh: `KataGo 更倾向于${regionZh}的 ${best.move}。目数差距很小，但这手棋保留了最强的局部后续和最稳健的棋形。`,
       ja: `KataGoは${regionJa}の ${best.move} を推奨します。目数差はわずかですが、この手は最も強い局所の進行と安定した形を保ちます。`,
       ko: `KataGo는 ${regionKo}의 ${best.move}를 선호합니다. 점수 차이는 작지만 이 수가 가장 강한 국지 진행과 안정적인 모양을 유지합니다.`,
+      ky: `KataGo ${regionKy} ${best.move} жүрүшүн сунуштайт. Упай айырмасы аз, бирок бул жүрүш эң күчтүү жергиликтүү уландыны жана ишенимдүү форманы сактайт.`,
     } satisfies LocalizedText;
   }
   return {
@@ -320,6 +322,7 @@ function explanation(
     zh: `KataGo 更倾向于${regionZh}的 ${best.move}。与最接近的分析候选相比，这手棋多保留约 ${points} 目，同时维持最强后续。`,
     ja: `KataGoは${regionJa}の ${best.move} を推奨します。解析された次善手より約 ${points} 目多く保ち、最も強い進行を維持します。`,
     ko: `KataGo는 ${regionKo}의 ${best.move}를 선호합니다. 분석된 차선책보다 약 ${points}집을 더 지키면서 가장 강한 진행을 유지합니다.`,
+    ky: `KataGo ${regionKy} ${best.move} жүрүшүн сунуштайт. Ал талданган кийинки вариантка караганда болжол менен ${points} упай көбүрөөк сактап, эң күчтүү уландыны калтырат.`,
   } satisfies LocalizedText;
 }
 
@@ -372,6 +375,7 @@ function categoryExplanation(
   const responseZh = reply ? ` ${userMove} 之后，${reply} 是强制应手。` : "";
   const responseJa = reply ? ` ${userMove} の後は ${reply} が必然の応手です。` : "";
   const responseKo = reply ? ` ${userMove} 다음에는 ${reply}가 강제 응수입니다.` : "";
+  const responseKy = reply ? ` ${userMove} жүрүшүнөн кийин ${reply} — мажбур жооп.` : "";
   const copy = {
     life_and_death: {
       en: "This route misses the vital point that decides the group's eye space.",
@@ -381,6 +385,7 @@ function categoryExplanation(
       zh: "这个变化错过了决定棋块眼位的要点。",
       ja: "この変化は、石の眼形を決める急所を逃しています。",
       ko: "이 변화도는 돌의 눈 모양을 결정하는 급소를 놓칩니다.",
+      ky: "Бул вариант топтун көз мейкиндигин чечкен маанилүү чекитти өткөрүп жиберет.",
     },
     tesuji: {
       en: "This move loses the forcing order; the opponent can answer efficiently and keep the shape connected.",
@@ -390,6 +395,7 @@ function categoryExplanation(
       zh: "这手棋失去了强制次序；对手可以高效应对并保持棋形连接。",
       ja: "この手では強制的な手順を失い、相手に効率よく応じて連絡を保たれてしまいます。",
       ko: "이 수는 강제 수순을 잃어 상대가 효율적으로 응수하며 연결을 유지할 수 있습니다.",
+      ky: "Бул жүрүш мажбур тартипти жоготот; атаандаш натыйжалуу жооп берип, формасын байланышта кармайт.",
     },
     capturing_race: {
       en: "This route falls behind in the liberty race and lets the opponent take the key shared liberty.",
@@ -399,6 +405,7 @@ function categoryExplanation(
       zh: "这个变化在对杀中慢了一气，让对手抢到关键的公气。",
       ja: "この変化は攻め合いで遅れ、相手に重要な共通のダメを取らせてしまいます。",
       ko: "이 변화도는 수상전에서 한 수 뒤처져 상대에게 핵심 공배를 내줍니다.",
+      ky: "Бул вариант дем жарышында артта калып, атаандашка негизги жалпы демди берет.",
     },
     endgame: {
       en: "This route gives up endgame value or sente, so the opponent can take the larger follow-up.",
@@ -408,6 +415,7 @@ function categoryExplanation(
       zh: "这个变化损失了官子价值或先手，让对手抢到更大的后续。",
       ja: "この変化はヨセの価値または先手を失い、相手により大きな後続手を許します。",
       ko: "이 변화도는 끝내기 가치나 선수를 포기해 상대가 더 큰 후속 수를 차지하게 합니다.",
+      ky: "Бул вариант эндшпилдеги бааны же демилгени жоготуп, атаандашка чоңураак уландыны берет.",
     },
   }[category];
   return {
@@ -418,6 +426,7 @@ function categoryExplanation(
     zh: `${copy.zh}${responseZh}`,
     ja: `${copy.ja}${responseJa}`,
     ko: `${copy.ko}${responseKo}`,
+    ky: `${copy.ky}${responseKy}`,
   } satisfies LocalizedText;
 }
 
@@ -436,6 +445,7 @@ function categorySolutionExplanation(
       zh: `${sequence} 从眼位要点开始了经过局部验证的变化。`,
       ja: `${sequence} は眼形の急所から始まる、局所的に検証された手順です。`,
       ko: `${sequence}는 눈 모양의 급소에서 시작하는 국지 검증 수순입니다.`,
+      ky: `${sequence} — көз мейкиндигинин маанилүү чекитинен башталган, жергиликтүү текшерилген ырааттуулук.`,
     },
     tesuji: {
       en: `${sequence} is the locally verified forcing order; playing elsewhere loses the tactical timing.`,
@@ -445,6 +455,7 @@ function categorySolutionExplanation(
       zh: `${sequence} 是经过局部验证的强制次序；脱先会错过战术时机。`,
       ja: `${sequence} は局所的に検証された強制手順で、他所に打つと手筋の機を逃します。`,
       ko: `${sequence}는 국지 검증된 강제 수순이며, 다른 곳에 두면 전술적 타이밍을 놓칩니다.`,
+      ky: `${sequence} — жергиликтүү текшерилген мажбур тартип; башка жерге ойноо тактикалык учурду жоготот.`,
     },
     capturing_race: {
       en: `${sequence} takes the key liberty in the locally verified capturing race.`,
@@ -454,6 +465,7 @@ function categorySolutionExplanation(
       zh: `${sequence} 抢到了经过局部验证的对杀关键气。`,
       ja: `${sequence} は局所的に検証された攻め合いで重要なダメを取ります。`,
       ko: `${sequence}는 국지 검증된 수상전에서 핵심 활로를 차지합니다.`,
+      ky: `${sequence} жергиликтүү текшерилген дем жарышындагы негизги демди ээлейт.`,
     },
     endgame: {
       en: `${sequence} begins the locally verified forcing yose sequence and keeps the initiative.`,
@@ -463,6 +475,7 @@ function categorySolutionExplanation(
       zh: `${sequence} 开始了经过局部验证的强制官子次序，并保持先手。`,
       ja: `${sequence} は局所的に検証された強制ヨセの手順を始め、先手を保ちます。`,
       ko: `${sequence}는 국지 검증된 강제 끝내기 수순을 시작하며 선수를 지킵니다.`,
+      ky: `${sequence} жергиликтүү текшерилген мажбур эндшпиль ырааттуулугун баштап, демилгени сактайт.`,
     },
   }[category];
   return copy satisfies LocalizedText;

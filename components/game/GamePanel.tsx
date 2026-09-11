@@ -169,28 +169,26 @@ export function GamePanel({
 
       {activeScoring ? (
         <div className="scoring-controls">
+          <div className="scoring-heading">
+            <strong>{copy.confirmFinalPosition}</strong>
+            <span>{copy.scoringInstructions}</span>
+          </div>
           <div className="scoring-preview" aria-label={copy.provisionalScore}>
             <span><small>{copy.black}</small><strong>{activeScoring.preview.black}</strong></span>
             <span><small>{copy.white}</small><strong>{activeScoring.preview.white}</strong></span>
           </div>
-          <span className="scoring-note">
-            {rulesSummary}
-            {activeScoring.expiresAt ? (
-              <>
-                <br />
-                {copy.respondBy}{" "}
-                <time dateTime={activeScoring.expiresAt}>
-                  {new Date(activeScoring.expiresAt).toISOString().slice(11, 16)} UTC
-                </time>
-                ; {copy.autoResume}
-              </>
-            ) : null}
-          </span>
-          <p>
-            {copy.yourConfirmation}: <strong>{youConfirmed ? copy.confirmed : copy.waiting}</strong>
-            <br />
-            {copy.opponent}: <strong>{(yourColor === "black" ? activeScoring.whiteConfirmed : activeScoring.blackConfirmed) ? copy.confirmed : copy.waiting}</strong>
-          </p>
+          <div className="scoring-confirmation-status">
+            <span>{copy.yourConfirmation}<strong>{youConfirmed ? copy.confirmed : copy.waiting}</strong></span>
+            <span>{copy.opponent}<strong>{(yourColor === "black" ? activeScoring.whiteConfirmed : activeScoring.blackConfirmed) ? copy.confirmed : copy.waiting}</strong></span>
+          </div>
+          <button
+            className="scoring-confirm-action"
+            disabled={controlsDisabled || Boolean(youConfirmed)}
+            onClick={onConfirmScore}
+            type="button"
+          >
+            <Check size={20} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
+          </button>
           <details className="scoring-breakdown">
             <summary>{copy.scoreBreakdown}</summary>
             {"blackStones" in activeScoring.preview ? (
@@ -208,54 +206,66 @@ export function GamePanel({
               {copy.neutral}: {activeScoring.preview.neutralPoints}{game.ruleset === "chinese" ? `, ${copy.sharedEqually}` : ""} · {copy.dead}: {deadCounts.black} {copy.black.toLocaleLowerCase()}, {deadCounts.white} {copy.white.toLocaleLowerCase()}
             </span>
           </details>
-          <label className="scoring-dispute-picker">
-            <span>{copy.markedGroup}</span>
-            <select
-              disabled={controlsDisabled || disputeGroups.length === 0}
-              onChange={(event) => setSelectedGroupKey(event.target.value)}
-              value={selectedGroup?.key ?? ""}
-            >
-              {disputeGroups.length === 0 ? <option value="">{copy.markGroupFirst}</option> : null}
-              {disputeGroups.map((group) => (
-                <option key={group.key} value={group.key}>
-                  {formatBoardLabel(copy.groupOptionLabel, {
-                    group: group.color === "black" ? copy.blackGroupOption : copy.whiteGroupOption,
-                    coordinate: goCoordinate(game.boardSize, group.representative.x, group.representative.y),
-                    stoneCount: `${group.stones.length} ${group.stones.length === 1 ? copy.stone : copy.stones}`,
-                  })}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="game-actions scoring-actions">
-            <button disabled={controlsDisabled || Boolean(youConfirmed)} onClick={onConfirmScore} type="button">
-              <Check size={18} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
-            </button>
-            <button
-              disabled={controlsDisabled || !selectedGroup}
-              onClick={() => selectedGroup && onResumePlay("dead", selectedGroup.representative)}
-              type="button"
-            >
-              <Play size={18} /> {copy.proveDead}
-            </button>
-            <button
-              disabled={controlsDisabled || !selectedGroup}
-              onClick={() => selectedGroup && onResumePlay("alive", selectedGroup.representative)}
-              type="button"
-            >
-              <Play size={18} /> {copy.challengeDead}
-            </button>
-            <button disabled={controlsDisabled} onClick={onResign} type="button">
-              <Flag size={18} /> {copy.resign}
-            </button>
-          </div>
+          <details className="scoring-dispute">
+            <summary>{copy.markedGroup}</summary>
+            <label className="scoring-dispute-picker">
+              <span>{copy.markedGroup}</span>
+              <select
+                disabled={controlsDisabled || disputeGroups.length === 0}
+                onChange={(event) => setSelectedGroupKey(event.target.value)}
+                value={selectedGroup?.key ?? ""}
+              >
+                {disputeGroups.length === 0 ? <option value="">{copy.markGroupFirst}</option> : null}
+                {disputeGroups.map((group) => (
+                  <option key={group.key} value={group.key}>
+                    {formatBoardLabel(copy.groupOptionLabel, {
+                      group: group.color === "black" ? copy.blackGroupOption : copy.whiteGroupOption,
+                      coordinate: goCoordinate(game.boardSize, group.representative.x, group.representative.y),
+                      stoneCount: `${group.stones.length} ${group.stones.length === 1 ? copy.stone : copy.stones}`,
+                    })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="game-actions scoring-actions">
+              <button
+                disabled={controlsDisabled || !selectedGroup}
+                onClick={() => selectedGroup && onResumePlay("dead", selectedGroup.representative)}
+                type="button"
+              >
+                <Play size={18} /> {copy.proveDead}
+              </button>
+              <button
+                disabled={controlsDisabled || !selectedGroup}
+                onClick={() => selectedGroup && onResumePlay("alive", selectedGroup.representative)}
+                type="button"
+              >
+                <Play size={18} /> {copy.challengeDead}
+              </button>
+            </div>
+          </details>
+          <span className="scoring-note">
+            {rulesSummary}
+            {activeScoring.expiresAt ? (
+              <>
+                {" · "}{copy.respondBy}{" "}
+                <time dateTime={activeScoring.expiresAt}>
+                  {new Date(activeScoring.expiresAt).toISOString().slice(11, 16)} UTC
+                </time>
+                ; {copy.autoResume}
+              </>
+            ) : null}
+          </span>
+          <button className="scoring-resign-action" disabled={controlsDisabled} onClick={onResign} type="button">
+            <Flag size={16} /> {copy.resign}
+          </button>
         </div>
       ) : game.status === "active" ? (
         <div className="game-actions">
-          <button disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
+          <button className="game-action-pass" disabled={!yourTurn || controlsDisabled} onClick={onPass} type="button">
             <SkipForward size={18} /> {copy.pass}
           </button>
-          <button disabled={controlsDisabled} onClick={onResign} type="button">
+          <button className="game-action-resign" disabled={controlsDisabled} onClick={onResign} type="button">
             <Flag size={18} /> {copy.resign}
           </button>
         </div>

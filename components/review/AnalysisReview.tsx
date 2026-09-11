@@ -91,7 +91,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   if (!game || !board) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
 
   return (
-    <div className={styles.reviewWorkspace}>
+    <div className={`${styles.reviewWorkspace} review-workspace`}>
       <header className={styles.reviewHeader}>
         <Link href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
         <div><span>{game.blackPlayerName} · {game.whitePlayerName}</span><strong>{game.boardSize}×{game.boardSize} · {game.result}</strong></div>
@@ -179,12 +179,10 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
                     <strong><i className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} {formatWinrate(winrates.white)}</strong>
                   </div>
                   <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
-                  <small>{copy.winChanceNote}</small>
                 </article>
                 <article className={styles.scoreMetric}>
                   <span>{copy.score}</span>
                   <strong>{scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +{scoreLead.points.toFixed(1)}</strong>
-                  <small>{copy.afterMove.replaceAll("{move}", String(selectedMove))}</small>
                 </article>
               </div>
               <section className={styles.alternatives}>
@@ -192,7 +190,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
                 {current.alternatives.map((alternative, index) => (
                   <article key={`${current.moveNumber}:${alternative.move}`}>
                     <span>{index + 1}</span><strong>{alternative.move}</strong>
-                    <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b><small>{alternative.scoreLead > 0 ? "+" : ""}{alternative.scoreLead.toFixed(1)} · {alternative.visits} {copy.visits}</small></div>
+                    <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b></div>
                   </article>
                 ))}
               </section>

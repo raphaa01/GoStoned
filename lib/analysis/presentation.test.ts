@@ -45,10 +45,15 @@ test("keeps expected score lead anchored to a fixed color", () => {
   assert.deepEqual(fixedColorScoreLead(move({ color: "white", scoreLeadAfter: 3 })), { color: "white", points: 3 });
 });
 
-test("builds a concrete German explanation from the actual board and variation", () => {
+test("builds a short concrete German explanation without repeating score metrics", () => {
   const explanation = moveExplanation(move(), createEmptyBoard(9), 9, "de");
-  assert.match(explanation, /C3 gegenüber dem gespielten Zug E5/);
-  assert.match(explanation, /20\.0 Prozentpunkte/);
+  assert.match(explanation, /KataGo empfiehlt C3/);
   assert.match(explanation, /Freiheiten/);
-  assert.match(explanation, /C3 – G7/);
+  assert.doesNotMatch(explanation, /Prozentpunkte|Punkte mehr|C3 – G7/);
+});
+
+test("builds a Kyrgyz board explanation for newly localized reviews", () => {
+  const explanation = moveExplanation(move(), createEmptyBoard(9), 9, "ky");
+  assert.match(explanation, /KataGo C3 жүрүшүн сунуштайт/);
+  assert.doesNotMatch(explanation, /20\.0|3\.5/);
 });

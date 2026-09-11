@@ -47,6 +47,7 @@ function explanations(
     zh: region === "corner" ? "高效守住角部" : region === "side" ? "从边上发展并保持连接" : region === "center" ? "保持中央的影响力和先手" : "避免不必要的局部定型",
     ja: region === "corner" ? "隅を効率よく確保します" : region === "side" ? "連絡を保ちながら辺から展開します" : region === "center" ? "中央での影響力と先手を保ちます" : "不要な局地戦を避けます",
     ko: region === "corner" ? "귀를 효율적으로 지킵니다" : region === "side" ? "연결을 유지하며 변에서 전개합니다" : region === "center" ? "중앙의 영향력과 선수를 유지합니다" : "불필요한 국지전을 피합니다",
+    ky: region === "corner" ? "бурчту натыйжалуу бекемдейт" : region === "side" ? "байланышты сактап, четтен өнүгөт" : region === "center" ? "борбордогу таасирди жана демилгени сактайт" : "керексиз жергиликтүү кармаштан качат",
   } satisfies LocalizedText;
   const sequence = {
     en: pv.length > 1 ? ` The expected continuation starts ${continuation}.` : "",
@@ -56,6 +57,7 @@ function explanations(
     zh: pv.length > 1 ? ` 预期后续从 ${continuation} 开始。` : "",
     ja: pv.length > 1 ? ` 想定される進行は ${continuation} から始まります。` : "",
     ko: pv.length > 1 ? ` 예상 진행은 ${continuation}로 시작합니다.` : "",
+    ky: pv.length > 1 ? ` Күтүлгөн уланды ${continuation} менен башталат.` : "",
   } satisfies LocalizedText;
   if (playedMove === bestMove) {
     return {
@@ -66,6 +68,7 @@ function explanations(
       zh: `${bestMove} 是 KataGo 的首选。这手棋${regionCopy.zh}，并保持当前局面的胜率。${sequence.zh}`,
       ja: `${bestMove} はKataGoの第一候補です。この手は${regionCopy.ja}、局面の勝率を維持します。${sequence.ja}`,
       ko: `${bestMove}는 KataGo의 최우선 수입니다. 이 수는 ${regionCopy.ko} 포지션의 승률을 유지합니다.${sequence.ko}`,
+      ky: `${bestMove} — KataGoнун биринчи тандоосу. Бул жүрүш ${regionCopy.ky}.${sequence.ky}`,
     } satisfies LocalizedText;
   }
   const loss = (winrateLoss * 100).toFixed(1);
@@ -78,6 +81,7 @@ function explanations(
     zh: `${bestMove} 比 ${playedMove} 更强：这手棋${regionCopy.zh}。KataGo 估计当前行棋方可多获得约 ${loss} 个百分点的胜率和 ${points} 目。${sequence.zh}`,
     ja: `${bestMove} は ${playedMove} より優れています。この手は${regionCopy.ja}。KataGoは手番側の勝率が約 ${loss} ポイント、スコアが ${points} 目高くなると推定しています。${sequence.ja}`,
     ko: `${bestMove}는 ${playedMove}보다 강합니다. 이 수는 ${regionCopy.ko}. KataGo는 둘 차례인 쪽의 승률이 약 ${loss}%포인트, 점수가 ${points}집 높아진다고 평가합니다.${sequence.ko}`,
+    ky: `${bestMove} ${playedMove} жүрүшүнө караганда күчтүү: ал ${regionCopy.ky}.${sequence.ky}`,
   } satisfies LocalizedText;
 }
 

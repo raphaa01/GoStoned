@@ -6,10 +6,11 @@ export const LOCALES = [
   { code: "zh", nativeName: "简体中文", openGraphLocale: "zh_CN" },
   { code: "ja", nativeName: "日本語", openGraphLocale: "ja_JP" },
   { code: "ko", nativeName: "한국어", openGraphLocale: "ko_KR" },
+  { code: "ky", nativeName: "Кыргызча", openGraphLocale: "ky_KG" },
 ] as const;
 
 export type Locale = (typeof LOCALES)[number]["code"];
-export type LocalizedText = Record<Locale, string>;
+export type LocalizedText = Record<Exclude<Locale, "ky">, string> & Partial<Record<"ky", string>>;
 
 export const SUPPORTED_LOCALES = LOCALES.map(({ code }) => code) as Locale[];
 export const DEFAULT_LOCALE: Locale = "en";

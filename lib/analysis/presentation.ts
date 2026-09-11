@@ -30,7 +30,14 @@ export function fixedColorScoreLead(move: Pick<MoveAnalysis, "color" | "scoreLea
     : { color: "white" as const, points: -blackLead };
 }
 
-type MoveShape = { captures: number; connections: number; liberties: number; pass: boolean };
+type MoveRegion = "corner" | "side" | "center";
+type MoveShape = {
+  captures: number;
+  connections: number;
+  liberties: number;
+  pass: boolean;
+  region: MoveRegion | null;
+};
 
 function moveShape(board: Board, size: BoardSize, color: Stone, move: string): MoveShape | null {
   let coordinate: ReturnType<typeof fromGtpCoordinate>;
@@ -39,7 +46,7 @@ function moveShape(board: Board, size: BoardSize, color: Stone, move: string): M
   } catch {
     return null;
   }
-  if (coordinate.isPass) return { captures: 0, connections: 0, liberties: 0, pass: true };
+  if (coordinate.isPass) return { captures: 0, connections: 0, liberties: 0, pass: true, region: null };
   if (coordinate.x === undefined || coordinate.y === undefined) return null;
   const position = { x: coordinate.x, y: coordinate.y };
   const adjacentFriendlyGroups = new Set<string>();
@@ -51,61 +58,66 @@ function moveShape(board: Board, size: BoardSize, color: Stone, move: string): M
   const result = applyMove(board, color, position.x, position.y);
   if (!result.ok) return null;
   const group = getGroup(result.board, position);
+  const edgeDistance = Math.min(position.x, position.y, size - 1 - position.x, size - 1 - position.y);
+  const nearHorizontalEdge = Math.min(position.x, size - 1 - position.x) <= Math.max(2, Math.floor(size / 5));
+  const nearVerticalEdge = Math.min(position.y, size - 1 - position.y) <= Math.max(2, Math.floor(size / 5));
   return {
     captures: result.captured.length,
     connections: adjacentFriendlyGroups.size,
     liberties: countLiberties(result.board, group),
     pass: false,
+    region: nearHorizontalEdge && nearVerticalEdge
+      ? "corner"
+      : edgeDistance <= Math.max(2, Math.floor(size / 5)) ? "side" : "center",
   };
 }
 
 function germanShape(move: string, shape: MoveShape): string {
-  if (shape.pass) return `${move} gibt den Zug ab und verändert das Brett nicht.`;
-  const facts: string[] = [];
-  if (shape.captures > 0) facts.push(`fängt ${shape.captures} ${shape.captures === 1 ? "Stein" : "Steine"}`);
-  if (shape.connections > 0) facts.push(`verbindet ${shape.connections} benachbarte ${shape.connections === 1 ? "Gruppe" : "Gruppen"}`);
-  facts.push(`lässt die neue Gruppe mit ${shape.liberties} ${shape.liberties === 1 ? "Freiheit" : "Freiheiten"}`);
-  return `${move} ${facts.join(", ")}.`;
+  if (shape.pass) return `${move} passt und verändert das Brett nicht.`;
+  if (shape.captures > 0) return `${move} fängt ${shape.captures} ${shape.captures === 1 ? "Stein" : "Steine"}.`;
+  if (shape.connections > 0) return `${move} verbindet ${shape.connections} benachbarte ${shape.connections === 1 ? "Gruppe" : "Gruppen"}.`;
+  const region = shape.region === "corner" ? "in Eckennähe" : shape.region === "side" ? "am Rand" : "im Zentrum";
+  return `${move} spielt ${region} und gibt der Gruppe ${shape.liberties} ${shape.liberties === 1 ? "Freiheit" : "Freiheiten"}.`;
 }
 
 function englishShape(move: string, shape: MoveShape): string {
-  if (shape.pass) return `${move} yields the turn and does not change the board.`;
-  const facts: string[] = [];
-  if (shape.captures > 0) facts.push(`captures ${shape.captures} ${shape.captures === 1 ? "stone" : "stones"}`);
-  if (shape.connections > 0) facts.push(`connects ${shape.connections} adjacent ${shape.connections === 1 ? "group" : "groups"}`);
-  facts.push(`leaves the new group with ${shape.liberties} ${shape.liberties === 1 ? "liberty" : "liberties"}`);
-  return `${move} ${facts.join(", ")}.`;
+  if (shape.pass) return `${move} passes and leaves the board unchanged.`;
+  if (shape.captures > 0) return `${move} captures ${shape.captures} ${shape.captures === 1 ? "stone" : "stones"}.`;
+  if (shape.connections > 0) return `${move} connects ${shape.connections} adjacent ${shape.connections === 1 ? "group" : "groups"}.`;
+  const region = shape.region === "corner" ? "near a corner" : shape.region === "side" ? "along the side" : "in the center";
+  return `${move} plays ${region} and gives the group ${shape.liberties} ${shape.liberties === 1 ? "liberty" : "liberties"}.`;
+}
+
+function kyrgyzShape(move: string, shape: MoveShape): string {
+  if (shape.pass) return `${move} пас берет жана тактаны өзгөртпөйт.`;
+  if (shape.captures > 0) return `${move} ${shape.captures} ташты алат.`;
+  if (shape.connections > 0) return `${move} коңшу ${shape.connections} топту бириктирет.`;
+  const region = shape.region === "corner" ? "бурчка жакын" : shape.region === "side" ? "четке" : "борборго";
+  return `${move} ${region} ойнолуп, топко ${shape.liberties} дем берет.`;
 }
 
 export function moveExplanation(move: MoveAnalysis, boardBefore: Board, size: BoardSize, locale: Locale): string {
-  if (locale !== "de" && locale !== "en") return move.explanation[locale];
+  if (locale !== "de" && locale !== "en" && locale !== "ky") return move.explanation[locale] ?? move.explanation.en;
   const played = moveShape(boardBefore, size, move.color, move.playedMove);
   const best = moveShape(boardBefore, size, move.color, move.bestMove);
-  const chanceLoss = normalizeWinrate(move.winrateLoss) * 100;
   const sameMove = move.playedMove.toLowerCase() === move.bestMove.toLowerCase();
-  const variation = move.alternatives[0]?.pv.slice(0, 4).join(" – ") ?? "";
 
   if (locale === "de") {
-    const verdict = sameMove
-      ? `${move.playedMove} entspricht KataGos erster Wahl.`
-      : `KataGo bevorzugt ${move.bestMove} gegenüber dem gespielten Zug ${move.playedMove}.`;
-    const impact = sameMove
-      ? "Der Zug hält die Bewertung der Stellung praktisch stabil."
-      : `Die Alternative bewahrt ungefähr ${chanceLoss.toFixed(1)} Prozentpunkte Gewinnchance und ${Math.max(0, move.scoreLoss).toFixed(1)} Punkte mehr.`;
-    const boardFacts = sameMove
-      ? played ? germanShape(move.playedMove, played) : ""
-      : [played ? `Gespielt: ${germanShape(move.playedMove, played)}` : "", best ? `Vorschlag: ${germanShape(move.bestMove, best)}` : ""].filter(Boolean).join(" ");
-    return `${verdict} ${impact}${boardFacts ? ` ${boardFacts}` : ""}${variation ? ` Berechnete Fortsetzung: ${variation}.` : ""}`;
+    if (sameMove) return played
+      ? `KataGos erste Wahl. ${germanShape(move.playedMove, played)}`
+      : `${move.playedMove} ist KataGos erste Wahl.`;
+    return `KataGo empfiehlt ${move.bestMove}. ${best ? germanShape(move.bestMove, best) : ""}${played ? ` Dein Zug: ${germanShape(move.playedMove, played)}` : ""}`.trim();
   }
 
-  const verdict = sameMove
-    ? `${move.playedMove} matches KataGo's first choice.`
-    : `KataGo prefers ${move.bestMove} to the played move ${move.playedMove}.`;
-  const impact = sameMove
-    ? "The move keeps the position's evaluation effectively stable."
-    : `The alternative preserves about ${chanceLoss.toFixed(1)} percentage points of winning chance and ${Math.max(0, move.scoreLoss).toFixed(1)} more points.`;
-  const boardFacts = sameMove
-    ? played ? englishShape(move.playedMove, played) : ""
-    : [played ? `Played: ${englishShape(move.playedMove, played)}` : "", best ? `Suggestion: ${englishShape(move.bestMove, best)}` : ""].filter(Boolean).join(" ");
-  return `${verdict} ${impact}${boardFacts ? ` ${boardFacts}` : ""}${variation ? ` Calculated continuation: ${variation}.` : ""}`;
+  if (locale === "ky") {
+    if (sameMove) return played
+      ? `KataGo да ушул жүрүштү тандайт. ${kyrgyzShape(move.playedMove, played)}`
+      : `${move.playedMove} — KataGoнун биринчи тандоосу.`;
+    return `KataGo ${move.bestMove} жүрүшүн сунуштайт. ${best ? kyrgyzShape(move.bestMove, best) : ""}${played ? ` Сиздин жүрүшүңүз: ${kyrgyzShape(move.playedMove, played)}` : ""}`.trim();
+  }
+
+  if (sameMove) return played
+    ? `KataGo's first choice. ${englishShape(move.playedMove, played)}`
+    : `${move.playedMove} is KataGo's first choice.`;
+  return `KataGo recommends ${move.bestMove}. ${best ? englishShape(move.bestMove, best) : ""}${played ? ` Your move: ${englishShape(move.playedMove, played)}` : ""}`.trim();
 }

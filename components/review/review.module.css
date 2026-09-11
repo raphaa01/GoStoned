@@ -277,3 +277,56 @@
   .hero { padding-top: 24px; }
   .hero h1 { font-size: clamp(40px, 12vw, 52px); }
 }
+
+/* Keep the complete analysis flow visible on a laptop-sized viewport. */
+@media (min-width: 901px) {
+  .reviewWorkspace {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100dvh;
+    min-height: 620px;
+    overflow: hidden;
+    padding: 14px clamp(18px, 2.5vw, 34px) 10px;
+  }
+
+  .reviewHeader { margin-bottom: 12px; padding-bottom: 12px; }
+
+  .reviewMain {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .boardPanel {
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .board {
+    height: 100%;
+    max-height: 100%;
+    max-width: 100%;
+    width: auto;
+  }
+
+  .insightPanel { overflow-y: auto; }
+
+  .moveStrip {
+    margin-top: 10px;
+    max-height: 72px;
+    min-height: 64px;
+  }
+
+  .moveStrip button { flex-basis: 92px; padding-block: 7px; }
+}
+
+.explanationBlock { min-height: 0; }
+.explanation { line-height: 1.5; }
+.alternatives article { grid-template-columns: 25px 50px minmax(0, 1fr); }
+.alternatives article div { align-items: center; }
+
+@media (max-width: 900px) {
+  .reviewWorkspace { height: auto; min-height: calc(100dvh - 60px); overflow: visible; }
+  .reviewMain { overflow: visible; }
+}

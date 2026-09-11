@@ -4,12 +4,13 @@ import { es } from "./catalogs/es";
 import { fr } from "./catalogs/fr";
 import { ja } from "./catalogs/ja";
 import { ko } from "./catalogs/ko";
+import { ky } from "./catalogs/ky";
 import { zh } from "./catalogs/zh";
 import type { Locale } from "./config";
 
 export type { Dictionary } from "./catalogs/en";
 
-const DICTIONARIES: Record<Locale, Dictionary> = { de, en, es, fr, ja, ko, zh };
+const DICTIONARIES: Record<Locale, Dictionary> = { de, en, es, fr, ja, ko, ky, zh };
 
 export function getDictionary(locale: Locale): Dictionary {
   return DICTIONARIES[locale];

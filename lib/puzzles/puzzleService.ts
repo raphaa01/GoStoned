@@ -80,13 +80,33 @@ function parsePly(value: unknown, boardSize: BoardSize): PuzzlePly {
   return { color, move, x: x as number, y: y as number };
 }
 
-function parseLocalized(value: unknown): LocalizedText {
+function kyrgyzPuzzleFallback(
+  category: PuzzleCategory | null,
+  purpose: "solution" | "retry",
+): string {
+  if (purpose === "solution") {
+    if (category === "life_and_death") return "Бул жүрүш көз мейкиндигинин маанилүү чекитин ээлеп, топтун жашоо же өлүү жыйынтыгын чечет.";
+    if (category === "tesuji") return "Бул жүрүш туура мажбур тартипти баштап, тактикалык учурду сактайт.";
+    if (category === "capturing_race") return "Бул жүрүш дем жарышындагы негизги демди алып, топту алдыга чыгарат.";
+    if (category === "endgame") return "Бул жүрүш эндшпилдеги чоң маанини алып, демилгени сактайт.";
+    return "Бул — KataGo текшерген эң күчтүү жүрүш; ал форманы жана кийинки мүмкүнчүлүктөрдү сактайт.";
+  }
+  if (category === "life_and_death") return "Бул вариант көз мейкиндигин чечкен маанилүү чекитти өткөрүп жиберет.";
+  if (category === "tesuji") return "Бул вариант мажбур тартипти жоготуп, атаандашка натыйжалуу жооп берүүгө мүмкүндүк берет.";
+  if (category === "capturing_race") return "Бул вариант дем жарышында артта калып, негизги демди атаандашка берет.";
+  if (category === "endgame") return "Бул вариант эндшпилдеги бааны же демилгени жоготот.";
+  return "Бул вариант эң күчтүү уландыны сактабайт. Атаандаштын жообун карап, кайра аракет кылыңыз.";
+}
+
+function parseLocalized(value: unknown, kyrgyzFallback?: string): LocalizedText {
   if (!isRecord(value) || typeof value.en !== "string" || typeof value.de !== "string") {
     throw new Error("Stored puzzle explanation is invalid.");
   }
   return Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [
     locale,
-    typeof value[locale] === "string" ? value[locale] : value.en,
+    typeof value[locale] === "string"
+      ? value[locale]
+      : locale === "ky" && kyrgyzFallback ? kyrgyzFallback : value.en,
   ])) as LocalizedText;
 }
 
@@ -112,14 +132,20 @@ function parseVariation(row: PuzzleRow): PuzzleVariation | null {
     return {
       userMove: parsePly(entry.userMove, row.board_size),
       reply: entry.reply === null ? null : parsePly(entry.reply, row.board_size),
-      explanation: parseLocalized(entry.explanation),
+      explanation: parseLocalized(
+        entry.explanation,
+        kyrgyzPuzzleFallback(row.category, "retry"),
+      ),
     };
   });
   return {
     version: 1,
     mainLine,
     refutations,
-    fallbackExplanation: parseLocalized(row.variation.fallbackExplanation),
+    fallbackExplanation: parseLocalized(
+      row.variation.fallbackExplanation,
+      kyrgyzPuzzleFallback(row.category, "retry"),
+    ),
   };
 }
 
@@ -136,7 +162,10 @@ function solution(row: PuzzleRow, variation = parseVariation(row)): PuzzleSoluti
     move: row.solution_move,
     x: row.solution_x,
     y: row.solution_y,
-    explanation: row.explanation,
+    explanation: parseLocalized(
+      row.explanation,
+      kyrgyzPuzzleFallback(row.category, "solution"),
+    ),
     line: variation?.mainLine ?? [{
       color: row.to_play,
       move: row.solution_move,

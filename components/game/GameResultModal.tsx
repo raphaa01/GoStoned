@@ -1,5 +1,6 @@
 "use client";
 
+import { Search } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -12,6 +13,7 @@ type GameResultModalProps = {
   open: boolean;
   playerKey: string;
   onHome: () => void;
+  onAnalyze: () => void;
   onPlayAgain: () => void;
   onViewBoard: () => void;
   finalFocusRef?: RefObject<HTMLElement | null>;
@@ -22,6 +24,7 @@ export function GameResultModal({
   open,
   playerKey,
   onHome,
+  onAnalyze,
   onPlayAgain,
   onViewBoard,
   finalFocusRef,
@@ -115,6 +118,15 @@ export function GameResultModal({
           type="button"
         >
           {copy.findAnother}
+        </button>
+        <button
+          className="result-analysis-action"
+          disabled={exiting}
+          onClick={() => void exitResult(onAnalyze)}
+          type="button"
+        >
+          <Search aria-hidden="true" size={18} />
+          {dictionary.analysisReview.analyze}
         </button>
         <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
           {exiting ? dictionary.common.pleaseWait : ""}
