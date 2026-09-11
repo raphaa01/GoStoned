@@ -20,6 +20,7 @@ from .generate import (
 )
 from .model import GoStoneStudent, StudentConfig
 from .settlement import propose_settlement, score_japanese
+from .teacher import KataGoTeacher, TeacherRetry
 from .train import MAX_MODEL_BYTES, train_student
 
 
@@ -234,6 +235,34 @@ class JapaneseSettlementTests(unittest.TestCase):
         )
         self.assertEqual(proposal.groups[0].status, "uncertain")
         self.assertEqual(proposal.dead_stones, ())
+
+
+class TeacherRecoveryTests(unittest.TestCase):
+    def test_timeout_restarts_teacher_and_retries_with_smaller_budget(self) -> None:
+        teacher = object.__new__(KataGoTeacher)
+        teacher._generation = 0
+        visits: list[int] = []
+
+        def submit(query):
+            visits.append(query["maxVisits"])
+            if len(visits) == 1:
+                raise TeacherRetry("timeout")
+            return "query", object(), teacher._generation
+
+        def restart(expected_generation, _reason):
+            self.assertEqual(expected_generation, 0)
+            teacher._generation += 1
+
+        teacher._submit = submit
+        teacher._restart = restart
+        teacher._receive = lambda *_args: {"id": "query"}
+        result = teacher.analyze(
+            moves=[], size=9, komi=6.5, profile="rank_5k", visits=256,
+            include_ownership=True,
+        )
+        self.assertEqual(result["id"], "query")
+        self.assertEqual(visits, [256, 128])
+        self.assertEqual(teacher._generation, 1)
 
 
 if __name__ == "__main__":

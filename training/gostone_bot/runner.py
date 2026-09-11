@@ -76,7 +76,10 @@ def run(run_dir: Path) -> None:
         journal.update(phase="data", positions=fresh_positions, replay_positions=replay_positions)
         progress_lock = threading.Lock(); live_positions: dict[int, int] = {}; last_status = [0.0]
 
-        with KataGoTeacher(human_model=human_model, cpu_threads=cpu_threads) as teacher:
+        with KataGoTeacher(
+            human_model=human_model, cpu_threads=cpu_threads,
+            on_retry=lambda message: journal.event(message, "warning"),
+        ) as teacher:
             def generate_one(game_index: int):
                 def on_position(position: int, limit: int, size: int, visits: int) -> None:
                     with progress_lock:
@@ -158,7 +161,10 @@ def run(run_dir: Path) -> None:
             baseline_raw = config.get("comparison_model_checkpoint")
             baseline = Path(baseline_raw) if isinstance(baseline_raw, str) else None
             journal.event("Running locked test metrics and the color-swapped 9×9/13×13/19×19 arena.")
-            with KataGoTeacher(human_model=human_model, cpu_threads=cpu_threads) as teacher:
+            with KataGoTeacher(
+                human_model=human_model, cpu_threads=cpu_threads,
+                on_retry=lambda message: journal.event(message, "warning"),
+            ) as teacher:
                 promotion = run_promotion_gate(
                     candidate_checkpoint=artifact_dir / "gostone-japanese-v1.pt", baseline_checkpoint=baseline,
                     data_paths=data_paths, seed=int(config.get("seed", 20260909)), batch_size=preset.batch_size,
