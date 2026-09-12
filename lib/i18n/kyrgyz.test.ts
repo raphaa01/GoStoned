@@ -50,7 +50,7 @@ test("Kyrgyz account, learning, friends, and privacy pages use Kyrgyz copy", () 
   assert.equal(friends.boardSize, "Тактанын өлчөмү");
   assert.match(chapter.kicker, /Башталгыч/);
   assert.match(chapter.lessons.capture.instruction, /[А-Яа-яӨөҮүҢң]/);
-  assert.equal(privacy.sections.length, 11);
+  assert.equal(privacy.sections.length, 12);
   assert.match(privacy.title, /Купуялык/);
   assert.ok(privacy.sections.every((section) => (
     /[А-Яа-яӨөҮүҢң]/.test([section.title, ...section.paragraphs, ...section.items].join(" "))

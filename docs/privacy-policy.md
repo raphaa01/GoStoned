@@ -32,7 +32,8 @@ deployment if any of those facts changes.
 
 ## Changes that require a policy and consent review
 
-- analytics, advertising, attribution, session replay, or cross-site tracking;
+- analytics beyond the documented cookie-free Vercel Web Analytics setup,
+  advertising, attribution, session replay, or cross-site tracking;
 - external fonts, video embeds, social widgets, or other third-party browser
   requests;
 - email collection, password recovery, newsletters, payments, or support tools;
@@ -43,10 +44,12 @@ deployment if any of those facts changes.
 - a material change to retention, automated decisions, or international data
   transfers.
 
-The current implementation uses only the three first-party cookies documented on
-the page. Under Section 25(2)(2) TDDDG, those cookies are limited to the requested
-authentication, guest-play, and language functions. If an optional browser or
-device technology is introduced, obtain any required consent before activating
+The current implementation uses only the necessary first-party cookies documented
+on the page. Under Section 25(2)(2) TDDDG, those cookies are limited to the
+requested authentication, guest-play, and language functions. Vercel Web
+Analytics is cookie-free, does not use localStorage, and redacts query parameters
+plus game and review identifiers before collection. If another optional browser
+or device technology is introduced, obtain any required consent before activating
 it; a privacy-policy update alone is not consent.
 
 ## Primary and provider sources
