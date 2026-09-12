@@ -77,6 +77,13 @@ class ModelCatalog:
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
             preset_id = str(preset.get("id", "")) if isinstance(preset, dict) else ""
+            quality_gate = metadata.get("quality_gate")
+            if (
+                preset_id != "smoke"
+                and isinstance(quality_gate, dict)
+                and quality_gate.get("approved") is False
+            ):
+                continue
             raw_version = config.get("model_version") if isinstance(config, dict) else None
             version = raw_version if isinstance(raw_version, int) and raw_version > 0 else None
             candidates.append(
