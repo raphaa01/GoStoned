@@ -37,7 +37,7 @@ export default async function LocalizedRootLayout({
         <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
           <AuthProvider>{children}</AuthProvider>
         </I18nProvider>
-        <WebAnalytics />
+        {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>
     </html>
   );

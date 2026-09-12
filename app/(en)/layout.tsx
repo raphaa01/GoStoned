@@ -16,7 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <I18nProvider dictionary={getDictionary("en")} locale="en">
           <AuthProvider>{children}</AuthProvider>
         </I18nProvider>
-        <WebAnalytics />
+        {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>
     </html>
   );
