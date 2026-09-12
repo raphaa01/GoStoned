@@ -139,7 +139,10 @@ export function AuthForm({
   ) : null;
   return (
     <section className="auth-card">
-      <h1>{registering ? dictionary.auth.createTitle : dictionary.auth.loginTitle}</h1>
+      <header className="auth-card__header">
+        <h1>{registering ? dictionary.auth.createTitle : dictionary.auth.loginTitle}</h1>
+        <p>{registering ? dictionary.auth.createDescription : dictionary.auth.loginDescription}</p>
+      </header>
 
       <form className="auth-form" onSubmit={submit}>
         <label>
