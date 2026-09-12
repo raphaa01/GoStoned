@@ -29,7 +29,7 @@
             <p class="hero-copy">KataGo generates teaching positions locally. Your compact model learns playing strength, endgame judgment, ownership, and group survival without Codex, Modal, or cloud compute.</p>
           </div>
           <div class="contract-card">
-            <span class="contract-value">≤ 8 MiB</span>
+            <span class="contract-value">≤ 15 MiB</span>
             <span class="contract-label">Fixed model budget</span>
             <div class="contract-rule"><span>日本</span> Japanese territory scoring only · 6.5 komi</div>
           </div>
@@ -80,7 +80,7 @@
               </div>
             </div>
             <div id="preset-list" class="preset-list" aria-label="Training scope"></div>
-            <p class="training-lineage-note"><strong>Every real run continues from the latest successful version:</strong> new KataGo games, balanced colors, and complete endgame phases. Use the AI Arena to verify whether the new version is actually stronger.</p>
+            <p class="training-lineage-note"><strong>V5 starts with fresh weights and a new architecture.</strong> V6 and later continue from the latest V5-family model and replay all earlier V5-family data. Locked validation, test metrics, and a color-swapped arena run automatically.</p>
             <label class="cpu-control" for="cpu-threads">
               <span><strong>CPU threads</strong><small>More threads run faster but make the laptop warmer.</small></span>
               <output id="cpu-output" for="cpu-threads">6</output>
@@ -98,8 +98,8 @@
             <div class="capability-grid">
               <div><span class="number">01</span><strong>Six strengths</strong><p>Nominal target profiles from 600 to 2100 Elo from one model.</p></div>
               <div><span class="number">02</span><strong>Endgame & pass</strong><p>Deeper late-game searches discourage pointless moves inside settled territory.</p></div>
-              <div><span class="number">03</span><strong>Life & death</strong><p>Groups are proposed as alive, dead, or deliberately uncertain.</p></div>
-              <div><span class="number">04</span><strong>Japanese score</strong><p>Ownership, prisoners, territory, seki hints, and 6.5 komi.</p></div>
+              <div><span class="number">03</span><strong>Life & death</strong><p>Separate alive, dead, seki, and unsettled targets from deep endgame searches.</p></div>
+              <div><span class="number">04</span><strong>Japanese score</strong><p>Score distribution, uncertainty, ownership, territory, dame, prisoners, and 6.5 komi.</p></div>
             </div>
             <div class="agreement-note"><strong>Important:</strong> The AI makes a proposal. An official result still requires both players to accept the same dead groups.</div>
           </article>
