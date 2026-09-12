@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import subprocess
 import threading
@@ -17,7 +18,9 @@ TEACHER_URL = (
     f"{TEACHER_FILENAME}"
 )
 DEFAULT_IMAGE = "newproject-katago:latest"
-MAX_QUERY_ATTEMPTS = 3
+MAX_QUERY_ATTEMPTS = 5
+MAX_PENDING_QUERIES = 8
+DEEP_BATCH_SIZE = 4
 
 
 class TeacherRetry(RuntimeError):
@@ -53,6 +56,10 @@ class KataGoTeacher:
             "run",
             "--rm",
             "-i",
+            "--name",
+            f"gostone-training-teacher-{os.getpid()}-{uuid.uuid4().hex[:10]}",
+            "--label",
+            "com.gostone.role=training-teacher",
         ]
         if cpu_threads is not None:
             command.extend(("--cpus", str(max(1, cpu_threads))))
@@ -73,8 +80,11 @@ class KataGoTeacher:
             "/models/analysis.cfg",
         ])
         self._command = command
+        self._container_name = command[command.index("--name") + 1]
         self._on_retry = on_retry
         self._lifecycle_lock = threading.Lock()
+        self._reservation_lock = threading.Lock()
+        self._query_slots = threading.BoundedSemaphore(MAX_PENDING_QUERIES)
         self._generation = 0
         self._closed = False
         self._stderr_tail: deque[str] = deque(maxlen=80)
@@ -94,6 +104,21 @@ class KataGoTeacher:
             bufsize=1,
         )
         self._process = process
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            created = subprocess.run(
+                ["docker", "inspect", self._container_name],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=10, check=False,
+            )
+            if created.returncode == 0:
+                break
+            if process.poll() is not None:
+                raise TeacherRetry("Docker exited before the KataGo teacher container was created")
+            time.sleep(0.1)
+        else:
+            process.terminate()
+            raise TeacherRetry("KataGo teacher container was not created within 30 seconds")
         threading.Thread(target=self._drain_stderr, args=(process,), daemon=True).start()
         threading.Thread(target=self._drain_stdout, args=(process,), daemon=True).start()
 
@@ -158,12 +183,15 @@ class KataGoTeacher:
                     result = response_queue.get(timeout=min(1.0, remaining))
                     break
                 except queue.Empty:
+                    if generation != self._generation:
+                        raise TeacherRetry("KataGo teacher was restarted while the query was pending")
                     if self._process.poll() is not None:
                         details = "\n".join(self._stderr_tail)
                         raise TeacherRetry(f"KataGo teacher stopped unexpectedly.\n{details}")
         finally:
             with self._pending_lock:
                 self._pending.pop(query_id, None)
+            self._query_slots.release()
         if result.get("_teacher_restart"):
             raise TeacherRetry(str(result.get("error", "KataGo teacher restarted")))
         if "error" in result:
@@ -185,16 +213,47 @@ class KataGoTeacher:
                 except queue.Full:
                     pass
             process = self._process
+            self._remove_container()
             if process.poll() is None:
                 process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
             self._generation += 1
             self._stderr_tail.clear()
             self._start_process()
+
+    def _remove_container(self) -> None:
+        subprocess.run(
+            ["docker", "rm", "-f", self._container_name],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=30, check=False,
+        )
+
+    def _submit_group(
+        self, requests: list[dict[str, Any]],
+    ) -> list[tuple[str, queue.Queue[dict[str, Any]], int]]:
+        reserved = 0
+        submitted: list[tuple[str, queue.Queue[dict[str, Any]], int]] = []
+        try:
+            # Reserve the whole group atomically. Concurrent workers therefore
+            # cannot each hold a few slots and deadlock before receiving.
+            with self._reservation_lock:
+                for _ in requests:
+                    self._query_slots.acquire()
+                    reserved += 1
+            for request in requests:
+                submitted.append(self._submit(self._query(**request)))
+            return submitted
+        except BaseException:
+            with self._pending_lock:
+                for query_id, _, _ in submitted:
+                    self._pending.pop(query_id, None)
+            for _ in range(reserved):
+                self._query_slots.release()
+            raise
 
     def _run_with_retries(self, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
         last_error: TeacherRetry | None = None
@@ -205,10 +264,25 @@ class KataGoTeacher:
                 item["visits"] = max(1, int(item["visits"]) // (2 ** attempt))
                 adjusted.append(item)
             generation = self._generation
+            submitted: list[tuple[str, queue.Queue[dict[str, Any]], int]] = []
+            received = 0
             try:
-                submitted = [self._submit(self._query(**request)) for request in adjusted]
-                return [self._receive(query_id, response_queue, query_generation) for query_id, response_queue, query_generation in submitted]
+                submitted = self._submit_group(adjusted)
+                results = []
+                for query_id, response_queue, query_generation in submitted:
+                    results.append(self._receive(query_id, response_queue, query_generation))
+                    received += 1
+                return results
             except TeacherRetry as error:
+                # The failing receive already released its slot. No receive will
+                # consume the remainder of this group, so release those here.
+                remainder = submitted[received + 1 :]
+                if remainder:
+                    with self._pending_lock:
+                        for query_id, _, _ in remainder:
+                            self._pending.pop(query_id, None)
+                    for _ in remainder:
+                        self._query_slots.release()
                 last_error = error
                 self._restart(generation, f"KataGo retry {attempt + 1}/{MAX_QUERY_ATTEMPTS}: {error}")
         assert last_error is not None
@@ -258,18 +332,25 @@ class KataGoTeacher:
         """Submit a batch before waiting so KataGo can batch neural evaluations."""
         if not requests:
             return []
-        return self._run_with_retries(requests)
+        results: list[dict[str, Any]] = []
+        for offset in range(0, len(requests), DEEP_BATCH_SIZE):
+            results.extend(self._run_with_retries(requests[offset : offset + DEEP_BATCH_SIZE]))
+        return results
 
     def close(self) -> None:
         with self._lifecycle_lock:
             self._closed = True
             if self._process.poll() is not None:
+                self._remove_container()
                 return
             if self._process.stdin is not None:
                 self._process.stdin.close()
             try:
                 self._process.wait(timeout=15)
             except subprocess.TimeoutExpired:
+                pass
+            self._remove_container()
+            if self._process.poll() is None:
                 self._process.terminate()
                 try:
                     self._process.wait(timeout=5)

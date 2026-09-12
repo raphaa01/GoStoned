@@ -253,7 +253,7 @@ class TeacherRecoveryTests(unittest.TestCase):
             self.assertEqual(expected_generation, 0)
             teacher._generation += 1
 
-        teacher._submit = submit
+        teacher._submit_group = lambda requests: [submit(teacher._query(**request)) for request in requests]
         teacher._restart = restart
         teacher._receive = lambda *_args: {"id": "query"}
         result = teacher.analyze(
@@ -263,6 +263,14 @@ class TeacherRecoveryTests(unittest.TestCase):
         self.assertEqual(result["id"], "query")
         self.assertEqual(visits, [256, 128])
         self.assertEqual(teacher._generation, 1)
+
+    def test_deep_analysis_is_split_into_bounded_batches(self) -> None:
+        teacher = object.__new__(KataGoTeacher)
+        groups: list[int] = []
+        teacher._run_with_retries = lambda requests: groups.append(len(requests)) or requests
+        requests = [{"visits": 256}] * 9
+        self.assertEqual(len(teacher.analyze_many(requests)), 9)
+        self.assertEqual(groups, [4, 4, 1])
 
 
 if __name__ == "__main__":
