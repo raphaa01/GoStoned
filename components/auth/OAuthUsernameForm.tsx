@@ -79,7 +79,10 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
 
   return (
     <section className="auth-card auth-card--oauth-username">
-      <h1>{dictionary.auth.chooseUsernameTitle}</h1>
+      <header className="auth-card__header">
+        <h1>{dictionary.auth.chooseUsernameTitle}</h1>
+        <p>{dictionary.auth.chooseUsernameDescription}</p>
+      </header>
 
       <form className="auth-form" onSubmit={submit}>
         <label>

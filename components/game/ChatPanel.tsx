@@ -171,6 +171,12 @@ export function ChatPanel({
           </div>
         ))}
       </div>
+      {error || (blockError && !opponentIsBot) ? (
+        <div className="chat-feedback">
+          {error ? <p className="chat-error" role="alert">{error}</p> : null}
+          {blockError && !opponentIsBot ? <p className="chat-error" role="alert">{blockError}</p> : null}
+        </div>
+      ) : null}
       <form className="chat-form" onSubmit={submit} ref={formRef}>
         <input
           aria-describedby={chatUnavailable ? unavailableId : undefined}
@@ -188,8 +194,6 @@ export function ChatPanel({
           <Send aria-hidden="true" size={17} />
         </button>
       </form>
-      {error ? <p className="chat-error" role="alert">{error}</p> : null}
-      {blockError && !opponentIsBot ? <p className="chat-error" role="alert">{blockError}</p> : null}
     </section>
   );
 }

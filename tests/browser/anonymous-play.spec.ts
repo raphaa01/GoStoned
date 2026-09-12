@@ -1480,6 +1480,22 @@ for (const locale of ["en", "de"] as const) {
       { timeout: 4_000 },
     ).toBeGreaterThan(0);
 
+    const passAction = page.getByRole("button", { name: localeCopy.pass, exact: true });
+    await expect(passAction).toContainText(localeCopy.pass);
+    expect(await passAction.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return style.color !== style.backgroundColor;
+    }), "Pass text must contrast with its button background").toBe(true);
+
+    const chatInput = page.getByRole("textbox", { name: localeCopy.chatMessage, exact: true });
+    await expectControlInsideViewport(page, chatInput, true, 40);
+    await expect(chatInput).toBeEnabled();
+    expect(await chatInput.evaluate((input) => {
+      const panel = input.closest(".chat-panel")?.getBoundingClientRect();
+      const bounds = input.getBoundingClientRect();
+      return Boolean(panel && bounds.bottom <= panel.bottom + 0.5);
+    }), "Chat input must remain inside the visible chat panel").toBe(true);
+
     await expectKeyboardSkipLink(page, localeCopy.skipToContent);
     await page.keyboard.press("Tab");
     const rovingCell = grid.locator('[role="gridcell"][tabindex="0"]');
