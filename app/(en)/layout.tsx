@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WebAnalytics } from "@/components/analytics/WebAnalytics";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
 import { getDictionary } from "@/lib/i18n/dictionary";
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <I18nProvider dictionary={getDictionary("en")} locale="en">
           <AuthProvider>{children}</AuthProvider>
         </I18nProvider>
+        {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>
     </html>
   );

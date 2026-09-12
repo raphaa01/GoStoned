@@ -122,7 +122,7 @@ const heading = {
     "GoStone의 개인정보 처리, 쿠키, 서비스 제공업체, 보관 기간 및 개인정보 권리에 관한 정보입니다.",
   ),
   updatedLabel: text("Last updated", "Stand", "Dernière mise à jour", "Última actualización", "更新日期", "最終更新日", "최종 업데이트"),
-  updated: text("August 1, 2026", "1. August 2026", "1 août 2026", "1 de agosto de 2026", "2026年8月1日", "2026年8月1日", "2026년 8월 1일"),
+  updated: text("September 12, 2026", "12. September 2026", "12 septembre 2026", "12 de septiembre de 2026", "2026年9月12日", "2026年9月12日", "2026년 9월 12일"),
 };
 
 const controller = {
@@ -164,6 +164,18 @@ const sections: LocalizedSection[] = [
       "访问 GoStone 时，托管基础设施会处理提供和保护服务所需的技术请求数据，包括 IP 地址、日期和时间、请求地址及查询参数、请求方法、响应状态、来源页面、用户代理、语言标头、请求标识符和处理区域。处理目的为可靠提供服务、排查故障以及防范攻击和滥用。法律依据为 GDPR 第6条第1款(f)项；我们的合法利益是安全可靠地运营 GoStone。Vercel 运行日志依所购方案保存，最长不超过30天。",
       "GoStone へのアクセス時、ホスティング基盤はサービスの提供と保護に必要な技術的リクエストデータを処理します。これには IP アドレス、日時、アクセス先と検索パラメータ、メソッド、応答ステータス、リファラー、ユーザーエージェント、言語ヘッダー、リクエスト ID、処理リージョンが含まれる場合があります。目的は安定提供、障害調査、攻撃・不正利用の防止です。法的根拠は GDPR 第6条1項(f)であり、安全で安定した運営が正当な利益です。Vercel のランタイムログは契約プランに応じ、最長30日保存されます。",
       "GoStone 접속 시 호스팅 인프라는 서비스 제공과 보호에 필요한 기술적 요청 데이터를 처리합니다. 여기에는 IP 주소, 날짜와 시간, 요청 주소 및 검색 매개변수, 요청 방식, 응답 상태, 리퍼러, 사용자 에이전트, 언어 헤더, 요청 식별자와 처리 지역이 포함될 수 있습니다. 목적은 안정적인 제공, 오류 분석, 공격 및 오용 방지입니다. 법적 근거는 GDPR 제6조 제1항 (f)이며, 안전하고 안정적인 운영이 정당한 이익입니다. Vercel 런타임 로그는 이용 요금제에 따라 최대 30일 보관됩니다.",
+    )],
+  },
+  {
+    title: text("Privacy-friendly reach measurement", "Datenschutzfreundliche Reichweitenmessung", "Mesure d’audience respectueuse de la vie privée", "Medición de audiencia respetuosa con la privacidad", "隐私友好的访问量统计", "プライバシーに配慮したアクセス解析", "개인정보 친화적 방문 통계"),
+    paragraphs: [text(
+      "We use Vercel Web Analytics to understand how often pages are visited and from which countries traffic originates. It processes the visited page after query parameters and game or review identifiers have been removed, the referrer, timestamp, country, region and city derived from the request, browser, operating system, and device type. The service does not use analytics cookies or localStorage, does not associate analytics with a GoStone account, and does not retain the raw IP address as an analytics data point. Visitor recognition uses a daily-resetting hash. The legal basis is Article 6(1)(f) GDPR; our legitimate interests are measuring reach and improving content and reliability. Aggregated analytics are retained according to the booked Vercel plan.",
+      "Wir verwenden Vercel Web Analytics, um zu verstehen, wie häufig Seiten besucht werden und aus welchen Ländern Zugriffe stammen. Verarbeitet werden die besuchte Seite nach Entfernung von Suchparametern sowie Partie- und Analysekennungen, Referrer, Zeitpunkt, aus der Anfrage abgeleitetes Land, Region und Stadt, Browser, Betriebssystem und Gerätetyp. Der Dienst verwendet keine Analyse-Cookies und keinen localStorage, verknüpft Analysedaten nicht mit einem GoStone-Konto und speichert die rohe IP-Adresse nicht als Analysedatenpunkt. Zur Wiedererkennung wird ein täglich zurückgesetzter Hash verwendet. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unsere berechtigten Interessen sind Reichweitenmessung sowie die Verbesserung von Inhalten und Zuverlässigkeit. Aggregierte Analysedaten werden abhängig vom gebuchten Vercel-Tarif gespeichert.",
+      "Nous utilisons Vercel Web Analytics pour comprendre la fréquence de consultation des pages et les pays d’origine du trafic. Le service traite la page visitée après suppression des paramètres de recherche et des identifiants de partie ou d’analyse, le référent, l’horodatage, le pays, la région et la ville déduits de la requête, le navigateur, le système d’exploitation et le type d’appareil. Il n’utilise ni cookie d’analyse ni localStorage, ne relie pas les données à un compte GoStone et ne conserve pas l’adresse IP brute comme donnée analytique. La reconnaissance repose sur une empreinte renouvelée chaque jour. La base juridique est l’article 6, paragraphe 1, point f) du RGPD ; nos intérêts légitimes sont la mesure d’audience et l’amélioration du contenu et de la fiabilité. Les données agrégées sont conservées selon l’offre Vercel souscrite.",
+      "Usamos Vercel Web Analytics para conocer la frecuencia de visita de las páginas y los países de origen del tráfico. Se tratan la página visitada tras eliminar parámetros de búsqueda e identificadores de partida o análisis, el referente, la hora, el país, la región y la ciudad derivados de la solicitud, el navegador, el sistema operativo y el tipo de dispositivo. No usa cookies de analítica ni localStorage, no vincula los datos con una cuenta de GoStone y no conserva la dirección IP sin procesar como dato analítico. El reconocimiento usa un hash que se renueva a diario. La base jurídica es el artículo 6.1.f del RGPD; nuestros intereses legítimos son medir el alcance y mejorar el contenido y la fiabilidad. Los datos agregados se conservan según el plan de Vercel contratado.",
+      "我们使用 Vercel Web Analytics 了解页面访问频率及流量来源国家。该服务处理已删除查询参数及对局或复盘标识符的访问页面、来源页面、时间戳、由请求推断的国家、地区和城市、浏览器、操作系统和设备类型。服务不使用分析 Cookie 或 localStorage，不将分析数据与 GoStone 账户关联，也不将原始 IP 地址保存为分析数据点。访客识别使用每日重置的哈希。法律依据为 GDPR 第6条第1款(f)项；我们的合法利益是衡量访问量以及改进内容和可靠性。汇总分析数据依所购 Vercel 方案保存。",
+      "ページの閲覧頻度とアクセス元の国を把握するため、Vercel Web Analytics を利用します。クエリパラメータと対局・レビュー ID を除去した閲覧ページ、リファラー、時刻、リクエストから推定される国・地域・都市、ブラウザー、OS、端末種別を処理します。解析 Cookie や localStorage は使わず、GoStone アカウントと解析データを結び付けず、生の IP アドレスを解析データとして保持しません。訪問者の識別には毎日リセットされるハッシュを使用します。法的根拠は GDPR 第6条1項(f)で、アクセス状況の把握とコンテンツ・信頼性の改善が正当な利益です。集計データは契約する Vercel プランに従って保存されます。",
+      "페이지 방문 빈도와 트래픽 유입 국가를 파악하기 위해 Vercel Web Analytics를 사용합니다. 검색 매개변수와 대국·복기 식별자를 제거한 방문 페이지, 리퍼러, 시각, 요청에서 추정한 국가·지역·도시, 브라우저, 운영체제 및 기기 유형을 처리합니다. 분석 쿠키나 localStorage를 사용하지 않고, 분석 데이터를 GoStone 계정과 연결하지 않으며, 원본 IP 주소를 분석 데이터로 보관하지 않습니다. 방문자 인식에는 매일 초기화되는 해시를 사용합니다. 법적 근거는 GDPR 제6조 제1항 (f)이며, 방문 범위 측정과 콘텐츠 및 안정성 개선이 정당한 이익입니다. 집계 분석 데이터는 이용 중인 Vercel 요금제에 따라 보관됩니다.",
     )],
   },
   {
@@ -393,13 +405,13 @@ const cookies = {
     },
   ] satisfies LocalizedCookie[],
   closing: text(
-    "No analytics, advertising, cross-site tracking, or social-media cookies are used. GoStone does not currently use localStorage for personal data. If optional technologies are added later, this policy and any required consent mechanism will be updated before activation.",
-    "Analyse-, Werbe-, websiteübergreifende Tracking- oder Social-Media-Cookies werden nicht eingesetzt. GoStone nutzt derzeit keinen localStorage für personenbezogene Daten. Werden später optionale Technologien ergänzt, werden diese Erklärung und eine gegebenenfalls erforderliche Einwilligungslösung vor der Aktivierung angepasst.",
-    "Aucun cookie d’analyse, de publicité, de suivi intersites ou de réseau social n’est utilisé. GoStone n’utilise actuellement pas localStorage pour des données personnelles. Avant tout ajout futur de technologie facultative, cette politique et, si nécessaire, le mécanisme de consentement seront mis à jour.",
-    "No se usan cookies de analítica, publicidad, seguimiento entre sitios ni redes sociales. GoStone no usa actualmente localStorage para datos personales. Si se añaden tecnologías opcionales, esta política y cualquier consentimiento necesario se actualizarán antes de activarlas.",
-    "我们不使用分析、广告、跨站跟踪或社交媒体 Cookie。GoStone 目前不使用 localStorage 保存个人数据。如未来添加可选技术，我们会在启用前更新本政策及任何所需同意机制。",
-    "解析、広告、クロスサイト追跡、SNS Cookie は使用していません。現在、個人データを localStorage に保存していません。将来任意技術を追加する場合、利用開始前に本ポリシーと必要な同意手段を更新します。",
-    "분석, 광고, 사이트 간 추적 또는 소셜 미디어 쿠키를 사용하지 않습니다. 현재 개인정보를 localStorage에 저장하지 않습니다. 향후 선택 기술을 추가하면 활성화 전에 본 방침과 필요한 동의 절차를 갱신합니다.",
+    "No analytics, advertising, cross-site tracking, or social-media cookies are used. The cookie-free reach measurement described above does not use localStorage. If optional technologies are added later, this policy and any required consent mechanism will be updated before activation.",
+    "Analyse-, Werbe-, websiteübergreifende Tracking- oder Social-Media-Cookies werden nicht eingesetzt. Die oben beschriebene cookie-freie Reichweitenmessung verwendet keinen localStorage. Werden später optionale Technologien ergänzt, werden diese Erklärung und eine gegebenenfalls erforderliche Einwilligungslösung vor der Aktivierung angepasst.",
+    "Aucun cookie d’analyse, de publicité, de suivi intersites ou de réseau social n’est utilisé. La mesure d’audience sans cookie décrite ci-dessus n’utilise pas localStorage. Avant tout ajout futur de technologie facultative, cette politique et, si nécessaire, le mécanisme de consentement seront mis à jour.",
+    "No se usan cookies de analítica, publicidad, seguimiento entre sitios ni redes sociales. La medición de audiencia sin cookies descrita arriba no usa localStorage. Si se añaden tecnologías opcionales, esta política y cualquier consentimiento necesario se actualizarán antes de activarlas.",
+    "我们不使用分析、广告、跨站跟踪或社交媒体 Cookie。上述无 Cookie 访问量统计不使用 localStorage。如未来添加可选技术，我们会在启用前更新本政策及任何所需同意机制。",
+    "解析、広告、クロスサイト追跡、SNS Cookie は使用していません。上記の Cookie を使わないアクセス解析では localStorage も使用しません。将来任意技術を追加する場合、利用開始前に本ポリシーと必要な同意手段を更新します。",
+    "분석, 광고, 사이트 간 추적 또는 소셜 미디어 쿠키를 사용하지 않습니다. 위에서 설명한 쿠키 없는 방문 통계는 localStorage를 사용하지 않습니다. 향후 선택 기술을 추가하면 활성화 전에 본 방침과 필요한 동의 절차를 갱신합니다.",
   ),
 };
 
@@ -417,7 +429,7 @@ const processors = {
   entries: [
     {
       name: "Vercel Inc.",
-      purpose: text("Website hosting, content delivery, server functions, request routing, security, and runtime logs.", "Hosting der Website, Inhaltsauslieferung, Serverfunktionen, Anfragenrouting, Sicherheit und Laufzeitprotokolle.", "Hébergement, diffusion de contenu, fonctions serveur, routage, sécurité et journaux d’exécution.", "Alojamiento, distribución de contenido, funciones de servidor, enrutamiento, seguridad y registros de ejecución.", "网站托管、内容分发、服务器函数、请求路由、安全和运行日志。", "ウェブホスティング、コンテンツ配信、サーバー関数、ルーティング、セキュリティ、ランタイムログ。", "웹 호스팅, 콘텐츠 전송, 서버 함수, 요청 라우팅, 보안 및 런타임 로그."),
+      purpose: text("Website hosting, content delivery, server functions, request routing, security, runtime logs, and cookie-free aggregated reach measurement.", "Hosting der Website, Inhaltsauslieferung, Serverfunktionen, Anfragenrouting, Sicherheit, Laufzeitprotokolle und cookie-freie aggregierte Reichweitenmessung.", "Hébergement, diffusion de contenu, fonctions serveur, routage, sécurité, journaux d’exécution et mesure d’audience agrégée sans cookie.", "Alojamiento, distribución de contenido, funciones de servidor, enrutamiento, seguridad, registros de ejecución y medición agregada de audiencia sin cookies.", "网站托管、内容分发、服务器函数、请求路由、安全、运行日志和无 Cookie 的汇总访问量统计。", "ウェブホスティング、コンテンツ配信、サーバー関数、ルーティング、セキュリティ、ランタイムログ、Cookie を使わない集計アクセス解析。", "웹 호스팅, 콘텐츠 전송, 서버 함수, 요청 라우팅, 보안, 런타임 로그 및 쿠키 없는 집계 방문 통계."),
       privacyUrl: "https://vercel.com/legal/privacy-policy",
     },
     {
