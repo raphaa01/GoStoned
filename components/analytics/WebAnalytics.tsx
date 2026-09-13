@@ -2,8 +2,12 @@
 
 import { Analytics, type BeforeSendEvent } from "@vercel/analytics/next";
 
-function redactSensitiveRouteData(event: BeforeSendEvent): BeforeSendEvent {
+export function redactSensitiveRouteData(event: BeforeSendEvent): BeforeSendEvent | null {
   const url = new URL(event.url);
+
+  if (url.pathname === "/webanalytics" || url.pathname.startsWith("/webanalytics/")) {
+    return null;
+  }
 
   url.pathname = url.pathname.replace(
     /\/(game|review)\/[^/]+$/,
