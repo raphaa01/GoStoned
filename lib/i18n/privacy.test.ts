@@ -14,7 +14,7 @@ test("privacy copy is complete for every supported locale", () => {
     const copy = getPrivacyCopy(locale);
     assert.ok(copy.title.length > 0, locale);
     assert.ok(copy.metadataDescription.length > 0, locale);
-    assert.equal(copy.sections.length, 11, locale);
+    assert.equal(copy.sections.length, 12, locale);
     assert.ok(copy.sections.every((section) => (
       section.title.length > 0
       && section.paragraphs.length + section.items.length > 0
@@ -56,6 +56,9 @@ test("privacy metadata and footer use the localized canonical route", () => {
 test("privacy policy discloses only the currently implemented storage technologies", () => {
   const english = getPrivacyCopy("en");
   assert.match(english.cookies.closing, /No analytics, advertising, cross-site tracking/);
+  assert.match(english.sections.map(({ paragraphs, items }) => (
+    [...paragraphs, ...items].join(" ")
+  )).join(" "), /Vercel Web Analytics/);
   assert.match(english.sections.map(({ paragraphs, items }) => (
     [...paragraphs, ...items].join(" ")
   )).join(" "), /Article 22 GDPR/);
