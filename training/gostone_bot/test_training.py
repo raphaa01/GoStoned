@@ -4,14 +4,27 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import torch
 
 from .board import BoardState, FEATURE_PLANES, PASS_INDEX, policy_to_padded, spatial_to_padded
-from .curriculum import FALSE_EYE, KO, SEKI_STATUS, position_tags, settlement_labels
+from .curriculum import (
+    CLOSE_GAME,
+    FALSE_EYE,
+    KO,
+    POLICY_UNCERTAIN,
+    RANK_CONTRAST,
+    SEKI,
+    SEKI_STATUS,
+    position_tags,
+    settlement_labels,
+)
 from .generate import (
     STRENGTHS,
+    _deep_indices,
+    generate_game_samples,
     make_target_policy,
     settlement_targets,
     split_for_game,
@@ -21,7 +34,8 @@ from .generate import (
 from .model import GoStoneStudent, StudentConfig
 from .settlement import propose_settlement, score_japanese
 from .teacher import KataGoTeacher, TeacherRetry
-from .train import MAX_MODEL_BYTES, train_student
+from .train import MAX_MODEL_BYTES, train_student, validation_objective
+from .validation import run_promotion_gate
 
 
 class BoardEncodingTests(unittest.TestCase):
@@ -69,6 +83,79 @@ class StudentModelTests(unittest.TestCase):
             [600, 900, 1200, 1500, 1800, 2100],
         )
 
+    def test_validation_objective_penalizes_the_v5_value_head_regression(self) -> None:
+        metrics = {
+            "positions": 10.0,
+            "policy_loss": 2.0,
+            "score_mae": 0.1,
+            "ownership_mse": 0.1,
+            "value_mse": 0.1,
+            "status_accuracy": 0.9,
+            "territory_accuracy": 0.9,
+            "seki_false_positive": 0.0,
+        }
+        worse = {**metrics, "value_mse": 0.3}
+        self.assertGreater(validation_objective(worse), validation_objective(metrics))
+
+    def test_v6_promotion_requires_real_improvement_over_v5(self) -> None:
+        metrics = {
+            "positions": 120.0,
+            "board_sizes": 3.0,
+            "policy_loss": 2.0,
+            "policy_top1": 0.6,
+            "value_mse": 0.2,
+            "score_mae": 0.1,
+            "score_mae_points": 15.0,
+            "ownership_mse": 0.1,
+            "status_accuracy": 0.9,
+            "territory_accuracy": 0.9,
+            "seki_false_positive": 0.0,
+            "settlement_coverage": 0.9,
+            "covered_status_accuracy": 0.9,
+            "calibration_error": 0.1,
+            "alive_precision": 0.9,
+            "alive_recall": 0.9,
+            "dead_precision": 0.9,
+            "dead_recall": 0.9,
+            "seki_precision": 0.0,
+            "seki_recall": 0.0,
+            "unsettled_precision": 0.2,
+            "unsettled_recall": 0.1,
+            "rank_conditioning_gain": 0.15,
+            "rank_move_change_rate": 0.2,
+        }
+        metrics.update({f"policy_top1_elo_{profile.nominal_elo}": 0.6 for profile in STRENGTHS})
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = Path(directory) / "baseline.pt"
+            baseline.write_bytes(b"checkpoint")
+            with (
+                patch("training.gostone_bot.validation.load_checkpoint_model", return_value=object()),
+                patch("training.gostone_bot.validation.evaluate_model", return_value=metrics),
+            ):
+                result = run_promotion_gate(
+                    candidate_checkpoint=Path(directory) / "candidate.pt",
+                    baseline_checkpoint=baseline,
+                    data_paths=[],
+                    fresh_data_paths=[],
+                    replay_data_paths=[],
+                    seed=1,
+                    batch_size=8,
+                    teacher=None,
+                    arena_visits=1,
+                    require_improvement=True,
+                    legacy_baseline_checkpoint=baseline,
+                )
+        self.assertFalse(result["approved"])
+        self.assertIn(
+            "composite test objective did not improve by at least one percent",
+            result["reasons"],
+        )
+        self.assertIn(
+            "new-curriculum test objective did not improve by at least one percent",
+            result["reasons"],
+        )
+        self.assertIn("composite test objective did not improve over V4", result["reasons"])
+
     def test_early_teacher_pass_is_suppressed(self) -> None:
         raw_policy = [0.0] * 82
         raw_policy[0] = 0.4
@@ -103,6 +190,7 @@ class StudentModelTests(unittest.TestCase):
                 territory_targets=np.full((1, 361), 2, dtype=np.int8),
                 territory_weights=np.ones((1, 361), dtype=np.float32),
                 position_kinds=np.zeros(1, dtype=np.int16),
+                nominal_elos=np.full(1, 1200, dtype=np.int16),
                 board_sizes=np.full(1, 9, dtype=np.int8),
                 metadata=json.dumps({"format": 5, "split": "train"}),
             )
@@ -165,6 +253,7 @@ class StudentModelTests(unittest.TestCase):
         labels = settlement_labels(board, ownership, confidence)
         offset = 5
         self.assertEqual(labels.status_targets.reshape(19, 19)[offset, offset], SEKI_STATUS)
+        self.assertTrue(position_tags(board) & SEKI)
 
     def test_real_training_balances_ranks_across_both_colors(self) -> None:
         pairings = [training_profiles(index) for index in range(18)]
@@ -179,6 +268,76 @@ class StudentModelTests(unittest.TestCase):
             all_strengths = sorted(profile.nominal_elo for profile in STRENGTHS)
             self.assertEqual(board_black, all_strengths)
             self.assertEqual(board_white, all_strengths)
+
+    def test_v6_curriculum_varies_opponent_distance_without_losing_rank_balance(self) -> None:
+        pairings = [training_profiles(index, curriculum_generation=1) for index in range(108)]
+        black = [profile.nominal_elo for profile, _ in pairings]
+        white = [profile.nominal_elo for _, profile in pairings]
+        expected = sorted([profile.nominal_elo for profile in STRENGTHS] * 18)
+        self.assertEqual(sorted(black), expected)
+        self.assertEqual(sorted(white), expected)
+        distances = {abs(left.nominal_elo - right.nominal_elo) for left, right in pairings}
+        self.assertIn(0, distances)
+        self.assertGreaterEqual(len(distances), 4)
+
+    def test_v6_deep_budget_covers_rare_strategic_and_multiple_game_phases(self) -> None:
+        tags = [0] * 100
+        tags[8] = KO
+        tags[22] = SEKI
+        tags[38] = CLOSE_GAME
+        tags[61] = POLICY_UNCERTAIN
+        selected = _deep_indices(tags, 10, curriculum_generation=1)
+        self.assertEqual(len(selected), 10)
+        self.assertIn(8, selected)
+        self.assertIn(22, selected)
+        self.assertTrue(any(index < 35 for index in selected))
+        self.assertTrue(any(35 <= index < 70 for index in selected))
+        self.assertTrue(any(index >= 70 for index in selected))
+
+    def test_v6_adds_same_position_rank_contrast_targets(self) -> None:
+        class Teacher:
+            @staticmethod
+            def result(moves, include_ownership=False):
+                policy = [0.0] * 82
+                policy[min(len(moves), 80)] = 1.0
+                result = {
+                    "humanPolicy": policy,
+                    "moveInfos": [{"move": f"{chr(65 + len(moves))}9", "visits": 2}],
+                    "rootInfo": {"winrate": 0.5, "scoreLead": 0.0},
+                }
+                if include_ownership:
+                    result["ownership"] = [0.0] * 81
+                    result["ownershipStdev"] = [0.2] * 81
+                return result
+
+            def analyze(self, **request):
+                return self.result(request["moves"], request["include_ownership"])
+
+            def analyze_many(self, requests):
+                return [self.result(request["moves"], request["include_ownership"]) for request in requests]
+
+        game = generate_game_samples(
+            teacher=Teacher(),
+            game_index=0,
+            board_sizes=(9,),
+            normal_visits=1,
+            endgame_visits=2,
+            hard_visits=2,
+            strategic_visits=2,
+            max_moves=2,
+            seed=4,
+            settlement_samples=1,
+            curriculum_generation=1,
+            rank_contrast_positions=1,
+            rank_contrast_visits=2,
+        )
+        contrast = [
+            (elo, tags)
+            for elo, tags in zip(game.nominal_elos, game.position_kinds)
+            if tags & RANK_CONTRAST
+        ]
+        self.assertEqual({elo for elo, _ in contrast}, {1500, 2100})
+        self.assertEqual(game.positions, 4)
 
     def test_whole_game_split_covers_every_board_size(self) -> None:
         splits = {(index % 3, split_for_game(index)) for index in range(30)}

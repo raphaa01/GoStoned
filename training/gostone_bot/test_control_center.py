@@ -126,18 +126,34 @@ class ControlCenterTests(unittest.TestCase):
             self.assertIsNone(config["base_model_checkpoint"])
             self.assertEqual(config["comparison_model_version"], 4)
             self.assertEqual(config["comparison_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
+            self.assertEqual(config["legacy_comparison_model_version"], 4)
+            self.assertEqual(config["legacy_comparison_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
             self.assertEqual(config["replay_data_dirs"], [])
             self.assertNotEqual(config["seed"], 20260801)
             self.assertEqual(started["preset_name"], "GoStone AI v5")
 
     def test_v6_inherits_v5_checkpoint_and_replay_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory); prior = root / "runs" / "v5"; artifact = prior / "artifact"; data = prior / "data"
+            root = Path(directory)
+            legacy = root / "runs" / "v4"
+            legacy_artifact = legacy / "artifact"
+            legacy_artifact.mkdir(parents=True)
+            (legacy_artifact / "gostone-japanese-v1.pt").write_bytes(b"checkpoint")
+            (legacy_artifact / "gostone-japanese-v1.onnx").write_bytes(b"onnx")
+            (legacy_artifact / "gostone-japanese-v1.json").write_text(
+                json.dumps({"rules": "japanese", "komi": 6.5, "architecture_version": 4}),
+                encoding="utf-8",
+            )
+            atomic_json(
+                legacy / "config.json",
+                {"created_at": 1, "preset": {"id": "short"}, "model_version": 4},
+            )
+            prior = root / "runs" / "v5"; artifact = prior / "artifact"; data = prior / "data"
             artifact.mkdir(parents=True); data.mkdir()
             (artifact / "gostone-japanese-v1.pt").write_bytes(b"checkpoint")
             (artifact / "gostone-japanese-v1.onnx").write_bytes(b"onnx")
             (artifact / "gostone-japanese-v1.json").write_text(json.dumps({"rules": "japanese", "komi": 6.5, "architecture_version": 5}), encoding="utf-8")
-            atomic_json(prior / "config.json", {"created_at": 1, "preset": {"id": "short"}, "model_version": 5})
+            atomic_json(prior / "config.json", {"created_at": 2, "preset": {"id": "short"}, "model_version": 5})
             manager = RunManager(root)
             manager._launch = lambda run_dir: (RunJournal(run_dir).update(status="running", pid=os.getpid()) or os.getpid())  # type: ignore[method-assign]
             started = manager.start("short", 4); config = load_json(Path(str(started["run_dir"])) / "config.json")
@@ -145,6 +161,17 @@ class ControlCenterTests(unittest.TestCase):
             self.assertEqual(config["base_model_version"], 5)
             self.assertEqual(config["base_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
             self.assertEqual(config["replay_data_dirs"], [str(data.resolve())])
+            self.assertEqual(config["legacy_comparison_model_version"], 4)
+            self.assertEqual(
+                config["legacy_comparison_model_checkpoint"],
+                str((legacy_artifact / "gostone-japanese-v1.pt").resolve()),
+            )
+            self.assertEqual(config["curriculum_generation"], 1)
+            self.assertEqual(config["learning_rate"], 1.2e-4)
+            self.assertGreaterEqual(config["normal_visits"], 2)
+            self.assertGreater(config["rank_contrast_positions"], 0)
+            self.assertEqual(config["status_class_weights"], [1.0, 1.25, 6.0, 2.5])
+            self.assertTrue(config["requires_replay_retention"])
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from .board import MAX_BOARD_SIZE, PASS_INDEX
 REQUIRED_KEYS = (
     "features", "policies", "values", "scores", "ownerships", "ownership_weights",
     "status_targets", "status_weights", "territory_targets", "territory_weights",
-    "position_kinds", "board_sizes",
+    "position_kinds", "nominal_elos", "board_sizes",
 )
 
 
@@ -120,5 +120,6 @@ class StreamingShardDataset(IterableDataset):
                         "status": status, "status_weight": status_weight,
                         "territory": territory, "territory_weight": territory_weight,
                         "board_size": torch.tensor(int(arrays["board_sizes"][index]), dtype=torch.int64),
+                        "nominal_elo": torch.tensor(int(arrays["nominal_elos"][index]), dtype=torch.int64),
                         "position_kind": torch.tensor(int(arrays["position_kinds"][index]), dtype=torch.int64),
                     }

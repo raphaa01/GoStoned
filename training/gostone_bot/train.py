@@ -17,7 +17,8 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-from .board import MAX_BOARD_SIZE
+from .board import MAX_BOARD_SIZE, STRENGTH_PLANE
+from .curriculum import TERMINAL_WINDOW
 from .data import StreamingShardDataset
 from .generate import JAPANESE_KOMI, STRENGTHS
 from .model import GoStoneStudent, SCORE_BINS, StudentConfig, load_checkpoint_model
@@ -56,17 +57,29 @@ def _forward(model: nn.Module, features: torch.Tensor):
     return policy, value, score, ownership, survival, score_stdev, territory, status, score_logits
 
 
-def _batch_losses(model: nn.Module, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+def _batch_losses(
+    model: nn.Module,
+    batch: dict[str, torch.Tensor],
+    *,
+    value_loss_weight: float = 0.25,
+    status_class_weights: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     policy, value, score, ownership, survival, score_stdev, territory, status, score_logits = _forward(model, batch["features"])
     policy_loss = -(batch["policy"] * F.log_softmax(policy, dim=1)).sum(dim=1).mean()
-    value_loss = F.mse_loss(value, batch["value"])
-    score_regression = F.smooth_l1_loss(score, batch["score"])
+    deep_weights = 1.0 + 1.5 * ((batch["position_kind"] & TERMINAL_WINDOW) != 0).float()
+    value_loss = _weighted_mean((value - batch["value"]).square(), deep_weights)
+    score_regression = _weighted_mean(
+        F.smooth_l1_loss(score, batch["score"], reduction="none"),
+        deep_weights,
+    )
     score_index = ((batch["score"] + 1.0) * 0.5 * (SCORE_BINS - 1)).round().long().clamp(0, SCORE_BINS - 1)
     score_distribution = F.cross_entropy(score_logits, score_index)
     score_calibration = (batch["score"] - score).abs().sub(score_stdev).abs().mean()
     ownership_loss = _weighted_mean((ownership - batch["ownership"]).square(), batch["ownership_weight"])
+    class_weights = torch.tensor(status_class_weights, device=status.device, dtype=status.dtype)
     status_loss = _weighted_mean(
-        F.cross_entropy(status, batch["status"], reduction="none"), batch["status_weight"]
+        F.cross_entropy(status, batch["status"], weight=class_weights, reduction="none"),
+        batch["status_weight"],
     )
     territory_loss = _weighted_mean(
         F.cross_entropy(territory, batch["territory"], reduction="none"), batch["territory_weight"]
@@ -76,7 +89,7 @@ def _batch_losses(model: nn.Module, batch: dict[str, torch.Tensor]) -> tuple[tor
         F.binary_cross_entropy_with_logits(survival, survival_target, reduction="none"), batch["status_weight"]
     )
     loss = (
-        policy_loss + 0.25 * value_loss + 0.20 * score_regression + 0.08 * score_distribution
+        policy_loss + value_loss_weight * value_loss + 0.20 * score_regression + 0.08 * score_distribution
         + 0.04 * score_calibration + 0.40 * ownership_loss + 0.30 * status_loss
         + 0.20 * territory_loss + 0.10 * survival_loss
     )
@@ -95,6 +108,7 @@ def evaluate_model(model: nn.Module, dataset: StreamingShardDataset, batch_size:
         "policy_loss", "policy_top1", "value_mse", "score_mae", "score_mae_points",
         "ownership_mse", "status_accuracy", "territory_accuracy", "seki_false_positive",
         "settlement_coverage", "covered_status_accuracy", "calibration_error",
+        "rank_conditioning_gain", "rank_move_change_rate",
     )}
     counts = {key: 0.0 for key in totals}; board_sizes: set[int] = set()
     status_confusion = torch.zeros(4, 4, dtype=torch.float64)
@@ -105,6 +119,38 @@ def evaluate_model(model: nn.Module, dataset: StreamingShardDataset, batch_size:
             policy_each = -(batch["policy"] * F.log_softmax(policy, dim=1)).sum(dim=1)
             totals["policy_loss"] += float(policy_each.sum()); counts["policy_loss"] += batch_count
             totals["policy_top1"] += float((policy.argmax(1) == batch["policy"].argmax(1)).sum()); counts["policy_top1"] += batch_count
+            mirror_features = batch["features"].clone()
+            mirror_strength = (
+                (STRENGTHS[-1].nominal_elo - batch["nominal_elo"].float())
+                / (STRENGTHS[-1].nominal_elo - STRENGTHS[0].nominal_elo)
+            ).clamp(0.0, 1.0)
+            mirror_features[:, STRENGTH_PLANE] = (
+                mirror_features[:, 4]
+                * mirror_strength[:, None, None]
+            )
+            mirror_policy = _forward(model, mirror_features)[0]
+            mirror_policy_each = -(
+                batch["policy"] * F.log_softmax(mirror_policy, dim=1)
+            ).sum(dim=1)
+            totals["rank_conditioning_gain"] += float((mirror_policy_each - policy_each).sum())
+            counts["rank_conditioning_gain"] += batch_count
+            totals["rank_move_change_rate"] += float(
+                (mirror_policy.argmax(1) != policy.argmax(1)).sum()
+            )
+            counts["rank_move_change_rate"] += batch_count
+            for profile in STRENGTHS:
+                elo_mask = batch["nominal_elo"] == profile.nominal_elo
+                elo_count = int(elo_mask.sum())
+                if elo_count <= 0:
+                    continue
+                loss_key = f"policy_loss_elo_{profile.nominal_elo}"
+                top1_key = f"policy_top1_elo_{profile.nominal_elo}"
+                totals[loss_key] = totals.get(loss_key, 0.0) + float(policy_each[elo_mask].sum())
+                counts[loss_key] = counts.get(loss_key, 0.0) + elo_count
+                totals[top1_key] = totals.get(top1_key, 0.0) + float(
+                    (policy.argmax(1)[elo_mask] == batch["policy"].argmax(1)[elo_mask]).sum()
+                )
+                counts[top1_key] = counts.get(top1_key, 0.0) + elo_count
             totals["value_mse"] += float((value - batch["value"]).square().sum()); counts["value_mse"] += batch_count
             score_error = (score - batch["score"]).abs()
             totals["score_mae"] += float(score_error.sum()); counts["score_mae"] += batch_count
@@ -137,6 +183,7 @@ def validation_objective(metrics: dict[str, float]) -> float:
     if not metrics.get("positions"): return math.inf
     return (
         metrics["policy_loss"] + 1.5 * metrics["score_mae"] + metrics["ownership_mse"]
+        + 0.5 * metrics["value_mse"]
         + (1.0 - metrics["status_accuracy"]) + 0.5 * (1.0 - metrics["territory_accuracy"])
         + metrics["seki_false_positive"]
     )
@@ -175,7 +222,15 @@ def train_student(
     control: Callable[[], None] | None = None,
     on_epoch: Callable[[int, int, dict[str, float]], None] | None = None,
     resume: bool = False, min_epochs: int = 5, early_stopping_patience: int = 6,
+    value_loss_weight: float = 0.25,
+    status_class_weights: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
 ) -> Path:
+    if not math.isfinite(value_loss_weight) or value_loss_weight <= 0:
+        raise ValueError("value_loss_weight must be finite and positive")
+    if len(status_class_weights) != 4 or any(
+        not math.isfinite(weight) or weight <= 0 for weight in status_class_weights
+    ):
+        raise ValueError("status_class_weights must contain four finite positive values")
     random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
     torch.set_num_threads(max(1, min(12, cpu_threads or torch.get_num_threads())))
     paths = [data] if isinstance(data, Path) else list(data)
@@ -185,6 +240,11 @@ def train_student(
     if len(train_data) == 0: raise ValueError("Training dataset contains no train split")
     config = StudentConfig(channels=channels, blocks=blocks)
     model = GoStoneStudent(config); optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=2e-4)
+    training_contract = {
+        "learning_rate": learning_rate,
+        "value_loss_weight": value_loss_weight,
+        "status_class_weights": list(status_class_weights),
+    }
     warmup = max(1, min(3, epochs // 10))
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
@@ -196,6 +256,8 @@ def train_student(
     if resume and progress.is_file():
         saved = torch.load(progress, map_location="cpu", weights_only=True)
         if saved.get("config") != config.as_dict(): raise RuntimeError("Saved training architecture does not match this run")
+        if saved.get("training_contract", training_contract) != training_contract:
+            raise RuntimeError("Saved optimizer and loss contract does not match this run")
         model.load_state_dict(saved["state_dict"]); optimizer.load_state_dict(saved["optimizer"])
         if "scheduler" in saved: scheduler.load_state_dict(saved["scheduler"])
         ema = saved.get("ema_state", ema); best_state = saved.get("best_state")
@@ -214,7 +276,13 @@ def train_student(
         totals: dict[str, float] = {}; batches = 0
         for batch in loader:
             if control: control()
-            optimizer.zero_grad(set_to_none=True); loss, batch_metrics = _batch_losses(model, batch)
+            optimizer.zero_grad(set_to_none=True)
+            loss, batch_metrics = _batch_losses(
+                model,
+                batch,
+                value_loss_weight=value_loss_weight,
+                status_class_weights=status_class_weights,
+            )
             loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 3.0); optimizer.step(); _ema_update(ema, model)
             for key, metric in batch_metrics.items(): totals[key] = totals.get(key, 0.0) + float(metric.detach())
             batches += 1
@@ -231,7 +299,7 @@ def train_student(
             "config": config.as_dict(), "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(), "ema_state": ema, "best_state": best_state,
             "best_objective": best_objective, "epochs_without_improvement": epochs_without_improvement,
-            "completed_epochs": completed_epochs,
+            "completed_epochs": completed_epochs, "training_contract": training_contract,
         }, progress)
         print(f"epoch {completed_epochs}/{epochs}: loss={metrics['loss']:.4f}, validation={objective:.4f}, patience={epochs_without_improvement}/{early_stopping_patience}", flush=True)
         if on_epoch: on_epoch(completed_epochs, epochs, metrics)
@@ -248,6 +316,7 @@ def train_student(
         "format": 5, "architecture_version": 5, "model": "GoStoneJapaneseStudent", "rules": "japanese", "komi": JAPANESE_KOMI,
         "config": config.as_dict(), "parameters": model.parameter_count, "onnx_bytes": onnx_path.stat().st_size,
         "max_onnx_bytes": MAX_MODEL_BYTES, "completed_epochs": completed_epochs,
+        "training_contract": training_contract,
         "validation_metrics": validation_metrics, "test_metrics": test_metrics,
         "outputs": {
             "policy_logits": "rank-conditioned 362 move logits including pass", "value": "side-to-move win value",

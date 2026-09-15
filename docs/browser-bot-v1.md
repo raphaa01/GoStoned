@@ -62,3 +62,22 @@ Die AI Arena im lokalen Training Lab listet neben den abgeschlossenen Läufen im
 aktuellen Arbeitsverzeichnis auch deren ausdrücklich in `comparison_model_checkpoint`
 verknüpfte Vergleichsmodelle. Dadurch lassen sich insbesondere V5 und das für seine
 Promotion verwendete V4-Artefakt direkt als Schwarz beziehungsweise Weiß auswählen.
+
+V6 behält absichtlich Architekturversion 5 und lädt den vollständigen V5-Checkpoint.
+Der neue Trainingslauf verwendet einen unabhängigen Seed, variierte
+Stärke-Paarungen, tiefer analysierte knappe beziehungsweise policy-unklare
+Positionen und zusätzliche Policy-Ziele für dieselbe Stellung auf mehreren
+Stärkeprofilen. Alte V5-Fähigkeiten werden durch vollständiges Replay und einen
+separaten gesperrten Retention-Test geschützt. Die Promotion verlangt bei V6+
+eine Verbesserung auf frischen Testdaten, mindestens 60 Prozent in der
+farbgetauschten Arena sowie Grenzen für Policy-, Value-, Score-, Settlement- und
+Stärkeprofil-Regressionen auf dem V5-Testsplit. Zusätzlich muss V6 den verknüpften
+V4-Vorgänger sowohl beim kombinierten gesperrten Testziel als auch in einer zweiten
+direkten Arena schlagen.
+
+Die Werte 600 bis 2100 sind weiterhin nominale Trainingsprofile. V5 reagiert zwar
+messbar auf den Stärke-Kanal, eine echte Elo-Zuordnung erfordert aber eine
+Kalibrierungsliga mit ausreichend vielen gewerteten Partien. V6 prüft deshalb
+zusätzlich Policy-Qualität je Profil und ob das korrekte Stärkeprofil dieselben
+Stellungen besser erklärt als das gespiegelte Profil; diese Prüfung ersetzt keine
+spätere Spielstärke-Kalibrierung.

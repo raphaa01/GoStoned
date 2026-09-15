@@ -12,7 +12,8 @@ import numpy as np
 
 from .board import BoardState, PASS_INDEX, board_offset, padded_policy_index, policy_to_padded, spatial_to_padded
 from .curriculum import (
-    ATARI, DAME, DEAD_INVASION, FALSE_EYE, KO, SEKI, SNAPBACK, TERMINAL_WINDOW,
+    ATARI, CLOSE_GAME, DAME, DEAD_INVASION, ENDGAME, FALSE_EYE, KO,
+    POLICY_UNCERTAIN, RANK_CONTRAST, SEKI, SNAPBACK, TERMINAL_WINDOW,
     position_tags, settlement_labels,
 )
 from .runtime import StopRequested
@@ -43,12 +44,22 @@ STRENGTHS = (
 )
 
 
-def training_profiles(game_index: int, board_size_count: int = 3) -> tuple[StrengthProfile, StrengthProfile]:
+def training_profiles(
+    game_index: int,
+    board_size_count: int = 3,
+    curriculum_generation: int = 0,
+) -> tuple[StrengthProfile, StrengthProfile]:
     if game_index < 0 or board_size_count <= 0:
         raise ValueError("game_index must be nonnegative and board_size_count positive")
     profile_index = (game_index // board_size_count) % len(STRENGTHS)
     black = STRENGTHS[profile_index]
-    white = STRENGTHS[(profile_index + len(STRENGTHS) // 2) % len(STRENGTHS)]
+    if curriculum_generation <= 0:
+        opponent_offset = len(STRENGTHS) // 2
+    else:
+        pairing_cycle = (0, 1, 3, -1, 2, -2)
+        round_index = game_index // (board_size_count * len(STRENGTHS))
+        opponent_offset = pairing_cycle[(round_index + curriculum_generation - 1) % len(pairing_cycle)]
+    white = STRENGTHS[(profile_index + opponent_offset) % len(STRENGTHS)]
     return black, white
 
 
@@ -163,15 +174,66 @@ def _root_targets(result: dict[str, Any], size: int) -> tuple[float, float]:
     return float(np.clip(winrate * 2.0 - 1.0, -1.0, 1.0)), float(np.clip(score_lead / (size * size), -1.0, 1.0))
 
 
-def _deep_indices(tags: list[int], limit: int) -> list[int]:
-    selected = {len(tags) - offset for offset in TERMINAL_OFFSETS if len(tags) - offset >= 0}
-    if tags: selected.add(len(tags) - 1)
-    tactical = [index for index, mask in enumerate(tags) if mask & HARD_TAGS]
-    # Prefer diverse recent tactical positions, then fill terminal windows.
-    for index in reversed(tactical):
-        if len(selected) >= limit: break
-        selected.add(index)
-    return sorted(selected, reverse=True)[:limit]
+def _spread_indices(indices: list[int], limit: int) -> list[int]:
+    if limit <= 0 or not indices:
+        return []
+    if len(indices) <= limit:
+        return indices
+    selected = np.linspace(0, len(indices) - 1, num=limit, dtype=np.int64)
+    return [indices[int(index)] for index in selected]
+
+
+def _deep_indices(tags: list[int], limit: int, curriculum_generation: int = 0) -> list[int]:
+    if limit <= 0 or not tags:
+        return []
+    if curriculum_generation <= 0:
+        selected = {len(tags) - offset for offset in TERMINAL_OFFSETS if len(tags) - offset >= 0}
+        selected.add(len(tags) - 1)
+        tactical = [index for index, mask in enumerate(tags) if mask & HARD_TAGS]
+        for index in reversed(tactical):
+            if len(selected) >= limit: break
+            selected.add(index)
+        return sorted(selected, reverse=True)[:limit]
+
+    selected: list[int] = []
+
+    def add(indices: list[int], count: int) -> None:
+        for index in _spread_indices(indices, count):
+            if index not in selected and len(selected) < limit:
+                selected.append(index)
+
+    terminal = sorted(
+        {len(tags) - 1}
+        | {len(tags) - offset for offset in TERMINAL_OFFSETS if len(tags) - offset >= 0}
+    )
+    add(terminal, min(4, limit))
+    for bit in (SEKI, KO, SNAPBACK, DAME):
+        add([index for index, mask in enumerate(tags) if mask & bit], 1)
+    strategic = [
+        index for index, mask in enumerate(tags)
+        if mask & (CLOSE_GAME | POLICY_UNCERTAIN)
+    ]
+    add(strategic, max(2, limit // 3))
+    for bit in (ATARI, DEAD_INVASION, FALSE_EYE):
+        add([index for index, mask in enumerate(tags) if mask & bit], 2)
+    phase_anchors = [
+        min(len(tags) - 1, round((len(tags) - 1) * fraction))
+        for fraction in (0.12, 0.30, 0.50, 0.70, 0.88)
+    ]
+    add(phase_anchors, len(phase_anchors))
+    add(list(range(len(tags))), limit)
+    return sorted(selected[:limit], reverse=True)
+
+
+def _teacher_tags(target: np.ndarray, value: float, score: float, tags: int) -> int:
+    if abs(value) <= 0.35 or abs(score) <= 0.08:
+        tags |= CLOSE_GAME
+    positive = target[target > 0]
+    if len(positive) > 1:
+        entropy = float(-(positive * np.log(positive)).sum() / np.log(len(positive)))
+        if entropy >= 0.55:
+            tags |= POLICY_UNCERTAIN
+    return tags
 
 
 def generate_game_samples(
@@ -180,11 +242,15 @@ def generate_game_samples(
     ensure_endgame: bool = False, hard_visits: int | None = None,
     settlement_samples: int = 12, control: Callable[[], None] | None = None,
     on_position: Callable[[int, int, int, int], None] | None = None,
+    curriculum_generation: int = 0, strategic_visits: int | None = None,
+    rank_contrast_positions: int = 0, rank_contrast_visits: int = 1,
 ) -> TrainingGame:
     if not board_sizes or any(size not in (9, 13, 19) for size in board_sizes):
         raise ValueError("Training requires at least one supported board size")
     size = board_sizes[game_index % len(board_sizes)]
-    black_profile, white_profile = training_profiles(game_index, len(board_sizes))
+    black_profile, white_profile = training_profiles(
+        game_index, len(board_sizes), curriculum_generation
+    )
     rng = np.random.default_rng(seed + game_index * 10_007)
     board = BoardState(size); history: list[list[str]] = []; game = TrainingGame.empty()
     snapshots: list[BoardState] = []; histories: list[list[list[str]]] = []; profiles: list[StrengthProfile] = []
@@ -201,7 +267,10 @@ def generate_game_samples(
             allow_pass = is_endgame or board.consecutive_passes > 0
             target = make_target_policy(result, size, search_mix=0.18, allow_pass=allow_pass)
             value, score = _root_targets(result, size)
-            snapshot = copy.deepcopy(board); tags = position_tags(snapshot)
+            snapshot = copy.deepcopy(board)
+            tags = position_tags(snapshot)
+            if curriculum_generation > 0:
+                tags = _teacher_tags(target, value, score, tags)
             snapshots.append(snapshot); histories.append([move.copy() for move in history]); profiles.append(profile)
             game.features.append(snapshot.features(profile.normalized, JAPANESE_KOMI)); game.policies.append(target)
             game.values.append(value); game.scores.append(score)
@@ -214,11 +283,20 @@ def generate_game_samples(
             if on_position: on_position(position_index + 1, position_limit, size, normal_visits)
             if board.consecutive_passes >= 2: break
 
-        selected = _deep_indices(game.position_kinds, settlement_samples)
+        selected = _deep_indices(
+            game.position_kinds,
+            settlement_samples,
+            curriculum_generation,
+        )
         requests = []
         for index in selected:
             snapshot = snapshots[index]
-            visits = (hard_visits or endgame_visits) if game.position_kinds[index] & HARD_TAGS else endgame_visits
+            if game.position_kinds[index] & HARD_TAGS:
+                visits = hard_visits or endgame_visits
+            elif game.position_kinds[index] & (CLOSE_GAME | POLICY_UNCERTAIN):
+                visits = strategic_visits or endgame_visits
+            else:
+                visits = endgame_visits
             requests.append({
                 "moves": histories[index], "size": size, "komi": JAPANESE_KOMI,
                 "profile": profiles[index].katago_profile, "visits": visits, "include_ownership": True,
@@ -232,9 +310,52 @@ def generate_game_samples(
             game.ownerships[index] = ownership; game.ownership_weights[index] = confidence
             game.status_targets[index] = labels.status_targets; game.status_weights[index] = labels.status_weights
             game.territory_targets[index] = labels.territory_targets; game.territory_weights[index] = labels.territory_weights
-            game.position_kinds[index] = labels.tags | TERMINAL_WINDOW
+            game.position_kinds[index] |= labels.tags | TERMINAL_WINDOW
             game.values[index], game.scores[index] = _root_targets(result, size)
             if on_position: on_position(index + 1, position_limit, size, int(requests[selected.index(index)]["visits"]))
+
+        if curriculum_generation > 0 and rank_contrast_positions > 0:
+            # Reuse only deeply relabelled positions. Their strength-independent
+            # value and score targets are reliable enough to duplicate while the
+            # policy target changes with the human rank profile.
+            contrast_indices = _spread_indices(sorted(selected), rank_contrast_positions)
+            contrast_requests: list[dict[str, Any]] = []
+            contrast_records: list[tuple[int, StrengthProfile]] = []
+            contrast_profiles = (STRENGTHS[0], STRENGTHS[len(STRENGTHS) // 2], STRENGTHS[-1])
+            for index in contrast_indices:
+                for contrast_profile in contrast_profiles:
+                    if contrast_profile == profiles[index]:
+                        continue
+                    contrast_requests.append({
+                        "moves": histories[index], "size": size, "komi": JAPANESE_KOMI,
+                        "profile": contrast_profile.katago_profile,
+                        "visits": rank_contrast_visits, "include_ownership": False,
+                    })
+                    contrast_records.append((index, contrast_profile))
+            if control: control()
+            for (index, contrast_profile), result in zip(
+                contrast_records, teacher.analyze_many(contrast_requests)
+            ):
+                if control: control()
+                snapshot = snapshots[index]
+                allow_pass = bool(
+                    game.position_kinds[index] & ENDGAME
+                    or snapshot.consecutive_passes > 0
+                )
+                policy = make_target_policy(result, size, search_mix=0.08, allow_pass=allow_pass)
+                game.features.append(snapshot.features(contrast_profile.normalized, JAPANESE_KOMI))
+                game.policies.append(policy)
+                game.values.append(game.values[index])
+                game.scores.append(game.scores[index])
+                game.ownerships.append(np.zeros(PASS_INDEX, dtype=np.float32))
+                game.ownership_weights.append(np.zeros(PASS_INDEX, dtype=np.float32))
+                game.status_targets.append(np.full(PASS_INDEX, 3, dtype=np.int8))
+                game.status_weights.append(np.zeros(PASS_INDEX, dtype=np.float32))
+                game.territory_targets.append(np.full(PASS_INDEX, 2, dtype=np.int8))
+                game.territory_weights.append(np.zeros(PASS_INDEX, dtype=np.float32))
+                game.position_kinds.append(game.position_kinds[index] | RANK_CONTRAST)
+                game.nominal_elos.append(contrast_profile.nominal_elo)
+                game.board_sizes.append(size)
     except StopRequested as error:
         game.moves = len(history); error.partial_game = game; raise
     game.moves = len(history)

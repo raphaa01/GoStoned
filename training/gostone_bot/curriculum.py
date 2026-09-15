@@ -15,6 +15,9 @@ DAME = 1 << 5
 SEKI = 1 << 6
 DEAD_INVASION = 1 << 7
 TERMINAL_WINDOW = 1 << 8
+CLOSE_GAME = 1 << 9
+POLICY_UNCERTAIN = 1 << 10
+RANK_CONTRAST = 1 << 11
 
 TAG_NAMES = {
     ENDGAME: "endgame",
@@ -26,6 +29,9 @@ TAG_NAMES = {
     SEKI: "seki",
     DEAD_INVASION: "dead_invasion",
     TERMINAL_WINDOW: "terminal_window",
+    CLOSE_GAME: "close_game",
+    POLICY_UNCERTAIN: "policy_uncertain",
+    RANK_CONTRAST: "rank_contrast",
 }
 
 ALIVE, DEAD, SEKI_STATUS, UNSETTLED = range(4)
@@ -85,6 +91,14 @@ def position_tags(board: BoardState) -> int:
                 if opponent_neighbors >= len(group): tags |= DEAD_INVASION
     for region, borders in _empty_regions(board.stones):
         if tags & ENDGAME and borders == {-1, 1} and len(region) <= 8: tags |= DAME
+        if borders == {-1, 1} and len(region) <= 8:
+            shared_colors = {
+                color
+                for _, liberties, color in groups
+                if len(liberties) >= 2 and liberties.issubset(region)
+            }
+            if shared_colors == {-1, 1}:
+                tags |= SEKI
     for y in range(board.size):
         for x in range(board.size):
             if board.stones[y, x] != 0: continue

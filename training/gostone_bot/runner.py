@@ -55,6 +55,11 @@ def run(run_dir: Path) -> None:
     data_dir = run_dir / "data"; artifact_dir = run_dir / "artifact"; data_dir.mkdir(parents=True, exist_ok=True)
     replay_dirs = [Path(value) for value in config.get("replay_data_dirs", []) if isinstance(value, str) and Path(value).is_dir()]
     data_paths = [*replay_dirs, data_dir]
+    curriculum_generation = int(config.get("curriculum_generation", 0))
+    normal_visits = int(config.get("normal_visits", preset.normal_visits))
+    strategic_visits = int(config.get("strategic_visits", preset.endgame_visits))
+    rank_contrast_positions = int(config.get("rank_contrast_positions", 0))
+    rank_contrast_visits = int(config.get("rank_contrast_visits", 1))
     journal.update(
         status="running", pid=os.getpid(), phase="setup", phase_progress=0.0, overall_progress=0.0,
         rules="japanese", komi=6.5, preset_name=str(config.get("display_name", preset.name)),
@@ -63,7 +68,7 @@ def run(run_dir: Path) -> None:
         model_limit_bytes=MAX_MODEL_BYTES, replay_runs=len(replay_dirs), error=None, traceback=None,
     )
     try:
-        gate.checkpoint(); journal.event("Verifying the KataGo teacher model and V5 data contract.")
+        gate.checkpoint(); journal.event("Verifying the KataGo teacher model and V5-family data contract.")
         human_model = download_teacher(); journal.update(phase_progress=1.0, overall_progress=_overall("setup", 1.0))
         existing_indices = _completed_game_indices(data_dir)
         missing_indices = [index for index in range(preset.games) if index not in existing_indices]
@@ -98,10 +103,14 @@ def run(run_dir: Path) -> None:
                 try:
                     game = generate_game_samples(
                         teacher=teacher, game_index=game_index, board_sizes=tuple(preset.board_sizes),
-                        normal_visits=preset.normal_visits, endgame_visits=preset.endgame_visits,
+                        normal_visits=normal_visits, endgame_visits=preset.endgame_visits,
                         hard_visits=preset.hard_visits, settlement_samples=preset.settlement_samples,
                         max_moves=preset.max_moves, seed=int(config.get("seed", 20260909)),
                         ensure_endgame=preset.ensure_endgame, control=gate.checkpoint, on_position=on_position,
+                        curriculum_generation=curriculum_generation,
+                        strategic_visits=strategic_visits,
+                        rank_contrast_positions=rank_contrast_positions,
+                        rank_contrast_visits=rank_contrast_visits,
                     )
                     return game_index, game, False
                 except StopRequested as error:
@@ -117,8 +126,12 @@ def run(run_dir: Path) -> None:
                         save_game_archive(data_dir / f"game-{game_index:05d}.npz", game, {
                             "game_index": game_index, "partial": partial, "moves": game.moves,
                             "split": split_for_game(game_index, len(preset.board_sizes), preset.id == "smoke"),
-                            "seed": config.get("seed"), "normal_visits": preset.normal_visits,
+                            "seed": config.get("seed"), "normal_visits": normal_visits,
                             "settlement_visits": preset.endgame_visits, "hard_visits": preset.hard_visits,
+                            "strategic_visits": strategic_visits,
+                            "curriculum_generation": curriculum_generation,
+                            "rank_contrast_positions": rank_contrast_positions,
+                            "rank_contrast_visits": rank_contrast_visits,
                         })
                         if not partial: existing_indices.add(game_index)
                         fresh_positions = _count_positions([data_dir])
@@ -131,7 +144,10 @@ def run(run_dir: Path) -> None:
         journal.event(f"AI training starts with {fresh_positions} fresh and {total_positions - fresh_positions} replay positions.")
         base_raw = config.get("base_model_checkpoint"); base_checkpoint = Path(base_raw) if isinstance(base_raw, str) else None
         if base_checkpoint is not None:
-            journal.event(f"This version continues from GoStone AI v{config.get('base_model_version')} with full V5+ replay.")
+            journal.event(
+                f"This version continues from GoStone AI v{config.get('base_model_version')} with full V5+ replay, "
+                "new rank contrasts, and a separate anti-forgetting gate."
+            )
 
         def on_epoch(epoch: int, total: int, metrics: dict[str, float]) -> None:
             fraction = epoch / total
@@ -144,10 +160,16 @@ def run(run_dir: Path) -> None:
         journal.update(phase="training", phase_progress=0.0, overall_progress=_overall("training", 0.0), total_training_positions=total_positions)
         model_path = train_student(
             data=data_paths, output_dir=artifact_dir, epochs=preset.epochs, batch_size=preset.batch_size,
-            learning_rate=3e-4, channels=preset.channels, blocks=preset.blocks,
+            learning_rate=float(config.get("learning_rate", 3e-4)),
+            channels=preset.channels, blocks=preset.blocks,
             min_epochs=preset.min_epochs, early_stopping_patience=preset.early_stopping_patience,
             cpu_threads=cpu_threads, seed=int(config.get("seed", 20260909)), initial_checkpoint=base_checkpoint,
             control=gate.checkpoint, on_epoch=on_epoch, resume=True,
+            value_loss_weight=float(config.get("value_loss_weight", 0.25)),
+            status_class_weights=tuple(
+                float(value)
+                for value in config.get("status_class_weights", [1.0, 1.0, 1.0, 1.0])
+            ),
         )
         journal.update(phase="export", phase_progress=1.0, overall_progress=_overall("export", 1.0)); journal.event("ONNX export passed structural and 15 MiB validation.")
         gate.checkpoint(); metadata_path = artifact_dir / "gostone-japanese-v1.json"
@@ -160,6 +182,8 @@ def run(run_dir: Path) -> None:
         if not technical:
             baseline_raw = config.get("comparison_model_checkpoint")
             baseline = Path(baseline_raw) if isinstance(baseline_raw, str) else None
+            legacy_raw = config.get("legacy_comparison_model_checkpoint")
+            legacy_baseline = Path(legacy_raw) if isinstance(legacy_raw, str) else None
             journal.event("Running locked test metrics and the color-swapped 9×9/13×13/19×19 arena.")
             with KataGoTeacher(
                 human_model=human_model, cpu_threads=cpu_threads,
@@ -169,11 +193,22 @@ def run(run_dir: Path) -> None:
                     candidate_checkpoint=artifact_dir / "gostone-japanese-v1.pt", baseline_checkpoint=baseline,
                     data_paths=data_paths, seed=int(config.get("seed", 20260909)), batch_size=preset.batch_size,
                     teacher=teacher, arena_visits=min(128, preset.hard_visits), control=gate.checkpoint,
+                    fresh_data_paths=[data_dir], replay_data_paths=replay_dirs,
+                    require_improvement=bool(config.get("requires_replay_retention", False)),
+                    legacy_baseline_checkpoint=legacy_baseline,
                 )
         metadata.update(
             display_name=config.get("display_name"), model_version=config.get("model_version"), training_seed=config.get("seed"),
             base_model_version=config.get("base_model_version"), replay_model_versions=config.get("replay_model_versions", []),
             fresh_positions=fresh_positions, total_training_positions=total_positions, promotion_gate=promotion,
+            curriculum_generation=curriculum_generation,
+            curriculum={
+                "normal_visits": normal_visits,
+                "strategic_visits": strategic_visits,
+                "rank_contrast_positions_per_game": rank_contrast_positions,
+                "rank_contrast_visits": rank_contrast_visits,
+                "replay_retention_required": bool(config.get("requires_replay_retention", False)),
+            },
         )
         metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         approved = bool(promotion.get("approved"))
@@ -196,7 +231,7 @@ def run(run_dir: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run one resumable GoStone V5 training session"); parser.add_argument("--run-dir", type=Path, required=True); return parser.parse_args()
+    parser = argparse.ArgumentParser(description="Run one resumable GoStone V5-family training session"); parser.add_argument("--run-dir", type=Path, required=True); return parser.parse_args()
 
 
 if __name__ == "__main__":

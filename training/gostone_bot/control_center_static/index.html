@@ -80,7 +80,7 @@
               </div>
             </div>
             <div id="preset-list" class="preset-list" aria-label="Training scope"></div>
-            <p class="training-lineage-note"><strong>V5 starts with fresh weights and a new architecture.</strong> V6 and later continue from the latest V5-family model and replay all earlier V5-family data. Locked validation, test metrics, and a color-swapped arena run automatically.</p>
+            <p class="training-lineage-note"><strong>V5 starts with fresh weights and a new architecture.</strong> V6 and later keep that architecture and inherit the latest weights, replay all earlier V5-family data, add new strategic and same-position rank contrasts, and must pass separate improvement, anti-forgetting, and direct V4 gates.</p>
             <label class="cpu-control" for="cpu-threads">
               <span><strong>CPU threads</strong><small>More threads run faster but make the laptop warmer.</small></span>
               <output id="cpu-output" for="cpu-threads">6</output>

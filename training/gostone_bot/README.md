@@ -15,7 +15,8 @@ weights, data shards, checkpoints, and generated models stay below
 The first real run is always **GoStone AI v5**. V5 uses random initial weights
 and never loads a V1–V4 checkpoint or replay shard. A later real run becomes V6,
 V7, and so on; it loads the newest V5-family checkpoint and streams every
-available V5-family training shard as replay data.
+available V5-family training shard as replay data. Model version V6 deliberately
+keeps architecture version 5 so every V5 weight can be inherited exactly.
 
 The System Check preset is only a technical smoke test. It does not consume a
 version number or become a base model.
@@ -55,6 +56,25 @@ The preset controls deep and hard visit budgets. The week-long preset uses up to
 256 visits for tactical settlement positions without spending that budget on
 every opening move.
 
+## V6 improvement curriculum
+
+An inherited V6+ run does not repeat the V5 recipe unchanged. It uses a new
+random seed and a new curriculum generation with:
+
+- varied equal-strength, adjacent-rank, and distant-rank game pairings;
+- deeper labels for close games and high-entropy policy decisions across all
+  game phases, rather than filling the deep budget mostly with late false-eye
+  and invasion candidates;
+- explicit same-position policy targets at 600, 1500, and 2100 nominal Elo so
+  the rank input cannot be ignored;
+- stronger weighting for the win-value head and for rare seki/unsettled labels;
+- a lower inherited-model learning rate, full V5-family replay, and a separate
+  locked V5 replay gate to prevent catastrophic forgetting.
+
+The training seed changes for every numbered run. Fresh shards are therefore
+new games; earlier training shards are used only as protected replay. Test shards
+remain locked and are never optimized.
+
 KataGo analysis is configured as `SIDETOMOVE`. During generation, Black-to-move
 ownership is therefore negated before storage. Dataset format 5 records the
 fixed-color contract and tests cover both perspectives.
@@ -88,6 +108,14 @@ It then runs six visible-equivalent AI games against the preceding model: both
 colors on 9x9, 13x13, and 19x19. KataGo evaluates each final position so neither
 contestant scores its own match. A candidate is still available in the manual
 Arena if the gate fails, but its metadata clearly records that it is not approved.
+
+For V6+, approval additionally requires a measurable improvement on the fresh
+locked curriculum, at least 60% in the direct six-game V5 arena, no material
+regression on the V5 replay test, and no regression of the six per-Elo policy
+slices or their rank-conditioning gain. The linked V4 artifact is required, and
+V6 must also improve its combined locked objective and score at least 60% in a
+separate direct V4 arena. The displayed 600–2100 values remain nominal until a
+separate calibration league supplies enough real game evidence to assign ratings.
 
 ## Pause, resume, and stop
 

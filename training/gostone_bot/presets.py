@@ -35,15 +35,15 @@ PRESETS = {
     for preset in (
         TrainingPreset(
             "smoke", "System Check",
-            "Verifies the V5 data contract, all model heads, pause/resume, and ONNX export.",
-            "about 3–8 minutes", "Technical validation only — does not create V5",
+            "Verifies the V5-family data contract, all model heads, pause/resume, and ONNX export.",
+            "about 3–8 minutes", "Technical validation only — does not create a numbered model",
             games=3, max_moves=6, normal_visits=1, endgame_visits=1, hard_visits=1,
             settlement_samples=1, epochs=1, min_epochs=1, early_stopping_patience=1,
             parallel_games=2, batch_size=8, channels=32, blocks=2,
         ),
         TrainingPreset(
-            "short", "Focused V5 Session",
-            "A complete split-aware V5 run with targeted settlement positions and a promotion gate.",
+            "short", "Focused Training Session",
+            "A complete split-aware run with targeted strategic and settlement positions.",
             "about 12–30 hours", "Experimental candidate — automatic tests included",
             games=30, max_moves=90, normal_visits=1, endgame_visits=32, hard_visits=64,
             settlement_samples=8, epochs=30, min_epochs=8, early_stopping_patience=5,
@@ -51,7 +51,7 @@ PRESETS = {
         ),
         TrainingPreset(
             "overnight", "Extended Training",
-            "Twice the fresh games, deeper settlement labels, and more replay optimization.",
+            "More fresh games, deeper strategic labels, rank contrasts, and protected replay.",
             "about 1–3 days", "Strong local candidate — automatic tests included",
             games=60, max_moves=160, normal_visits=1, endgame_visits=64, hard_visits=128,
             settlement_samples=12, epochs=50, min_epochs=12, early_stopping_patience=7,
@@ -59,7 +59,7 @@ PRESETS = {
         ),
         TrainingPreset(
             "serious", "Week-long Deep Training",
-            "Maximum local curriculum with 256-visit tactical labels and full replay from V5 onward.",
+            "Maximum local curriculum with new tactical, strategic, rank-contrast, and replay data.",
             "about 3–7 days", "Best local candidate under the 15 MiB browser budget",
             games=120, max_moves=260, normal_visits=1, endgame_visits=96, hard_visits=256,
             settlement_samples=16, epochs=80, min_epochs=18, early_stopping_patience=10,
