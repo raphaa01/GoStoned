@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import secrets
@@ -57,9 +58,16 @@ class ModelCatalog:
         candidates: list[dict[str, Any]] = []
         if not self.runs_dir.is_dir():
             return []
-        for run_dir in self.runs_dir.iterdir():
-            if not run_dir.is_dir():
+
+        pending = [run_dir for run_dir in self.runs_dir.iterdir() if run_dir.is_dir()]
+        seen_runs: set[Path] = set()
+        seen_checkpoints: set[Path] = set()
+        while pending:
+            run_dir = pending.pop(0)
+            resolved_run = run_dir.resolve()
+            if resolved_run in seen_runs:
                 continue
+            seen_runs.add(resolved_run)
             state_path = run_dir / "state.json"
             if state_path.is_file():
                 try:
@@ -82,6 +90,8 @@ class ModelCatalog:
                     continue
                 config_path = run_dir / "config.json"
                 config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
+                if not isinstance(config, dict):
+                    config = {}
                 preset = config.get("preset", {}) if isinstance(config, dict) else {}
                 created_at = float(config.get("created_at", onnx.stat().st_mtime)) if isinstance(config, dict) else onnx.stat().st_mtime
                 architecture_version = int(metadata.get("architecture_version", 0))
@@ -90,6 +100,10 @@ class ModelCatalog:
             preset_id = str(preset.get("id", "")) if isinstance(preset, dict) else ""
             raw_version = config.get("model_version") if isinstance(config, dict) else None
             version = raw_version if isinstance(raw_version, int) and raw_version > 0 else None
+            resolved_checkpoint = checkpoint.resolve()
+            if resolved_checkpoint in seen_checkpoints:
+                continue
+            seen_checkpoints.add(resolved_checkpoint)
             candidates.append(
                 {
                     "id": run_dir.name,
@@ -104,6 +118,20 @@ class ModelCatalog:
                     "technical_test": preset_id == "smoke",
                 }
             )
+
+            comparison_path = config.get("comparison_model_checkpoint")
+            if isinstance(comparison_path, str) and comparison_path:
+                linked_checkpoint = Path(comparison_path).expanduser()
+                if not linked_checkpoint.is_absolute():
+                    linked_checkpoint = run_dir / linked_checkpoint
+                if (
+                    linked_checkpoint.name == "gostone-japanese-v1.pt"
+                    and linked_checkpoint.parent.name == "artifact"
+                ):
+                    linked_run = linked_checkpoint.parent.parent
+                    if linked_run.is_dir():
+                        pending.append(linked_run)
+
         candidates.sort(key=lambda item: float(item["created_at"]))
         used_versions = {
             int(item["model_version"])
@@ -112,7 +140,14 @@ class ModelCatalog:
         }
         next_legacy_version = 1
         result: list[ModelArtifact] = []
+        id_counts: dict[str, int] = {}
         for item in candidates:
+            item_id = str(item["id"])
+            id_counts[item_id] = id_counts.get(item_id, 0) + 1
+        for item in candidates:
+            if id_counts[str(item["id"])] > 1:
+                path_hash = hashlib.sha256(str(Path(item["checkpoint"]).resolve()).encode("utf-8")).hexdigest()[:8]
+                item["id"] = f"{item['id']}-{path_hash}"
             version = item["model_version"]
             if not item["technical_test"] and version is None:
                 while next_legacy_version in used_versions:

@@ -57,3 +57,8 @@ mit zufälligen Gewichten; V6+ übernimmt ausschließlich V5-Familiengewichte un
 Replay-Daten. Ein erzeugtes V5-Modell ersetzt den oben genannten produktiven V4-Vertrag
 nicht automatisch. Die Produktionsintegration benötigt weiterhin eine ausdrückliche
 Änderung von `GOSTONE_BOT_MODEL`, Browser-Worker und Versionsbindung.
+
+Die AI Arena im lokalen Training Lab listet neben den abgeschlossenen Läufen im
+aktuellen Arbeitsverzeichnis auch deren ausdrücklich in `comparison_model_checkpoint`
+verknüpfte Vergleichsmodelle. Dadurch lassen sich insbesondere V5 und das für seine
+Promotion verwendete V4-Artefakt direkt als Schwarz beziehungsweise Weiß auswählen.
