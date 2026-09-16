@@ -432,16 +432,17 @@ body {
 
 .nav-link::after {
   background: var(--color-moss);
-  border-radius: 50%;
-  bottom: 2px;
+  border-radius: var(--radius-pill);
+  bottom: 1px;
   content: "";
-  height: 5px;
-  left: 50%;
+  height: 2px;
+  left: 0;
   opacity: 0;
   position: absolute;
-  transform: translate(-50%, 3px);
+  transform: scaleX(0);
+  transform-origin: center;
   transition: opacity var(--duration-base), transform var(--duration-base) var(--ease-out);
-  width: 5px;
+  width: 100%;
 }
 
 .nav-link:hover,
@@ -457,7 +458,7 @@ body {
 .nav-link:hover::after,
 .nav-link.is-active::after {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: scaleX(1);
 }
 
 .sidebar-bottom {
@@ -1713,21 +1714,6 @@ body {
 .play-active-card {
   max-width: 560px;
   width: 100%;
-}
-
-.app-shell:has(.play-experience) .nav-link::after {
-  border-radius: var(--radius-pill);
-  bottom: 1px;
-  height: 2px;
-  left: 0;
-  transform: scaleX(0);
-  transform-origin: center;
-  width: 100%;
-}
-
-.app-shell:has(.play-experience) .nav-link:hover::after,
-.app-shell:has(.play-experience) .nav-link.is-active::after {
-  transform: scaleX(1);
 }
 
 .match-lobby-copy h1 {
