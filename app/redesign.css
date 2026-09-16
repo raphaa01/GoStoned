@@ -7503,3 +7503,135 @@ html {
     transform: none;
   }
 }
+
+/* Homepage navigation and water-to-board handoff ------------------------- */
+.mobile-nav-shortcuts {
+  display: none;
+}
+
+.home-chapters {
+  overflow: visible;
+}
+
+.home-chapters::before {
+  background-image:
+    linear-gradient(rgb(87 67 41 / .16) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(87 67 41 / .16) 1px, transparent 1px),
+    radial-gradient(ellipse 43% 27% at 50% 20%, transparent 62%, rgb(71 117 99 / .11) 63%, transparent 64%),
+    linear-gradient(to bottom, transparent 2%, rgb(245 242 235 / .74) 30%, rgb(238 233 223 / .92) 72%, transparent 100%);
+  background-position: center, center, center, center;
+  background-size: 54px 54px, 54px 54px, 100% 100%, 100% 100%;
+  height: clamp(300px, 26vw, 430px);
+  left: -4%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 72%, transparent);
+  opacity: .58;
+  right: -4%;
+  top: clamp(-210px, -14vw, -145px);
+  transform: perspective(1100px) rotateX(58deg);
+}
+
+.home-chapter--review::before {
+  background: radial-gradient(ellipse at center, rgb(23 32 27 / .2), transparent 70%);
+  content: "";
+  display: block;
+  filter: blur(24px);
+  inset: -90px -7%;
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
+@media (max-width: 1180px) {
+  .app-shell:has(.home-experience) .mobile-nav {
+    align-content: center;
+    flex-wrap: wrap;
+    height: 108px;
+    padding-bottom: 0;
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts {
+    align-items: center;
+    border-top: 1px solid rgb(40 39 34 / .07);
+    display: flex;
+    flex: 0 0 calc(100% + 48px);
+    gap: 4px;
+    margin-inline: -24px;
+    min-width: 0;
+    order: 3;
+    overflow-x: auto;
+    padding: 0 18px;
+    scrollbar-width: none;
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a {
+    color: var(--color-text-muted);
+    flex: 0 0 auto;
+    font-size: 13px;
+    font-weight: 620;
+    min-height: 48px;
+    padding: 15px 13px 12px;
+    position: relative;
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a::after {
+    background: var(--color-moss);
+    bottom: 7px;
+    content: "";
+    height: 2px;
+    left: 13px;
+    opacity: 0;
+    position: absolute;
+    right: 13px;
+    transform: scaleX(.3);
+    transition: opacity var(--duration-base), transform var(--duration-base) var(--ease-out);
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a:hover,
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a:focus-visible,
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a.is-active {
+    color: var(--color-ink);
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a:hover::after,
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a:focus-visible::after,
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a.is-active::after {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .app-shell:has(.home-experience) .app-main {
+    padding-top: 108px;
+  }
+
+  .app-shell:has(.home-experience) .home-hero {
+    height: calc(100svh - 108px);
+  }
+
+  .app-shell:has(.home-experience) .mobile-menu {
+    max-height: calc(100dvh - 108px);
+    top: 108px;
+  }
+}
+
+@media (max-width: 840px) {
+  .app-shell:has(.home-experience) .mobile-nav {
+    padding-inline: 16px;
+  }
+
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts {
+    flex-basis: calc(100% + 32px);
+    margin-inline: -16px;
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-shell:has(.home-experience) .mobile-nav-shortcuts a {
+    padding-inline: 11px;
+  }
+}

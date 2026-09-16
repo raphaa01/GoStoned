@@ -89,6 +89,19 @@ export function Navbar() {
       >
         {open ? <X size={22} /> : <Menu size={22} />}
       </button>
+      <nav aria-label={dictionary.nav.mainLabel} className="mobile-nav-shortcuts">
+        {links.slice(0, 6).map(({ destination, path, label }) => (
+          <Link
+            aria-current={isRouteActive(pathname, path) ? "page" : undefined}
+            className={isRouteActive(pathname, path) ? "is-active" : ""}
+            href={destination}
+            key={path}
+            onClick={() => setOpen(false)}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       <nav
         aria-label={dictionary.nav.mobileLabel}
         className="mobile-menu"
