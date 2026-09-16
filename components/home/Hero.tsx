@@ -103,10 +103,7 @@ export function Hero() {
 
         <div className="hero-actions">
           <Link className="button button--primary button--lg hero-start" href={href("/play")}>
-            <span className="hero-start-label">{copy.startPlay}</span>
-            <span aria-hidden="true" className="hero-start-arrow">
-              <ArrowRight size={20} />
-            </span>
+            {copy.startPlay} <ArrowRight aria-hidden="true" size={20} />
           </Link>
         </div>
       </section>
