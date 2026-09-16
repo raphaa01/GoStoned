@@ -190,7 +190,6 @@ export function GoBoardScene({ label, scene }: { label: string; scene: Scene }) 
           {stones[scene].map((stone, index) => <StonePiece key={`${stone.x}-${stone.y}-${index}`} scene={scene} stone={stone} />)}
         </BoardFrame>
       </div>
-      <div aria-hidden="true" className="board-scene-index">{scene === "play" ? "01" : scene === "learn" ? "02" : scene === "puzzles" ? "03" : "04"}</div>
       {scene === "play" ? (
         <div aria-hidden="true" className="board-match-strip">
           <span className="board-match-player"><i className="board-mini-stone board-mini-stone--black" /> 09:42</span>
