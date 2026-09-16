@@ -7674,7 +7674,7 @@ html {
   pointer-events: none;
   position: absolute;
   right: -8%;
-  top: 0;
+  top: clamp(50px, 5vw, 76px);
   z-index: -1;
 }
 
@@ -7710,7 +7710,7 @@ html {
 }
 
 @keyframes water-handoff-scroll {
-  from { opacity: .16; transform: translateY(-24px) scale(.94); }
+  from { opacity: .16; transform: translateY(-18px) scale(.94); }
   to { opacity: .72; transform: translateY(8px) scale(1.03); }
 }
 
