@@ -6347,7 +6347,7 @@ body {
 }
 
 /* Home scroll experience -------------------------------------------------- */
-html {
+html:has(.home-chapters) {
   scroll-behavior: smooth;
   scroll-padding-top: 150px;
 }
@@ -6916,7 +6916,7 @@ html {
 }
 
 @media (max-width: 840px) {
-  html { scroll-padding-top: 118px; }
+  html:has(.home-chapters) { scroll-padding-top: 118px; }
 
   .home-wayfinder > div {
     padding-inline: 12px;
@@ -6968,7 +6968,7 @@ html {
 }
 
 @media (max-width: 620px) {
-  html { scroll-padding-top: 110px; }
+  html:has(.home-chapters) { scroll-padding-top: 110px; }
 
   .home-wayfinder {
     overflow-x: auto;
@@ -7051,7 +7051,7 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  html:has(.home-chapters) { scroll-behavior: auto; }
   .go-board-frame,
   .home-wayfinder a,
   .home-wayfinder a::after { transition: none; }
