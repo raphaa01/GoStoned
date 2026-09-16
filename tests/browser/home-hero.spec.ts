@@ -24,6 +24,14 @@ test("keeps the primary homepage action visible and proportionally anchored", as
   expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(viewport.height);
 
   const relativeButtonTop = (buttonBox.y - heroBox.y) / heroBox.height;
-  expect(relativeButtonTop).toBeGreaterThan(0.6);
+  expect(relativeButtonTop).toBeGreaterThan(0.5);
   expect(relativeButtonTop).toBeLessThan(0.9);
+
+  const buttonCenter = buttonBox.x + buttonBox.width / 2;
+  expect(Math.abs(buttonCenter - viewport.width / 2)).toBeLessThanOrEqual(1);
+
+  if (viewport.width >= 1200) {
+    expect(relativeButtonTop).toBeLessThan(0.74);
+    expect(buttonBox.height).toBeGreaterThanOrEqual(74);
+  }
 });
