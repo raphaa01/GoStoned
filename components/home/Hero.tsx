@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
+import { GoBoardScene } from "@/components/home/GoBoardScene";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
 type PublicActivityCount = number | "under_5";
@@ -108,79 +109,73 @@ export function Hero() {
         </div>
       </section>
 
+      <nav className="home-wayfinder" aria-label={copy.kicker}>
+        <div>
+          <a href="#home-play"><span>01</span>{copy.playChapterKicker}</a>
+          <a href="#home-learn"><span>02</span>{copy.learnChapterKicker}</a>
+          <a href="#home-puzzles"><span>03</span>{copy.puzzlesChapterKicker}</a>
+          <a href="#home-review"><span>04</span>{copy.reviewChapterKicker}</a>
+          <a href="#home-progress"><span>05</span>{copy.progressChapterKicker}</a>
+        </div>
+      </nav>
+
       <div className="home-chapters">
-        <section className="home-chapter home-chapter--play" aria-labelledby="home-play-title">
-          <div className="chapter-visual chapter-visual--board" aria-hidden="true">
-            <span className="chapter-stone chapter-stone--black" />
-            <span className="chapter-stone chapter-stone--white" />
-            <span className="chapter-ripple" />
-          </div>
-          <div className="chapter-copy">
-            <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-            <p>{copy.playChapterBody}</p>
-            <Link className="chapter-link" href={href("/play")}>{copy.playChapterAction}</Link>
-          </div>
-        </section>
-
-        <section className="home-chapter home-chapter--learn" aria-labelledby="home-learn-title">
-          <div className="chapter-copy">
-            <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-            <p>{copy.learnChapterBody}</p>
-            <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction}</Link>
-          </div>
-          <div className="chapter-visual chapter-visual--lesson" aria-hidden="true">
-            <span className="lesson-stone lesson-stone--one" />
-            <span className="lesson-stone lesson-stone--two" />
-            <span className="lesson-stone lesson-stone--three" />
-            <span className="lesson-liberty lesson-liberty--one" />
-            <span className="lesson-liberty lesson-liberty--two" />
+        <section aria-labelledby="home-play-title" className="home-chapter home-chapter--play" data-chapter="01" id="home-play">
+          <div className="home-chapter-inner">
+            <GoBoardScene label={copy.playChapterTitle} scene="play" />
+            <div className="chapter-copy">
+              <p className="chapter-kicker"><span>01</span>{copy.playChapterKicker}</p>
+              <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+              <p>{copy.playChapterBody}</p>
+              <Link className="chapter-link" href={href("/play")}>{copy.playChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+            </div>
           </div>
         </section>
 
-        <section className="home-chapter home-chapter--puzzles" aria-labelledby="home-puzzles-title">
-          <div className="chapter-copy">
-            <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-            <p>{copy.puzzlesChapterBody}</p>
-            <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction}</Link>
-          </div>
-          <div className="chapter-visual chapter-visual--puzzles" aria-hidden="true">
-            <span className="puzzle-stone puzzle-stone--black puzzle-stone--one" />
-            <span className="puzzle-stone puzzle-stone--black puzzle-stone--two" />
-            <span className="puzzle-stone puzzle-stone--black puzzle-stone--three" />
-            <span className="puzzle-stone puzzle-stone--white puzzle-stone--four" />
-            <span className="puzzle-stone puzzle-stone--white puzzle-stone--five" />
-            <span className="puzzle-vital-point" />
-            <span className="puzzle-sequence-line" />
-            <span className="puzzle-sequence-label">1</span>
+        <section aria-labelledby="home-learn-title" className="home-chapter home-chapter--learn" data-chapter="02" id="home-learn">
+          <div className="home-chapter-inner">
+            <div className="chapter-copy">
+              <p className="chapter-kicker"><span>02</span>{copy.learnChapterKicker}</p>
+              <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+              <p>{copy.learnChapterBody}</p>
+              <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+            </div>
+            <GoBoardScene label={copy.learnChapterTitle} scene="learn" />
           </div>
         </section>
 
-        <section className="home-chapter home-chapter--review" aria-labelledby="home-review-title">
-          <div className="chapter-visual chapter-visual--review" aria-hidden="true">
-            <span className="review-stone review-stone--black review-stone--one" />
-            <span className="review-stone review-stone--black review-stone--two" />
-            <span className="review-stone review-stone--black review-stone--three" />
-            <span className="review-stone review-stone--black review-stone--four" />
-            <span className="review-stone review-stone--white review-stone--five" />
-            <span className="review-stone review-stone--white review-stone--six" />
-            <span className="review-stone review-stone--white review-stone--seven">
-              <span>42</span>
-            </span>
-          </div>
-          <div className="chapter-copy">
-            <h2 id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-            <p>{copy.reviewChapterBody}</p>
-            <Link className="chapter-link" href={reviewHref}>{copy.reviewChapterAction}</Link>
+        <section aria-labelledby="home-puzzles-title" className="home-chapter home-chapter--puzzles" data-chapter="03" id="home-puzzles">
+          <div className="home-chapter-inner">
+            <GoBoardScene label={copy.puzzlesChapterTitle} scene="puzzles" />
+            <div className="chapter-copy">
+              <p className="chapter-kicker"><span>03</span>{copy.puzzlesChapterKicker}</p>
+              <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+              <p>{copy.puzzlesChapterBody}</p>
+              <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+            </div>
           </div>
         </section>
 
-        <section className="platform-status" aria-labelledby="home-progress-title">
+        <section aria-labelledby="home-review-title" className="home-chapter home-chapter--review" data-chapter="04" id="home-review">
+          <div className="home-chapter-inner">
+            <div className="chapter-copy">
+              <p className="chapter-kicker"><span>04</span>{copy.reviewChapterKicker}</p>
+              <h2 id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+              <p>{copy.reviewChapterBody}</p>
+              <Link className="chapter-link" href={reviewHref}>{copy.reviewChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+            </div>
+            <GoBoardScene label={copy.reviewChapterTitle} scene="review" />
+          </div>
+        </section>
+
+        <section className="platform-status" id="home-progress" aria-labelledby="home-progress-title">
           <div className="platform-status-heading">
             <div>
+              <p className="chapter-kicker"><span>05</span>{copy.progressChapterKicker}</p>
               <h2 id="home-progress-title">{copy.progressChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.progressChapterBody}</p>
             </div>
-            <Link href={profileHref}>{copy.progressChapterAction}</Link>
+            <Link className="chapter-link" href={profileHref}>{copy.progressChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
           </div>
 
           <div className="platform-metrics">
