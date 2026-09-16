@@ -29,6 +29,7 @@ export function Hero() {
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: "loading" });
   const [requestKey, setRequestKey] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const featurePairRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
   const focusStatusAfterSuccess = useRef(false);
 
@@ -56,6 +57,25 @@ export function Hero() {
     focusStatusAfterSuccess.current = false;
     statusRef.current?.focus();
   }, [summaryState]);
+
+  useEffect(() => {
+    const featurePair = featurePairRef.current;
+    if (
+      !featurePair
+      || !("IntersectionObserver" in window)
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) return;
+
+    featurePair.classList.add("is-reveal-ready");
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      featurePair.classList.add("is-visible");
+      observer.disconnect();
+    }, { threshold: 0.16 });
+    observer.observe(featurePair);
+
+    return () => observer.disconnect();
+  }, []);
 
   const summary = summaryState.kind === "ready" ? summaryState.summary : null;
   const displayCount = (count: PublicActivityCount | undefined) => count === "under_5"
@@ -114,10 +134,9 @@ export function Hero() {
           <div className="home-chapter-inner">
             <Link aria-label={copy.playChapterAction} className="board-feature-link" href={href("/play")}>
               <GoBoardScene label={copy.playChapterTitle} scene="play" />
-              <span aria-hidden="true" className="board-action-glyph"><Play fill="currentColor" size={18} /></span>
             </Link>
             <div className="chapter-copy">
-              <p className="chapter-kicker"><Gamepad2 aria-hidden="true" size={17} />{copy.playChapterKicker}</p>
+              <p className="chapter-kicker"><Gamepad2 aria-hidden="true" size={21} />{copy.playChapterKicker}</p>
               <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.playChapterBody}</p>
               <nav aria-label={copy.playChapterAction} className="board-size-choices">
@@ -132,15 +151,14 @@ export function Hero() {
           </div>
         </section>
 
-        <div className="home-feature-pair">
+        <div className="home-feature-pair" ref={featurePairRef}>
           <section aria-labelledby="home-learn-title" className="home-chapter home-chapter--learn" id="home-learn">
             <div className="home-chapter-inner">
               <Link aria-label={copy.learnChapterAction} className="board-feature-link" href={learnHref}>
                 <GoBoardScene label={copy.learnChapterTitle} scene="learn" />
-                <span aria-hidden="true" className="board-action-glyph"><BookOpen size={18} /></span>
               </Link>
               <div className="chapter-copy">
-                <p className="chapter-kicker"><BookOpen aria-hidden="true" size={17} />{copy.learnChapterKicker}</p>
+                <p className="chapter-kicker"><BookOpen aria-hidden="true" size={21} />{copy.learnChapterKicker}</p>
                 <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
                 <p>{copy.learnChapterBody}</p>
               </div>
@@ -151,10 +169,9 @@ export function Hero() {
             <div className="home-chapter-inner">
               <Link aria-label={copy.puzzlesChapterAction} className="board-feature-link" href={href("/puzzles")}>
                 <GoBoardScene label={copy.puzzlesChapterTitle} scene="puzzles" />
-                <span aria-hidden="true" className="board-action-glyph"><Puzzle size={18} /></span>
               </Link>
               <div className="chapter-copy">
-                <p className="chapter-kicker"><Puzzle aria-hidden="true" size={17} />{copy.puzzlesChapterKicker}</p>
+                <p className="chapter-kicker"><Puzzle aria-hidden="true" size={21} />{copy.puzzlesChapterKicker}</p>
                 <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
                 <p>{copy.puzzlesChapterBody}</p>
               </div>
@@ -165,13 +182,12 @@ export function Hero() {
         <section aria-labelledby="home-review-title" className="home-chapter home-chapter--review" id="home-review">
           <div className="home-chapter-inner">
             <div className="chapter-copy">
-              <p className="chapter-kicker"><Search aria-hidden="true" size={17} />{copy.reviewChapterKicker}</p>
+              <p className="chapter-kicker"><Search aria-hidden="true" size={21} />{copy.reviewChapterKicker}</p>
               <h2 id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.reviewChapterBody}</p>
             </div>
             <Link aria-label={copy.reviewChapterAction} className="board-feature-link" href={reviewHref}>
               <GoBoardScene label={copy.reviewChapterTitle} scene="review" />
-              <span aria-hidden="true" className="board-action-glyph"><Search size={18} /></span>
             </Link>
           </div>
         </section>
@@ -179,7 +195,7 @@ export function Hero() {
         <section className="platform-status" id="home-progress" aria-labelledby="home-progress-title">
           <div className="platform-status-heading">
             <div>
-              <p className="chapter-kicker"><Trophy aria-hidden="true" size={17} />{copy.progressChapterKicker}</p>
+              <p className="chapter-kicker"><Trophy aria-hidden="true" size={21} />{copy.progressChapterKicker}</p>
               <h2 id="home-progress-title">{copy.progressChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.progressChapterBody}</p>
             </div>

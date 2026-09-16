@@ -1,6 +1,7 @@
 /* GoStone 2026 visual system ------------------------------------------------ */
 :root {
   color-scheme: light;
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: "Iowan Old Style", Baskerville, "Times New Roman", serif;
   --color-canvas: #f5f2eb;
   --color-canvas-deep: #eee9df;
@@ -729,6 +730,7 @@ body {
 
 /* Homepage --------------------------------------------------------------- */
 .home-experience {
+  font-family: var(--font-sans);
   overflow: clip;
 }
 
@@ -6641,7 +6643,7 @@ html {
 
 .board-coordinate {
   fill: rgb(68 42 20 / .56);
-  font-family: "Avenir Next", sans-serif;
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 720;
   letter-spacing: .08em;
@@ -6654,7 +6656,7 @@ html {
 }
 
 .board-move-label {
-  font-family: "Avenir Next", sans-serif;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 750;
 }
@@ -7286,13 +7288,15 @@ html {
 }
 
 .chapter-kicker svg {
-  color: var(--color-oxide);
+  color: var(--color-moss-strong);
   flex: 0 0 auto;
-  stroke-width: 1.7;
+  height: 22px;
+  stroke-width: 1.45;
+  width: 22px;
 }
 
 .home-chapter--review .chapter-kicker svg {
-  color: #d39983;
+  color: #a7c8b9;
 }
 
 .board-feature-link {
@@ -7320,33 +7324,6 @@ html {
 
 .home-chapter--review .board-feature-link {
   max-width: 540px;
-}
-
-.board-action-glyph {
-  align-items: center;
-  backdrop-filter: blur(12px);
-  background: rgb(255 253 249 / .9);
-  border: 1px solid rgb(23 24 22 / .13);
-  border-radius: 50%;
-  box-shadow: 0 10px 30px rgb(37 25 13 / .18);
-  color: var(--color-ink);
-  display: flex;
-  height: 46px;
-  justify-content: center;
-  position: absolute;
-  right: 5.5%;
-  top: 5.5%;
-  transform: translateZ(0);
-  transition: background-color 260ms var(--ease-out), color 260ms var(--ease-out), transform 420ms var(--ease-out);
-  width: 46px;
-  z-index: 3;
-}
-
-.board-feature-link:hover .board-action-glyph,
-.board-feature-link:focus-visible .board-action-glyph {
-  background: var(--color-ink);
-  color: var(--color-canvas);
-  transform: scale(1.08);
 }
 
 .board-size-choices {
@@ -7465,6 +7442,15 @@ html {
   color: var(--color-ink);
 }
 
+.platform-status-heading > .chapter-symbol-link {
+  color: var(--color-canvas);
+}
+
+.platform-status-heading > .chapter-symbol-link:hover,
+.platform-status-heading > .chapter-symbol-link:focus-visible {
+  color: var(--color-ink);
+}
+
 .platform-status .chapter-kicker {
   color: var(--color-moss-strong) !important;
 }
@@ -7495,28 +7481,35 @@ html {
   font-size: clamp(32px, 4vw, 50px);
 }
 
-@supports (animation-timeline: view()) {
-  .home-feature-pair .home-chapter:first-child {
-    animation: home-card-left both linear;
-    animation-range: entry 4% cover 34%;
-    animation-timeline: view();
-  }
+.home-feature-pair.is-reveal-ready .home-chapter {
+  opacity: 0;
+  will-change: opacity, transform;
+}
 
-  .home-feature-pair .home-chapter:last-child {
-    animation: home-card-right both linear;
-    animation-range: entry 4% cover 34%;
-    animation-timeline: view();
-  }
+.home-feature-pair.is-reveal-ready .home-chapter:first-child {
+  transform: perspective(1200px) translate(-44px, 40px) rotateY(-5deg) rotateZ(-.7deg);
+}
+
+.home-feature-pair.is-reveal-ready .home-chapter:last-child {
+  transform: perspective(1200px) translate(44px, 40px) rotateY(5deg) rotateZ(.7deg);
+}
+
+.home-feature-pair.is-reveal-ready.is-visible .home-chapter:first-child {
+  animation: home-card-left 920ms 40ms var(--ease-out) both;
+}
+
+.home-feature-pair.is-reveal-ready.is-visible .home-chapter:last-child {
+  animation: home-card-right 920ms 130ms var(--ease-out) both;
 }
 
 @keyframes home-card-left {
-  from { opacity: .25; transform: translate(-28px, 34px); }
-  to { opacity: 1; transform: translate(0, 0); }
+  from { opacity: 0; transform: perspective(1200px) translate(-44px, 40px) rotateY(-5deg) rotateZ(-.7deg); }
+  to { opacity: 1; transform: perspective(1200px) translate(0, 0) rotateY(0) rotateZ(0); }
 }
 
 @keyframes home-card-right {
-  from { opacity: .25; transform: translate(28px, 34px); }
-  to { opacity: 1; transform: translate(0, 0); }
+  from { opacity: 0; transform: perspective(1200px) translate(44px, 40px) rotateY(5deg) rotateZ(.7deg); }
+  to { opacity: 1; transform: perspective(1200px) translate(0, 0) rotateY(0) rotateZ(0); }
 }
 
 @media (max-width: 920px) {
@@ -7637,7 +7630,6 @@ html {
     transform: none;
   }
 
-  .board-action-glyph,
   .board-size-choices a,
   .chapter-symbol-link {
     transition: none;
@@ -7657,14 +7649,78 @@ html {
     linear-gradient(to bottom, transparent 2%, rgb(245 242 235 / .74) 30%, rgb(238 233 223 / .92) 72%, transparent 100%);
   background-position: center, center, center, center;
   background-size: 54px 54px, 54px 54px, 100% 100%, 100% 100%;
-  height: clamp(300px, 26vw, 430px);
+  height: clamp(360px, 31vw, 500px);
   left: -4%;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 72%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 72%, transparent);
-  opacity: .58;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 38%, #000 76%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 38%, #000 76%, transparent);
+  opacity: .54;
   right: -4%;
-  top: clamp(24px, 4vw, 58px);
+  top: clamp(72px, 8vw, 118px);
   transform: perspective(1100px) rotateX(58deg);
+}
+
+.home-chapters::after {
+  background:
+    radial-gradient(ellipse 52% 25% at 50% -5%, transparent 64%, rgb(71 117 99 / .13) 65%, transparent 66%),
+    radial-gradient(ellipse 66% 33% at 50% -8%, transparent 67%, rgb(95 99 91 / .1) 68%, transparent 69%),
+    radial-gradient(ellipse 82% 40% at 50% -12%, transparent 70%, rgb(123 48 44 / .055) 71%, transparent 72%);
+  content: "";
+  display: block;
+  height: clamp(260px, 24vw, 390px);
+  left: -8%;
+  -webkit-mask-image: linear-gradient(to bottom, #000, #000 56%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000, #000 56%, transparent 100%);
+  opacity: .72;
+  pointer-events: none;
+  position: absolute;
+  right: -8%;
+  top: 0;
+  z-index: -1;
+}
+
+@supports (animation-timeline: view()) {
+  .hero-stone-image {
+    animation: hero-stone-scroll both linear;
+    animation-range: exit 0% exit 100%;
+    animation-timeline: view();
+    transform-origin: 50% 58%;
+  }
+
+  .home-chapters::before {
+    animation: board-grid-arrive both linear;
+    animation-range: entry 0% cover 27%;
+    animation-timeline: view();
+  }
+
+  .home-chapters::after {
+    animation: water-handoff-scroll both linear;
+    animation-range: entry 0% cover 22%;
+    animation-timeline: view();
+  }
+}
+
+@keyframes hero-stone-scroll {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: .84; transform: translateY(42px) scale(.965); }
+}
+
+@keyframes board-grid-arrive {
+  from { opacity: 0; transform: perspective(1100px) rotateX(58deg) translateY(62px) scale(.97); }
+  to { opacity: .54; transform: perspective(1100px) rotateX(58deg) translateY(0) scale(1); }
+}
+
+@keyframes water-handoff-scroll {
+  from { opacity: .16; transform: translateY(-24px) scale(.94); }
+  to { opacity: .72; transform: translateY(8px) scale(1.03); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-stone-image,
+  .home-chapters::before,
+  .home-chapters::after {
+    animation: none !important;
+    transform: none;
+  }
 }
 
 .home-chapter--review::before {
