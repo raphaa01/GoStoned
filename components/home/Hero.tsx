@@ -109,16 +109,6 @@ export function Hero() {
         </div>
       </section>
 
-      <nav className="home-wayfinder" aria-label={copy.kicker}>
-        <div>
-          <a href="#home-play"><span>01</span>{copy.playChapterKicker}</a>
-          <a href="#home-learn"><span>02</span>{copy.learnChapterKicker}</a>
-          <a href="#home-puzzles"><span>03</span>{copy.puzzlesChapterKicker}</a>
-          <a href="#home-review"><span>04</span>{copy.reviewChapterKicker}</a>
-          <a href="#home-progress"><span>05</span>{copy.progressChapterKicker}</a>
-        </div>
-      </nav>
-
       <div className="home-chapters">
         <section aria-labelledby="home-play-title" className="home-chapter home-chapter--play" data-chapter="01" id="home-play">
           <div className="home-chapter-inner">
@@ -132,29 +122,31 @@ export function Hero() {
           </div>
         </section>
 
-        <section aria-labelledby="home-learn-title" className="home-chapter home-chapter--learn" data-chapter="02" id="home-learn">
-          <div className="home-chapter-inner">
-            <div className="chapter-copy">
-              <p className="chapter-kicker"><span>02</span>{copy.learnChapterKicker}</p>
-              <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-              <p>{copy.learnChapterBody}</p>
-              <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+        <div className="home-feature-pair">
+          <section aria-labelledby="home-learn-title" className="home-chapter home-chapter--learn" data-chapter="02" id="home-learn">
+            <div className="home-chapter-inner">
+              <GoBoardScene label={copy.learnChapterTitle} scene="learn" />
+              <div className="chapter-copy">
+                <p className="chapter-kicker"><span>02</span>{copy.learnChapterKicker}</p>
+                <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+                <p>{copy.learnChapterBody}</p>
+                <Link className="chapter-link" href={learnHref}>{copy.learnChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+              </div>
             </div>
-            <GoBoardScene label={copy.learnChapterTitle} scene="learn" />
-          </div>
-        </section>
+          </section>
 
-        <section aria-labelledby="home-puzzles-title" className="home-chapter home-chapter--puzzles" data-chapter="03" id="home-puzzles">
-          <div className="home-chapter-inner">
-            <GoBoardScene label={copy.puzzlesChapterTitle} scene="puzzles" />
-            <div className="chapter-copy">
-              <p className="chapter-kicker"><span>03</span>{copy.puzzlesChapterKicker}</p>
-              <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-              <p>{copy.puzzlesChapterBody}</p>
-              <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+          <section aria-labelledby="home-puzzles-title" className="home-chapter home-chapter--puzzles" data-chapter="03" id="home-puzzles">
+            <div className="home-chapter-inner">
+              <GoBoardScene label={copy.puzzlesChapterTitle} scene="puzzles" />
+              <div className="chapter-copy">
+                <p className="chapter-kicker"><span>03</span>{copy.puzzlesChapterKicker}</p>
+                <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
+                <p>{copy.puzzlesChapterBody}</p>
+                <Link className="chapter-link" href={href("/puzzles")}>{copy.puzzlesChapterAction}<ArrowRight aria-hidden="true" size={18} /></Link>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         <section aria-labelledby="home-review-title" className="home-chapter home-chapter--review" data-chapter="04" id="home-review">
           <div className="home-chapter-inner">
