@@ -153,55 +153,62 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       ) : analysis.status === "failed" ? (
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
       ) : current && result && boardBefore && winrates && scoreLead ? (
-        <>
-          <main className={styles.reviewMain}>
-            <section className={styles.boardPanel}>
-              <AnalysisBoard board={board} bestMove={current.bestMove} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
-              <div className={styles.moveControls}>
-                <button aria-label={copy.previous} disabled={selectedMove <= 1} onClick={() => setSelectedMove((move) => Math.max(1, move - 1))} type="button"><ArrowLeft /></button>
-                <span>{copy.move} <strong>{selectedMove}</strong> / {result.moves.length}</span>
-                <button aria-label={copy.next} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove((move) => Math.min(result.moves.length, move + 1))} type="button"><ArrowRight /></button>
-              </div>
-              <input aria-label={copy.move} className={styles.moveSlider} max={result.moves.length} min="1" onChange={(event) => setSelectedMove(Number(event.target.value))} type="range" value={selectedMove} />
-            </section>
+        <main className={styles.reviewMain}>
+          <section className={`${styles.coachCard} ${styles[current.classification]}`}>
+            <div className={styles.coachCardHeading}>
+              <span>{copy.classifications[current.classification]}</span>
+              <strong>{current.playedMove}</strong>
+            </div>
+            <span className={styles.coachCardLabel}>{copy.explanation}</span>
+            <p>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
+          </section>
 
-            <aside className={styles.insightPanel}>
-              <div className={`${styles.classification} ${styles[current.classification]}`}><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
-              <div className={styles.explanationBlock}>
-                <span>{copy.explanation}</span>
-                <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
-              </div>
-              <div className={styles.metrics}>
-                <article className={styles.winrateMetric}>
-                  <span>{copy.winChance}</span>
-                  <div className={styles.winrateValues}>
-                    <strong><i className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} {formatWinrate(winrates.black)}</strong>
-                    <strong><i className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} {formatWinrate(winrates.white)}</strong>
-                  </div>
-                  <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
+          <section className={styles.boardPanel}>
+            <AnalysisBoard board={board} bestMove={current.bestMove} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
+            <div className={styles.moveControls}>
+              <button aria-label={copy.previous} disabled={selectedMove <= 1} onClick={() => setSelectedMove((move) => Math.max(1, move - 1))} type="button"><ArrowLeft /></button>
+              <span>{copy.move} <strong>{selectedMove}</strong> / {result.moves.length}</span>
+              <button className={styles.nextMove} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove((move) => Math.min(result.moves.length, move + 1))} type="button"><span>{copy.next}</span><ArrowRight /></button>
+            </div>
+            <input aria-label={copy.move} className={styles.moveSlider} max={result.moves.length} min="1" onChange={(event) => setSelectedMove(Number(event.target.value))} type="range" value={selectedMove} />
+            <nav aria-label={copy.movesLabel} className={styles.moveStrip}>
+              {result.moves.map((move) => (
+                <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} className={styles[move.classification]} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button"><small>{move.moveNumber}</small><strong>{move.playedMove}</strong><span>{copy.classifications[move.classification]}</span></button>
+              ))}
+            </nav>
+          </section>
+
+          <aside className={styles.insightPanel}>
+            <div className={`${styles.classification} ${styles[current.classification]}`}><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
+            <div className={styles.explanationBlock}>
+              <span>{copy.explanation}</span>
+              <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
+            </div>
+            <div className={styles.metrics}>
+              <article className={styles.winrateMetric}>
+                <span>{copy.winChance}</span>
+                <div className={styles.winrateValues}>
+                  <strong><i className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} {formatWinrate(winrates.black)}</strong>
+                  <strong><i className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} {formatWinrate(winrates.white)}</strong>
+                </div>
+                <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
+              </article>
+              <article className={styles.scoreMetric}>
+                <span>{copy.score}</span>
+                <strong>{scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +{scoreLead.points.toFixed(1)}</strong>
+              </article>
+            </div>
+            <section className={styles.alternatives}>
+              <h2>{copy.alternatives}</h2>
+              {current.alternatives.map((alternative, index) => (
+                <article key={`${current.moveNumber}:${alternative.move}`}>
+                  <span>{index + 1}</span><strong>{alternative.move}</strong>
+                  <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b></div>
                 </article>
-                <article className={styles.scoreMetric}>
-                  <span>{copy.score}</span>
-                  <strong>{scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +{scoreLead.points.toFixed(1)}</strong>
-                </article>
-              </div>
-              <section className={styles.alternatives}>
-                <h2>{copy.alternatives}</h2>
-                {current.alternatives.map((alternative, index) => (
-                  <article key={`${current.moveNumber}:${alternative.move}`}>
-                    <span>{index + 1}</span><strong>{alternative.move}</strong>
-                    <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b></div>
-                  </article>
-                ))}
-              </section>
-            </aside>
-          </main>
-          <nav aria-label={copy.movesLabel} className={styles.moveStrip}>
-            {result.moves.map((move) => (
-              <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} className={styles[move.classification]} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button"><small>{move.moveNumber}</small><strong>{move.playedMove}</strong><span>{copy.classifications[move.classification]}</span></button>
-            ))}
-          </nav>
-        </>
+              ))}
+            </section>
+          </aside>
+        </main>
       ) : null}
     </div>
   );
