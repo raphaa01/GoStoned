@@ -19,6 +19,9 @@ export type LessonText = {
 };
 
 export type ChapterOneCopy = {
+  chapterLabel: string;
+  backToPath: string;
+  lockedLesson: string;
   kicker: string;
   title: string;
   description: string;
@@ -93,9 +96,12 @@ export const LESSON_SETUPS: Record<ChapterOneLessonId, readonly LessonStone[]> =
 };
 
 const en: ChapterOneCopy = {
-  kicker: "Beginner lesson",
-  title: "The basic rules of Go.",
-  description: "Six short steps show you how to place stones, keep them alive, capture, connect, and make territory.",
+  chapterLabel: "Chapter 1",
+  backToPath: "Back to path",
+  lockedLesson: "Complete the previous lesson first",
+  kicker: "Beginner path",
+  title: "The basics of Go.",
+  description: "Six quick exercises. Learn each rule directly on the board.",
   stepLabel: "Step",
   progressLabel: "Your progress",
   resetProgress: "Start over",
@@ -180,9 +186,12 @@ const en: ChapterOneCopy = {
 };
 
 const de: ChapterOneCopy = {
-  kicker: "Einsteigerlektion",
-  title: "Die Grundregeln von Go.",
-  description: "Sechs kurze Schritte zeigen dir, wie du Steine setzt, sie am Leben hältst, schlägst, verbindest und Gebiet bildest.",
+  chapterLabel: "Kapitel 1",
+  backToPath: "Zurück zum Pfad",
+  lockedLesson: "Schließe zuerst die vorherige Lektion ab",
+  kicker: "Einsteigerpfad",
+  title: "Die Grundlagen von Go.",
+  description: "Sechs kurze Übungen. Lerne jede Regel direkt am Brett.",
   stepLabel: "Schritt",
   progressLabel: "Fortschritt",
   resetProgress: "Von vorn beginnen",
