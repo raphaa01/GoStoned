@@ -40,6 +40,14 @@ class RunManager:
         path = Path(raw)
         return path if path.is_dir() else None
 
+    def _run_dir(self, run_id: str) -> Path:
+        if not run_id or Path(run_id).name != run_id:
+            raise ValueError("Invalid training run ID.")
+        path = self.runs_dir / run_id
+        if not path.is_dir():
+            raise ValueError("This training run no longer exists.")
+        return path
+
     def _launch(self, run_dir: Path) -> int:
         command = [
             sys.executable,
@@ -166,6 +174,45 @@ class RunManager:
             self._launch(run_dir)
             return self.status()
 
+    def runs(self) -> list[dict[str, object]]:
+        current = self._current_dir()
+        result: list[dict[str, object]] = []
+        if not self.runs_dir.is_dir():
+            return result
+        for run_dir in sorted(self.runs_dir.iterdir(), reverse=True):
+            if not run_dir.is_dir():
+                continue
+            state = load_json(run_dir / "state.json", {"status": "unknown"})
+            config = load_json(run_dir / "config.json")
+            preset = config.get("preset") if isinstance(config.get("preset"), dict) else {}
+            result.append(
+                {
+                    "id": run_dir.name,
+                    "selected": current is not None and run_dir.resolve() == current.resolve(),
+                    "status": state.get("status", "unknown"),
+                    "name": state.get("preset_name") or config.get("display_name") or preset.get("name"),
+                    "preset_id": preset.get("id"),
+                    "completed_games": state.get("completed_games", 0),
+                    "target_games": state.get("target_games", preset.get("games", 0)),
+                    "positions": state.get("positions", 0),
+                    "completed_epochs": state.get("completed_epochs", 0),
+                    "target_epochs": state.get("target_epochs", preset.get("epochs", 0)),
+                    "updated_at": state.get("updated_at", config.get("created_at", 0)),
+                    "resumable": state.get("status") in {"stopped", "failed", "quality_rejected"},
+                    "quality_gate": state.get("quality_gate"),
+                }
+            )
+        return result
+
+    def select(self, run_id: str) -> dict[str, object]:
+        with self._lock:
+            current = self.status()
+            if current.get("status") in ACTIVE_STATUSES:
+                raise RuntimeError("Pause or stop the active run before selecting another one.")
+            run_dir = self._run_dir(run_id)
+            atomic_json(self.current_path, {"run_dir": str(run_dir.resolve())})
+            return self.status()
+
     def pause(self) -> dict[str, object]:
         with self._lock:
             run_dir = self._current_dir()
@@ -182,7 +229,21 @@ class RunManager:
                 raise RuntimeError("There is no training run to resume.")
             state = self.status()
             (run_dir / "pause.flag").unlink(missing_ok=True)
-            if state.get("status") in {"stopped", "failed"}:
+            if state.get("status") in {"stopped", "failed", "quality_rejected"}:
+                if state.get("status") == "quality_rejected":
+                    config_path = run_dir / "config.json"
+                    config = load_json(config_path)
+                    preset = config.get("preset")
+                    if not isinstance(preset, dict):
+                        raise RuntimeError("The run preset is missing.")
+                    previous_epochs = int(preset.get("epochs", 0))
+                    extra_epochs = max(4, round(previous_epochs * 0.25))
+                    preset["epochs"] = previous_epochs + extra_epochs
+                    config["preset"] = preset
+                    atomic_json(config_path, config)
+                    RunJournal(run_dir).event(
+                        f"Quality retry adds {extra_epochs} epochs and focuses the weakest KataGo targets."
+                    )
                 (run_dir / "stop.flag").unlink(missing_ok=True)
                 self._launch(run_dir)
             elif state.get("status") != "paused":
@@ -271,6 +332,8 @@ class ControlHandler(BaseHTTPRequestHandler):
             self._json(self.manager.status())
         elif path == "/api/presets":
             self._json([preset.to_public_dict() for preset in PRESETS.values()])
+        elif path == "/api/runs":
+            self._json(self.manager.runs())
         elif path == "/api/logs":
             self._json(self.manager.logs())
         elif path == "/api/arena/models":
@@ -306,6 +369,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                 if body:
                     raise ValueError("Resume does not accept parameters.")
                 result = self.manager.resume()
+            elif path == "/api/select-run":
+                if set(body) != {"run_id"}:
+                    raise ValueError("Only the training run ID is accepted.")
+                result = self.manager.select(str(body["run_id"]))
             elif path == "/api/stop":
                 if body:
                     raise ValueError("Stop does not accept parameters.")

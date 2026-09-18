@@ -56,10 +56,11 @@ The approximately 99 MB KataGo human teacher is checksum-verified and stored in
 
 ## Versions and repeated training
 
-Completed real models are named `GoStone AI v1`, `GoStone AI v2`, and so on.
-The number is assigned only to a run that reaches the final artifact validation;
-failed runs do not consume a version. Smoke runs are listed separately as
-`GoStone AI Technical Test` and are never used as the base for a real model.
+Approved real models are named `GoStone AI v1`, `GoStone AI v2`, and so on.
+A candidate is released only after artifact validation and the KataGo quality
+gate described below. Smoke runs are listed separately as `GoStone AI Technical
+Test`; they verify the pipeline, but are never promoted or used as the base for a
+real model.
 
 A new real run uses a fresh random seed and starts with the newest successful
 model weights. It therefore creates different KataGo games and continues learning
@@ -67,9 +68,14 @@ instead of reproducing the previous model. Every strength profile appears equall
 often as Black and White on every board size over a complete 18-game cycle. Real presets also continue
 9x9, 13x13, and 19x19 games far enough to include actual endgame positions.
 
-More training is not an automatic guarantee of a stronger release. Compare the
-new version with the previous one in fixed test positions and AI games before
-shipping it.
+Every fifth complete KataGo game is kept out of gradient training. After training,
+the candidate and its base model are compared on those unseen positions across
+policy, value, score, ownership, and stone-survival outputs. A candidate must
+improve the combined score by at least 0.5 percent and may not regress any single
+output by more than 3 percent. A rejected candidate remains resumable, but is not
+shown as a released model. Its two weakest outputs receive extra loss weight on
+the next resume. This prevents a demonstrably worse run from silently replacing
+the previous model; AI-vs-AI calibration is still recommended before production.
 
 ## Model contract
 
@@ -92,10 +98,16 @@ league is required before displaying ratings publicly.
 ## Safe controls and resume
 
 The control center supports pause, resume, and safe stop. Completed games are
-stored as independent compressed shards, and every completed epoch has a training
-checkpoint. After a restart, **Resume** reuses both. If a stop is requested
-inside a game, the already analyzed partial game is retained as valid training
-data.
+stored as independent compressed shards. During neural-network training, an
+atomic checkpoint is written after every batch, including optimizer state and the
+exact epoch/batch position. After a restart, **Resume** continues from that point.
+If a stop is requested inside KataGo game generation, the already analyzed
+partial game is retained as valid training data.
+
+The **Saved checkpoints** selector lists older stopped runs as well as the newest
+run. Select the older run and press **Use selected run** before **Resume**. This is
+important when a later smoke test became the current run: the smoke test never
+absorbs or replaces the data of an earlier long run.
 
 Runs live below:
 
