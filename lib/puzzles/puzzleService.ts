@@ -20,6 +20,10 @@ import {
   type PuzzleVariation,
   type PuzzleView,
 } from "./types";
+import {
+  STATIC_DAILY_ENGINE_VERSION,
+  staticDailyPuzzleForDate,
+} from "./staticDailyPuzzle";
 
 type PuzzleRow = {
   id: string;
@@ -119,7 +123,8 @@ function parseVariation(row: PuzzleRow): PuzzleVariation | null {
     throw new Error("Stored puzzle variation is incomplete.");
   }
   const mainLine = row.variation.mainLine.map((ply) => parsePly(ply, row.board_size));
-  if (mainLine.length < 3 || mainLine.length > 5) {
+  const minimumLineLength = row.kind === "daily" ? 1 : 3;
+  if (mainLine.length < minimumLineLength || mainLine.length > 5) {
     throw new Error("Stored puzzle main line has an invalid length.");
   }
   let expectedColor = row.to_play;
@@ -211,10 +216,74 @@ const SELECT_PUZZLE = `
     LEFT JOIN puzzle_attempts attempt
       ON attempt.puzzle_id = puzzle.id AND attempt.player_key = $1`;
 
+async function ensureStaticDailyPuzzle(): Promise<void> {
+  await withTransaction(async (client) => {
+    const dateResult = await client.query<{ today: string }>(
+      "SELECT CURRENT_DATE::text AS today",
+    );
+    const today = dateResult.rows[0]?.today;
+    if (!today) throw new Error("The database did not return its current date.");
+    const daily = staticDailyPuzzleForDate(today);
+    await client.query(
+      `INSERT INTO puzzles AS puzzle (
+         kind, daily_date, board_size, to_play, position_moves, board,
+         solution_move, solution_x, solution_y, alternatives, difficulty,
+         explanation, engine_version, model_name, visits, source_game_id,
+         source_move_number, category, rank_kyu, collection_order, variation
+       )
+       VALUES (
+         'daily', $1, 13, 'black', '[]'::jsonb, $2::jsonb,
+         $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, 0, NULL,
+         0, $11, $12, $13, $14::jsonb
+       )
+       ON CONFLICT (daily_date) WHERE kind = 'daily' DO UPDATE
+         SET board_size = EXCLUDED.board_size,
+             to_play = EXCLUDED.to_play,
+             position_moves = EXCLUDED.position_moves,
+             board = EXCLUDED.board,
+             solution_move = EXCLUDED.solution_move,
+             solution_x = EXCLUDED.solution_x,
+             solution_y = EXCLUDED.solution_y,
+             alternatives = EXCLUDED.alternatives,
+             difficulty = EXCLUDED.difficulty,
+             explanation = EXCLUDED.explanation,
+             engine_version = EXCLUDED.engine_version,
+             model_name = EXCLUDED.model_name,
+             visits = EXCLUDED.visits,
+             source_game_id = NULL,
+             source_move_number = EXCLUDED.source_move_number,
+             category = EXCLUDED.category,
+             rank_kyu = EXCLUDED.rank_kyu,
+             collection_order = EXCLUDED.collection_order,
+             variation = EXCLUDED.variation
+       WHERE puzzle.engine_version IS DISTINCT FROM EXCLUDED.engine_version
+          OR puzzle.model_name IS DISTINCT FROM EXCLUDED.model_name
+          OR puzzle.collection_order IS DISTINCT FROM EXCLUDED.collection_order`,
+      [
+        daily.dailyDate,
+        JSON.stringify(daily.board),
+        daily.solutionMove,
+        daily.solutionX,
+        daily.solutionY,
+        JSON.stringify([{ move: daily.solutionMove, source: "curated" }]),
+        daily.difficulty,
+        JSON.stringify(daily.explanation),
+        STATIC_DAILY_ENGINE_VERSION,
+        daily.sourceId,
+        daily.category,
+        daily.rankKyu,
+        daily.cycleOrder,
+        JSON.stringify(daily.variation),
+      ],
+    );
+  });
+}
+
 export async function readPuzzleHub(
   playerKey: string,
   mode: PuzzleKind,
 ): Promise<PuzzleHub> {
+  if (mode === "daily") await ensureStaticDailyPuzzle();
   const suffix = mode === "daily"
     ? "WHERE puzzle.kind = 'daily' AND puzzle.daily_date = CURRENT_DATE ORDER BY puzzle.id LIMIT 1"
     : `WHERE puzzle.kind = 'practice' AND puzzle.category IS NOT NULL
@@ -230,37 +299,30 @@ export async function readPuzzleHub(
 }
 
 export async function reservePuzzleGenerationDispatch(mode: PuzzleKind): Promise<string | null> {
+  if (mode === "daily") return null;
   return withTransaction(async (client) => {
-    if (mode === "daily") {
-      await client.query(
-        `INSERT INTO puzzle_generation_jobs (kind, target_date, board_size)
-         VALUES ('daily', CURRENT_DATE, 13)
-         ON CONFLICT (target_date) WHERE kind = 'daily' DO NOTHING`,
-      );
-    } else {
-      const categories: PuzzleCategory[] = [];
-      const ranks: number[] = [];
-      const orders: number[] = [];
-      for (const category of PUZZLE_CATEGORIES) {
-        for (let index = 0; index < PUZZLES_PER_CATEGORY; index += 1) {
-          categories.push(category);
-          ranks.push(PUZZLE_KYU_LADDER[index] ?? 15);
-          orders.push(index + 1);
-        }
+    const categories: PuzzleCategory[] = [];
+    const ranks: number[] = [];
+    const orders: number[] = [];
+    for (const category of PUZZLE_CATEGORIES) {
+      for (let index = 0; index < PUZZLES_PER_CATEGORY; index += 1) {
+        categories.push(category);
+        ranks.push(PUZZLE_KYU_LADDER[index] ?? 15);
+        orders.push(index + 1);
       }
-      await client.query(
-        `INSERT INTO puzzle_generation_jobs (
-           kind, board_size, category, rank_kyu, collection_order
-         )
-         SELECT 'practice', 13, catalog.category, catalog.rank_kyu, catalog.collection_order
-           FROM UNNEST($1::text[], $2::int[], $3::int[])
-             AS catalog(category, rank_kyu, collection_order)
-         ON CONFLICT (category, collection_order)
-           WHERE kind = 'practice' AND category IS NOT NULL
-         DO NOTHING`,
-        [categories, ranks, orders],
-      );
     }
+    await client.query(
+      `INSERT INTO puzzle_generation_jobs (
+         kind, board_size, category, rank_kyu, collection_order
+       )
+       SELECT 'practice', 13, catalog.category, catalog.rank_kyu, catalog.collection_order
+         FROM UNNEST($1::text[], $2::int[], $3::int[])
+           AS catalog(category, rank_kyu, collection_order)
+       ON CONFLICT (category, collection_order)
+         WHERE kind = 'practice' AND category IS NOT NULL
+       DO NOTHING`,
+      [categories, ranks, orders],
+    );
 
     const reserved = await client.query<{ id: string }>(
       `WITH candidate AS (
@@ -511,11 +573,15 @@ async function attemptVariationPuzzle(
       ))
       : undefined;
     const intendedReply = variation.mainLine[progress.length + 1] ?? null;
-    const reply = legalReply(placed.board, userColor === "black" ? "white" : "black", [
-      matching?.reply ?? null,
-      intendedReply,
-      ...variation.refutations.map((entry) => entry.reply),
-    ]);
+    const reply = puzzle.kind === "daily" ? null : legalReply(
+      placed.board,
+      userColor === "black" ? "white" : "black",
+      [
+        matching?.reply ?? null,
+        intendedReply,
+        ...variation.refutations.map((entry) => entry.reply),
+      ],
+    );
     const state = await saveVariationAttempt(client, {
       puzzleId: puzzle.id,
       playerKey,

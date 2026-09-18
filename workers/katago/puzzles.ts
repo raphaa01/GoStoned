@@ -23,7 +23,6 @@ import {
   type PuzzleVariation,
 } from "@/lib/puzzles/types";
 import { curatedPuzzle } from "@/lib/puzzles/curatedCatalog";
-import { dailyPuzzleForDate } from "@/lib/puzzles/dailyCatalog";
 import type { KataGoEngine } from "./engine";
 
 type PuzzleJob = {
@@ -210,16 +209,6 @@ function categoryPosition(job: PuzzleJob): PuzzlePosition {
     category: job.category,
     rankKyu: job.rank_kyu,
     collectionOrder: job.collection_order,
-  });
-}
-
-function dailyPosition(job: PuzzleJob): PuzzlePosition {
-  if (!job.target_date) throw new Error("Daily puzzle job has no target date.");
-  const daily = dailyPuzzleForDate(job.target_date);
-  return catalogPosition(job, daily, {
-    category: daily.category,
-    rankKyu: daily.rankKyu,
-    collectionOrder: daily.cycleOrder,
   });
 }
 
@@ -610,18 +599,6 @@ async function ensurePuzzleInventory(): Promise<void> {
       "SELECT pg_try_advisory_xact_lock(hashtext('gostone:puzzle-inventory')) AS locked",
     );
     if (!lock.rows[0]?.locked) return;
-    const day = await client.query<{ today: string }>(
-      "SELECT CURRENT_DATE::text AS today",
-    );
-    const today = day.rows[0];
-    if (!today) return;
-    const dailySize: BoardSize = 13;
-    await client.query(
-      `INSERT INTO puzzle_generation_jobs (kind, target_date, board_size)
-       VALUES ('daily', $1, $2)
-       ON CONFLICT (target_date) WHERE kind = 'daily' DO NOTHING`,
-      [today.today, dailySize],
-    );
     const categories: PuzzleCategory[] = [];
     const ranks: number[] = [];
     const orders: number[] = [];
@@ -656,10 +633,10 @@ async function claimPuzzleJob(jobId?: string): Promise<PuzzleJob | null> {
       WHERE id = (
         SELECT id FROM puzzle_generation_jobs
          WHERE attempts < 3
+           AND kind = 'practice'
            AND ($2::uuid IS NULL OR id = $2::uuid)
            AND (status = 'queued' OR (status = 'running' AND lease_expires_at < NOW()))
-         ORDER BY CASE kind WHEN 'daily' THEN 0 ELSE 1 END,
-                  collection_order NULLS FIRST, category NULLS FIRST, created_at, id
+          ORDER BY collection_order NULLS FIRST, category NULLS FIRST, created_at, id
          FOR UPDATE SKIP LOCKED
          LIMIT 1
       )
@@ -715,13 +692,7 @@ async function analyzeCuratedPuzzle(
   );
   const localCandidates = sortedStoneCandidates(localAnalysis);
   const accepted = new Set(solutions.map((move) => move.toLowerCase()));
-  const localBest = localCandidates[0];
-  if (job.kind === "daily" && (!localBest || !accepted.has(localBest.move.toLowerCase()))) {
-    throw new Error("KataGo did not confirm the catalog answer as the strongest local move.");
-  }
-  let best = job.kind === "daily"
-    ? localBest
-    : localCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
+  let best = localCandidates.find((candidate) => accepted.has(candidate.move.toLowerCase()));
   let mainLine = best
     ? lineFromCandidate(position.board, "black", best, job.board_size, 3)
     : [];
@@ -806,12 +777,13 @@ async function generatePuzzle(
   engineVersion: string,
   modelName: string,
 ): Promise<void> {
-  const position = job.kind === "daily"
-    ? dailyPosition(job)
-    : job.category
-      ? categoryPosition(job)
-      : await sourceFromGame(job) ?? syntheticPosition(job);
-  if (job.kind === "daily" || job.category) {
+  if (job.kind === "daily") {
+    throw new Error("Daily puzzles are static and must not be sent to KataGo.");
+  }
+  const position = job.category
+    ? categoryPosition(job)
+    : await sourceFromGame(job) ?? syntheticPosition(job);
+  if (job.category) {
     const curated = await analyzeCuratedPuzzle(engine, job, position, visits);
     const point = fromGtpCoordinate(job.board_size, curated.best.move);
     if (point.x === undefined || point.y === undefined) {

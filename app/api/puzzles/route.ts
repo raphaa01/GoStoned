@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     assertExpectedPlayer(request, playerKey);
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.puzzleRead, playerKey);
     const hub = await readPuzzleHub(playerKey, mode);
-    if (hub.status === "generating") {
+    if (mode === "practice" && hub.status === "generating") {
       const targetId = await reservePuzzleGenerationDispatch(mode);
       if (targetId) {
         after(() => safelyDispatch(async () => {
