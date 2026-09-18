@@ -7,6 +7,7 @@ const migration = readFileSync(new URL("../../db/migrations/019_katago_puzzles.s
 const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_variation_training.sql", import.meta.url), "utf8");
 const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curated_puzzle_board_guard.sql", import.meta.url), "utf8");
 const dailyCycleMigration = readFileSync(new URL("../../db/migrations/036_daily_puzzle_cycle.sql", import.meta.url), "utf8");
+const staticDailyMigration = readFileSync(new URL("../../db/migrations/038_static_daily_puzzle_rotation.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
@@ -38,9 +39,21 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
     schema.replaceAll("\r\n", "\n").includes(dailyCycleMigration.replaceAll("\r\n", "\n")),
     "Canonical schema must contain migration 036 exactly.",
   );
-  assert.match(worker, /job\.kind === "daily"\s*\? dailyPosition\(job\)/);
-  assert.match(worker, /KataGo did not confirm the catalog answer as the strongest local move/);
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").includes(staticDailyMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must contain migration 038 exactly.",
+  );
+  assert.match(service, /ensureStaticDailyPuzzle/);
+  assert.match(service, /STATIC_DAILY_ENGINE_VERSION/);
+  assert.match(service, /if \(mode === "daily"\) return null/);
+  assert.match(service, /puzzle\.kind === "daily" \? null : legalReply/);
+  assert.match(worker, /AND kind = 'practice'/);
+  assert.match(worker, /Daily puzzles are static and must not be sent to KataGo/);
+  assert.doesNotMatch(worker, /dailyPosition/);
+  assert.match(route, /mode === "practice" && hub\.status === "generating"/);
   assert.match(dailyCycleMigration, /collection_order BETWEEN 1 AND 20/);
+  assert.match(staticDailyMigration, /DELETE FROM puzzle_generation_jobs\s+WHERE kind = 'daily'/);
+  assert.match(staticDailyMigration, /visits BETWEEN 0 AND 10000/);
 });
 
 test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {
