@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, Lightbulb, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Lightbulb, Lock, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import type { Position } from "@/lib/game/types";
 import {
@@ -102,7 +102,7 @@ export function ChapterOne() {
   const copy = chapterOneCopy(locale);
   const [activeId, setActiveId] = useState<ChapterOneLessonId>(CHAPTER_ONE_LESSON_IDS[0]);
   const [session, setSession] = useState<LessonSession>(() => initialSession(activeId));
-  const workspaceRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState<"path" | "lesson">("path");
   const savedProgress = useSyncExternalStore(subscribeToProgress, progressSnapshot, serverProgressSnapshot);
   const completedIds = savedLessonIds(savedProgress);
 
@@ -111,12 +111,10 @@ export function ChapterOne() {
   const completionPercentage = Math.round((completedIds.length / CHAPTER_ONE_LESSONS.length) * 100);
   const allComplete = completedIds.length === CHAPTER_ONE_LESSONS.length;
 
-  const selectLesson = (id: ChapterOneLessonId, scroll = true) => {
+  const selectLesson = (id: ChapterOneLessonId) => {
     setActiveId(id);
     setSession(initialSession(id));
-    if (scroll) {
-      window.requestAnimationFrame(() => workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-    }
+    setView("lesson");
   };
 
   const completeLesson = (nextSession: LessonSession) => {
@@ -177,146 +175,156 @@ export function ChapterOne() {
   const ownedTerritory = activeId === "territory" && session.completed ? [TERRITORY_POINT] : [];
   const choicePositions = activeId === "place" ? [PLACE_MOVE] : [];
   const nextId = CHAPTER_ONE_LESSONS[activeIndex + 1]?.id;
-  const previousId = CHAPTER_ONE_LESSONS[activeIndex - 1]?.id;
   const canRestart = session.hintVisible || session.feedback !== null || session.markedPositions.length > 0;
+  const nextLessonIndex = CHAPTER_ONE_LESSONS.findIndex(({ id }) => !completedIds.includes(id));
+  const currentPathIndex = nextLessonIndex === -1 ? CHAPTER_ONE_LESSONS.length - 1 : nextLessonIndex;
 
   return (
     <div className="content-page learn-path">
-      <section aria-labelledby="beginner-lesson-title" className="learn-chapter">
-        <header className="learn-course__header">
-          <div className="learn-course__intro">
-            <span className="section-kicker">{copy.kicker}</span>
-            <h1 className="product-page-title" id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
-            <p>{copy.description}</p>
-          </div>
+      <section aria-labelledby="beginner-lesson-title" className="learn-chapter learn-course">
+        {view === "path" ? (
+          <div className="learn-map">
+            <header className="learn-map__header">
+              <span className="section-kicker">{copy.kicker}</span>
+              <span className="learn-map__chapter">{copy.chapterLabel}</span>
+              <h1 className="product-page-title" id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
+              <p>{copy.description}</p>
+              <div aria-label={`${copy.progressLabel}: ${completionPercentage}%`} className="learn-map__progress">
+                <span aria-hidden="true"><i style={{ width: `${completionPercentage}%` }} /></span>
+                <strong>{completedIds.length} / {CHAPTER_ONE_LESSONS.length}</strong>
+              </div>
+            </header>
 
-          <div aria-label={`${copy.progressLabel}: ${completionPercentage}%`} className="learn-progress">
-            <div className="learn-progress__copy">
-              <span>{copy.stepLabel} {activeIndex + 1} / {CHAPTER_ONE_LESSONS.length}</span>
-            </div>
-            <div aria-hidden="true" className="learn-progress__track">
-              <span style={{ width: `${completionPercentage}%` }} />
-            </div>
+            <nav aria-label={copy.lessonNavigation} className="learn-pathway">
+              <span aria-hidden="true" className="learn-pathway__line" />
+              {CHAPTER_ONE_LESSONS.map(({ id }, index) => {
+                const complete = completedIds.includes(id);
+                const unlocked = index === 0 || completedIds.includes(CHAPTER_ONE_LESSONS[index - 1].id);
+                const current = index === currentPathIndex && !allComplete;
+                return (
+                  <div className={`learn-pathway__item${complete ? " is-complete" : ""}${current ? " is-current" : ""}${!unlocked ? " is-locked" : ""}`} key={id}>
+                    <button
+                      aria-current={current ? "step" : undefined}
+                      aria-label={!unlocked ? `${copy.lessons[id].shortTitle}. ${copy.lockedLesson}` : undefined}
+                      className="learn-node"
+                      disabled={!unlocked}
+                      onClick={() => selectLesson(id)}
+                      type="button"
+                    >
+                      <span className="learn-node__stone">
+                        {complete ? <Check aria-hidden="true" size={23} /> : !unlocked ? <Lock aria-hidden="true" size={18} /> : index + 1}
+                      </span>
+                      <span className="learn-node__copy">
+                        <small>{copy.stepLabel} {index + 1}</small>
+                        <strong>{copy.lessons[id].shortTitle}</strong>
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </nav>
+
             {completedIds.length > 0 ? (
               <button
-                className="learn-progress__reset"
+                className="learn-map__reset"
                 onClick={() => {
                   saveProgress([]);
-                  selectLesson(CHAPTER_ONE_LESSON_IDS[0], false);
+                  setActiveId(CHAPTER_ONE_LESSON_IDS[0]);
+                  setSession(initialSession(CHAPTER_ONE_LESSON_IDS[0]));
                 }}
                 type="button"
               >
-                <RotateCcw aria-hidden="true" size={13} /> {copy.resetProgress}
+                <RotateCcw aria-hidden="true" size={14} /> {copy.resetProgress}
               </button>
             ) : null}
+
+            {allComplete ? (
+              <aside className="learn-chapter-complete">
+                <Check aria-hidden="true" size={21} />
+                <div><strong>{copy.chapterComplete}</strong><p>{copy.chapterCompleteBody}</p></div>
+                <Link className="button button--secondary" href={href("/play?size=9")}>{copy.playNine} <ArrowRight aria-hidden="true" size={17} /></Link>
+              </aside>
+            ) : null}
           </div>
-        </header>
-
-        <nav aria-label={copy.lessonNavigation} className="lesson-rail">
-          {CHAPTER_ONE_LESSONS.map(({ id }, index) => {
-            const complete = completedIds.includes(id);
-            const active = id === activeId;
-            return (
-              <button
-                aria-current={active ? "step" : undefined}
-                className={`lesson-rail__item${active ? " is-active" : ""}${complete ? " is-complete" : ""}`}
-                key={id}
-                onClick={() => selectLesson(id, false)}
-                type="button"
-              >
-                <span className="lesson-rail__number">{complete ? <Check aria-hidden="true" size={13} /> : index + 1}</span>
-                <span>{copy.lessons[id].shortTitle}</span>
+        ) : (
+          <article className="learn-lesson-focus">
+            <header className="learn-lesson-focus__topbar">
+              <button className="lesson-text-action" onClick={() => setView("path")} type="button">
+                <ArrowLeft aria-hidden="true" size={17} /> {copy.backToPath}
               </button>
-            );
-          })}
-        </nav>
-
-        <article className="lesson-workspace" ref={workspaceRef}>
-          <div className="lesson-workspace__board-panel">
-            <header>
-              <span>{copy.boardLabel}</span>
-              <strong className="lesson-turn"><i aria-hidden="true" /> {activeId === "liberties" ? copy.markLiberties : copy.blackToPlay}</strong>
+              <span>{copy.stepLabel} {activeIndex + 1} / {CHAPTER_ONE_LESSONS.length}</span>
             </header>
-            <LessonBoard
-              choicePositions={choicePositions}
-              copy={copy}
-              disabled={session.completed}
-              hintPositions={hintPositions}
-              markedPositions={session.markedPositions}
-              onPlay={handlePlay}
-              ownedTerritory={ownedTerritory}
-              size={LESSON_BOARD_SIZE}
-              stones={session.stones}
-              territoryTargets={territoryTargets}
-            />
-          </div>
 
-          <div className="lesson-workspace__lesson-panel">
-            <div className="lesson-copy">
-              <span className="lesson-copy__eyebrow">{copy.stepLabel} {activeIndex + 1} / {CHAPTER_ONE_LESSONS.length}</span>
-              <h2>{lesson.title.replace(/[.!?。！？]+$/, "")}</h2>
-              <p>{lesson.summary}</p>
-            </div>
-
-            <section className="lesson-task" aria-labelledby="lesson-task-title">
-              <h3 id="lesson-task-title">{copy.instructionLabel}</h3>
+            <div className="learn-lesson-focus__intro">
+              <span className="section-kicker">{copy.lessons[activeId].shortTitle}</span>
+              <h1 id="beginner-lesson-title">{lesson.title.replace(/[.!?。！？]+$/, "")}</h1>
               <p>{lesson.instruction}</p>
-            </section>
-
-            {session.feedback && session.feedbackTone ? (
-              <div aria-atomic="true" aria-live="polite" className={`lesson-feedback is-${session.feedbackTone}`} role="status">
-                {session.feedbackTone === "success" ? <Check aria-hidden="true" size={17} /> : null}
-                <p>{session.feedback}</p>
-              </div>
-            ) : null}
-
-            {session.hintVisible && !session.completed ? (
-              <div className="lesson-hint"><Lightbulb aria-hidden="true" size={16} /><p>{lesson.hint}</p></div>
-            ) : null}
-
-            <div className="lesson-actions">
-              {!session.completed ? (
-                <button
-                  className="lesson-text-action"
-                  onClick={() => setSession((current) => ({ ...current, hintVisible: !current.hintVisible }))}
-                  type="button"
-                >
-                  <Lightbulb aria-hidden="true" size={15} /> {session.hintVisible ? copy.hideHint : copy.hint}
-                </button>
-              ) : null}
-              {canRestart ? (
-                <button className="lesson-text-action" onClick={() => setSession(initialSession(activeId))} type="button">
-                  <RotateCcw aria-hidden="true" size={15} /> {copy.restartLesson}
-                </button>
-              ) : null}
             </div>
 
-            <footer className="lesson-pagination">
-              {previousId ? (
-                <button className="lesson-pagination__previous" onClick={() => selectLesson(previousId)} type="button">
-                  <ArrowLeft aria-hidden="true" size={17} /> {copy.previousLesson}
-                </button>
-              ) : <span />}
-              {nextId ? (
-                <button className="button button--primary" disabled={!session.completed} onClick={() => selectLesson(nextId)} type="button">
-                  {copy.nextLesson} <ArrowRight aria-hidden="true" size={17} />
-                </button>
-              ) : session.completed ? (
-                <Link className="button button--primary" href={href("/play?size=9")}>{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></Link>
-              ) : (
-                <button className="button button--primary" disabled type="button">{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></button>
-              )}
-            </footer>
-          </div>
-        </article>
+            <div className="learn-lesson-focus__workspace">
+              <div className="lesson-workspace__board-panel">
+                <header>
+                  <span>{copy.boardLabel}</span>
+                  <strong className="lesson-turn"><i aria-hidden="true" /> {activeId === "liberties" ? copy.markLiberties : copy.blackToPlay}</strong>
+                </header>
+                <LessonBoard
+                  choicePositions={choicePositions}
+                  copy={copy}
+                  disabled={session.completed}
+                  hintPositions={hintPositions}
+                  markedPositions={session.markedPositions}
+                  onPlay={handlePlay}
+                  ownedTerritory={ownedTerritory}
+                  size={LESSON_BOARD_SIZE}
+                  stones={session.stones}
+                  territoryTargets={territoryTargets}
+                />
+              </div>
 
-        {allComplete ? (
-          <aside className="learn-chapter-complete">
-            <Check aria-hidden="true" size={21} />
-            <div><strong>{copy.chapterComplete}</strong><p>{copy.chapterCompleteBody}</p></div>
-            <Link className="button button--secondary" href={href("/play?size=9")}>{copy.playNine} <ArrowRight aria-hidden="true" size={17} /></Link>
-          </aside>
-        ) : null}
+              <div className="learn-lesson-focus__controls">
+                {session.feedback && session.feedbackTone ? (
+                  <div aria-atomic="true" aria-live="polite" className={`lesson-feedback is-${session.feedbackTone}`} role="status">
+                    {session.feedbackTone === "success" ? <Check aria-hidden="true" size={17} /> : null}
+                    <p>{session.feedback}</p>
+                  </div>
+                ) : null}
+
+                {session.hintVisible && !session.completed ? (
+                  <div className="lesson-hint"><Lightbulb aria-hidden="true" size={16} /><p>{lesson.hint}</p></div>
+                ) : null}
+
+                <div className="lesson-actions">
+                  {!session.completed ? (
+                    <button
+                      className="lesson-text-action"
+                      onClick={() => setSession((current) => ({ ...current, hintVisible: !current.hintVisible }))}
+                      type="button"
+                    >
+                      <Lightbulb aria-hidden="true" size={15} /> {session.hintVisible ? copy.hideHint : copy.hint}
+                    </button>
+                  ) : null}
+                  {canRestart ? (
+                    <button className="lesson-text-action" onClick={() => setSession(initialSession(activeId))} type="button">
+                      <RotateCcw aria-hidden="true" size={15} /> {copy.restartLesson}
+                    </button>
+                  ) : null}
+                </div>
+
+                <footer className="learn-lesson-focus__next">
+                  {nextId ? (
+                    <button className="button button--primary" disabled={!session.completed} onClick={() => selectLesson(nextId)} type="button">
+                      {copy.nextLesson} <ArrowRight aria-hidden="true" size={17} />
+                    </button>
+                  ) : session.completed ? (
+                    <Link className="button button--primary" href={href("/play?size=9")}>{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></Link>
+                  ) : (
+                    <button className="button button--primary" disabled type="button">{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></button>
+                  )}
+                </footer>
+              </div>
+            </div>
+          </article>
+        )}
       </section>
     </div>
   );

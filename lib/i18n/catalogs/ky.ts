@@ -931,9 +931,12 @@ export const kyFriends = {
 } satisfies FriendsCopy;
 
 export const kyChapterOne = {
-  "kicker": "Башталгыч сабак",
-  "title": "Go негизги эрежелери.",
-  "description": "Алты кыска кадам таштарды кантип жайгаштырууну, аларды тирүү кармоону, басып алууну, туташтырып, аймакты кантип түзүүнү көрсөтөт.",
+  "chapterLabel": "1-бөлүм",
+  "backToPath": "Жолго кайтуу",
+  "lockedLesson": "Адегенде мурунку сабакты бүтүрүңүз",
+  "kicker": "Башталгыч жол",
+  "title": "Go негиздери.",
+  "description": "Алты кыска көнүгүү. Ар бир эрежени тактадан үйрөнүңүз.",
   "stepLabel": "Кадам",
   "progressLabel": "Сиздин прогресс",
   "resetProgress": "Кайра баштаңыз",
