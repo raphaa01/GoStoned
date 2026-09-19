@@ -97,6 +97,58 @@ function saveProgress(ids: readonly ChapterOneLessonId[]) {
   window.dispatchEvent(new Event(PROGRESS_EVENT));
 }
 
+function LessonPathIcon({ id }: { id: ChapterOneLessonId }) {
+  return (
+    <svg aria-hidden="true" className={`learn-symbol learn-symbol--${id}`} viewBox="0 0 64 64">
+      <path className="learn-symbol__grid" d="M12 20h40M12 32h40M12 44h40M20 12v40M32 12v40M44 12v40" />
+      {id === "place" ? <circle className="learn-symbol__black" cx="32" cy="32" r="8" /> : null}
+      {id === "liberties" ? (
+        <>
+          <circle className="learn-symbol__black" cx="32" cy="32" r="7" />
+          <circle className="learn-symbol__mark" cx="32" cy="20" r="3" />
+          <circle className="learn-symbol__mark" cx="20" cy="32" r="3" />
+          <circle className="learn-symbol__mark" cx="44" cy="32" r="3" />
+          <circle className="learn-symbol__mark" cx="32" cy="44" r="3" />
+        </>
+      ) : null}
+      {id === "capture" ? (
+        <>
+          <circle className="learn-symbol__white" cx="32" cy="32" r="7" />
+          <circle className="learn-symbol__black" cx="32" cy="20" r="6" />
+          <circle className="learn-symbol__black" cx="20" cy="32" r="6" />
+          <circle className="learn-symbol__black" cx="44" cy="32" r="6" />
+          <circle className="learn-symbol__target" cx="32" cy="44" r="5" />
+        </>
+      ) : null}
+      {id === "escape" ? (
+        <>
+          <circle className="learn-symbol__white" cx="32" cy="20" r="6" />
+          <circle className="learn-symbol__white" cx="20" cy="32" r="6" />
+          <circle className="learn-symbol__white" cx="44" cy="32" r="6" />
+          <circle className="learn-symbol__black" cx="32" cy="32" r="7" />
+          <circle className="learn-symbol__mark" cx="32" cy="44" r="5" />
+        </>
+      ) : null}
+      {id === "connect" ? (
+        <>
+          <circle className="learn-symbol__black" cx="20" cy="32" r="7" />
+          <circle className="learn-symbol__mark" cx="32" cy="32" r="6" />
+          <circle className="learn-symbol__black" cx="44" cy="32" r="7" />
+        </>
+      ) : null}
+      {id === "territory" ? (
+        <>
+          <circle className="learn-symbol__black" cx="32" cy="20" r="6" />
+          <circle className="learn-symbol__black" cx="20" cy="32" r="6" />
+          <circle className="learn-symbol__black" cx="44" cy="32" r="6" />
+          <circle className="learn-symbol__black" cx="32" cy="44" r="6" />
+          <rect className="learn-symbol__territory" height="10" rx="2" width="10" x="27" y="27" />
+        </>
+      ) : null}
+    </svg>
+  );
+}
+
 export function ChapterOne() {
   const { href, locale } = useI18n();
   const copy = chapterOneCopy(locale);
@@ -185,7 +237,6 @@ export function ChapterOne() {
         {view === "path" ? (
           <div className="learn-map">
             <header className="learn-map__header">
-              <span className="section-kicker">{copy.kicker}</span>
               <span className="learn-map__chapter">{copy.chapterLabel}</span>
               <h1 className="product-page-title" id="beginner-lesson-title">{copy.title.replace(/[.!?。！？]+$/, "")}</h1>
               <p>{copy.description}</p>
@@ -196,7 +247,9 @@ export function ChapterOne() {
             </header>
 
             <nav aria-label={copy.lessonNavigation} className="learn-pathway">
-              <span aria-hidden="true" className="learn-pathway__line" />
+              <svg aria-hidden="true" className="learn-pathway__line" preserveAspectRatio="none" viewBox="0 0 100 708">
+                <path d="M30 59 C30 118 70 118 70 177 S30 236 30 295 S70 354 70 413 S30 472 30 531 S70 590 70 649" />
+              </svg>
               {CHAPTER_ONE_LESSONS.map(({ id }, index) => {
                 const complete = completedIds.includes(id);
                 const unlocked = index === 0 || completedIds.includes(CHAPTER_ONE_LESSONS[index - 1].id);
@@ -211,13 +264,12 @@ export function ChapterOne() {
                       onClick={() => selectLesson(id)}
                       type="button"
                     >
-                      <span className="learn-node__stone">
-                        {complete ? <Check aria-hidden="true" size={23} /> : !unlocked ? <Lock aria-hidden="true" size={18} /> : index + 1}
+                      <span className="learn-node__tile">
+                        <LessonPathIcon id={id} />
                       </span>
-                      <span className="learn-node__copy">
-                        <small>{copy.stepLabel} {index + 1}</small>
-                        <strong>{copy.lessons[id].shortTitle}</strong>
-                      </span>
+                      {complete ? <span className="learn-node__status"><Check aria-hidden="true" size={16} /></span> : null}
+                      {!unlocked ? <span className="learn-node__status"><Lock aria-hidden="true" size={14} /></span> : null}
+                      {current ? <span aria-hidden="true" className="learn-node__label">{copy.lessons[id].shortTitle}<i /></span> : null}
                     </button>
                   </div>
                 );
