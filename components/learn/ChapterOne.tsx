@@ -149,7 +149,7 @@ function LessonPathIcon({ id }: { id: ChapterOneLessonId }) {
   );
 }
 
-export function ChapterOne() {
+export function ChapterOne({ embedded = false, nextChapterLabel, onFinish }: { embedded?: boolean; nextChapterLabel?: string; onFinish?: () => void } = {}) {
   const { href, locale } = useI18n();
   const copy = chapterOneCopy(locale);
   const [activeId, setActiveId] = useState<ChapterOneLessonId>(CHAPTER_ONE_LESSON_IDS[0]);
@@ -232,7 +232,7 @@ export function ChapterOne() {
   const currentPathIndex = nextLessonIndex === -1 ? CHAPTER_ONE_LESSONS.length - 1 : nextLessonIndex;
 
   return (
-    <div className="content-page learn-path">
+    <div className={embedded ? "learn-path" : "content-page learn-path"}>
       <section aria-labelledby="beginner-lesson-title" className="learn-chapter learn-course">
         {view === "path" ? (
           <div className="learn-map">
@@ -294,7 +294,12 @@ export function ChapterOne() {
               <aside className="learn-chapter-complete">
                 <Check aria-hidden="true" size={21} />
                 <div><strong>{copy.chapterComplete}</strong><p>{copy.chapterCompleteBody}</p></div>
-                <Link className="button button--secondary" href={href("/play?size=9")}>{copy.playNine} <ArrowRight aria-hidden="true" size={17} /></Link>
+                <div className="learn-chapter-complete__actions">
+                  {onFinish && nextChapterLabel ? (
+                    <button className="button button--primary" onClick={onFinish} type="button">{nextChapterLabel} <ArrowRight aria-hidden="true" size={17} /></button>
+                  ) : null}
+                  <Link className="button button--secondary" href={href("/play?size=9")}>{copy.playNine} <ArrowRight aria-hidden="true" size={17} /></Link>
+                </div>
               </aside>
             ) : null}
           </div>
