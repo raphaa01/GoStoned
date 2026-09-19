@@ -7,27 +7,23 @@ import { FormEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields } from "@/lib/auth/errorFields";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
-import {
-  KNOWN_RANK_OPTIONS,
-  type StartingStrengthEstimate,
-} from "@/lib/rating/preferences";
+import type { StartingStrength } from "@/lib/rating/preferences";
 import { useAuth } from "./AuthProvider";
+import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
 
 export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | null }) {
   const { user, refresh } = useAuth();
   const { dictionary, href } = useI18n();
   const router = useRouter();
   const [username, setUsername] = useState("");
-  const [startingStrength, setStartingStrength] = useState<StartingStrengthEstimate>("unspecified");
-  const [knownRank, setKnownRank] = useState("12k");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; username: boolean } | null>(null);
   const usernameHintId = useId();
   const errorId = useId();
   const usernameInput = useRef<HTMLInputElement>(null);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createAccount(strength: StartingStrength): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -36,8 +32,8 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username,
-          startingStrength,
-          knownRank: startingStrength === "known" ? knownRank : null,
+          startingStrength: strength.estimate,
+          knownRank: strength.knownRank,
         }),
       });
       const body = (await response.json()) as { ok: boolean; code?: string };
@@ -50,11 +46,10 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
         if (usernameAffected) {
           window.requestAnimationFrame(() => usernameInput.current?.focus());
         }
-        return;
+        setOnboardingOpen(false);
+        return false;
       }
-      await refresh();
-      router.push(href(returnTo ?? "/profile"));
-      router.refresh();
+      return true;
     } catch (requestError) {
       setError({
         message: requestError instanceof Error
@@ -62,6 +57,25 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
           : dictionary.auth.errors.request_failed,
         username: false,
       });
+      setOnboardingOpen(false);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setOnboardingOpen(true);
+  }
+
+  async function finishRegistration(destination?: "/learn") {
+    setBusy(true);
+    try {
+      await refresh();
+      router.push(href(destination ?? returnTo ?? "/profile"));
+      router.refresh();
     } finally {
       setBusy(false);
     }
@@ -110,42 +124,6 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
           <small id={usernameHintId}>{dictionary.auth.usernameHint}</small>
         </label>
 
-        <details className="auth-strength">
-          <summary>{dictionary.auth.startingStrength}</summary>
-          <div className="auth-strength-content">
-            <p>{dictionary.auth.startingStrengthHint}</p>
-            <label>
-              <span className="sr-only">{dictionary.auth.startingStrength}</span>
-              <span className="input-wrap">
-                <select
-                  aria-label={dictionary.auth.startingStrength}
-                  onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}
-                  value={startingStrength}
-                >
-                  <option value="unspecified">{dictionary.auth.strengthUnspecified}</option>
-                  <option value="new">{dictionary.auth.strengthNew}</option>
-                  <option value="beginner">{dictionary.auth.strengthBeginner}</option>
-                  <option value="intermediate">{dictionary.auth.strengthIntermediate}</option>
-                  <option value="experienced">{dictionary.auth.strengthExperienced}</option>
-                  <option value="known">{dictionary.auth.strengthKnown}</option>
-                </select>
-              </span>
-            </label>
-            {startingStrength === "known" ? (
-              <label>
-                <span>{dictionary.auth.knownRank}</span>
-                <select
-                  aria-label={dictionary.auth.knownRank}
-                  onChange={(event) => setKnownRank(event.target.value)}
-                  value={knownRank}
-                >
-                  {KNOWN_RANK_OPTIONS.map((rank) => <option key={rank} value={rank}>{rank}</option>)}
-                </select>
-              </label>
-            ) : null}
-          </div>
-        </details>
-
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}
@@ -158,6 +136,15 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
           {dictionary.auth.restartSocialSignup}
         </Link>
       </p>
+      {onboardingOpen ? (
+        <BeginnerOnboardingDialog
+          busy={busy}
+          onCancel={() => setOnboardingOpen(false)}
+          onCreateAccount={createAccount}
+          onFinish={finishRegistration}
+          open
+        />
+      ) : null}
     </section>
   );
 }

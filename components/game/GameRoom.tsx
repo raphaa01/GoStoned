@@ -56,9 +56,27 @@ import type { GoStoneJapaneseSettlementProposal } from "@/lib/bot/modelV1";
 import { GamePanel } from "./GamePanel";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
+import { ScoringHelpDialog } from "./ScoringHelpDialog";
 
 type Confirmation = "resign" | "leave" | "block" | null;
 const BLOCKED_CHAT_RECHECK_MS = 15_000;
+const SCORING_HELP_HIDDEN_PREFIX = "gostone:scoring-help:v1:hidden:";
+
+function scoringHelpIsHidden(playerKey: string) {
+  try {
+    return window.localStorage.getItem(`${SCORING_HELP_HIDDEN_PREFIX}${playerKey}`) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function rememberScoringHelpHidden(playerKey: string) {
+  try {
+    window.localStorage.setItem(`${SCORING_HELP_HIDDEN_PREFIX}${playerKey}`, "true");
+  } catch {
+    // The guide remains available for this game when storage is unavailable.
+  }
+}
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const router = useRouter();
@@ -82,6 +100,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [estimateBusy, setEstimateBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
+  const [showScoringHelp, setShowScoringHelp] = useState(false);
   const [identityChanged, setIdentityChanged] = useState(false);
   const [gameAnnouncement, setGameAnnouncement] = useState("");
   const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
@@ -149,6 +168,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setConfirmation(null);
       setShowResult(false);
       setBusy(false);
+      setShowScoringHelp(false);
     }
     if (presentationChanged) {
       setConnectionAnnouncement(announce ? connectionAnnouncementText(next) : "");
@@ -181,6 +201,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setBlockAnnouncement("");
     setConfirmation(null);
     setShowResult(false);
+    setShowScoringHelp(false);
     setGameAnnouncement("");
   }, [moveOperationLatch]);
 
@@ -244,7 +265,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ) {
       return false;
     }
-    const nextGame = gameStateFromPoll(acceptedGame.current, response, receivedAt);
+    const previousGame = acceptedGame.current;
+    const nextGame = gameStateFromPoll(previousGame, response, receivedAt);
     if (!nextGame) return false;
     if (!deriveGameOpponent(nextGame, playerKey)) {
       identityAuthority.current.invalidate();
@@ -255,6 +277,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     latestGameVersion.current = nextGame.version;
     gameStatus.current = nextGame.status;
     const announcement = describeGameChange(acceptedGame.current, nextGame, copy);
+    if (
+      nextGame.status === "active"
+      && nextGame.phase === "scoring"
+      && previousGame?.phase !== "scoring"
+      && !scoringHelpIsHidden(playerKey)
+    ) {
+      setShowScoringHelp(true);
+    }
     acceptedGame.current = nextGame;
     if (announcement) setGameAnnouncement(announcement);
     setGame(nextGame);
@@ -1412,6 +1442,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onShowScoringHelp={() => setShowScoringHelp(true)}
             onResign={() => {
               if (!gameInteractionAllowed) return;
               setError(null);
@@ -1504,6 +1535,22 @@ export function GameRoom({ gameId }: { gameId: string }) {
         onViewBoard={() => setShowResult(false)}
         open={showResult}
         playerKey={playerKey}
+      />
+      <ScoringHelpDialog
+        finalFocusRef={boardStatus}
+        onClose={() => setShowScoringHelp(false)}
+        onHideNextTime={() => {
+          if (playerKey) rememberScoringHelpHidden(playerKey);
+          setShowScoringHelp(false);
+        }}
+        open={Boolean(
+          showScoringHelp
+          && game
+          && (
+            (game.status === "active" && game.phase === "scoring")
+            || (game.status === "finished" && game.finishReason === "score" && game.scoring)
+          ),
+        )}
       />
     </div>
   );

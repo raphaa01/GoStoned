@@ -9,10 +9,8 @@ import { affectedAuthFields, type AuthField } from "@/lib/auth/errorFields";
 import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
-import {
-  KNOWN_RANK_OPTIONS,
-  type StartingStrengthEstimate,
-} from "@/lib/rating/preferences";
+import type { StartingStrength } from "@/lib/rating/preferences";
+import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
 
 type FormError = {
   message: string;
@@ -39,8 +37,7 @@ export function AuthForm({
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [startingStrength, setStartingStrength] = useState<StartingStrengthEstimate>("unspecified");
-  const [knownRank, setKnownRank] = useState("12k");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
   const usernameHintId = useId();
@@ -54,8 +51,7 @@ export function AuthForm({
     return `/api/auth/oauth/${provider}?${parameters.toString()}`;
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function authenticate(strength?: StartingStrength): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -66,8 +62,8 @@ export function AuthForm({
           ? {
               username,
               password,
-              startingStrength,
-              knownRank: startingStrength === "known" ? knownRank : null,
+              startingStrength: strength?.estimate ?? "unspecified",
+              knownRank: strength?.knownRank ?? null,
             }
           : { username, password }),
       });
@@ -82,11 +78,15 @@ export function AuthForm({
           if (fields[0] === "username") usernameInput.current?.focus();
           else if (fields[0] === "password") passwordInput.current?.focus();
         });
-        return;
+        setOnboardingOpen(false);
+        return false;
       }
-      await refresh();
-      router.push(href(returnTo ?? (mode === "register" ? "/profile" : "/play")));
-      router.refresh();
+      if (mode === "login") {
+        await refresh();
+        router.push(href(returnTo ?? "/play"));
+        router.refresh();
+      }
+      return true;
     } catch (requestError) {
       setError({
         message: requestError instanceof Error
@@ -94,6 +94,29 @@ export function AuthForm({
           : dictionary.auth.errors.request_failed,
         fields: [],
       });
+      setOnboardingOpen(false);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (mode === "register") {
+      setError(null);
+      setOnboardingOpen(true);
+      return;
+    }
+    await authenticate();
+  }
+
+  async function finishRegistration(destination?: "/learn") {
+    setBusy(true);
+    try {
+      await refresh();
+      router.push(href(destination ?? returnTo ?? "/profile"));
+      router.refresh();
     } finally {
       setBusy(false);
     }
@@ -210,43 +233,6 @@ export function AuthForm({
           </>
         ) : null}
 
-        {registering ? (
-          <details className="auth-strength">
-            <summary>{dictionary.auth.startingStrength}</summary>
-            <div className="auth-strength-content">
-              <p>{dictionary.auth.startingStrengthHint}</p>
-              <label>
-                <span className="sr-only">{dictionary.auth.startingStrength}</span>
-                <span className="input-wrap">
-                  <select
-                    aria-label={dictionary.auth.startingStrength}
-                    onChange={(event) => setStartingStrength(event.target.value as StartingStrengthEstimate)}
-                    value={startingStrength}
-                  >
-                    <option value="unspecified">{dictionary.auth.strengthUnspecified}</option>
-                    <option value="new">{dictionary.auth.strengthNew}</option>
-                    <option value="beginner">{dictionary.auth.strengthBeginner}</option>
-                    <option value="intermediate">{dictionary.auth.strengthIntermediate}</option>
-                    <option value="experienced">{dictionary.auth.strengthExperienced}</option>
-                    <option value="known">{dictionary.auth.strengthKnown}</option>
-                  </select>
-                </span>
-              </label>
-              {startingStrength === "known" ? (
-                <label>
-                  <span>{dictionary.auth.knownRank}</span>
-                  <select
-                    aria-label={dictionary.auth.knownRank}
-                    onChange={(event) => setKnownRank(event.target.value)}
-                    value={knownRank}
-                  >
-                    {KNOWN_RANK_OPTIONS.map((rank) => <option key={rank} value={rank}>{rank}</option>)}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-          </details>
-        ) : null}
       </form>
 
       {!registering && socialOptions ? (
@@ -266,6 +252,15 @@ export function AuthForm({
           {registering ? dictionary.auth.login : dictionary.auth.createAccount}
         </Link>
       </p>
+      {registering && onboardingOpen ? (
+        <BeginnerOnboardingDialog
+          busy={busy}
+          onCancel={() => setOnboardingOpen(false)}
+          onCreateAccount={authenticate}
+          onFinish={finishRegistration}
+          open
+        />
+      ) : null}
     </section>
   );
 }

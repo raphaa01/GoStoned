@@ -1,6 +1,6 @@
 import type { RatingDisplayPreference } from "./rankPolicy";
 
-export const STARTING_STRENGTH_POLICY_VERSION = "starting-strength-v1" as const;
+export const STARTING_STRENGTH_POLICY_VERSION = "starting-strength-v2" as const;
 
 export type StartingStrengthEstimate =
   | "unspecified"
@@ -85,7 +85,7 @@ export function initialRatingForStartingStrength(strength: StartingStrength): nu
     case "beginner": return 900;
     case "intermediate": return 1400;
     case "experienced": return 1800;
-    case "unspecified": return 1200;
+    case "unspecified": return 500;
     case "known": {
       const match = strength.knownRank?.match(KNOWN_RANK);
       if (!match) throw new RangeError("Known rank must be between 30k and 9d.");
