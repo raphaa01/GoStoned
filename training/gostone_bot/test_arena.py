@@ -17,6 +17,8 @@ def create_artifact(
     *,
     preset_id: str = "short",
     model_version: int | None = None,
+    created_at: float = 10,
+    comparison_model_checkpoint: Path | None = None,
 ) -> Path:
     run_dir = root / run_id
     artifact_dir = run_dir / "artifact"
@@ -35,9 +37,14 @@ def create_artifact(
     (run_dir / "config.json").write_text(
         json.dumps(
             {
-                "created_at": 10,
+                "created_at": created_at,
                 "preset": {"id": preset_id, "name": "Interner Presetname"},
                 "model_version": model_version,
+                "comparison_model_checkpoint": (
+                    str(comparison_model_checkpoint.resolve())
+                    if comparison_model_checkpoint is not None
+                    else None
+                ),
             }
         ),
         encoding="utf-8",
@@ -60,6 +67,31 @@ class ArenaTests(unittest.TestCase):
             self.assertEqual([model.id for model in models], ["test-run"])
             self.assertTrue(models[0].label.startswith("GoStone AI v1 · "))
             self.assertEqual(models[0].model_version, 1)
+
+    def test_catalog_includes_the_external_comparison_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old_run = create_artifact(
+                root / "old-runs",
+                "old-v4",
+                model_version=4,
+                created_at=10,
+            )
+            old_checkpoint = old_run / "artifact" / "gostone-japanese-v1.pt"
+            create_artifact(
+                root / "current-runs",
+                "new-v5",
+                model_version=5,
+                created_at=20,
+                comparison_model_checkpoint=old_checkpoint,
+            )
+
+            models = ModelCatalog(root / "current-runs").artifacts()
+
+            self.assertEqual([model.id for model in models], ["new-v5", "old-v4"])
+            self.assertEqual([model.model_version for model in models], [5, 4])
+            self.assertTrue(models[0].label.startswith("GoStone AI v5 · "))
+            self.assertTrue(models[1].label.startswith("GoStone AI v4 · "))
 
     def test_versioned_and_technical_models_have_product_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
