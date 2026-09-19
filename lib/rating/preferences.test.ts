@@ -9,9 +9,9 @@ import {
 } from "./preferences";
 
 test("maps optional starting estimates to versioned high-uncertainty anchors", () => {
-  assert.equal(STARTING_STRENGTH_POLICY_VERSION, "starting-strength-v1");
+  assert.equal(STARTING_STRENGTH_POLICY_VERSION, "starting-strength-v2");
   for (const [estimate, expected] of [
-    ["unspecified", 1200],
+    ["unspecified", 500],
     ["new", 500],
     ["beginner", 900],
     ["intermediate", 1400],
@@ -21,7 +21,7 @@ test("maps optional starting estimates to versioned high-uncertainty anchors", (
   }
 });
 
-test("maps every supported known kyu/dan boundary through the shared v1 anchors", () => {
+test("maps every supported known kyu/dan boundary through the shared anchors", () => {
   assert.equal(initialRatingForStartingStrength(parseStartingStrength("known", "30k")), 500);
   assert.equal(initialRatingForStartingStrength(parseStartingStrength("known", "12K")), 1400);
   assert.equal(initialRatingForStartingStrength(parseStartingStrength("known", "1k")), 1950);

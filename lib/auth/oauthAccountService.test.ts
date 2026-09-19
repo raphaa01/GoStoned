@@ -207,7 +207,7 @@ test("username completion creates the account atomically with the player's chose
     true,
     "known",
     "5k",
-    "starting-strength-v1",
+    "starting-strength-v2",
     1750,
     350,
     0.06,

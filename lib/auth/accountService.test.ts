@@ -148,8 +148,8 @@ test("registration commits the user, session, and bounded cleanup before exposin
   assert.deepEqual(database.statements[2].values.slice(2), [
     "unspecified",
     null,
-    "starting-strength-v1",
-    1200,
+    "starting-strength-v2",
+    500,
     350,
     0.06,
     "glicko2-v1-tau-0.5",

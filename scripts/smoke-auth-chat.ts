@@ -9,6 +9,7 @@ import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
 const smokeHost = new URL(baseUrl).hostname;
+const DEFAULT_NEW_ACCOUNT_RATING = 500;
 
 if (smokeHost !== "localhost" && smokeHost !== "127.0.0.1" && smokeHost !== "::1") {
   throw new Error("The auth/chat smoke test only runs against an isolated local server.");
@@ -256,12 +257,12 @@ async function run() {
   assert.equal(firstRating.ratedGameCount, 1);
   assert.equal(firstRating.isProvisional, true);
   assert.equal(firstRating.algorithmVersion, "glicko2-v1-tau-0.5");
-  assert.ok(firstRating.rating < 1200);
+  assert.ok(firstRating.rating < DEFAULT_NEW_ACCOUNT_RATING);
   assert.ok(firstRating.ratingDeviation > 0 && firstRating.ratingDeviation < 350);
   assert.equal(firstRating.highestRating, firstRating.rating);
   assert.ok(firstRating.ratingChange30Days < 0);
   assert.equal(firstGameHistory?.result, "loss");
-  assert.equal(firstGameHistory?.ratingBefore, 1200);
+  assert.equal(firstGameHistory?.ratingBefore, DEFAULT_NEW_ACCOUNT_RATING);
   assert.equal(firstGameHistory?.ratingAfter, firstRating.rating);
   assert.equal(firstGameHistory?.ratingChange, firstRating.ratingChange30Days);
   assert.equal(firstRecentGames[0].gameId, gameId);
@@ -299,11 +300,14 @@ async function run() {
   assert.equal(secondRating.ratedGameCount, 1);
   assert.equal(secondRating.isProvisional, true);
   assert.equal(secondRating.algorithmVersion, "glicko2-v1-tau-0.5");
-  assert.ok(secondRating.rating > 1200);
+  assert.ok(secondRating.rating > DEFAULT_NEW_ACCOUNT_RATING);
   assert.equal(secondRating.ratingDeviation, firstRating.ratingDeviation);
-  assertNear(secondRating.ratingChange30Days, secondRating.rating - 1200);
+  assertNear(
+    secondRating.ratingChange30Days,
+    secondRating.rating - DEFAULT_NEW_ACCOUNT_RATING,
+  );
   assert.equal(secondGameHistory?.result, "win");
-  assert.equal(secondGameHistory?.ratingBefore, 1200);
+  assert.equal(secondGameHistory?.ratingBefore, DEFAULT_NEW_ACCOUNT_RATING);
   assert.equal(secondGameHistory?.ratingAfter, secondRating.rating);
   assert.equal(secondGameHistory?.ratingChange, secondRating.ratingChange30Days);
 

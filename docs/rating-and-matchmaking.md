@@ -7,7 +7,8 @@ one rating period. The current v1 policy does not add inactivity-only periods;
 no-result writes immutable zero-change evidence without advancing the period.
 
 New accounts may optionally provide a broad experience estimate or a known Go
-rank. `starting-strength-v1` maps that claim to the initial rating with RD 350.
+rank. `starting-strength-v2` maps accounts without a stronger claim to the 30 kyu
+anchor and keeps RD 350; older immutable claims retain their recorded v1 policy.
 The claim is immutable, is applied once before any rated game, and cannot later
 rewrite an established rating. Accounts are provisional for their first ten
 rated games. Rank labels are derived display values under `gostone-rank-v1`;

@@ -11,6 +11,7 @@ import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { getFriendsCopy } from "@/lib/i18n/friends";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { PlayerClock } from "./PlayerClock";
+import { ScoringHelpButton } from "./ScoringHelpDialog";
 
 function deadStoneCounts(game: GameState) {
   return (game.scoring?.deadStones ?? []).reduce(
@@ -32,6 +33,7 @@ type GamePanelProps = {
   onPass: () => void;
   onResign: () => void;
   onConfirmScore: () => void;
+  onShowScoringHelp: () => void;
   onResumePlay: (claim: "dead" | "alive", disputedStone: Position) => void;
   onLeave: () => void;
 };
@@ -45,6 +47,7 @@ export function GamePanel({
   onPass,
   onResign,
   onConfirmScore,
+  onShowScoringHelp,
   onResumePlay,
   onLeave,
 }: GamePanelProps) {
@@ -170,7 +173,10 @@ export function GamePanel({
       {activeScoring ? (
         <div className="scoring-controls">
           <div className="scoring-heading">
-            <strong>{copy.confirmFinalPosition}</strong>
+            <div>
+              <strong>{copy.confirmFinalPosition}</strong>
+              <ScoringHelpButton onClick={onShowScoringHelp} />
+            </div>
             <span>{copy.scoringInstructions}</span>
           </div>
           <div className="scoring-preview" aria-label={copy.provisionalScore}>
@@ -273,7 +279,10 @@ export function GamePanel({
         <>
           {game.finishReason === "score" && scoring?.finalizedAt ? (
             <div className="final-score-summary">
-              <strong>{copy.agreedScore}</strong>
+              <div className="final-score-heading">
+                <strong>{copy.agreedScore}</strong>
+                <ScoringHelpButton onClick={onShowScoringHelp} />
+              </div>
               <span>{copy.black} {scoring.preview.black} · {copy.white} {scoring.preview.white}</span>
               <span>
                 {scoring.deadStones.length} {copy.dead.toLocaleLowerCase()} {scoring.deadStones.length === 1 ? copy.stone : copy.stones}
