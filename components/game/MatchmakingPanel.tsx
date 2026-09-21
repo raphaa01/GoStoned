@@ -65,6 +65,10 @@ export function MatchmakingPanel({
 
   return (
     <section className="play-matchmaking">
+      <div className="matchmaking-summary" aria-label={`${boardSize}×${boardSize}, ${selectedTime.name}`}>
+        <div><span>{copy.boardSize}</span><strong>{boardSize}×{boardSize}</strong></div>
+        <div><span>{copy.timeControl}</span><strong>{selectedTime.name}</strong><small>{selectedTime.shortLabel}</small></div>
+      </div>
       <p
         aria-atomic="true"
         aria-label={statusAnnouncement}

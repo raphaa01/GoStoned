@@ -31,6 +31,18 @@ import styles from "./puzzles.module.css";
 type PuzzleApiResponse = PuzzleHub & { actor: string };
 type Feedback = "correct" | "incorrect" | "continue" | null;
 
+function PuzzleLoading({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" className={styles.loadingWorkspace} role="status">
+      <span className="sr-only">{label}</span>
+      <div aria-hidden="true" className={styles.loadingBoard} />
+      <div aria-hidden="true" className={styles.loadingPanel}>
+        <i /><b /><i /><i /><span />
+      </div>
+    </div>
+  );
+}
+
 function lineBoard(base: PuzzleHub["puzzles"][number]["board"], line: readonly PuzzlePly[]) {
   let board = base;
   for (const ply of line) {
@@ -275,7 +287,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       </div>
 
       {identityLoading ? (
-        <div className={styles.state} role="status">{copy.loading}</div>
+        <PuzzleLoading label={copy.loading} />
       ) : identityError ? (
         <div className={styles.state} role="alert"><p>{copy.identityError}</p><button className="button button--secondary" onClick={retry} type="button">{copy.retry}</button></div>
       ) : error && !hub ? (
@@ -298,7 +310,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
           </div>
         </section>
       ) : hub?.status === "generating" || !puzzle || !displayBoard ? (
-        <div className={styles.state} role="status"><h2>{copy.generating}</h2></div>
+        <PuzzleLoading label={copy.generating} />
       ) : (
         <>
           {mode === "practice" ? (
