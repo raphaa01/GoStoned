@@ -1,6 +1,5 @@
 "use client";
 
-import { Medal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -185,9 +184,7 @@ export function LeaderboardView() {
                         <td>
                           <span className={`rank rank--${entry.position}`}>
                             <span className="sr-only">{entry.position}</span>
-                            {entry.position <= 3
-                              ? <Medal aria-hidden="true" size={18} />
-                              : <span aria-hidden="true">{entry.position}</span>}
+                            <span aria-hidden="true">{String(entry.position).padStart(3, "0")}</span>
                           </span>
                         </td>
                         <th scope="row">{entry.playerName}</th>

@@ -8604,3 +8604,143 @@ html:has(.home-chapters) {
     grid-column: 1 / -1;
   }
 }
+
+/* Final product-system pass ---------------------------------------------
+   Tool pages use one quiet hierarchy: open surfaces, hairline rules and
+   board-led layouts. The homepage keeps the more atmospheric treatment. */
+
+.leaderboard-card,
+.player-search,
+.friends-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.leaderboard-card {
+  overflow: visible;
+  padding: 0;
+}
+
+.leaderboard-card::before {
+  display: none;
+}
+
+.leaderboard-title {
+  border-bottom: 1px solid var(--color-line);
+  font-family: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  padding: 0 0 12px;
+}
+
+.leaderboard-viewer {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid var(--color-moss);
+  border-radius: 0;
+  padding: 10px 14px;
+}
+
+.leaderboard-table {
+  border-top: 1px solid var(--color-line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.leaderboard-table .rank {
+  color: var(--color-text-subtle);
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+}
+
+.leaderboard-table .rank--1,
+.leaderboard-table .rank--2,
+.leaderboard-table .rank--3 {
+  color: var(--color-ink);
+  font-weight: 720;
+}
+
+.friends-summary {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--color-ink);
+  display: grid;
+  gap: 2px;
+  grid-template-columns: 1fr;
+  padding: 4px 0 4px 22px;
+}
+
+.friends-summary strong {
+  background: transparent;
+  color: var(--color-ink);
+  display: block;
+  font-size: 24px;
+  height: auto;
+  width: auto;
+}
+
+.friends-summary span {
+  color: var(--color-text-subtle);
+  margin: 0;
+}
+
+.player-search {
+  border-bottom: 1px solid var(--color-line);
+  padding: 0 0 26px;
+}
+
+.friends-card > header {
+  padding-inline: 0;
+}
+
+.friend-row,
+.friend-request,
+.game-invite,
+.friends-empty {
+  padding-inline: 0;
+}
+
+.learning-chapters {
+  background: transparent;
+  border: 0;
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+}
+
+.learning-chapters__item:hover:not(:disabled),
+.learning-chapters__item.is-active {
+  background: transparent;
+}
+
+@media (max-width: 620px) {
+  .leaderboard-card {
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .friends-summary {
+    border-left: 0;
+    border-top: 1px solid var(--color-line);
+    padding: 12px 0 0;
+  }
+
+  .friends-summary span {
+    display: block;
+  }
+
+  .friends-summary strong {
+    color: var(--color-ink);
+    height: auto;
+    width: auto;
+  }
+
+  .learning-chapters {
+    border-radius: 0;
+  }
+}

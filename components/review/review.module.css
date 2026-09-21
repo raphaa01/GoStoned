@@ -259,6 +259,64 @@
   .engineBadge { font-size: .65rem; }
 }
 
+/* The review index is a tool selector, not a marketing card. */
+.hub {
+  gap: clamp(30px, 5vw, 58px);
+  padding: 0 0 80px;
+}
+
+.hero {
+  border: 0;
+  isolation: auto;
+  overflow: visible;
+  padding: clamp(32px, 5vw, 62px) 0 0;
+}
+
+.hero::before,
+.hero::after,
+.gamePicker::before {
+  display: none;
+}
+
+.hero h1 {
+  font-family: inherit;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 540;
+  letter-spacing: -.055em;
+  line-height: .98;
+}
+
+.gamePicker {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.sectionHeading {
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 14px;
+}
+
+.sectionHeading h2 {
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 620;
+}
+
+@media (max-width: 900px) {
+  .hub { padding: 0 0 64px; }
+}
+
+@media (max-width: 620px) {
+  .hub { padding: 0 0 56px; }
+  .hero { padding: 24px 0 0; }
+  .hero h1 { font-size: 38px; }
+  .gamePicker { padding: 0; }
+}
+
 /* Keep the review hub title aligned with the beginner-course heading. */
 .hero {
   border: 0;
@@ -325,4 +383,13 @@
 
 @media (max-width: 900px) {
   .reviewWorkspace { height: auto; overflow-x: clip; overflow-y: visible; }
+}
+
+/* Review selection stays compact even though other page titles can be larger. */
+.hero h1 {
+  font-size: clamp(36px, 4vw, 52px);
+}
+
+@media (max-width: 620px) {
+  .hero h1 { font-size: 38px; }
 }
