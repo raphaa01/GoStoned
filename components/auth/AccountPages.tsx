@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { LearningGuide } from "@/components/learn/LearningGuide";
+import { TrainingGame } from "@/components/learn/TrainingGame";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { AnalysisReview } from "@/components/review/AnalysisReview";
 import { ReviewGuide } from "@/components/review/ReviewGuide";
@@ -21,6 +22,11 @@ export async function AccountFriendsPage({ locale }: { locale: Locale }) {
 export async function AccountLearnPage({ locale }: { locale: Locale }) {
   await requireAccountPage("/learn", locale);
   return <AppShell><LearningGuide /></AppShell>;
+}
+
+export async function AccountTrainingGamePage({ locale }: { locale: Locale }) {
+  await requireAccountPage("/learn/ai", locale);
+  return <AppShell><TrainingGame /></AppShell>;
 }
 
 export async function AccountReviewPage({ locale }: { locale: Locale }) {

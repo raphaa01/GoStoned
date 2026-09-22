@@ -41,6 +41,7 @@ export function safeAccountReturnPath(
   const logicalPath = safeLogicalPath(value);
   if (!logicalPath) return null;
   return logicalPath === "/learn"
+    || logicalPath === "/learn/ai"
     || logicalPath === "/profile"
     || logicalPath === "/friends"
     || logicalPath === "/review"

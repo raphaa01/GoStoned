@@ -32,6 +32,8 @@ test("reauthentication can return to the localized play lobby", () => {
 test("account onboarding returns only to protected account features", () => {
   assert.equal(safeAccountReturnPath("/learn"), "/learn");
   assert.equal(safeAccountReturnPath("/fr/learn"), "/learn");
+  assert.equal(safeAccountReturnPath("/learn/ai"), "/learn/ai");
+  assert.equal(safeAccountReturnPath("/de/learn/ai"), "/learn/ai");
   assert.equal(safeAccountReturnPath("/profile"), "/profile");
   assert.equal(safeAccountReturnPath("/de/profile"), "/profile");
   assert.equal(safeAccountReturnPath("/friends"), "/friends");

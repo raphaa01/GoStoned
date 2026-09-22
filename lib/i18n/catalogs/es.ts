@@ -1,6 +1,7 @@
 import { en, type Dictionary } from "./en";
 
 export const es = {
+  trainingGame: en.trainingGame,
   "metadata": {
     "home": {
       "title": "GoStone — Juega Go en línea",
