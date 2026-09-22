@@ -29,6 +29,7 @@ type GoBoardProps = {
   disabled?: boolean;
   interactionMode?: "play" | "mark-dead";
   deadStones?: Position[];
+  selectedDeadStones?: Position[];
   lastMove?: Position | null;
   pendingMove?: (Position & { color: Stone }) | null;
   precisionRevision: string;
@@ -56,6 +57,7 @@ export function GoBoard({
   disabled = false,
   interactionMode = "play",
   deadStones = [],
+  selectedDeadStones = [],
   lastMove = null,
   pendingMove = null,
   precisionRevision,
@@ -105,6 +107,9 @@ export function GoBoard({
       + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
+  const selectedDeadStoneKeys = new Set(
+    selectedDeadStones.map(({ x, y }) => `${x}:${y}`),
+  );
   const precisionContext = {
     boardSize,
     disabled,
@@ -401,6 +406,7 @@ export function GoBoard({
               const stone = serverStone ?? pendingStone;
               const isPendingMove = pendingStone !== null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
+              const disputeSelected = selectedDeadStoneKeys.has(`${x}:${y}`);
               const stoneLabel = stone === "black" ? copy.blackStone : copy.whiteStone;
               const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
               const coordinate = goCoordinate(boardSize, x, y);
@@ -447,7 +453,7 @@ export function GoBoard({
                   aria-selected={interactionMode === "mark-dead"
                     ? stone ? markedDead : undefined
                     : isPrecisionPreview || undefined}
-                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""} ${isPendingMove ? "is-pending-move" : ""}`}
+                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${disputeSelected ? "is-dispute-selected" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""} ${isPendingMove ? "is-pending-move" : ""}`}
                   key={`${x}-${y}`}
                   onClick={(event) => {
                     if (
@@ -501,6 +507,9 @@ export function GoBoard({
                     <span aria-hidden="true" className="dead-stone-mark">
                       ×
                     </span>
+                  ) : null}
+                  {disputeSelected ? (
+                    <span aria-hidden="true" className="dispute-selection-mark" />
                   ) : null}
                   {isLastMove ? <span aria-hidden="true" className="last-move-mark" /> : null}
                 </button>
