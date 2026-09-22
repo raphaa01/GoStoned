@@ -2,7 +2,7 @@
 
 import { Calculator, Check, LogIn, LogOut, RefreshCw, ShieldCheck, Undo2, Wifi, WifiOff, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
@@ -47,6 +47,7 @@ import {
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
 import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
+import { groupMarkedDeadStones } from "@/lib/game/scoring";
 import type { GamePollResponse, GameState, Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
@@ -101,6 +102,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [showResult, setShowResult] = useState(false);
   const [showScoringHelp, setShowScoringHelp] = useState(false);
+  const [selectedDisputeSelection, setSelectedDisputeSelection] = useState<{
+    boardHash: string;
+    stone: Position;
+  } | null>(null);
   const [identityChanged, setIdentityChanged] = useState(false);
   const [gameAnnouncement, setGameAnnouncement] = useState("");
   const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
@@ -720,6 +725,22 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && game.phase === "scoring"
     && game.scoring,
   ) && gameInteractionAllowed && !busy;
+  const scoringBoard = game?.board ?? null;
+  const scoringDeadStones = game?.scoring?.deadStones ?? null;
+  const scoringBoardHash = game?.scoring?.boardHash ?? null;
+  const disputeGroups = useMemo(
+    () => scoringBoard
+      ? groupMarkedDeadStones(scoringBoard, scoringDeadStones ?? [])
+      : [],
+    [scoringBoard, scoringDeadStones],
+  );
+  const selectedDisputeStone = selectedDisputeSelection?.boardHash === scoringBoardHash
+    ? selectedDisputeSelection.stone
+    : null;
+  const selectedDisputeGroup = disputeGroups.find(({ stones }) =>
+    selectedDisputeStone
+    && stones.some(({ x, y }) => x === selectedDisputeStone.x && y === selectedDisputeStone.y),
+  ) ?? disputeGroups[0] ?? null;
 
   function reconcileAfterOperation(requestError: unknown) {
     if (
@@ -1347,6 +1368,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               boardSize={game.boardSize}
               boardState={game.board}
               deadStones={game.scoring?.deadStones}
+              selectedDeadStones={selectedDisputeGroup?.stones}
               disabled={!canMove && !canMarkDead}
               interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
               lastMove={(() => {
@@ -1361,6 +1383,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   const dead = !game.scoring.deadStones.some(
                     (stone) => stone.x === x && stone.y === y,
                   );
+                  setSelectedDisputeSelection(dead
+                    ? { boardHash: game.scoring.boardHash, stone: { x, y } }
+                    : null);
                   void scoringAction("dead-stones", { x, y, dead });
                 } else {
                   void makeMove({ x, y }, game.version);
@@ -1442,6 +1467,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onSelectDisputeGroup={(representative) => {
+              if (!game.scoring) return;
+              setSelectedDisputeSelection({
+                boardHash: game.scoring.boardHash,
+                stone: representative,
+              });
+            }}
             onShowScoringHelp={() => setShowScoringHelp(true)}
             onResign={() => {
               if (!gameInteractionAllowed) return;
@@ -1456,6 +1488,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               });
             }}
             playerKey={playerKey}
+            selectedDisputeStone={selectedDisputeStone}
           />
           <ChatPanel
             blockActionRef={blockActionRef}

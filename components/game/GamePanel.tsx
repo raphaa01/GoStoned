@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
 import { replayMovesWithPrisoners } from "@/lib/game/goEngine";
@@ -34,6 +34,8 @@ type GamePanelProps = {
   onResign: () => void;
   onConfirmScore: () => void;
   onShowScoringHelp: () => void;
+  selectedDisputeStone: Position | null;
+  onSelectDisputeGroup: (representative: Position) => void;
   onResumePlay: (claim: "dead" | "alive", disputedStone: Position) => void;
   onLeave: () => void;
 };
@@ -48,6 +50,8 @@ export function GamePanel({
   onResign,
   onConfirmScore,
   onShowScoringHelp,
+  selectedDisputeStone,
+  onSelectDisputeGroup,
   onResumePlay,
   onLeave,
 }: GamePanelProps) {
@@ -59,7 +63,6 @@ export function GamePanel({
     () => replayMovesWithPrisoners(game.boardSize, game.moves).prisoners,
     [game.boardSize, game.moves],
   );
-  const [selectedGroupKey, setSelectedGroupKey] = useState("");
   const yourColor: Stone | null = game.blackPlayerKey === playerKey
     ? "black"
     : game.whitePlayerKey === playerKey
@@ -75,7 +78,10 @@ export function GamePanel({
   const scoring = game.phase === "scoring" ? game.scoring : null;
   const activeScoring = game.status === "active" ? scoring : null;
   const disputeGroups = groupMarkedDeadStones(game.board, game.scoring?.deadStones ?? []);
-  const selectedGroup = disputeGroups.find(({ key }) => key === selectedGroupKey)
+  const selectedGroup = disputeGroups.find(({ stones }) =>
+    selectedDisputeStone
+    && stones.some(({ x, y }) => x === selectedDisputeStone.x && y === selectedDisputeStone.y),
+  )
     ?? disputeGroups[0]
     ?? null;
   const deadCounts = deadStoneCounts(game);
@@ -214,25 +220,34 @@ export function GamePanel({
           </details>
           <details className="scoring-dispute">
             <summary>{copy.markedGroup}</summary>
-            <label className="scoring-dispute-picker">
-              <span>{copy.markedGroup}</span>
-              <select
-                disabled={controlsDisabled || disputeGroups.length === 0}
-                onChange={(event) => setSelectedGroupKey(event.target.value)}
-                value={selectedGroup?.key ?? ""}
-              >
-                {disputeGroups.length === 0 ? <option value="">{copy.markGroupFirst}</option> : null}
-                {disputeGroups.map((group) => (
-                  <option key={group.key} value={group.key}>
-                    {formatBoardLabel(copy.groupOptionLabel, {
-                      group: group.color === "black" ? copy.blackGroupOption : copy.whiteGroupOption,
-                      coordinate: goCoordinate(game.boardSize, group.representative.x, group.representative.y),
-                      stoneCount: `${group.stones.length} ${group.stones.length === 1 ? copy.stone : copy.stones}`,
-                    })}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div aria-label={copy.markedGroup} className="scoring-dispute-options" role="group">
+              {disputeGroups.length === 0 ? (
+                <span className="scoring-dispute-empty">{copy.markGroupFirst}</span>
+              ) : disputeGroups.map((group) => {
+                const selected = group.key === selectedGroup?.key;
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className="scoring-dispute-option"
+                    disabled={controlsDisabled}
+                    key={group.key}
+                    onClick={() => onSelectDisputeGroup(group.representative)}
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="scoring-dispute-option-indicator">
+                      {selected ? <Check size={14} /> : null}
+                    </span>
+                    <span>
+                      {formatBoardLabel(copy.groupOptionLabel, {
+                        group: group.color === "black" ? copy.blackGroupOption : copy.whiteGroupOption,
+                        coordinate: goCoordinate(game.boardSize, group.representative.x, group.representative.y),
+                        stoneCount: `${group.stones.length} ${group.stones.length === 1 ? copy.stone : copy.stones}`,
+                      })}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             <div className="game-actions scoring-actions">
               <button
                 disabled={controlsDisabled || !selectedGroup}

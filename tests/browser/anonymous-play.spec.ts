@@ -27,6 +27,7 @@ const copy = {
     learn: "Learn",
     live: "Live",
     markBlackC17: "Mark the black group at C17 as dead.",
+    markWhiteP4: "Mark the white group at P4 as dead.",
     mobileNavigation: "Mobile navigation",
     openMenu: "Open menu",
     opponent: "Opponent",
@@ -66,6 +67,7 @@ const copy = {
     learn: "Lernen",
     live: "Live",
     markBlackC17: "Markiere die schwarze Gruppe bei C17 als tot.",
+    markWhiteP4: "Markiere die weiße Gruppe bei P4 als tot.",
     mobileNavigation: "Mobile Navigation",
     openMenu: "Menü öffnen",
     opponent: "Gegner",
@@ -1242,19 +1244,39 @@ for (const locale of ["en", "de"] as const) {
     await page.reload();
     await expect(page.locator('.go-board[data-interaction-mode="mark-dead"]')).toBeVisible();
     await dismissScoringHelp();
+    const whiteGroupCell = page.getByRole("gridcell", {
+      name: localeCopy.markWhiteP4,
+      exact: true,
+    });
+    await activateGroup(whiteGroupCell);
+    await expect(page.getByRole("gridcell", { selected: true })).toHaveCount(4);
+    expect(harness.scoringBodies.deadStones[4]).toEqual({
+      x: 14,
+      y: 15,
+      dead: true,
+      expectedRevision: 1,
+    });
     const challengeDead = page.getByRole("button", {
       name: localeCopy.challengeDead,
       exact: true,
     });
     await page.locator(".scoring-dispute summary").click();
+    const groupOptions = page.locator(".scoring-dispute-option");
+    await expect(groupOptions).toHaveCount(2);
+    await expect(groupOptions.nth(1)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".intersection.is-dispute-selected")).toHaveCount(2);
+    await groupOptions.nth(0).click();
+    await expect(groupOptions.nth(0)).toHaveAttribute("aria-pressed", "true");
+    await groupOptions.nth(1).click();
+    await expect(groupOptions.nth(1)).toHaveAttribute("aria-pressed", "true");
     await expectControlInsideViewport(page, challengeDead, true, 24);
     await challengeDead.click();
     await expect.poll(() => harness.scoringBodies.resume.length).toBe(1);
     expect(harness.scoringBodies.resume).toEqual([{
       claim: "alive",
-      x: 2,
-      y: 2,
-      expectedRevision: 1,
+      x: 14,
+      y: 15,
+      expectedRevision: 2,
     }]);
     await expect(page.locator(".scoring-controls")).toHaveCount(0);
     await expect(page.getByText(localeCopy.disputeResumed, { exact: true })).toBeVisible();
