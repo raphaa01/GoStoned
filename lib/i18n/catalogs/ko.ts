@@ -1,6 +1,7 @@
 import { en, type Dictionary } from "./en";
 
 export const ko = {
+  trainingGame: en.trainingGame,
   "metadata": {
     "home": {
       "title": "GoStone — 온라인 바둑 플레이",

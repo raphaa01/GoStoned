@@ -1,9 +1,10 @@
-import type { Dictionary } from "./en";
+import { en, type Dictionary } from "./en";
 import type { FriendsCopy } from "../friends";
 import type { PrivacyCopy } from "../privacy";
 import type { ChapterOneCopy } from "../../learn/chapterOne";
 
 export const ky = {
+  trainingGame: en.trainingGame,
   "metadata": {
     "home": {
       "title": "GoStone — Гону онлайн ойноңуз",

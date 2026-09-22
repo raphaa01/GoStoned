@@ -1,6 +1,7 @@
 import { en, type Dictionary } from "./en";
 
 export const zh = {
+  trainingGame: en.trainingGame,
   "metadata": {
     "home": {
       "title": "GoStone — 在线围棋对弈",

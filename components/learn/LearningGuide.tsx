@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Lock } from "lucide-react";
+import { ArrowRight, Check, Lock } from "lucide-react";
+import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ADVANCED_CHAPTERS, LIFE_LESSON_IDS } from "@/lib/learn/advancedChapters";
@@ -34,7 +35,7 @@ function parseCompleted(raw: string | null): Set<string> {
 }
 
 export function LearningGuide() {
-  const { locale } = useI18n();
+  const { dictionary, href, locale } = useI18n();
   const [activeChapter, setActiveChapter] = useState<ChapterNumber>(1);
   const snapshot = useSyncExternalStore(
     subscribeToProgress,
@@ -58,6 +59,15 @@ export function LearningGuide() {
 
   return (
     <div className="content-page learn-path learning-guide">
+      <section className="learn-practice-entry">
+        <div>
+          <strong>{dictionary.trainingGame.launchTitle}</strong>
+          <span>{dictionary.trainingGame.launchDescription}</span>
+        </div>
+        <Link className="button button--primary button--sm" href={href("/learn/ai")}>
+          {dictionary.trainingGame.launchAction} <ArrowRight aria-hidden="true" size={15} />
+        </Link>
+      </section>
       <nav aria-label={labels.join(", ")} className="learning-chapters">
         {labels.map((label, index) => {
           const number = (index + 1) as ChapterNumber;
