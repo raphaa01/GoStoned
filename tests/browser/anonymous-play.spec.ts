@@ -37,6 +37,8 @@ const copy = {
     resignTitle: "Resign this game?",
     restoreBlackC17: "Restore the black group at C17 as alive.",
     scoringConflict: "The scoring proposal changed. Review the latest position.",
+    scoringHelpTitle: "Check the final score together",
+    scoringHelpUnderstood: "Understood",
     scoringStarted: "Scoring started. Mark dead groups, then both players confirm the same final position.",
     sessionExpired: "Session expired",
     showWholeBoard: "Show whole board",
@@ -74,6 +76,8 @@ const copy = {
     resignTitle: "Diese Partie aufgeben?",
     restoreBlackC17: "Stelle die schwarze Gruppe bei C17 als lebend wieder her.",
     scoringConflict: "Der Wertungsvorschlag hat sich geändert. Prüfe die aktuelle Position.",
+    scoringHelpTitle: "Prüft jetzt gemeinsam die Endwertung",
+    scoringHelpUnderstood: "Verstanden",
     scoringStarted: "Die Wertung hat begonnen. Markiert tote Gruppen und bestätigt danach beide dieselbe Endposition.",
     sessionExpired: "Sitzung abgelaufen",
     showWholeBoard: "Ganzes Brett zeigen",
@@ -1107,6 +1111,11 @@ for (const locale of ["en", "de"] as const) {
     const harness = await installApiHarness(page, { gameScenario: "scoring-lifecycle" });
     const localeCopy = copy[locale];
     const gamePath = locale === "en" ? `/game/${GAME_ID}` : `/de/game/${GAME_ID}`;
+    const dismissScoringHelp = async () => {
+      const dialog = page.getByRole("dialog", { name: localeCopy.scoringHelpTitle });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: localeCopy.scoringHelpUnderstood }).click();
+    };
 
     await page.goto(gamePath);
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
@@ -1123,6 +1132,7 @@ for (const locale of ["en", "de"] as const) {
     const board = page.locator('.go-board[data-interaction-mode="mark-dead"]');
     await expect(board).toBeVisible();
     await expect(page.getByText(localeCopy.scoringStarted, { exact: true })).toBeVisible();
+    await dismissScoringHelp();
     await expectNoDocumentOverflow(page);
 
     const activateGroup = async (cell: Locator) => {
@@ -1231,6 +1241,7 @@ for (const locale of ["en", "de"] as const) {
     harness.resetGame("scoring-dispute");
     await page.reload();
     await expect(page.locator('.go-board[data-interaction-mode="mark-dead"]')).toBeVisible();
+    await dismissScoringHelp();
     const challengeDead = page.getByRole("button", {
       name: localeCopy.challengeDead,
       exact: true,

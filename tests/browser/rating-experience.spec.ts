@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { de } from "../../lib/i18n/catalogs/de";
 import { en } from "../../lib/i18n/catalogs/en";
+import { getBeginnerGuideCopy } from "../../lib/i18n/beginnerGuide";
 
 const USER = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -30,6 +31,7 @@ async function assertNoHorizontalOverflow(page: Page) {
 
 for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
   test(`${locale.toUpperCase()} onboarding, global leaderboard, and account protection are honest and responsive`, async ({ page }) => {
+    const onboarding = getBeginnerGuideCopy(locale).onboarding;
     let signedIn = false;
     let registrationBody: unknown;
 
@@ -131,20 +133,20 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.goto(`${prefix}/register`);
     await page.getByLabel(dictionary.auth.username).fill("global_player");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
-    const strengthDisclosure = page.locator("details.auth-strength > summary");
-    await strengthDisclosure.focus();
-    await strengthDisclosure.press("Enter");
-    await expect(page.locator("details.auth-strength")).toHaveAttribute("open", "");
-    await page.getByLabel(dictionary.auth.startingStrength).selectOption("known");
-    await expect(page.getByLabel(dictionary.auth.knownRank)).toBeVisible();
-    await page.getByLabel(dictionary.auth.knownRank).selectOption("3d");
     await page.getByRole("button", { name: dictionary.auth.createAccount }).click();
+    const onboardingDialog = page.getByRole("dialog", { name: onboarding.canPlayTitle });
+    await expect(onboardingDialog).toBeVisible();
+    await onboardingDialog.getByRole("button", { name: onboarding.canPlayYes }).click();
+    const rankDialog = page.getByRole("dialog", { name: onboarding.rankTitle });
+    await expect(rankDialog).toBeVisible();
+    await rankDialog.getByRole("combobox", { name: onboarding.rankLabel }).selectOption("3k");
+    await rankDialog.getByRole("button", { name: onboarding.useRank }).click();
     await expect(page.locator(".form-error")).toContainText(dictionary.auth.errors.username_taken);
     expect(registrationBody).toEqual({
       username: "global_player",
       password: "correct-horse-battery",
       startingStrength: "known",
-      knownRank: "3d",
+      knownRank: "3k",
     });
     await assertNoHorizontalOverflow(page);
 
