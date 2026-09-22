@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, LoaderCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -166,9 +166,11 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
           <section className={styles.boardPanel}>
             <AnalysisBoard board={board} bestMove={current.bestMove} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
             <div className={styles.moveControls}>
+              <button aria-label={`${copy.previous} · 1`} disabled={selectedMove <= 1} onClick={() => setSelectedMove(1)} type="button"><ChevronsLeft /></button>
               <button aria-label={copy.previous} disabled={selectedMove <= 1} onClick={() => setSelectedMove((move) => Math.max(1, move - 1))} type="button"><ArrowLeft /></button>
               <span>{copy.move} <strong>{selectedMove}</strong> / {result.moves.length}</span>
               <button className={styles.nextMove} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove((move) => Math.min(result.moves.length, move + 1))} type="button"><span>{copy.next}</span><ArrowRight /></button>
+              <button aria-label={`${copy.next} · ${result.moves.length}`} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove(result.moves.length)} type="button"><ChevronsRight /></button>
             </div>
             <input aria-label={copy.move} className={styles.moveSlider} max={result.moves.length} min="1" onChange={(event) => setSelectedMove(Number(event.target.value))} type="range" value={selectedMove} />
             <nav aria-label={copy.movesLabel} className={styles.moveStrip}>

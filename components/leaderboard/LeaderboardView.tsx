@@ -138,15 +138,14 @@ export function LeaderboardView() {
           </aside>
         ) : null}
         {loading ? (
-          <p
-            aria-live="polite"
-            className="empty-state"
-            ref={resultStatusRef}
-            role="status"
-            tabIndex={-1}
-          >
-            {copy.loading}
-          </p>
+          <div className="leaderboard-loading" role="status" ref={resultStatusRef} tabIndex={-1}>
+            <span className="sr-only">{copy.loading}</span>
+            {Array.from({ length: 7 }, (_, index) => (
+              <div aria-hidden="true" key={index}>
+                <i>{String(index + 1).padStart(3, "0")}</i><b /><span /><span /><strong />
+              </div>
+            ))}
+          </div>
         ) : error ? (
           <div className="empty-state" role="alert">
             <p ref={resultStatusRef} tabIndex={-1}>{error}</p>

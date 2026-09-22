@@ -267,6 +267,10 @@ export function ChapterOne({ embedded = false, nextChapterLabel, onFinish }: { e
                       <span className="learn-node__tile">
                         <LessonPathIcon id={id} />
                       </span>
+                      <span className="learn-node__copy">
+                        <small>{copy.stepLabel} {String(index + 1).padStart(2, "0")}</small>
+                        <strong>{copy.lessons[id].shortTitle}</strong>
+                      </span>
                       {complete ? <span className="learn-node__status"><Check aria-hidden="true" size={16} /></span> : null}
                       {!unlocked ? <span className="learn-node__status"><Lock aria-hidden="true" size={14} /></span> : null}
                       {current ? <span aria-hidden="true" className="learn-node__label">{copy.lessons[id].shortTitle}<i /></span> : null}

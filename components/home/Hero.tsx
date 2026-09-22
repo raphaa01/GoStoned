@@ -29,7 +29,6 @@ export function Hero() {
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: "loading" });
   const [requestKey, setRequestKey] = useState(0);
   const [retrying, setRetrying] = useState(false);
-  const featurePairRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
   const focusStatusAfterSuccess = useRef(false);
 
@@ -57,25 +56,6 @@ export function Hero() {
     focusStatusAfterSuccess.current = false;
     statusRef.current?.focus();
   }, [summaryState]);
-
-  useEffect(() => {
-    const featurePair = featurePairRef.current;
-    if (
-      !featurePair
-      || !("IntersectionObserver" in window)
-      || window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) return;
-
-    featurePair.classList.add("is-reveal-ready");
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return;
-      featurePair.classList.add("is-visible");
-      observer.disconnect();
-    }, { threshold: 0.16 });
-    observer.observe(featurePair);
-
-    return () => observer.disconnect();
-  }, []);
 
   const summary = summaryState.kind === "ready" ? summaryState.summary : null;
   const displayCount = (count: PublicActivityCount | undefined) => count === "under_5"
@@ -139,6 +119,12 @@ export function Hero() {
               <p className="chapter-kicker"><Gamepad2 aria-hidden="true" size={21} />{copy.playChapterKicker}</p>
               <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.playChapterBody}</p>
+              <dl className="chapter-facts" aria-label={copy.playChapterTitle}>
+                <div><dt>{dictionary.play.boardSize}</dt><dd>19×19</dd></div>
+                <div><dt>{dictionary.play.timeControl}</dt><dd>{dictionary.timeControls.rapid.name}</dd></div>
+                <div><dt>{dictionary.game.move}</dt><dd>124</dd></div>
+                <div><dt>{dictionary.game.yourTurn}</dt><dd>06:42</dd></div>
+              </dl>
               <nav aria-label={copy.playChapterAction} className="board-size-choices">
                 {([9, 13, 19] as const).map((size) => (
                   <Link aria-label={`${copy.playChapterAction}: ${size}×${size}`} href={`${href("/play")}?size=${size}`} key={size}>
@@ -151,7 +137,7 @@ export function Hero() {
           </div>
         </section>
 
-        <div className="home-feature-pair" ref={featurePairRef}>
+        <div className="home-feature-pair">
           <section aria-labelledby="home-learn-title" className="home-chapter home-chapter--learn" id="home-learn">
             <div className="home-chapter-inner">
               <Link aria-label={copy.learnChapterAction} className="board-feature-link" href={learnHref}>
@@ -161,6 +147,9 @@ export function Hero() {
                 <p className="chapter-kicker"><BookOpen aria-hidden="true" size={21} />{copy.learnChapterKicker}</p>
                 <h2 id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
                 <p>{copy.learnChapterBody}</p>
+                <div className="chapter-progress" aria-label={copy.learnChapterTitle}>
+                  <span><i style={{ width: "34%" }} /></span><strong>6 / 18</strong>
+                </div>
               </div>
             </div>
           </section>
@@ -174,6 +163,10 @@ export function Hero() {
                 <p className="chapter-kicker"><Puzzle aria-hidden="true" size={21} />{copy.puzzlesChapterKicker}</p>
                 <h2 id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
                 <p>{copy.puzzlesChapterBody}</p>
+                <dl className="chapter-facts chapter-facts--compact" aria-label={copy.puzzlesChapterTitle}>
+                  <div><dt>{dictionary.puzzles.daily}</dt><dd>184</dd></div>
+                  <div><dt>{dictionary.puzzles.lifeAndDeath}</dt><dd>{dictionary.puzzles.intermediate}</dd></div>
+                </dl>
               </div>
             </div>
           </section>
@@ -185,6 +178,11 @@ export function Hero() {
               <p className="chapter-kicker"><Search aria-hidden="true" size={21} />{copy.reviewChapterKicker}</p>
               <h2 id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
               <p>{copy.reviewChapterBody}</p>
+              <dl className="chapter-facts chapter-facts--inverse" aria-label={copy.reviewChapterTitle}>
+                <div><dt>{dictionary.analysisReview.move}</dt><dd>124</dd></div>
+                <div><dt>{dictionary.analysisReview.winChance}</dt><dd>63%</dd></div>
+                <div><dt>{dictionary.analysisReview.score}</dt><dd>+2.7</dd></div>
+              </dl>
             </div>
             <Link aria-label={copy.reviewChapterAction} className="board-feature-link" href={reviewHref}>
               <GoBoardScene label={copy.reviewChapterTitle} scene="review" />
@@ -206,6 +204,21 @@ export function Hero() {
             <article><span>{copy.recentlyWaitingPlayers}</span><strong>{displayCount(summary?.recentlyWaitingPlayers)}</strong></article>
             <article><span>{copy.unfinishedGames}</span><strong>{displayCount(summary?.unfinishedGames)}</strong></article>
             <article><span>{copy.gamesStartedLast24Hours}</span><strong>{displayCount(summary?.gamesStartedLast24Hours)}</strong></article>
+          </div>
+
+          <div className="progress-preview" aria-hidden="true">
+            <div>
+              <span>{dictionary.profile.globalRating}</span>
+              <strong>1,842</strong>
+              <small>+36</small>
+            </div>
+            <svg viewBox="0 0 720 120" preserveAspectRatio="none">
+              <path className="progress-preview__area" d="M0 102C72 96 114 88 168 91S258 67 314 72 401 51 466 57 555 29 612 38 678 20 720 12V120H0Z" />
+              <path className="progress-preview__line" d="M0 102C72 96 114 88 168 91S258 67 314 72 401 51 466 57 555 29 612 38 678 20 720 12" />
+            </svg>
+            <ol className="progress-preview__form">
+              {["W", "W", "L", "W", "W"].map((result, index) => <li className={result === "W" ? "is-win" : "is-loss"} key={`${result}-${index}`}>{result}</li>)}
+            </ol>
           </div>
 
           <div className="platform-activity-status">

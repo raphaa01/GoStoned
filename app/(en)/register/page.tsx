@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AuthForm } from "@/components/auth/AuthForm";
 import { AppShell } from "@/components/layout/AppShell";
 import { configuredOAuthProviders } from "@/lib/auth/oauth";
@@ -16,6 +17,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   return (
     <AppShell>
       <div className="auth-page auth-page--register">
+        <div aria-hidden="true" className="auth-material">
+          <Image alt="" height={1024} priority sizes="(max-width: 760px) 100vw, 52vw" src="/images/gostone-hero-stone.webp" width={1536} />
+        </div>
         <AuthForm
           configuredOAuthProviders={configuredOAuthProviders()}
           mode="register"

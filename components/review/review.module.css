@@ -43,7 +43,7 @@
 .whiteStone { fill: #f4f1e8; stroke: #c6c1b5; stroke-width: .3; filter: drop-shadow(.4px .6px .5px rgba(0,0,0,.35)); }
 .playedMarker { fill: var(--color-oxide); stroke: #fff; stroke-width: .35; }
 .bestMarker { fill: rgb(71 117 99 / .12); stroke: var(--color-moss-strong); stroke-width: .8; stroke-dasharray: 1.8 1.2; }
-.moveControls { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: min(100%, 560px); margin-top: 12px; }
+.moveControls { display: grid; grid-template-columns: 42px 42px minmax(0, 1fr) auto 42px; align-items: center; gap: 7px; width: min(100%, 690px); margin-top: 12px; }
 .moveControls button { display: flex; height: 40px; align-items: center; justify-content: center; gap: 7px; padding-inline: 10px; border: 1px solid var(--color-line); border-radius: 3px; background: transparent; color: var(--color-ink); cursor: pointer; }
 .moveControls button:hover:not(:disabled) { border-color: var(--color-moss); color: var(--color-moss-strong); }
 .moveControls button:disabled { opacity: .35; }
@@ -150,7 +150,7 @@
   .reviewHeader > a { font-size: .88rem; }
   .engineBadge { font-size: .62rem; }
   .coachCard { padding: 14px 15px 15px; }
-  .moveControls { grid-template-columns: 42px minmax(0, 1fr) 94px; }
+  .moveControls { grid-template-columns: 38px 38px minmax(74px, 1fr) 88px 38px; gap: 4px; }
   .moveControls button { height: 42px; padding-inline: 8px; }
   .moveControls > span { font-size: .9rem; }
   .nextMove { min-width: 0; }
