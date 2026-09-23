@@ -17,6 +17,7 @@ def create_artifact(
     *,
     preset_id: str = "short",
     model_version: int | None = None,
+    quality_approved: bool | None = None,
 ) -> Path:
     run_dir = root / run_id
     artifact_dir = run_dir / "artifact"
@@ -28,8 +29,11 @@ def create_artifact(
         artifact_dir / "gostone-japanese-v1.pt",
     )
     (artifact_dir / "gostone-japanese-v1.onnx").write_bytes(b"test-onnx")
+    metadata = {"rules": "japanese", "komi": 6.5}
+    if quality_approved is not None:
+        metadata["quality_gate"] = {"approved": quality_approved}
     (artifact_dir / "gostone-japanese-v1.json").write_text(
-        json.dumps({"rules": "japanese", "komi": 6.5}),
+        json.dumps(metadata),
         encoding="utf-8",
     )
     (run_dir / "config.json").write_text(
@@ -46,6 +50,13 @@ def create_artifact(
 
 
 class ArenaTests(unittest.TestCase):
+    def test_rejected_candidate_is_not_offered_as_a_new_ai_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_artifact(root, "released", model_version=3, quality_approved=True)
+            create_artifact(root, "candidate", model_version=4, quality_approved=False)
+            self.assertEqual([model.id for model in ModelCatalog(root).artifacts()], ["released"])
+
     def test_catalog_lists_only_complete_japanese_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
