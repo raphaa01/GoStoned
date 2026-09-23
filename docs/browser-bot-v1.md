@@ -50,3 +50,10 @@ bekommt eine neue SHA-256-ID. Bereits begonnene Partien behalten ihre gebundene
 Modellversion. Nominale Stärken ersetzen keine Kalibrierungsliga: Ein Profil darf
 erst als gewerteter Gegner veröffentlicht werden, wenn die bestehenden
 Kalibrierungs- und Auditbedingungen erfüllt sind.
+
+Das lokale Training Lab erzeugt ab V5 einen neuen Modellvertrag mit 23 Eingabeebenen,
+Global-Pooling und zusätzlichen Score-, Territory- und Gruppenstatus-Heads. V5 startet
+mit zufälligen Gewichten; V6+ übernimmt ausschließlich V5-Familiengewichte und deren
+Replay-Daten. Ein erzeugtes V5-Modell ersetzt den oben genannten produktiven V4-Vertrag
+nicht automatisch. Die Produktionsintegration benötigt weiterhin eine ausdrückliche
+Änderung von `GOSTONE_BOT_MODEL`, Browser-Worker und Versionsbindung.
