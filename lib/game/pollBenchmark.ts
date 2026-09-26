@@ -192,6 +192,8 @@ const GAME_READ_SQL = `
          ) AS white_player_name,
          g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
          g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+         browser_binding.model_version AS browser_bot_model_version,
+         browser_binding.model_sha256 AS browser_bot_model_sha256,
          CASE WHEN g.black_player_key = game_bot.bot_player_key
            THEN COALESCE(calibrated_binding.opponent_rating,browser_binding.opponent_rating)
            ELSE black_rating.rating END AS black_rating,
