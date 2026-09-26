@@ -94,7 +94,7 @@ test("the Japanese rulebook handoff names the exact proposal-only model boundary
   const handoff = await source("docs", "browser-bot-v1.md");
   assert.match(agents, /GOSTONE_BOT_MODEL/);
   assert.match(agents, /proposal-only/);
-  assert.match(handoff, /gostone-japanese-v4\.onnx/);
+  assert.match(handoff, /gostone-japanese-v8\.onnx/);
   assert.match(handoff, /japaneseScoring\.ts/);
   assert.match(handoff, /Modal[\s\S]*nicht[\s\S]*aufrufen/);
 });

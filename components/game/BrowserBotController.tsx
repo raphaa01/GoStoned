@@ -6,7 +6,7 @@ import {
   generateBrowserBotMove,
   proposeJapaneseSettlement,
 } from "@/lib/bot/browserBotClient";
-import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
+import { goStoneBotModelForIdentity } from "@/lib/bot/modelV1";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import type { GameState, Position, Stone } from "@/lib/game/types";
 
@@ -50,6 +50,8 @@ function humanConfirmed(game: GameState, color: Stone): boolean {
 async function postBotAction(
   gameId: string,
   playerKey: string,
+  modelVersion: string,
+  modelSha256: string,
   body: Record<string, unknown>,
 ): Promise<GameState> {
   const response = await fetch(`/api/games/${gameId}/browser-bot`, {
@@ -60,8 +62,8 @@ async function postBotAction(
     },
     body: JSON.stringify({
       ...body,
-      modelVersion: GOSTONE_BOT_MODEL.modelVersion,
-      modelSha256: GOSTONE_BOT_MODEL.artifactSha256,
+      modelVersion,
+      modelSha256,
     }),
   });
   const data = await readApi<{ actor: string; game: GameState }>(response);
@@ -104,6 +106,10 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
     const snapshot = gameRef.current;
     const color = botColor(snapshot);
     if (!color) return;
+    const model = goStoneBotModelForIdentity(
+      snapshot.browserBotModelVersion ?? undefined,
+      snapshot.browserBotModelSha256 ?? undefined,
+    );
     activeAction.current = moveActionKey;
     let cancelled = false;
 
@@ -120,6 +126,8 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
           komi: snapshot.komi,
           targetRating: botRating(snapshot, color),
           gameVersion: snapshot.version,
+          modelVersion: model.modelVersion,
+          modelSha256: model.artifactSha256,
           excludedMoves,
         });
         const remainingDelay = delayFor(snapshot.id, snapshot.version) - (Date.now() - startedAt);
@@ -128,11 +136,17 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
         }
         if (cancelled) return;
         try {
-          const updated = await postBotAction(snapshot.id, playerKey, {
-            kind: "move",
-            expectedVersion: snapshot.version,
-            move,
-          });
+          const updated = await postBotAction(
+            snapshot.id,
+            playerKey,
+            model.modelVersion,
+            model.artifactSha256,
+            {
+              kind: "move",
+              expectedVersion: snapshot.version,
+              move,
+            },
+          );
           if (!cancelled) onGame(updated);
           return;
         } catch (error) {
@@ -164,6 +178,10 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
     const snapshot = gameRef.current;
     const color = botColor(snapshot);
     if (!color || !snapshot.scoring) return;
+    const model = goStoneBotModelForIdentity(
+      snapshot.browserBotModelVersion ?? undefined,
+      snapshot.browserBotModelSha256 ?? undefined,
+    );
     if (
       scoringActionKey.startsWith("settlement:")
       && settlementBoard.current === snapshot.scoring.boardHash
@@ -180,11 +198,19 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
           komi: snapshot.komi,
           targetRating: botRating(snapshot, color),
           gameVersion: snapshot.version,
-        }).then((proposal) => postBotAction(snapshot.id, playerKey, {
-          kind: "settlement",
-          expectedRevision: snapshot.scoring!.revision,
-          deadStones: proposal.deadStones,
-        })).then((updated) => {
+          modelVersion: model.modelVersion,
+          modelSha256: model.artifactSha256,
+        }).then((proposal) => postBotAction(
+          snapshot.id,
+          playerKey,
+          model.modelVersion,
+          model.artifactSha256,
+          {
+            kind: "settlement",
+            expectedRevision: snapshot.scoring!.revision,
+            deadStones: proposal.deadStones,
+          },
+        )).then((updated) => {
           if (cancelled) return;
           settlementBoard.current = snapshot.scoring!.boardHash;
           onGame(updated);
@@ -200,17 +226,23 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
       };
     }
 
-    void postBotAction(snapshot.id, playerKey, {
-          kind: "confirm",
-          expectedRevision: snapshot.scoring.revision,
-        }).then((updated) => {
-          if (!cancelled) onGame(updated);
-        }).catch((error) => {
-          if (!cancelled) {
-            activeAction.current = null;
-            onError(error);
-          }
-        });
+    void postBotAction(
+      snapshot.id,
+      playerKey,
+      model.modelVersion,
+      model.artifactSha256,
+      {
+        kind: "confirm",
+        expectedRevision: snapshot.scoring.revision,
+      },
+    ).then((updated) => {
+      if (!cancelled) onGame(updated);
+    }).catch((error) => {
+      if (!cancelled) {
+        activeAction.current = null;
+        onError(error);
+      }
+    });
     return () => {
       cancelled = true;
       if (activeAction.current === scoringActionKey) activeAction.current = null;

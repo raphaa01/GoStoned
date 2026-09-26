@@ -10,8 +10,11 @@ import {
 } from "./trainingGame";
 
 test("training kyu ranks map onto the browser model strength range", () => {
-  assert.equal(kyuToBotRating(TRAINING_KYU_MIN), 1_950);
-  assert.equal(kyuToBotRating(14), 1_300);
+  assert.equal(kyuToBotRating(TRAINING_KYU_MIN), 2_100);
+  assert.equal(kyuToBotRating(6), 1_800);
+  assert.equal(kyuToBotRating(12), 1_500);
+  assert.equal(kyuToBotRating(17), 1_200);
+  assert.equal(kyuToBotRating(23), 900);
   assert.equal(kyuToBotRating(TRAINING_KYU_MAX), 600);
   assert.equal(GOSTONE_BOT_MODEL.rules, "japanese");
   assert.throws(() => kyuToBotRating(0), RangeError);

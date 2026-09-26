@@ -1,0 +1,75 @@
+{
+  "integrationContractVersion": "gostone-v8-website-package-v1",
+  "existingWebsiteApiContract": "gostone-browser-bot-v1",
+  "model": "GoStoneJapaneseStudent",
+  "displayName": "GoStone AI v8",
+  "version": "v8",
+  "architectureVersion": 5,
+  "artifact": "gostone-japanese-v8.onnx",
+  "sha256": "47f0f57d51fd7e00becd5d85b1b5bcab62446538e376aa043b5a1a918917fb95",
+  "bytes": 14825412,
+  "maximumBytes": 15000000,
+  "rules": "japanese",
+  "komi": 6.5,
+  "input": {
+    "name": "features",
+    "dtype": "float32",
+    "shape": [null, 23, 19, 19],
+    "smallBoardEmbedding": "centered",
+    "planes": [
+      "black stones",
+      "white stones",
+      "black to move",
+      "white to move",
+      "active board mask",
+      "komi divided by 20, clipped to [-1,1]",
+      "move number divided by board area, clipped to [0,1]",
+      "strength: (rating-600)/1500, clipped to [0,1]",
+      "white stones captured by Black divided by board area",
+      "black stones captured by White divided by board area",
+      "consecutive passes divided by 2, clipped to [0,1]",
+      "last move point",
+      "simple-ko forbidden point",
+      "Black stones with 1 liberty",
+      "White stones with 1 liberty",
+      "Black stones with 2 liberties",
+      "White stones with 2 liberties",
+      "Black stones with 3 or more liberties",
+      "White stones with 3 or more liberties",
+      "previous board 1: Black stones",
+      "previous board 1: White stones",
+      "previous board 2: Black stones",
+      "previous board 2: White stones"
+    ]
+  },
+  "outputs": {
+    "policy_logits": {"shape": [null, 362], "meaning": "rank-conditioned move logits; index 361 is pass"},
+    "value": {"shape": [null], "meaning": "side-to-move win value"},
+    "score": {"shape": [null], "meaning": "expected side-to-move score lead divided by board area"},
+    "ownership": {"shape": [null, 361], "meaning": "fixed-color ownership: -1 Black, +1 White"},
+    "survival_logits": {"shape": [null, 361], "meaning": "compatibility survival confidence"},
+    "score_stdev": {"shape": [null], "meaning": "score forecast uncertainty"},
+    "territory_logits": {"shape": [null, 3, 361], "classes": ["Black", "White", "neutral/dame"]},
+    "status_logits": {"shape": [null, 4, 361], "classes": ["alive", "dead", "seki", "unsettled"]},
+    "score_logits": {"shape": [null, 41], "meaning": "normalized score distribution"}
+  },
+  "strengthProfiles": [
+    {"nominalElo": 600, "value": 0.0},
+    {"nominalElo": 900, "value": 0.2},
+    {"nominalElo": 1200, "value": 0.4},
+    {"nominalElo": 1500, "value": 0.6},
+    {"nominalElo": 1800, "value": 0.8},
+    {"nominalElo": 2100, "value": 1.0}
+  ],
+  "settlement": {
+    "authority": "proposal-only",
+    "requiresPlayerAgreement": true,
+    "automaticSekiClassificationAllowed": false
+  },
+  "quality": {
+    "arenaVsV7": {"games": 144, "wins": 83, "losses": 60, "draws": 1, "score": 0.5798611111111112},
+    "arenaVsV5": {"games": 36, "wins": 26, "losses": 10, "draws": 0, "score": 0.7222222222222222},
+    "promotionApproved": false,
+    "promotionBlockers": ["Seki precision below 35 percent", "Seki recall below 35 percent"]
+  }
+}

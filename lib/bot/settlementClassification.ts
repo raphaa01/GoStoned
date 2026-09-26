@@ -18,6 +18,17 @@ export function ownershipSurvivalProbability(
     : (1 + boundedOwnership) / 2;
 }
 
+export function statusRequiresPlayerAgreement(input: {
+  alive: number;
+  dead: number;
+  seki: number;
+  unsettled: number;
+}): boolean {
+  const logits = [input.alive, input.dead, input.seki, input.unsettled];
+  if (logits.some((value) => !Number.isFinite(value))) return true;
+  return Math.max(input.seki, input.unsettled) >= Math.max(input.alive, input.dead);
+}
+
 export function classifySettlementGroup(input: {
   modelSurvival: number;
   ownershipSurvival: number;

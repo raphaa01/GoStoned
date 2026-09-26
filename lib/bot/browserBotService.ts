@@ -8,7 +8,11 @@ import {
 } from "@/lib/game/gameService";
 import { GameServiceError } from "@/lib/game/gameServiceError";
 import type { GameState, Position } from "@/lib/game/types";
-import { GOSTONE_BOT_MODEL, type GoStoneBotMove } from "./modelV1";
+import {
+  GOSTONE_BOT_MODEL,
+  goStoneBotModelForIdentity,
+  type GoStoneBotMove,
+} from "./modelV1";
 
 type BrowserBotBindingRow = {
   bot_player_key: string;
@@ -43,23 +47,30 @@ async function bindingForHuman(
   if (!binding) conflict("This game has no browser-controlled bot opponent.", "bot_not_found");
   if (
     binding.model_contract_version !== GOSTONE_BOT_MODEL.contractVersion
-    || binding.model_version !== GOSTONE_BOT_MODEL.modelVersion
-    || binding.model_sha256 !== GOSTONE_BOT_MODEL.artifactSha256
-  ) conflict("This game is bound to another browser bot artifact.", "bot_model_mismatch");
+  ) conflict("This game is bound to another browser bot contract.", "bot_model_mismatch");
+  try {
+    goStoneBotModelForIdentity(binding.model_version, binding.model_sha256);
+  } catch {
+    conflict("This game is bound to an unsupported browser bot artifact.", "bot_model_mismatch");
+  }
   return binding;
 }
 
-function assertModelIdentity(modelVersion: unknown, modelSha256: unknown): void {
+function assertModelIdentity(
+  binding: BrowserBotBindingRow,
+  modelVersion: unknown,
+  modelSha256: unknown,
+): void {
   if (
-    modelVersion !== GOSTONE_BOT_MODEL.modelVersion
-    || modelSha256 !== GOSTONE_BOT_MODEL.artifactSha256
+    modelVersion !== binding.model_version
+    || modelSha256 !== binding.model_sha256
   ) {
     conflict("The browser bot model identity is not supported.", "bot_model_mismatch");
   }
 }
 
-function actionIdentity(gameId: string, version: number): string {
-  return `browser:${GOSTONE_BOT_MODEL.modelVersion}:${gameId}:${version}`;
+function actionIdentity(gameId: string, version: number, modelVersion: string): string {
+  return `browser:${modelVersion}:${gameId}:${version}`;
 }
 
 export async function submitBrowserBotMove(input: {
@@ -70,8 +81,8 @@ export async function submitBrowserBotMove(input: {
   expectedVersion: number;
   move: GoStoneBotMove;
 }): Promise<GameState> {
-  assertModelIdentity(input.modelVersion, input.modelSha256);
   const binding = await bindingForHuman(input.gameId, input.humanPlayerKey);
+  assertModelIdentity(binding, input.modelVersion, input.modelSha256);
   const updated = await submitMove(
     input.gameId,
     binding.bot_player_key,
@@ -83,10 +94,10 @@ export async function submitBrowserBotMove(input: {
     },
     {
       executionAudit: {
-        requestIdentity: actionIdentity(input.gameId, input.expectedVersion),
+        requestIdentity: actionIdentity(input.gameId, input.expectedVersion, binding.model_version),
         modelContractVersion: binding.model_contract_version,
-        modelVersion: GOSTONE_BOT_MODEL.modelVersion,
-        modelSha256: GOSTONE_BOT_MODEL.artifactSha256,
+        modelVersion: binding.model_version,
+        modelSha256: binding.model_sha256,
         workerId: "browser",
       },
     },
@@ -136,8 +147,8 @@ export async function applyBrowserBotSettlement(input: {
   expectedRevision: number;
   deadStones: unknown;
 }): Promise<GameState> {
-  assertModelIdentity(input.modelVersion, input.modelSha256);
   const binding = await bindingForHuman(input.gameId, input.humanPlayerKey);
+  assertModelIdentity(binding, input.modelVersion, input.modelSha256);
   let game = await getGameState(input.gameId, binding.bot_player_key);
   if (!game.scoring || game.scoring.revision !== input.expectedRevision) {
     conflict("The scoring proposal changed.", "scoring_revision_conflict");
@@ -174,7 +185,7 @@ export async function confirmBrowserBotScore(input: {
   modelSha256: unknown;
   expectedRevision: number;
 }): Promise<GameState> {
-  assertModelIdentity(input.modelVersion, input.modelSha256);
   const binding = await bindingForHuman(input.gameId, input.humanPlayerKey);
+  assertModelIdentity(binding, input.modelVersion, input.modelSha256);
   return confirmScore(input.gameId, binding.bot_player_key, input.expectedRevision);
 }

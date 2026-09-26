@@ -5,13 +5,14 @@
 Für Botzüge und Vorschläge zur japanischen Endwertung ist ausschließlich
 `GOSTONE_BOT_MODEL` aus `lib/bot/modelV1.ts` maßgeblich. Das aktuelle Artefakt ist:
 
-- Modell: `public/bot-models/gostone-japanese-v4.onnx`
-- Version: `v4`
-- SHA-256: `24252f2845699aeb1b2a42e461bab1197d13f322e68e964ea0ebd9b974ccef61`
+- Modell: `public/bot-models/gostone-japanese-v8.onnx`
+- Version: `v8`
+- SHA-256: `47f0f57d51fd7e00becd5d85b1b5bcab62446538e376aa043b5a1a918917fb95`
 - Regeln/Training: Japanisch, Komi 6,5
-- Training: 72 KataGo-Partien, 10.603 Positionen und 30 Epochen
-- Qualität: 11,8 % besserer kombinierter Holdout-Wert als v3, keine gemessene
-  Regression eines Ausgabekopfs
+- Eingabe: 23 Ebenen mit Ko-Punkt, Freiheitsklassen und zwei Brett-Historien
+- Training: 336 KataGo-Partien, 164.775 Trainings-/Replay-Positionen und 30 Epochen
+- Qualität: 57,99 % gegen v7 in 144 farbgetauschten Partien; der Seki-Kopf hat
+  den Qualitätstest nicht bestanden und bleibt daher ausschließlich unsichere Evidenz
 - Browserlaufzeit: `workers/browser/gostoneBot.worker.ts`
 - Servergrenze: `app/api/games/[gameId]/browser-bot/route.ts`
 
@@ -31,10 +32,12 @@ Der Worker liefert `GoStoneJapaneseSettlementProposal` mit:
   widerspruchsfrei ausgewertet werden kann.
 
 Die Gruppenklassifikation kombiniert den stärker gewichteten Ownership-Kopf mit
-dem Survival-Kopf. Zwei vollständig eingeschlossene Augen schützen eine Gruppe
-vor einer falschen Tot-Markierung; Gruppen mit wenigen Freiheiten werden nur bei
-zusätzlicher gegnerischer Ownership-Evidenz als tot vorgeschlagen. Solange eine
-Gruppe unklar bleibt, darf keine scheinpräzise Punktzahl ausgegeben werden.
+dem Survival-Kopf. Der v8-Survival-Kopf enthält Status-Evidenz, aber Seki und
+unsettled werden niemals automatisch finalisiert. Zwei vollständig eingeschlossene
+Augen schützen eine Gruppe vor einer falschen Tot-Markierung; Gruppen mit wenigen
+Freiheiten werden nur bei zusätzlicher gegnerischer Ownership-Evidenz als tot
+vorgeschlagen. Solange eine Gruppe unklar bleibt, darf keine scheinpräzise
+Punktzahl ausgegeben werden.
 
 Die Ausgabe hat immer `authority: "proposal-only"`. Für das japanische Rulebook
 muss der Code den Typ aus `lib/bot/modelV1.ts` verwenden und die abschließende
@@ -44,8 +47,9 @@ müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
 
 ## Training und Rating
 
-Der Strength-Kanal bildet nominal 600 bis 2100 Ratingpunkte ab. Das Artefakt ist
-versioniert; ein späteres Modell wird mit einer neuen Version neben v4 veröffentlicht und
+Der Strength-Kanal bildet die sechs trainierten Profile 600, 900, 1200, 1500,
+1800 und 2100 exakt auf 0,0 bis 1,0 ab. Das Artefakt ist versioniert; ein späteres
+Modell wird mit einer neuen Version neben v8 veröffentlicht und
 bekommt eine neue SHA-256-ID. Bereits begonnene Partien behalten ihre gebundene
 Modellversion. Nominale Stärken ersetzen keine Kalibrierungsliga: Ein Profil darf
 erst als gewerteter Gegner veröffentlicht werden, wenn die bestehenden

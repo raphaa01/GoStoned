@@ -561,7 +561,7 @@ export const en = {
     estimateScore: "Estimate score",
     estimatingScore: "Estimating…",
     japaneseEstimate: "Approximate Japanese score",
-    localEstimateNote: "Local GoStone v4 estimate; no paid analysis and not a final result.",
+    localEstimateNote: "Local GoStone v8 estimate; no paid analysis and not a final result.",
     estimateUnclear: "The position is too unclear for a reliable score.",
     uncertainGroups: "{count} groups are still uncertain.",
     requestTakeback: "Request takeback",

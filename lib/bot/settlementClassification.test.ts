@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   classifySettlementGroup,
   ownershipSurvivalProbability,
+  statusRequiresPlayerAgreement,
 } from "./settlementClassification";
 
 test("derives stone survival from KataGo-compatible ownership perspective", () => {
@@ -12,7 +13,7 @@ test("derives stone survival from KataGo-compatible ownership perspective", () =
   assert.equal(ownershipSurvivalProbability("white", -1), 0);
 });
 
-test("combines both v4 settlement heads instead of trusting survival alone", () => {
+test("combines both v8 settlement heads instead of trusting survival alone", () => {
   assert.equal(classifySettlementGroup({
     modelSurvival: 0.5,
     ownershipSurvival: 0.12,
@@ -43,4 +44,31 @@ test("keeps conflicting mid-confidence evidence visibly uncertain", () => {
     libertyCount: 4,
     enclosedEyeCount: 0,
   }).status, "uncertain");
+});
+
+test("v8 seki and unsettled status evidence can only force player agreement", () => {
+  assert.equal(statusRequiresPlayerAgreement({
+    alive: 3,
+    dead: -1,
+    seki: 4,
+    unsettled: 0,
+  }), true);
+  assert.equal(statusRequiresPlayerAgreement({
+    alive: 3,
+    dead: -1,
+    seki: 0,
+    unsettled: 4,
+  }), true);
+  assert.equal(statusRequiresPlayerAgreement({
+    alive: 4,
+    dead: -1,
+    seki: 3,
+    unsettled: 0,
+  }), false);
+  assert.equal(statusRequiresPlayerAgreement({
+    alive: Number.NaN,
+    dead: 0,
+    seki: 0,
+    unsettled: 0,
+  }), true);
 });

@@ -43,7 +43,9 @@ export function kyuToBotRating(kyu: number): number {
   if (!Number.isInteger(kyu) || kyu < TRAINING_KYU_MIN || kyu > TRAINING_KYU_MAX) {
     throw new RangeError(`Training rank must be ${TRAINING_KYU_MIN} through ${TRAINING_KYU_MAX} kyu.`);
   }
-  return 2_000 - kyu * 50;
+  const continuous = 600
+    + ((TRAINING_KYU_MAX - kyu) / (TRAINING_KYU_MAX - TRAINING_KYU_MIN)) * 1_500;
+  return Math.round(continuous / 50) * 50;
 }
 
 export function createTrainingPosition(boardSize: BoardSize): TrainingPosition {

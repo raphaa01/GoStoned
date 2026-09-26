@@ -563,7 +563,7 @@ export const de = {
     estimateScore: "Spielstand schätzen",
     estimatingScore: "Wird geschätzt…",
     japaneseEstimate: "Ungefähre japanische Wertung",
-    localEstimateNote: "Lokale GoStone-v4-Schätzung; keine bezahlte Analyse und kein Endergebnis.",
+    localEstimateNote: "Lokale GoStone-v8-Schätzung; keine bezahlte Analyse und kein Endergebnis.",
     estimateUnclear: "Die Stellung ist für eine verlässliche Schätzung noch zu unklar.",
     uncertainGroups: "{count} Gruppen sind noch unklar.",
     requestTakeback: "Zugrücknahme anfragen",

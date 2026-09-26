@@ -24,7 +24,7 @@ GoStone ist eine moderne Online-Plattform für Go, Baduk und Weiqi. Zwei Gäste 
 - serverseitige Zugreihenfolge, Captures, Suicide- und japanische Ko-Prüfung
 - Pass, pausierte Wertungsphase nach zwei Pässen, beiderseitige
   Totstein-Bestätigung, Wiederaufnahme und japanische Gebietswertung
-- kostenlose lokale GoStone-v4-Spielstandsschätzung und beidseitig bestätigte
+- kostenlose lokale GoStone-v8-Spielstandsschätzung und beidseitig bestätigte
   Zugrücknahme in Ranglisten- und Freundschaftspartien
 - dauerhaft gespeicherte Spiele, Züge, Ergebnisse und Statistiken
 - responsive Desktop- und Mobile-Oberfläche
