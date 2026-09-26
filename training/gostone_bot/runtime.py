@@ -52,20 +52,23 @@ class RunJournal:
         self.state_path = run_dir / "state.json"
         self.events_path = run_dir / "events.jsonl"
         self.state = load_json(self.state_path)
+        self._lock = threading.RLock()
 
     def update(self, **changes: Any) -> None:
         # The runner and the local control page are separate processes. Reload
         # before every write so a control action cannot restore stale progress.
-        self.state = load_json(self.state_path, self.state)
-        self.state.update(changes, updated_at=time.time())
-        atomic_json(self.state_path, self.state)
+        with self._lock:
+            self.state = load_json(self.state_path, self.state)
+            self.state.update(changes, updated_at=time.time())
+            atomic_json(self.state_path, self.state)
 
     def event(self, message: str, level: str = "info") -> None:
         entry = {"time": time.time(), "level": level, "message": message}
-        self.events_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.events_path.open("a", encoding="utf-8") as output:
-            output.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        self.update(message=message)
+        with self._lock:
+            self.events_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.events_path.open("a", encoding="utf-8") as output:
+                output.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            self.update(message=message)
 
 
 class ControlGate:
