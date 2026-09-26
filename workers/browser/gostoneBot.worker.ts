@@ -8,15 +8,18 @@ import {
   getNeighbors,
   replayMovesWithPrisoners,
 } from "@/lib/game/goEngine";
+import { buildLegacyV4Features, buildV8Features } from "@/lib/bot/v8Features";
 import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import type { Board, Position, Stone } from "@/lib/game/types";
 import {
   classifySettlementGroup,
   ownershipSurvivalProbability,
+  statusRequiresPlayerAgreement,
 } from "@/lib/bot/settlementClassification";
 import {
-  botStrengthForRating,
   GOSTONE_BOT_MODEL,
+  goStoneBotModelForIdentity,
+  type GoStoneBotRuntimeModel,
   type GoStoneBotMove,
   type GoStoneBotPosition,
   type GoStoneBotWorkerRequest,
@@ -26,18 +29,20 @@ import {
 } from "@/lib/bot/modelV1";
 
 const workerScope: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
+const sessionPromises = new Map<string, Promise<ort.InferenceSession>>();
 
-function inferenceSession(): Promise<ort.InferenceSession> {
-  if (sessionPromise) return sessionPromise;
+function inferenceSession(model: GoStoneBotRuntimeModel): Promise<ort.InferenceSession> {
+  const existing = sessionPromises.get(model.artifactSha256);
+  if (existing) return existing;
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.proxy = false;
   ort.env.wasm.wasmPaths = GOSTONE_BOT_MODEL.runtimeBaseUrl;
-  sessionPromise = ort.InferenceSession.create(GOSTONE_BOT_MODEL.artifactUrl, {
+  const created = ort.InferenceSession.create(model.artifactUrl, {
     executionProviders: ["wasm"],
     graphOptimizationLevel: "all",
   });
-  return sessionPromise;
+  sessionPromises.set(model.artifactSha256, created);
+  return created;
 }
 
 function boardOffset(size: number): number {
@@ -48,55 +53,20 @@ function positionKey({ x, y }: Position): string {
   return `${x}:${y}`;
 }
 
-function buildFeatures(position: GoStoneBotPosition): Float32Array {
-  const size = position.boardSize;
-  const area = GOSTONE_BOT_MODEL.maximumBoardSize ** 2;
-  const features = new Float32Array(GOSTONE_BOT_MODEL.inputPlanes * area);
-  const offset = boardOffset(size);
-  const replay = replayMovesWithPrisoners(size, [...position.moves]);
-  const lastMove = position.moves.at(-1);
-  const consecutivePasses = lastMove?.isPass
-    ? position.moves.at(-2)?.isPass ? 2 : 1
-    : 0;
-  const strength = botStrengthForRating(position.targetRating);
-  const boardArea = size * size;
-
-  const set = (plane: number, x: number, y: number, value: number) => {
-    const padded = (y + offset) * GOSTONE_BOT_MODEL.maximumBoardSize + x + offset;
-    features[plane * area + padded] = value;
-  };
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const stone = position.board[y][x];
-      set(0, x, y, stone === "black" ? 1 : 0);
-      set(1, x, y, stone === "white" ? 1 : 0);
-      set(2, x, y, position.toMove === "black" ? 1 : 0);
-      set(3, x, y, position.toMove === "white" ? 1 : 0);
-      set(4, x, y, 1);
-      set(5, x, y, Math.max(-1, Math.min(1, position.komi / 20)));
-      set(6, x, y, Math.min(1, position.moves.length / boardArea));
-      set(7, x, y, strength);
-      set(8, x, y, Math.min(1, replay.prisoners.capturedWhiteByBlack / boardArea));
-      set(9, x, y, Math.min(1, replay.prisoners.capturedBlackByWhite / boardArea));
-      set(10, x, y, Math.min(1, consecutivePasses / 2));
-    }
-  }
-  if (lastMove && !lastMove.isPass && lastMove.x !== null && lastMove.y !== null) {
-    set(11, lastMove.x, lastMove.y, 1);
-  }
-  return features;
-}
-
 async function runModel(position: GoStoneBotPosition) {
-  const session = await inferenceSession();
-  const features = buildFeatures(position);
-  return session.run({
-    [GOSTONE_BOT_MODEL.inputName]: new ort.Tensor(
+  const model = goStoneBotModelForIdentity(position.modelVersion, position.modelSha256);
+  const session = await inferenceSession(model);
+  const features = model.modelVersion === "v8"
+    ? buildV8Features(position)
+    : buildLegacyV4Features(position);
+  const outputs = await session.run({
+    [model.inputName]: new ort.Tensor(
       "float32",
       features,
-      [1, GOSTONE_BOT_MODEL.inputPlanes, 19, 19],
+      [1, model.inputPlanes, 19, 19],
     ),
   });
+  return { model, outputs };
 }
 
 function deterministicUnit(seed: string): number {
@@ -118,7 +88,11 @@ function policyPoint(index: number, size: number): Position | null {
   return x >= 0 && y >= 0 && x < size && y < size ? { x, y } : null;
 }
 
-function chooseMove(position: GoStoneBotPosition, policy: Float32Array): GoStoneBotMove {
+function chooseMove(
+  position: GoStoneBotPosition,
+  policy: Float32Array,
+  modelVersion: string,
+): GoStoneBotMove {
   const replay = replayMovesWithPrisoners(position.boardSize, [...position.moves]);
   const priorHashes = new Set(replay.positionHistory);
   const excluded = new Set((position.excludedMoves ?? []).map(positionKey));
@@ -155,7 +129,7 @@ function chooseMove(position: GoStoneBotPosition, policy: Float32Array): GoStone
   const weights = pool.map(({ logit }) => Math.exp((logit - maximum) / temperature));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
   let cursor = deterministicUnit(
-    `${position.gameId}:${position.gameVersion}:${GOSTONE_BOT_MODEL.modelVersion}`,
+    `${position.gameId}:${position.gameVersion}:${modelVersion}`,
   ) * total;
   for (let index = 0; index < pool.length; index += 1) {
     cursor -= weights[index];
@@ -167,10 +141,11 @@ function chooseMove(position: GoStoneBotPosition, policy: Float32Array): GoStone
 function numericOutput(
   outputs: ort.InferenceSession.OnnxValueMapType,
   name: string,
+  modelVersion: string,
 ): Float32Array {
   const value = outputs[name];
   if (!value || !(value.data instanceof Float32Array)) {
-    throw new Error(`The GoStone ${GOSTONE_BOT_MODEL.modelVersion} model output ${name} is missing.`);
+    throw new Error(`The GoStone ${modelVersion} model output ${name} is missing.`);
   }
   return value.data;
 }
@@ -236,6 +211,15 @@ function sigmoid(value: number): number {
   return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, value))));
 }
 
+function activeClassValue(
+  values: Float32Array,
+  classIndex: number,
+  size: number,
+  point: Position,
+): number {
+  return values[classIndex * 361 + (point.y + boardOffset(size)) * 19 + point.x + boardOffset(size)];
+}
+
 function groupShape(
   board: Board,
   stones: readonly Position[],
@@ -268,6 +252,8 @@ function settlementProposal(
   position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">,
   ownership: Float32Array,
   survival: Float32Array,
+  statusLogits: Float32Array | null,
+  model: GoStoneBotRuntimeModel,
 ): GoStoneJapaneseSettlementProposal {
   const boardGroups = groups(position.board);
   const candidateDead = new Set<string>();
@@ -290,7 +276,19 @@ function settlementProposal(
       ownershipSurvival,
       ...groupShape(position.board, group.stones, emptyRegions),
     });
-    const { status } = classified;
+    const averagedStatusLogit = (classIndex: number) => statusLogits
+      ? group.stones.reduce(
+          (sum, stone) => sum + activeClassValue(statusLogits, classIndex, position.boardSize, stone),
+          0,
+        ) / group.stones.length
+      : Number.NEGATIVE_INFINITY;
+    const requiresAgreement = statusLogits !== null && statusRequiresPlayerAgreement({
+      alive: averagedStatusLogit(0),
+      dead: averagedStatusLogit(1),
+      seki: averagedStatusLogit(2),
+      unsettled: averagedStatusLogit(3),
+    });
+    const status = requiresAgreement ? "uncertain" as const : classified.status;
     if (status === "dead") group.stones.forEach((stone) => candidateDead.add(positionKey(stone)));
     if (status === "uncertain") group.stones.forEach((stone) => uncertain.add(positionKey(stone)));
     return { ...group, status, survival: classified.survival };
@@ -352,8 +350,8 @@ function settlementProposal(
 
   return {
     contractVersion: "gostone-japanese-settlement-v1",
-    modelVersion: GOSTONE_BOT_MODEL.modelVersion,
-    modelSha256: GOSTONE_BOT_MODEL.artifactSha256,
+    modelVersion: model.modelVersion,
+    modelSha256: model.artifactSha256,
     authority: "proposal-only",
     boardSize: position.boardSize,
     stoppedMoveNumber: position.moves.length,
@@ -372,10 +370,11 @@ function settlementProposal(
 
 async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneBotWorkerResponse> {
   try {
+    const lastColor = request.position.moves.at(-1)?.color;
     const modelPosition: GoStoneBotPosition = request.kind === "move"
       ? request.position
-      : { ...request.position, toMove: "black" };
-    const outputs = await runModel(modelPosition);
+      : { ...request.position, toMove: lastColor === "black" ? "white" : "black" };
+    const { model, outputs } = await runModel(modelPosition);
     if (request.kind === "move") {
       return {
         id: request.id,
@@ -383,9 +382,10 @@ async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneB
         kind: "move",
         move: chooseMove(
           request.position,
-          numericOutput(outputs, GOSTONE_BOT_MODEL.outputs.policy),
+          numericOutput(outputs, model.outputs.policy, model.modelVersion),
+          model.modelVersion,
         ),
-        modelVersion: GOSTONE_BOT_MODEL.modelVersion,
+        modelVersion: model.modelVersion,
       };
     }
     return {
@@ -394,8 +394,12 @@ async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneB
       kind: "settlement",
       proposal: settlementProposal(
         request.position,
-        numericOutput(outputs, GOSTONE_BOT_MODEL.outputs.ownership),
-        numericOutput(outputs, GOSTONE_BOT_MODEL.outputs.survival),
+        numericOutput(outputs, model.outputs.ownership, model.modelVersion),
+        numericOutput(outputs, model.outputs.survival, model.modelVersion),
+        model.outputs.status
+          ? numericOutput(outputs, model.outputs.status, model.modelVersion)
+          : null,
+        model,
       ),
     };
   } catch (error) {

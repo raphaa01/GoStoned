@@ -67,6 +67,8 @@ type GameRow = {
   white_player_name: string;
   black_player_is_bot: boolean;
   white_player_is_bot: boolean;
+  browser_bot_model_version: string | null;
+  browser_bot_model_sha256: string | null;
   black_rating: string | number | null;
   black_rating_deviation: string | number | null;
   white_rating: string | number | null;
@@ -813,6 +815,8 @@ async function loadGame(
             ) AS white_player_name,
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
+            browser_binding.model_version AS browser_bot_model_version,
+            browser_binding.model_sha256 AS browser_bot_model_sha256,
             CASE WHEN g.black_player_key = game_bot.bot_player_key
               THEN COALESCE(calibrated_binding.opponent_rating,browser_binding.opponent_rating)
               ELSE black_rating.rating END AS black_rating,
@@ -1367,6 +1371,8 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerName: game.white_player_name,
     blackPlayerIsBot: game.black_player_is_bot,
     whitePlayerIsBot: game.white_player_is_bot,
+    browserBotModelVersion: game.browser_bot_model_version,
+    browserBotModelSha256: game.browser_bot_model_sha256,
     blackRating: game.black_rating === null ? null : Number(game.black_rating),
     blackRatingDeviation: game.black_rating_deviation === null ? null : Number(game.black_rating_deviation),
     whiteRating: game.white_rating === null ? null : Number(game.white_rating),
@@ -1430,6 +1436,8 @@ function withUpdatedGame(loaded: LoadedGame, row: GameRow): LoadedGame {
       white_player_name: loaded.game.white_player_name,
       black_player_is_bot: loaded.game.black_player_is_bot,
       white_player_is_bot: loaded.game.white_player_is_bot,
+      browser_bot_model_version: loaded.game.browser_bot_model_version,
+      browser_bot_model_sha256: loaded.game.browser_bot_model_sha256,
       rated: loaded.game.rated,
     },
   };

@@ -45,6 +45,8 @@ export type GameState = {
   whitePlayerName: string;
   blackPlayerIsBot?: boolean;
   whitePlayerIsBot?: boolean;
+  browserBotModelVersion?: string | null;
+  browserBotModelSha256?: string | null;
   blackRating?: number | null;
   blackRatingDeviation?: number | null;
   whiteRating?: number | null;

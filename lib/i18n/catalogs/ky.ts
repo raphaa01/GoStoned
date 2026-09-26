@@ -567,7 +567,7 @@ export const ky = {
     "estimateScore": "Болжолдуу балл",
     "estimatingScore": "Болжолдоо…",
     "japaneseEstimate": "Болжолдуу япон упай",
-    "localEstimateNote": "Жергиликтүү GoStone v4 болжолу; эч кандай акы төлөнүүчү анализ жана акыркы натыйжа эмес.",
+    "localEstimateNote": "Жергиликтүү GoStone v8 болжолу; эч кандай акы төлөнүүчү анализ жана акыркы натыйжа эмес.",
     "estimateUnclear": "Ишенимдүү балл алуу үчүн позиция өтө эле түшүнүксүз.",
     "uncertainGroups": "{count} топтор дагы эле белгисиз.",
     "requestTakeback": "Кайтарып алууну сураныңыз",
