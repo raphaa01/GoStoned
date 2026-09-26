@@ -11,11 +11,12 @@ type SchemaRow = {
   queue_rules_profile_default: string | null;
   queue_profile_constraint: string | null;
   queue_adaptive_constraint: string | null;
+  initial_rating_policy_constraint: string | null;
   takeback_rls: boolean;
 };
 
 async function checkProductionSchema(): Promise<void> {
-  console.log("Checking production matchmaking and Japanese scoring schema.");
+  console.log("Checking production schema requirements.");
 
   const databaseUrl = getDatabaseUrl();
   if (isLocalDatabase(databaseUrl)) {
@@ -49,6 +50,11 @@ async function checkProductionSchema(): Promise<void> {
          WHERE conname = 'matchmaking_queue_adaptive_state_check'
            AND conrelid = 'public.matchmaking_queue'::regclass)
          AS queue_adaptive_constraint,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'player_initial_rating_claims_policy_version_check'
+           AND conrelid = 'public.player_initial_rating_claims'::regclass)
+         AS initial_rating_policy_constraint,
        EXISTS (
          SELECT 1
            FROM pg_class relation
@@ -70,10 +76,11 @@ async function checkProductionSchema(): Promise<void> {
     queueRulesProfileDefault: row.queue_rules_profile_default,
     queueProfileConstraint: row.queue_profile_constraint,
     queueAdaptiveConstraint: row.queue_adaptive_constraint,
+    initialRatingPolicyConstraint: row.initial_rating_policy_constraint,
     takebackRls: row.takeback_rls,
   });
 
-  console.log("Production matchmaking and Japanese scoring schema is current.");
+  console.log("Production schema requirements are current.");
 }
 
 checkProductionSchema()

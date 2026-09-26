@@ -161,6 +161,7 @@ export const en = {
       invalid_credentials: "Username or password is incorrect.",
       invalid_starting_strength: "Choose a supported optional starting strength.",
       username_taken: "This username is already taken.",
+      registration_schema_outdated: "Account creation is temporarily unavailable because the database has not been updated yet.",
       oauth_registration_expired: "This account setup has expired. Continue with Google or Apple again.",
       rate_limited: "Too many attempts. Please wait and try again.",
       login_failed: "Could not log in.",

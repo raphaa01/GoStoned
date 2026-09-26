@@ -178,6 +178,7 @@ export const ja = {
       "password_too_long": "パスワードは最大で128文字までにする必要があります。",
       "invalid_credentials": "ユーザー名またはパスワードが正しくありません。",
       "username_taken": "このユーザー名は既に使用されています。",
+      "registration_schema_outdated": "データベースがまだ更新されていないため、現在アカウントを作成できません。",
       "oauth_registration_expired": "アカウント設定の有効期限が切れました。GoogleまたはAppleでもう一度続行してください。",
       "rate_limited": "試行回数が多すぎます。しばらく待ってから再度お試しください。",
       "login_failed": "ログインできませんでした。",

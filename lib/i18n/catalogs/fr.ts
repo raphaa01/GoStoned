@@ -178,6 +178,7 @@ export const fr = {
       "password_too_long": "Le mot de passe doit contenir au maximum 128 caractères.",
       "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect.",
       "username_taken": "Ce nom d'utilisateur est déjà pris.",
+      "registration_schema_outdated": "La création de compte est temporairement indisponible, car la base de données n'a pas encore été mise à jour.",
       "oauth_registration_expired": "Cette création de compte a expiré. Continuez à nouveau avec Google ou Apple.",
       "rate_limited": "Trop de tentatives. Veuillez patienter et réessayer.",
       "login_failed": "Impossible de se connecter.",

@@ -178,6 +178,7 @@ export const zh = {
       "password_too_long": "密码最多可包含128个字符。",
       "invalid_credentials": "用户名或密码不正确。",
       "username_taken": "该用户名已被使用。",
+      "registration_schema_outdated": "由于数据库尚未更新，暂时无法创建账户。",
       "oauth_registration_expired": "此账户设置已过期。请再次使用 Google 或 Apple 继续。",
       "rate_limited": "尝试次数过多。请稍候再试。",
       "login_failed": "无法登录。",

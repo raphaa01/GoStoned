@@ -35,6 +35,7 @@ const identity: VerifiedOAuthIdentity = {
 function oauthPool(options: {
   existing?: "confirmed" | "unconfirmed";
   intentUserId?: string | null;
+  schemaOutdated?: boolean;
   usernameTaken?: boolean;
 } = {}) {
   const statements: Array<{ sql: string; values: readonly unknown[] }> = [];
@@ -78,6 +79,12 @@ function oauthPool(options: {
         };
       }
       if (statement.startsWith("WITH account AS")) {
+        if (options.schemaOutdated) {
+          throw Object.assign(new Error("rating policy constraint rejected"), {
+            code: "23514",
+            constraint: "player_initial_rating_claims_policy_version_check",
+          });
+        }
         if (options.usernameTaken) {
           throw Object.assign(new Error("duplicate username"), {
             code: "23505",
@@ -268,6 +275,29 @@ test("a taken username rolls back without consuming the verified registration in
   );
   assert.equal(database.statements.at(-1)?.sql, "ROLLBACK");
   assert.equal(database.released(), true);
+});
+
+test("social registration reports an outdated rating-policy constraint precisely", async () => {
+  const database = oauthPool({ schemaOutdated: true });
+  await assert.rejects(
+    withPool(database.pool, () => completeOAuthRegistration(
+      "d".repeat(43),
+      "new_social_player",
+      { estimate: "unspecified", knownRank: null },
+    )),
+    (error: unknown) => {
+      assert.ok(error instanceof AuthError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, "registration_schema_outdated");
+      return true;
+    },
+  );
+
+  assert.equal(
+    database.statements.some(({ sql }) => sql.startsWith("DELETE FROM oauth_registration_intents WHERE")),
+    false,
+  );
+  assert.equal(database.statements.at(-1)?.sql, "ROLLBACK");
 });
 
 test("invalid or expired registration tokens fail before an account is created", async () => {

@@ -178,6 +178,7 @@ export const ko = {
       "password_too_long": "비밀번호는 최대 128자 이하여야 합니다.",
       "invalid_credentials": "사용자 이름 또는 비밀번호가 올바르지 않습니다.",
       "username_taken": "이 사용자 이름은 이미 사용 중입니다.",
+      "registration_schema_outdated": "데이터베이스가 아직 업데이트되지 않아 현재 계정을 만들 수 없습니다.",
       "oauth_registration_expired": "계정 설정이 만료되었습니다. Google 또는 Apple로 다시 진행해 주세요.",
       "rate_limited": "시도가 너무 많습니다. 잠시 기다린 후 다시 시도해 주세요.",
       "login_failed": "로그인할 수 없습니다.",

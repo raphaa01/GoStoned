@@ -15,6 +15,8 @@ const currentSnapshot: ProductionSchemaSnapshot = {
     "CHECK (rules_profile IN ('legacy-immediate-area', 'chinese-2002-gostone-v1', 'japanese-1989-gostone-v1'))",
   queueAdaptiveConstraint:
     "CHECK (rules_snapshot = 'japanese' AND rules_version_snapshot = 'japanese-1989-gostone-v1' AND scoring_method_snapshot = 'territory' AND komi_snapshot = 6.5)",
+  initialRatingPolicyConstraint:
+    "CHECK (policy_version IN ('starting-strength-v1', 'starting-strength-v2'))",
   takebackRls: true,
 };
 
@@ -41,5 +43,16 @@ test("rejects the old Chinese-only adaptive matchmaking constraint", () => {
         "CHECK (rules_snapshot = 'chinese' AND scoring_method_snapshot = 'area')",
     }),
     /adaptive matchmaking constraint/,
+  );
+});
+
+test("rejects a rating-policy constraint that blocks new accounts", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      initialRatingPolicyConstraint:
+        "CHECK (policy_version = 'starting-strength-v1')",
+    }),
+    /new-account rating-policy constraint/,
   );
 });
