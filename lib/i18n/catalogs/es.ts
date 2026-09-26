@@ -178,6 +178,7 @@ export const es = {
       "password_too_long": "La contraseña debe contener como máximo 128 caracteres.",
       "invalid_credentials": "El nombre de usuario o la contraseña son incorrectos.",
       "username_taken": "Este nombre de usuario ya está en uso.",
+      "registration_schema_outdated": "La creación de cuentas no está disponible temporalmente porque la base de datos aún no se ha actualizado.",
       "oauth_registration_expired": "Esta configuración de cuenta ha caducado. Continúa de nuevo con Google o Apple.",
       "rate_limited": "Demasiados intentos. Por favor, espere e inténtelo de nuevo.",
       "login_failed": "No se pudo iniciar sesión.",

@@ -163,6 +163,7 @@ export const de = {
       invalid_credentials: "Benutzername oder Passwort ist falsch.",
       invalid_starting_strength: "Wähle eine unterstützte optionale Spielstärke.",
       username_taken: "Dieser Benutzername ist bereits vergeben.",
+      registration_schema_outdated: "Die Kontoerstellung ist vorübergehend nicht verfügbar, weil die Datenbank noch nicht aktualisiert wurde.",
       oauth_registration_expired: "Diese Kontoeinrichtung ist abgelaufen. Fahre erneut mit Google oder Apple fort.",
       rate_limited: "Zu viele Versuche. Bitte warte und versuche es erneut.",
       login_failed: "Die Anmeldung ist fehlgeschlagen.",

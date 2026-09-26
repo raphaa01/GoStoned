@@ -13,7 +13,7 @@ import {
   GLICKO2_INITIAL_RATING_DEVIATION,
   GLICKO2_INITIAL_VOLATILITY,
 } from "@/lib/rating/ratingFinalizer";
-import { AuthError } from "./accountService";
+import { AuthError, registrationDatabaseError } from "./accountService";
 import { normalizeUsername } from "./password";
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
@@ -64,18 +64,6 @@ export function isOAuthRegistrationTokenFormat(token: string | undefined): token
 function cleanEmail(email: string | null): string | null {
   const normalized = email?.trim().toLowerCase() ?? "";
   return normalized && normalized.length <= 320 ? normalized : null;
-}
-
-function isUsernameUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== "object" || !("code" in error) || !("constraint" in error)) {
-    return false;
-  }
-  const databaseError = error as { code?: string; constraint?: string };
-  return databaseError.code === "23505"
-    && (
-      databaseError.constraint === "users_username_key"
-      || databaseError.constraint === "idx_users_username_lower"
-    );
 }
 
 function validateIdentity(identity: VerifiedOAuthIdentity): void {
@@ -287,9 +275,8 @@ export async function completeOAuthRegistration(
         account = created.rows[0];
       }
     } catch (error) {
-      if (isUsernameUniqueViolation(error)) {
-        throw new AuthError("This username is already taken.", 409, "username_taken");
-      }
+      const authError = registrationDatabaseError(error);
+      if (authError) throw authError;
       throw error;
     }
 

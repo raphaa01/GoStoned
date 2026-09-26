@@ -6,7 +6,7 @@ import type { Pool } from "pg";
 import { AuthError, registerAccount } from "./accountService";
 import { isSessionTokenFormat } from "./session";
 
-type FailureStage = "username" | "session" | "cleanup" | "commit-rejected";
+type FailureStage = "username" | "rating-policy" | "session" | "cleanup" | "commit-rejected";
 
 type Deferred = {
   promise: Promise<void>;
@@ -57,6 +57,12 @@ function registrationPool(options: {
           throw Object.assign(new Error("unique user conflict"), {
             code: "23505",
             constraint: options.usernameConstraint ?? "users_username_key",
+          });
+        }
+        if (options.failAt === "rating-policy") {
+          throw Object.assign(new Error("rating policy constraint rejected"), {
+            code: "23514",
+            constraint: "player_initial_rating_claims_policy_version_check",
           });
         }
         stagedUsername = String(values[0]);
@@ -206,6 +212,22 @@ test("only a unique violation from the user insert maps to username_taken", asyn
   );
   assert.equal(sessionCollision.committedUsers.size, 0);
   assert.equal(sessionCollision.statements.at(-1)?.sql, "ROLLBACK");
+});
+
+test("an outdated rating-policy constraint reports the missing database update", async () => {
+  const database = registrationPool({ failAt: "rating-policy" });
+  await assert.rejects(
+    withPool(database.pool, () => registerAccount("new_player", "password123")),
+    (error: unknown) => {
+      assert.ok(error instanceof AuthError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, "registration_schema_outdated");
+      return true;
+    },
+  );
+
+  assert.equal(database.committedUsers.size, 0);
+  assert.equal(database.statements.at(-1)?.sql, "ROLLBACK");
 });
 
 test("session cleanup and deterministic commit rejection roll back the new user", async (t) => {

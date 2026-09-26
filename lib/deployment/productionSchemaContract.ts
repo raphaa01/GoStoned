@@ -6,6 +6,7 @@ export type ProductionSchemaSnapshot = Readonly<{
   queueRulesProfileDefault: string | null;
   queueProfileConstraint: string | null;
   queueAdaptiveConstraint: string | null;
+  initialRatingPolicyConstraint: string | null;
   takebackRls: boolean;
 }>;
 
@@ -22,6 +23,11 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  requireFragment(
+    snapshot.initialRatingPolicyConstraint,
+    "starting-strength-v2",
+    "new-account rating-policy constraint",
+  );
   requireFragment(snapshot.gameRulesDefault, "japanese", "games.rules default");
   requireFragment(
     snapshot.gameRulesProfileDefault,

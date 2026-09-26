@@ -30,16 +30,29 @@ export class AuthError extends Error {
   }
 }
 
-function isUsernameUniqueViolation(error: unknown): boolean {
+export function registrationDatabaseError(error: unknown): AuthError | null {
   if (!error || typeof error !== "object" || !("code" in error) || !("constraint" in error)) {
-    return false;
+    return null;
   }
   const databaseError = error as { code?: string; constraint?: string };
-  return databaseError.code === "23505"
+  if (databaseError.code === "23505"
     && (
       databaseError.constraint === "users_username_key"
       || databaseError.constraint === "idx_users_username_lower"
+    )) {
+    return new AuthError("This username is already taken.", 409, "username_taken");
+  }
+  if (
+    databaseError.code === "23514"
+    && databaseError.constraint === "player_initial_rating_claims_policy_version_check"
+  ) {
+    return new AuthError(
+      "Account creation is temporarily unavailable because the database has not been updated yet.",
+      503,
+      "registration_schema_outdated",
     );
+  }
+  return null;
 }
 
 export function validateCredentials(usernameValue: unknown, passwordValue: unknown) {
@@ -106,9 +119,8 @@ export async function registerAccount(
         GLICKO2_ALGORITHM_VERSION,
       ],
     ).catch((error: unknown) => {
-      if (isUsernameUniqueViolation(error)) {
-        throw new AuthError("This username is already taken.", 409, "username_taken");
-      }
+      const authError = registrationDatabaseError(error);
+      if (authError) throw authError;
       throw error;
     });
     const user = serializeAuthUser(result.rows[0]);

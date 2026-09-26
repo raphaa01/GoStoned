@@ -539,6 +539,7 @@ test("successful registration exposes only the committed user and hardened sessi
 test("registration failures roll back the account and never set a session cookie", async (t) => {
   const cases = [
     { stage: "username", status: 409, code: "username_taken" },
+    { stage: "rating-policy", status: 503, code: "registration_schema_outdated" },
     { stage: "user-primary", status: 500, code: "register_failed" },
     { stage: "session", status: 500, code: "register_failed" },
     { stage: "cleanup", status: 500, code: "register_failed" },
@@ -558,10 +559,18 @@ test("registration failures roll back the account and never set a session cookie
             return { rows: [], rowCount: 0 };
           }
           if (sql.includes("INSERT INTO users")) {
-            if (failure.stage === "username" || failure.stage === "user-primary") {
+            if (
+              failure.stage === "username"
+              || failure.stage === "rating-policy"
+              || failure.stage === "user-primary"
+            ) {
               throw Object.assign(new Error("unique user conflict"), {
-                code: "23505",
-                constraint: failure.stage === "username" ? "users_username_key" : "users_pkey",
+                code: failure.stage === "rating-policy" ? "23514" : "23505",
+                constraint: failure.stage === "username"
+                  ? "users_username_key"
+                  : failure.stage === "rating-policy"
+                    ? "player_initial_rating_claims_policy_version_check"
+                    : "users_pkey",
               });
             }
             stagedUser = true;
@@ -636,6 +645,12 @@ test("registration failures roll back the account and never set a session cookie
             error: "This username is already taken.",
             code: "username_taken",
           });
+        } else if (failure.code === "registration_schema_outdated") {
+          assert.deepEqual(body, {
+            ok: false,
+            error: "Account creation is temporarily unavailable because the database has not been updated yet.",
+            code: "registration_schema_outdated",
+          });
         } else {
           assert.deepEqual(body, {
             ok: false,
@@ -649,7 +664,11 @@ test("registration failures roll back the account and never set a session cookie
         const sessionInsert = transactionStatements.findIndex(
           (sql) => sql.includes("INSERT INTO user_sessions"),
         );
-        if (failure.stage === "username" || failure.stage === "user-primary") {
+        if (
+          failure.stage === "username"
+          || failure.stage === "rating-policy"
+          || failure.stage === "user-primary"
+        ) {
           assert.equal(sessionInsert, -1);
         } else {
           assert.ok(transactionStatements.findIndex(
