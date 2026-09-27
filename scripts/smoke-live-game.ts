@@ -216,7 +216,7 @@ async function run() {
   assert.equal(blackMove.game.moveCount, 1);
   assert.equal(blackMove.game.turn, "white");
 
-  const whiteMove = await postMove<{ game: { moveCount: number; turn: string } }>(
+  const whiteMove = await postMove<{ game: { moveCount: number; turn: string; version: number } }>(
     gameId,
     { x: 3, y: 2 },
     white.cookie,
@@ -224,6 +224,35 @@ async function run() {
   );
   assert.equal(whiteMove.game.moveCount, 2);
   assert.equal(whiteMove.game.turn, "black");
+
+  const takebackRequested = await post<{
+    game: {
+      moveCount: number;
+      turn: string;
+      version: number;
+      takeback: { moveNumber: number; requestedBy: string };
+    };
+  }>(`/api/games/${gameId}/takeback`, {
+    action: "request",
+    expectedVersion: whiteMove.game.version,
+  }, black.cookie, black.playerKey);
+  assert.equal(takebackRequested.game.moveCount, 2);
+  assert.equal(takebackRequested.game.takeback.moveNumber, 1);
+  assert.equal(takebackRequested.game.takeback.requestedBy, "black");
+
+  const takebackAccepted = await post<{
+    game: { moveCount: number; turn: string; takeback: null };
+  }>(`/api/games/${gameId}/takeback`, {
+    action: "respond",
+    accept: true,
+    expectedVersion: takebackRequested.game.version,
+  }, white.cookie, white.playerKey);
+  assert.equal(takebackAccepted.game.moveCount, 0);
+  assert.equal(takebackAccepted.game.turn, "black");
+  assert.equal(takebackAccepted.game.takeback, null);
+
+  await postMove(gameId, { x: 2, y: 2 }, black.cookie, black.playerKey);
+  await postMove(gameId, { x: 3, y: 2 }, white.cookie, white.playerKey);
 
   await postMove(gameId, { isPass: true }, black.cookie, black.playerKey);
   const stopped = await postMove<{

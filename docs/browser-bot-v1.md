@@ -28,6 +28,8 @@ Der Worker liefert `GoStoneJapaneseSettlementProposal` mit:
 - vorgeschlagenen toten Steinen;
 - unsicheren Steinen, die nicht automatisch entschieden werden dürfen;
 - Seeds für neutrale Regionen/Seki;
+- einer ausdrücklich unverbindlichen Punkt-Momentaufnahme für die Partiewerkzeuge,
+  bei der unsichere Gruppen als lebend behandelt werden;
 - einer lokalen japanischen Territory-Score-Vorschau, soweit die Position
   widerspruchsfrei ausgewertet werden kann.
 
@@ -36,8 +38,10 @@ dem Survival-Kopf. Der v8-Survival-Kopf enthält Status-Evidenz, aber Seki und
 unsettled werden niemals automatisch finalisiert. Zwei vollständig eingeschlossene
 Augen schützen eine Gruppe vor einer falschen Tot-Markierung; Gruppen mit wenigen
 Freiheiten werden nur bei zusätzlicher gegnerischer Ownership-Evidenz als tot
-vorgeschlagen. Solange eine Gruppe unklar bleibt, darf keine scheinpräzise
-Punktzahl ausgegeben werden.
+vorgeschlagen. Solange eine Gruppe unklar bleibt, darf keine Zahl als belastbare
+Endwertung ausgegeben werden. Die Partiewerkzeuge dürfen eine klar als Schätzung
+bezeichnete Momentaufnahme zeigen; sie verändert weder den Vorschlag noch die
+Endwertung.
 
 Die Ausgabe hat immer `authority: "proposal-only"`. Für das japanische Rulebook
 muss der Code den Typ aus `lib/bot/modelV1.ts` verwenden und die abschließende

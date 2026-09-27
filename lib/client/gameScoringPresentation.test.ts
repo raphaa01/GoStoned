@@ -18,5 +18,14 @@ test("scoring presentation hides implementation labels and false precision", () 
   const worker = source("workers/browser/gostoneBot.worker.ts");
   assert.doesNotMatch(room, /copy\.localEstimateNote/);
   assert.match(worker, /group\.status !== "dead"[\s\S]+return \{ \.\.\.group, status: "uncertain" as const \}/);
-  assert.match(worker, /if \(uncertain\.size === 0\) \{[\s\S]+scoreJapaneseTerritory/);
+  assert.match(worker, /if \(uncertain\.size === 0\) score = candidate/);
+});
+
+test("game tools keep a non-binding estimate when groups remain uncertain", () => {
+  const room = source("components/game/GameRoom.tsx");
+  const worker = source("workers/browser/gostoneBot.worker.ts");
+  assert.match(worker, /let estimate:[\s\S]+scoreJapaneseTerritory/);
+  assert.match(worker, /deadStones: \[\],[\s\S]+agreedNeutralRegionSeeds: \[\]/);
+  assert.match(room, /estimate\.estimate\.blackTotal/);
+  assert.match(room, /estimate\.uncertainStones\.length > 0/);
 });

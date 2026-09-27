@@ -2003,17 +2003,28 @@ export async function setDeadGroup(
 
     const revision = scoring.revision + 1;
     const now = new Date();
-    await client.query("DELETE FROM game_dead_stones WHERE game_id = $1", [loaded.game.id]);
-    if (toggled.deadStones.length > 0) {
-      const xs = toggled.deadStones.map(({ x }) => x);
-      const ys = toggled.deadStones.map(({ y }) => y);
-      const colors = toggled.deadStones.map(({ x, y }) => board[y][x]);
+    const changedGroup = getGroup(board, { x: proposal.x, y: proposal.y });
+    const xs = changedGroup.map(({ x }) => x);
+    const ys = changedGroup.map(({ y }) => y);
+    if (proposal.dead) {
+      const colors = changedGroup.map(({ x, y }) => board[y][x]);
       await client.query(
         `INSERT INTO game_dead_stones (game_id, x, y, color)
          SELECT $1, proposal.x, proposal.y, proposal.color
            FROM UNNEST($2::int[], $3::int[], $4::text[])
-             AS proposal(x, y, color)`,
+             AS proposal(x, y, color)
+         ON CONFLICT (game_id, x, y) DO NOTHING`,
         [loaded.game.id, xs, ys, colors],
+      );
+    } else {
+      await client.query(
+        `DELETE FROM game_dead_stones
+          WHERE game_id = $1
+            AND (x, y) IN (
+              SELECT proposal.x, proposal.y
+                FROM UNNEST($2::int[], $3::int[]) AS proposal(x, y)
+            )`,
+        [loaded.game.id, xs, ys],
       );
     }
     const scoringResult = await client.query<ScoringRow>(
@@ -2250,25 +2261,34 @@ function assertExpectedGameVersion(game: GameRow, expectedVersion: number): void
   }
 }
 
-async function acceptTakeback(
+async function rollbackTakebackMoves(
   client: PoolClient,
-  loaded: LoadedGame & { takeback: TakebackRow },
+  loaded: LoadedGame,
+  firstRemovedMove: MoveRow,
+  restoredTurn: Stone,
   now: Date,
 ): Promise<GameState> {
-  const latest = loaded.moveRows.at(-1);
-  const request = loaded.takeback;
-  if (!latest || latest.move_number !== request.move_number || latest.color !== request.requested_by_color) {
-    throw new GameServiceError("The requested move is no longer the latest move.", 409, "takeback_stale");
+  const firstRemovedIndex = loaded.moveRows.findIndex(
+    ({ move_number }) => move_number === firstRemovedMove.move_number,
+  );
+  if (firstRemovedIndex < 0) {
+    throw new GameServiceError("The requested move is no longer available.", 409, "takeback_stale");
   }
-  await client.query(
-    "DELETE FROM game_takeback_requests WHERE game_id = $1",
-    [loaded.game.id],
+  if (loaded.takeback) {
+    await client.query(
+      "DELETE FROM game_takeback_requests WHERE game_id = $1",
+      [loaded.game.id],
+    );
+  }
+  const removed = await client.query(
+    "DELETE FROM moves WHERE game_id = $1 AND move_number >= $2",
+    [loaded.game.id, firstRemovedMove.move_number],
   );
-  await client.query(
-    "DELETE FROM moves WHERE game_id = $1 AND move_number = $2",
-    [loaded.game.id, latest.move_number],
-  );
-  const remainingRows = loaded.moveRows.slice(0, -1);
+  const removedCount = loaded.moveRows.length - firstRemovedIndex;
+  if (removed.rowCount !== removedCount) {
+    throw new GameServiceError("The move history changed during the takeback.", 409, "takeback_stale");
+  }
+  const remainingRows = loaded.moveRows.slice(0, firstRemovedIndex);
   const replay = replayMovesWithPrisoners(loaded.game.board_size, mapMoves(remainingRows));
   const consecutivePasses = remainingRows.at(-1)?.is_pass ? 1 : 0;
   const updated = await client.query<GameRow>(
@@ -2277,7 +2297,7 @@ async function acceptTakeback(
             turn_started_at = $4, updated_at = $4, version = version + 1
       WHERE id = $1
       RETURNING *`,
-    [loaded.game.id, request.requested_by_color, consecutivePasses, now],
+    [loaded.game.id, restoredTurn, consecutivePasses, now],
   );
   return serializeGame({
     ...withUpdatedGame(loaded, updated.rows[0]),
@@ -2286,6 +2306,31 @@ async function acceptTakeback(
     positionHistory: replay.positionHistory,
     takeback: null,
   }, now);
+}
+
+async function acceptTakeback(
+  client: PoolClient,
+  loaded: LoadedGame & { takeback: TakebackRow },
+  now: Date,
+): Promise<GameState> {
+  const request = loaded.takeback;
+  const requestedIndex = loaded.moveRows.findIndex(
+    ({ move_number }) => move_number === request.move_number,
+  );
+  const requestedMove = loaded.moveRows[requestedIndex];
+  const suffix = requestedIndex < 0 ? [] : loaded.moveRows.slice(requestedIndex);
+  const validSuffix = requestedMove?.color === request.requested_by_color
+    && (
+      suffix.length === 1
+      || (
+        suffix.length === 2
+        && suffix[1].color === opposite(request.requested_by_color)
+      )
+    );
+  if (!requestedMove || !validSuffix) {
+    throw new GameServiceError("The requested move is no longer the latest move.", 409, "takeback_stale");
+  }
+  return rollbackTakebackMoves(client, loaded, requestedMove, request.requested_by_color, now);
 }
 
 export async function requestTakeback(
@@ -2304,13 +2349,21 @@ export async function requestTakeback(
     }
     const requester = playerColor(loaded.game, playerKey);
     const latest = loaded.moveRows.at(-1);
-    if (
-      !latest
-      || latest.color !== requester
-      || currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy) !== opposite(requester)
-    ) {
+    const opponentIsBot = requester === "black"
+      ? loaded.game.white_player_is_bot
+      : loaded.game.black_player_is_bot;
+    const turn = currentTurn(loaded.game, loaded.moveRows, loaded.rules.policy);
+    const previous = loaded.moveRows.at(-2);
+    const requestedMove = latest?.color === requester && turn === opposite(requester)
+      ? latest
+      : turn === requester
+        && latest?.color === opposite(requester)
+        && previous?.color === requester
+        ? previous
+        : null;
+    if (!requestedMove) {
       throw new GameServiceError(
-        "A takeback can only be requested immediately after your own move.",
+        "Only your latest move and its direct reply can be taken back.",
         409,
         "takeback_unavailable",
       );
@@ -2320,7 +2373,7 @@ export async function requestTakeback(
       `INSERT INTO game_takeback_requests (game_id, move_number, requested_by_color, created_at)
        VALUES ($1, $2, $3, $4)
        RETURNING move_number, requested_by_color, created_at`,
-      [loaded.game.id, latest.move_number, requester, now],
+      [loaded.game.id, requestedMove.move_number, requester, now],
     );
     const updated = await client.query<GameRow>(
       "UPDATE games SET updated_at = $2, version = version + 1 WHERE id = $1 RETURNING *",
@@ -2330,9 +2383,6 @@ export async function requestTakeback(
       ...withUpdatedGame(loaded, updated.rows[0]),
       takeback: inserted.rows[0],
     };
-    const opponentIsBot = requester === "black"
-      ? loaded.game.white_player_is_bot
-      : loaded.game.black_player_is_bot;
     return opponentIsBot
       ? acceptTakeback(client, pendingLoaded, now)
       : serializeGame(pendingLoaded, now);

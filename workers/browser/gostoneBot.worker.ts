@@ -333,18 +333,32 @@ function settlementProposal(
     ) / region.points.length < GOSTONE_BOT_MODEL.settlement.neutralOwnershipThreshold)
     .map((region) => region.points[0]);
   const prisoners = replayMovesWithPrisoners(position.boardSize, [...position.moves]).prisoners;
+  let estimate: ReturnType<typeof scoreJapaneseTerritory> | null = null;
   let score: ReturnType<typeof scoreJapaneseTerritory> | null = null;
-  if (uncertain.size === 0) {
+  try {
+    const candidate = scoreJapaneseTerritory({
+      board: position.board,
+      prisoners,
+      deadStones,
+      agreedNeutralRegionSeeds: neutralRegionSeeds,
+      komi: position.komi,
+    });
+    estimate = candidate;
+    if (uncertain.size === 0) score = candidate;
+  } catch {
     try {
-      score = scoreJapaneseTerritory({
+      // A tool estimate must still return a useful snapshot when the model's
+      // tentative dead/neutral proposal is not a valid final settlement.
+      // Uncertain and disputed groups remain on the board and are treated as alive.
+      estimate = scoreJapaneseTerritory({
         board: position.board,
         prisoners,
-        deadStones,
-        agreedNeutralRegionSeeds: neutralRegionSeeds,
+        deadStones: [],
+        agreedNeutralRegionSeeds: [],
         komi: position.komi,
       });
     } catch {
-      // Ambiguous life/death stays a proposal. The server and both players remain authoritative.
+      // Invalid input stays fail-closed. The authoritative server rulebook is unaffected.
     }
   }
 
@@ -364,6 +378,7 @@ function settlementProposal(
     uncertainStones: boardGroups.flatMap((group) =>
       group.stones.filter((stone) => uncertain.has(positionKey(stone)))),
     neutralRegionSeeds,
+    estimate,
     score,
   };
 }

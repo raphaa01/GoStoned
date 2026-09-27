@@ -708,6 +708,23 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const opponent = game && playerKey
     ? deriveGameOpponent(game, playerKey)
     : null;
+  const latestMove = game?.moves.at(-1) ?? null;
+  const previousMove = game?.moves.at(-2) ?? null;
+  const canRequestTakeback = Boolean(
+    game
+    && yourColor
+    && game.status === "active"
+    && game.phase === "play"
+    && !game.takeback
+    && (
+      (latestMove?.color === yourColor && game.turn !== yourColor)
+      || (
+        game.turn === yourColor
+        && latestMove?.color !== yourColor
+        && previousMove?.color === yourColor
+      )
+    ),
+  );
   const gameInteractionAllowed = connectionAllowsMutations(connectionState)
     && Boolean(yourColor);
   const canMove =
@@ -1424,7 +1441,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   </button>
                   {!game.takeback ? (
                     <button
-                      disabled={busy || !yourColor || game.moves.at(-1)?.color !== yourColor || game.turn === yourColor}
+                      disabled={busy || !canRequestTakeback}
                       onClick={() => void takebackAction("request")}
                       type="button"
                     >
@@ -1446,10 +1463,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 {estimate ? (
                   <div className="final-score-summary">
                     <strong>{copy.japaneseEstimate}</strong>
-                    {estimate.score ? (
+                    {estimate.estimate ? (
                       <>
-                        <span>{copy.black} {estimate.score.blackTotal} · {copy.white} {estimate.score.whiteTotal}</span>
-                        <span>{estimate.score.outcome.kind === "jigo" ? copy.draw : `${estimate.score.outcome.winner === "black" ? copy.black : copy.white} +${estimate.score.outcome.margin}`}</span>
+                        <span>{copy.black} {estimate.estimate.blackTotal} · {copy.white} {estimate.estimate.whiteTotal}</span>
+                        <span>{estimate.estimate.outcome.kind === "jigo" ? copy.draw : `${estimate.estimate.outcome.winner === "black" ? copy.black : copy.white} +${estimate.estimate.outcome.margin}`}</span>
                       </>
                     ) : <span>{copy.estimateUnclear}</span>}
                     {estimate.uncertainStones.length > 0 ? (
