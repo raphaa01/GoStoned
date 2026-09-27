@@ -1,6 +1,11 @@
 import type { Board, Position } from "@/lib/game/types";
 import { curatedPuzzle } from "./curatedCatalog";
-import { DAILY_PUZZLE_CYCLE_LENGTH, type PuzzleCategory } from "./types";
+import {
+  DAILY_PUZZLE_CYCLE_LENGTH,
+  PUZZLE_CATEGORIES,
+  PUZZLE_KYU_LADDER,
+  type PuzzleCategory,
+} from "./types";
 
 export { DAILY_PUZZLE_CYCLE_LENGTH } from "./types";
 export const DAILY_PUZZLE_CYCLE_START = "2026-09-08";
@@ -11,31 +16,15 @@ type DailyPuzzleSource = {
   rankKyu: number;
 };
 
-// Progressively harder, distinct problems from all four curated categories.
-// Interleaving the themes keeps consecutive days varied while preserving a
-// deterministic 20-day cycle.
-const DAILY_SOURCES: readonly DailyPuzzleSource[] = [
-  { category: "life_and_death", sourceOrder: 2, rankKyu: 30 },
-  { category: "tesuji", sourceOrder: 1, rankKyu: 30 },
-  { category: "capturing_race", sourceOrder: 1, rankKyu: 30 },
-  { category: "endgame", sourceOrder: 1, rankKyu: 30 },
-  { category: "life_and_death", sourceOrder: 3, rankKyu: 26 },
-  { category: "tesuji", sourceOrder: 3, rankKyu: 26 },
-  { category: "capturing_race", sourceOrder: 2, rankKyu: 26 },
-  { category: "endgame", sourceOrder: 2, rankKyu: 26 },
-  { category: "life_and_death", sourceOrder: 5, rankKyu: 22 },
-  { category: "tesuji", sourceOrder: 5, rankKyu: 22 },
-  { category: "capturing_race", sourceOrder: 5, rankKyu: 22 },
-  { category: "endgame", sourceOrder: 4, rankKyu: 22 },
-  { category: "life_and_death", sourceOrder: 7, rankKyu: 19 },
-  { category: "tesuji", sourceOrder: 7, rankKyu: 19 },
-  { category: "capturing_race", sourceOrder: 7, rankKyu: 19 },
-  { category: "endgame", sourceOrder: 7, rankKyu: 19 },
-  { category: "life_and_death", sourceOrder: 9, rankKyu: 15 },
-  { category: "tesuji", sourceOrder: 10, rankKyu: 15 },
-  { category: "capturing_race", sourceOrder: 9, rankKyu: 15 },
-  { category: "tesuji", sourceOrder: 9, rankKyu: 15 },
-] as const;
+// Interleave all ten positions from every curated category. Each of the 40
+// problems appears exactly once before the deterministic rotation repeats.
+const DAILY_SOURCES: readonly DailyPuzzleSource[] = PUZZLE_KYU_LADDER.flatMap(
+  (rankKyu, index) => PUZZLE_CATEGORIES.map((category) => ({
+    category,
+    sourceOrder: index + 1,
+    rankKyu,
+  })),
+);
 
 export type DailyPuzzle = {
   cycleOrder: number;
@@ -85,7 +74,7 @@ export function dailyPuzzleAt(cycleOrder: number): DailyPuzzle {
     cycleOrder,
     category: source.category,
     rankKyu: source.rankKyu,
-    sourceId: `daily-v1:${cycleOrder}:${curated.sourceId}`,
+    sourceId: `daily-v2:${cycleOrder}:${curated.sourceId}`,
     board: curated.board,
     candidateMoves: curated.candidateMoves,
     localRegion: focusedRegion(curated.candidateMoves),

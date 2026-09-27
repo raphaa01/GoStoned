@@ -27,7 +27,7 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(worker, /PUZZLES_PER_CATEGORY/);
   assert.match(worker, /mainLine/);
   assert.match(service, /variationProgress/);
-  assert.match(service, /solution: solved \? solution\(row, variation\) : null/);
+  assert.match(service, /solution: solved \? solution\(row, variation, selected\) : null/);
   assert.match(variationMigration, /puzzles_category_shape_check/);
   assert.match(variationMigration, /idx_puzzles_category_order/);
   assert.match(variationMigration, /variation_progress JSONB NOT NULL/);
@@ -45,6 +45,10 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   );
   assert.match(service, /ensureStaticDailyPuzzle/);
   assert.match(service, /STATIC_DAILY_ENGINE_VERSION/);
+  assert.match(service, /daily\.acceptedMoves\.map/);
+  assert.match(service, /\$9, \$10, 1, NULL,[\s\S]*?\$11, NULL, NULL, NULL, NULL/);
+  assert.match(service, /category = NULL,[\s\S]*?rank_kyu = NULL,[\s\S]*?collection_order = NULL/);
+  assert.match(service, /if \(puzzle\.kind === "daily"\)/);
   assert.match(service, /if \(mode === "daily"\) return null/);
   assert.match(service, /puzzle\.kind === "daily" \? null : legalReply/);
   assert.match(worker, /AND kind = 'practice'/);

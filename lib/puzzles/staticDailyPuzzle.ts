@@ -8,7 +8,7 @@ import type {
   PuzzleVariation,
 } from "./types";
 
-export const STATIC_DAILY_ENGINE_VERSION = "static-daily-v1";
+export const STATIC_DAILY_ENGINE_VERSION = "static-daily-v2";
 
 const SOLUTION_EXPLANATIONS: Record<PuzzleCategory, LocalizedText> = {
   life_and_death: {
@@ -105,6 +105,7 @@ export type StaticDailyPuzzleRecord = {
   solutionMove: string;
   solutionX: number;
   solutionY: number;
+  acceptedMoves: Array<{ move: string; x: number; y: number }>;
   difficulty: PuzzleDifficulty;
   explanation: LocalizedText;
   variation: PuzzleVariation;
@@ -120,9 +121,12 @@ function difficulty(rankKyu: number): PuzzleDifficulty {
 export function staticDailyPuzzleForDate(dailyDate: string): StaticDailyPuzzleRecord {
   const puzzle = dailyPuzzleForDate(dailyDate);
   const solution = puzzle.candidateMoves[0];
-  if (!solution || puzzle.candidateMoves.length !== 1) {
-    throw new Error("Static daily puzzles require exactly one curated solution.");
-  }
+  if (!solution) throw new Error("Static daily puzzles require a curated solution.");
+  const acceptedMoves = puzzle.candidateMoves.map((candidate) => ({
+    move: toGtpCoordinate(13, { ...candidate, isPass: false }),
+    x: candidate.x,
+    y: candidate.y,
+  }));
   const solutionMove = toGtpCoordinate(13, { ...solution, isPass: false });
   const solutionPly = {
     color: "black" as const,
@@ -139,6 +143,7 @@ export function staticDailyPuzzleForDate(dailyDate: string): StaticDailyPuzzleRe
     solutionMove,
     solutionX: solution.x,
     solutionY: solution.y,
+    acceptedMoves,
     difficulty: difficulty(puzzle.rankKyu),
     explanation: SOLUTION_EXPLANATIONS[puzzle.category],
     variation: {

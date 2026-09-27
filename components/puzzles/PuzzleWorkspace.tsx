@@ -19,6 +19,7 @@ import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
+  DAILY_PUZZLE_CYCLE_LENGTH,
   PUZZLE_CATEGORIES,
   type PuzzleAttemptResult,
   type PuzzleCategory,
@@ -269,7 +270,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
   const expected = hub?.expectedPerCategory ?? 10;
-  const dailyCycleLength = hub?.dailyCycleLength ?? 20;
+  const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
 
   return (
     <div className={styles.page}>

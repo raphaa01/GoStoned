@@ -23,6 +23,7 @@ import {
 import {
   STATIC_DAILY_ENGINE_VERSION,
   staticDailyPuzzleForDate,
+  type StaticDailyPuzzleRecord,
 } from "./staticDailyPuzzle";
 
 type PuzzleRow = {
@@ -39,12 +40,15 @@ type PuzzleRow = {
   solution_move: string;
   solution_x: number;
   solution_y: number;
+  alternatives: unknown;
   explanation: LocalizedText;
   variation: unknown;
   published_at: Date;
   attempt_count: number | null;
   solved: boolean | null;
   first_attempt_correct: boolean | null;
+  selected_x: number | null;
+  selected_y: number | null;
   variation_progress: unknown;
   variation_revision: number | null;
 };
@@ -54,6 +58,11 @@ type AttemptState = {
   solved: boolean;
   first_attempt_correct: boolean | null;
   variation_revision: number;
+};
+
+type DailyAttemptState = AttemptState & {
+  selected_x: number;
+  selected_y: number;
 };
 
 function isoDate(value: string | Date | null): string | null {
@@ -162,16 +171,28 @@ function parseProgress(row: PuzzleRow): PuzzlePly[] {
   return row.variation_progress.map((ply) => parsePly(ply, row.board_size));
 }
 
-function solution(row: PuzzleRow, variation = parseVariation(row)): PuzzleSolution {
+function solution(
+  row: PuzzleRow,
+  variation = parseVariation(row),
+  selected?: { x: number; y: number },
+): PuzzleSolution {
+  const selectedMove = selected
+    ? toGtpCoordinate(row.board_size, { ...selected, isPass: false })
+    : row.solution_move;
   return {
-    move: row.solution_move,
-    x: row.solution_x,
-    y: row.solution_y,
+    move: selectedMove,
+    x: selected?.x ?? row.solution_x,
+    y: selected?.y ?? row.solution_y,
     explanation: parseLocalized(
       row.explanation,
       kyrgyzPuzzleFallback(row.category, "solution"),
     ),
-    line: variation?.mainLine ?? [{
+    line: selected ? [{
+      color: row.to_play,
+      move: selectedMove,
+      x: selected.x,
+      y: selected.y,
+    }] : variation?.mainLine ?? [{
       color: row.to_play,
       move: row.solution_move,
       x: row.solution_x,
@@ -183,6 +204,12 @@ function solution(row: PuzzleRow, variation = parseVariation(row)): PuzzleSoluti
 function view(row: PuzzleRow): PuzzleView {
   const solved = row.solved === true;
   const variation = parseVariation(row);
+  const selected = solved
+    && row.kind === "daily"
+    && Number.isInteger(row.selected_x)
+    && Number.isInteger(row.selected_y)
+    ? { x: row.selected_x as number, y: row.selected_y as number }
+    : undefined;
   return {
     id: row.id,
     kind: row.kind,
@@ -200,7 +227,7 @@ function view(row: PuzzleRow): PuzzleView {
     firstAttemptCorrect: row.first_attempt_correct,
     variationProgress: parseProgress(row),
     variationRevision: row.variation_revision ?? 0,
-    solution: solved ? solution(row, variation) : null,
+    solution: solved ? solution(row, variation, selected) : null,
   };
 }
 
@@ -208,22 +235,39 @@ const SELECT_PUZZLE = `
   SELECT puzzle.id, puzzle.kind, puzzle.category, puzzle.rank_kyu,
          puzzle.collection_order, puzzle.daily_date, puzzle.board_size,
          puzzle.to_play, puzzle.board, puzzle.difficulty, puzzle.solution_move,
-         puzzle.solution_x, puzzle.solution_y, puzzle.explanation,
+         puzzle.solution_x, puzzle.solution_y, puzzle.alternatives, puzzle.explanation,
          puzzle.variation, puzzle.published_at, attempt.attempt_count,
          attempt.solved, attempt.first_attempt_correct,
+         attempt.selected_x, attempt.selected_y,
          attempt.variation_progress, attempt.variation_revision
     FROM puzzles puzzle
     LEFT JOIN puzzle_attempts attempt
       ON attempt.puzzle_id = puzzle.id AND attempt.player_key = $1`;
 
-async function ensureStaticDailyPuzzle(): Promise<void> {
-  await withTransaction(async (client) => {
+async function ensureStaticDailyPuzzle(): Promise<StaticDailyPuzzleRecord> {
+  return withTransaction(async (client) => {
     const dateResult = await client.query<{ today: string }>(
       "SELECT CURRENT_DATE::text AS today",
     );
     const today = dateResult.rows[0]?.today;
     if (!today) throw new Error("The database did not return its current date.");
     const daily = staticDailyPuzzleForDate(today);
+    const priorResult = await client.query<{
+      id: string;
+      engine_version: string;
+      model_name: string;
+    }>(
+      `SELECT id, engine_version, model_name
+         FROM puzzles
+        WHERE kind = 'daily' AND daily_date = $1
+        FOR UPDATE`,
+      [daily.dailyDate],
+    );
+    const prior = priorResult.rows[0];
+    const contentChanged = Boolean(prior && (
+      prior.engine_version !== STATIC_DAILY_ENGINE_VERSION
+      || prior.model_name !== daily.sourceId
+    ));
     await client.query(
       `INSERT INTO puzzles AS puzzle (
          kind, daily_date, board_size, to_play, position_moves, board,
@@ -233,8 +277,8 @@ async function ensureStaticDailyPuzzle(): Promise<void> {
        )
        VALUES (
          'daily', $1, 13, 'black', '[]'::jsonb, $2::jsonb,
-         $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, 0, NULL,
-         0, $11, $12, $13, $14::jsonb
+         $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10, 1, NULL,
+         $11, NULL, NULL, NULL, NULL
        )
        ON CONFLICT (daily_date) WHERE kind = 'daily' DO UPDATE
          SET board_size = EXCLUDED.board_size,
@@ -252,30 +296,30 @@ async function ensureStaticDailyPuzzle(): Promise<void> {
              visits = EXCLUDED.visits,
              source_game_id = NULL,
              source_move_number = EXCLUDED.source_move_number,
-             category = EXCLUDED.category,
-             rank_kyu = EXCLUDED.rank_kyu,
-             collection_order = EXCLUDED.collection_order,
-             variation = EXCLUDED.variation
+             category = NULL,
+             rank_kyu = NULL,
+             collection_order = NULL,
+             variation = NULL
        WHERE puzzle.engine_version IS DISTINCT FROM EXCLUDED.engine_version
-          OR puzzle.model_name IS DISTINCT FROM EXCLUDED.model_name
-          OR puzzle.collection_order IS DISTINCT FROM EXCLUDED.collection_order`,
+          OR puzzle.model_name IS DISTINCT FROM EXCLUDED.model_name`,
       [
         daily.dailyDate,
         JSON.stringify(daily.board),
         daily.solutionMove,
         daily.solutionX,
         daily.solutionY,
-        JSON.stringify([{ move: daily.solutionMove, source: "curated" }]),
+        JSON.stringify(daily.acceptedMoves.map((move) => ({ ...move, source: "curated" }))),
         daily.difficulty,
         JSON.stringify(daily.explanation),
         STATIC_DAILY_ENGINE_VERSION,
         daily.sourceId,
-        daily.category,
-        daily.rankKyu,
         daily.cycleOrder,
-        JSON.stringify(daily.variation),
       ],
     );
+    if (prior && contentChanged) {
+      await client.query("DELETE FROM puzzle_attempts WHERE puzzle_id = $1", [prior.id]);
+    }
+    return daily;
   });
 }
 
@@ -283,7 +327,7 @@ export async function readPuzzleHub(
   playerKey: string,
   mode: PuzzleKind,
 ): Promise<PuzzleHub> {
-  if (mode === "daily") await ensureStaticDailyPuzzle();
+  const daily = mode === "daily" ? await ensureStaticDailyPuzzle() : null;
   const suffix = mode === "daily"
     ? "WHERE puzzle.kind = 'daily' AND puzzle.daily_date = CURRENT_DATE ORDER BY puzzle.id LIMIT 1"
     : `WHERE puzzle.kind = 'practice' AND puzzle.category IS NOT NULL
@@ -292,7 +336,12 @@ export async function readPuzzleHub(
   return {
     status: result.rows.length > 0 ? "ready" : "generating",
     mode,
-    puzzles: result.rows.map(view),
+    puzzles: result.rows.map((row) => view(daily ? {
+      ...row,
+      category: daily.category,
+      rank_kyu: daily.rankKyu,
+      collection_order: daily.cycleOrder,
+    } : row)),
     expectedPerCategory: PUZZLES_PER_CATEGORY,
     dailyCycleLength: DAILY_PUZZLE_CYCLE_LENGTH,
   };
@@ -436,14 +485,23 @@ async function saveVariationAttempt(
   return state;
 }
 
+function acceptedDailyMove(puzzle: PuzzleRow, selected: { x: number; y: number }): boolean {
+  const selectedMove = toGtpCoordinate(puzzle.board_size, { ...selected, isPass: false });
+  if (selectedMove === puzzle.solution_move) return true;
+  if (!Array.isArray(puzzle.alternatives)) return false;
+  return puzzle.alternatives.some((alternative) => (
+    isRecord(alternative) && alternative.move === selectedMove
+  ));
+}
+
 async function attemptDailyPuzzle(
   client: PoolClient,
   puzzle: PuzzleRow,
   playerKey: string,
   selected: { x: number; y: number },
 ): Promise<PuzzleAttemptResult> {
-  const correct = selected.x === puzzle.solution_x && selected.y === puzzle.solution_y;
-  const attempt = await client.query<AttemptState>(
+  const correct = acceptedDailyMove(puzzle, selected);
+  const attempt = await client.query<DailyAttemptState>(
     `INSERT INTO puzzle_attempts (
        puzzle_id, player_key, attempt_count, solved, first_attempt_correct,
        selected_x, selected_y, last_attempt_at, solved_at
@@ -456,15 +514,22 @@ async function attemptDailyPuzzle(
              puzzle_attempts.first_attempt_correct,
              EXCLUDED.first_attempt_correct
            ),
-           selected_x = EXCLUDED.selected_x,
-           selected_y = EXCLUDED.selected_y,
+           selected_x = CASE
+             WHEN puzzle_attempts.solved THEN puzzle_attempts.selected_x
+             ELSE EXCLUDED.selected_x
+           END,
+           selected_y = CASE
+             WHEN puzzle_attempts.solved THEN puzzle_attempts.selected_y
+             ELSE EXCLUDED.selected_y
+           END,
            last_attempt_at = NOW(),
            solved_at = CASE
              WHEN puzzle_attempts.solved THEN puzzle_attempts.solved_at
              WHEN EXCLUDED.solved THEN NOW()
              ELSE NULL
            END
-     RETURNING attempt_count, solved, first_attempt_correct, variation_revision`,
+     RETURNING attempt_count, solved, first_attempt_correct, variation_revision,
+               selected_x, selected_y`,
     [puzzle.id, playerKey, selected.x, selected.y, correct],
   );
   const state = attempt.rows[0];
@@ -485,7 +550,9 @@ async function attemptDailyPuzzle(
     variationRevision: state.variation_revision,
     displayLine: [played],
     feedback: null,
-    solution: state.solved ? solution(puzzle, null) : null,
+    solution: state.solved
+      ? solution(puzzle, null, { x: state.selected_x, y: state.selected_y })
+      : null,
   };
 }
 
@@ -659,6 +726,12 @@ export async function attemptPuzzle(
       || selected.y >= puzzle.board_size
     ) {
       throw new GameServiceError("That intersection is not available.", 409, "puzzle_move_unavailable");
+    }
+    if (puzzle.kind === "daily") {
+      if (puzzle.board[selected.y]?.[selected.x] !== null) {
+        throw new GameServiceError("That intersection is not available.", 409, "puzzle_move_unavailable");
+      }
+      return attemptDailyPuzzle(client, puzzle, playerKey, selected);
     }
     const variation = parseVariation(puzzle);
     if (variation) {
