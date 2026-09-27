@@ -9914,3 +9914,355 @@ html:has(.home-chapters) {
     transform: none;
   }
 }
+
+/* Responsive UX pass ----------------------------------------------------
+   Keep actions and real game information in view before decorative space. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.sidebar-login,
+.sidebar-signup {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 1.2;
+  padding: 11px 18px;
+  white-space: nowrap;
+}
+
+@media (min-width: 841px) and (max-width: 1280px) {
+  .sidebar { display: none; }
+  .mobile-nav {
+    align-items: center;
+    backdrop-filter: blur(14px);
+    background: rgb(245 242 235 / .95);
+    border-bottom: 1px solid var(--color-line);
+    display: flex;
+    height: 60px;
+    justify-content: space-between;
+    left: 0;
+    padding: 8px 24px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 50;
+  }
+  .mobile-nav > .brand { min-height: 44px; padding-right: 12px; }
+  .mobile-nav .icon-button {
+    align-items: center;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-line);
+    color: var(--color-ink);
+    display: flex;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+  }
+  .mobile-menu {
+    background: var(--color-surface-raised);
+    border-top: 1px solid var(--color-line);
+    box-shadow: var(--shadow-soft);
+    display: grid;
+    left: 0;
+    max-height: calc(100dvh - 60px);
+    overflow-y: auto;
+    padding: 14px;
+    position: absolute;
+    right: 0;
+    top: 60px;
+  }
+  .mobile-menu a,
+  .mobile-menu button {
+    align-items: center;
+    border-radius: 7px;
+    color: var(--color-text-muted);
+    display: flex;
+    font-size: 15px;
+    gap: 9px;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .mobile-menu button { background: transparent; border: 0; cursor: pointer; width: 100%; }
+  .mobile-menu a.is-active { background: var(--color-moss-soft); color: var(--color-moss-strong); }
+  .mobile-menu .language-menu-trigger { justify-content: flex-start; width: 100%; }
+  .mobile-menu .language-menu-chevron { margin-left: auto; }
+  .mobile-menu .language-menu-popover { box-shadow: none; margin-top: 6px; position: static; }
+  .app-main { padding-top: 60px; }
+}
+
+/* Account forms fit inside an ordinary laptop viewport. */
+.app-content:has(.auth-page) {
+  padding-bottom: 28px;
+  padding-top: 18px;
+}
+
+.auth-page {
+  align-items: center;
+  gap: clamp(30px, 5vw, 76px);
+  min-height: calc(100dvh - 142px);
+  padding: 12px 0 28px;
+}
+
+.auth-material {
+  height: min(610px, calc(100dvh - 178px));
+  min-height: 430px;
+}
+
+.auth-material::after {
+  background: linear-gradient(90deg, transparent 68%, var(--color-canvas));
+}
+
+.auth-material img {
+  object-fit: contain;
+  object-position: center;
+}
+
+.auth-card {
+  padding-block: 8px;
+}
+
+.auth-card__header {
+  gap: 7px;
+  padding-bottom: 15px;
+}
+
+.auth-card__header h1 {
+  font-size: clamp(34px, 4vw, 50px);
+  line-height: .98;
+}
+
+.auth-form { margin-top: 15px; }
+.auth-form label { gap: 5px; }
+.auth-card .auth-submit,
+.auth-social-button { min-height: 46px; }
+.auth-divider { margin-block: 13px; }
+.auth-switch { margin-top: 14px; }
+
+@media (max-width: 760px) {
+  .app-content:has(.auth-page) { padding-top: 10px; }
+  .auth-page { padding-top: 0; }
+  .auth-material {
+    height: clamp(132px, 24dvh, 190px);
+    margin-inline: -16px;
+    min-height: 0;
+    width: calc(100% + 32px);
+  }
+  .auth-material::after { background: linear-gradient(180deg, transparent 62%, var(--color-canvas)); }
+  .auth-card { margin-top: -8px; padding-top: 20px; }
+  .auth-card__header h1 { font-size: clamp(32px, 10vw, 43px); }
+}
+
+@media (max-height: 720px) and (min-width: 761px) {
+  .auth-material { height: calc(100dvh - 142px); min-height: 360px; }
+  .auth-card__header h1 { font-size: 38px; }
+  .auth-card__header p { font-size: 13px; }
+  .auth-form { margin-top: 12px; }
+}
+
+/* The three secondary homepage destinations are simple product links. */
+.home-feature-list {
+  border-block: 1px solid var(--color-line);
+  margin: clamp(26px, 4vw, 58px) auto;
+  max-width: 1180px;
+}
+
+.home-chapters::before,
+.home-chapters::after { display: none; }
+
+.home-feature-link {
+  align-items: center;
+  color: var(--color-ink);
+  display: grid;
+  gap: clamp(16px, 3vw, 30px);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 126px;
+  padding: 24px 4px;
+  text-decoration: none;
+}
+
+.home-feature-link + .home-feature-link { border-top: 1px solid var(--color-line); }
+.home-feature-icon {
+  align-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  color: var(--color-moss-strong);
+  display: flex;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+.home-feature-copy { display: grid; gap: 5px; }
+.home-feature-copy small {
+  color: var(--color-moss-strong);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.home-feature-copy strong { font-size: clamp(22px, 3vw, 34px); font-weight: 560; letter-spacing: -.035em; }
+.home-feature-copy > span { color: var(--color-text-muted); font-size: 14px; line-height: 1.5; max-width: 650px; }
+.home-feature-link > svg { color: var(--color-text-subtle); transition: transform 160ms ease; }
+.home-feature-link:hover .home-feature-copy strong { color: var(--color-moss-strong); }
+.home-feature-link:hover > svg { transform: translateX(4px); }
+
+@media (max-width: 620px) {
+  .home-feature-list { margin-block: 18px 38px; }
+  .home-feature-link { gap: 13px; grid-template-columns: 36px minmax(0, 1fr) auto; min-height: 108px; padding-block: 18px; }
+  .home-feature-icon { height: 36px; width: 36px; }
+  .home-feature-copy strong { font-size: 21px; }
+  .home-feature-copy > span { font-size: 12px; }
+}
+
+/* Tutorial pages prioritise the instruction and use a real board example. */
+.beginner-onboarding-modal { width: min(100%, 640px); }
+.beginner-onboarding-header { padding-block: 24px 18px; }
+.beginner-onboarding-header h2 {
+  font-family: inherit;
+  font-size: clamp(25px, 4vw, 34px);
+  font-weight: 610;
+  line-height: 1.08;
+}
+.beginner-onboarding-header p { color: var(--color-ink-soft); font-size: 15px; }
+.beginner-tutorial-body { padding-block: 18px 22px; }
+.beginner-tutorial-example {
+  align-items: center;
+  border-block: 1px solid var(--color-line);
+  display: grid;
+  gap: 22px;
+  grid-template-columns: 126px minmax(0, 1fr);
+  padding: 15px 0;
+}
+.beginner-tutorial-board { display: block; height: 118px; width: 118px; }
+.beginner-tutorial-board__wood { fill: #d6a756; stroke: rgb(83 55 27 / .24); }
+.beginner-tutorial-board__line { fill: none; stroke: rgb(61 43 25 / .7); stroke-width: 1; }
+.beginner-tutorial-board__stone.is-black { fill: #151714; stroke: #050505; }
+.beginner-tutorial-board__stone.is-white { fill: #fffdf7; stroke: rgb(44 42 36 / .45); }
+.beginner-tutorial-board__target { fill: none; stroke: var(--color-oxide); stroke-width: 2; }
+.beginner-tutorial-note {
+  background: transparent;
+  border-left: 0;
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 650;
+  padding: 0;
+}
+.beginner-rank-track {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(4, 1fr);
+  width: 126px;
+}
+.beginner-rank-track span {
+  align-items: center;
+  border-bottom: 2px solid var(--color-line-strong);
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+  padding-bottom: 7px;
+}
+.beginner-rank-track span.is-current { border-color: var(--color-moss-strong); color: var(--color-moss-strong); }
+
+.learn-lesson-focus__intro { margin-bottom: clamp(16px, 2vw, 24px); }
+.learn-lesson-focus__intro h1 {
+  font-size: clamp(31px, 4vw, 45px);
+  line-height: 1.06;
+  margin-block: 8px 10px;
+}
+.learn-lesson-focus__intro > p { color: var(--color-ink-soft); font-size: clamp(16px, 1.7vw, 18px); }
+.learn-lesson-focus__finish-actions { display: grid; gap: 9px; }
+.learn-lesson-focus__finish-actions .button { justify-content: center; width: 100%; }
+
+.learn-practice-entry {
+  background: transparent;
+  border: 0;
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+  max-width: 920px;
+  padding: 14px 0;
+}
+.learn-practice-entry .button { background: transparent; border-color: var(--color-line-strong); color: var(--color-ink); }
+
+@media (min-width: 761px) {
+  .learn-lesson-focus__workspace .lesson-board {
+    max-width: min(520px, calc(100dvh - 325px));
+  }
+  .training-board-panel .go-board-shell {
+    max-width: min(720px, calc(100dvh - 180px));
+  }
+}
+
+@media (max-width: 620px) {
+  .beginner-onboarding-header h2 { font-size: 26px; }
+  .beginner-onboarding-header p { font-size: 14px; }
+  .beginner-tutorial-example { gap: 14px; grid-template-columns: 88px minmax(0, 1fr); }
+  .beginner-tutorial-board { height: 84px; width: 84px; }
+  .beginner-rank-track { grid-template-columns: repeat(2, 1fr); width: 88px; }
+  .beginner-tutorial-note { font-size: 13px; }
+  .beginner-tutorial-progress { margin-top: 14px; }
+  .learn-map__header > p { display: block; font-size: 14px; line-height: 1.5; }
+  .learn-lesson-focus__intro h1 { font-size: clamp(29px, 9vw, 38px); }
+  .learn-lesson-focus__intro > p { font-size: 15px; }
+}
+
+/* Preview the stone that the current player will actually place. */
+.go-board[data-preview-color="black"] .intersection[aria-disabled="false"]:hover::before,
+.go-board[data-preview-color="black"] .intersection:focus-visible::before {
+  background: radial-gradient(circle at 31% 25%, rgb(100 100 100 / .76), rgb(3 4 3 / .78) 72%);
+  border: 1px solid rgb(0 0 0 / .45);
+}
+.go-board[data-preview-color="white"] .intersection[aria-disabled="false"]:hover::before,
+.go-board[data-preview-color="white"] .intersection:focus-visible::before {
+  background: radial-gradient(circle at 31% 23%, rgb(255 255 255 / .9), rgb(205 202 194 / .82));
+  border: 1px solid rgb(91 75 56 / .28);
+}
+
+/* Scoring and connection states read like tools, not promotional cards. */
+.scoring-heading > div > strong { font-size: 20px; line-height: 1.2; }
+.scoring-heading > span { font-size: 12px; }
+.scoring-help-header h3 {
+  font-family: inherit;
+  font-size: clamp(27px, 4vw, 36px);
+  font-weight: 620;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+  margin: 0;
+}
+.scoring-help-steps { display: grid; gap: 0; padding: 6px 32px 2px; }
+.scoring-help-steps section,
+.scoring-help-steps aside { border-bottom: 1px solid var(--color-line); padding: 15px 0; }
+.scoring-help-steps aside { border-bottom: 0; }
+.scoring-help-steps strong { color: var(--color-ink); display: block; font-size: 14px; }
+.scoring-help-steps p { color: var(--color-text-muted); font-size: 13px; line-height: 1.5; margin: 5px 0 0; }
+.game-connection-notice {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  color: var(--color-text-muted);
+  padding: 8px 2px;
+}
+.game-connection-notice > svg { color: var(--color-text-subtle); }
+.game-connection-notice strong { color: var(--color-ink-soft); font-weight: 650; }
+.game-connection[data-state="reconnecting"],
+.game-connection[data-state="delayed"] { color: var(--color-text-muted); }
+
+.profile-header { padding-inline: clamp(18px, 3vw, 34px); }
+.profile-header__actions { padding: 0; }
+.profile-header__actions .button { margin: 0; }
+
+@media (max-height: 820px) and (min-width: 1121px) {
+  .focused-game-layout { gap: 16px; padding-block: 12px; }
+  .focused-game-side { gap: 7px; }
+  .game-panel { padding-block: 10px; }
+  .game-panel-player { padding-block: 2px; }
+  .scoring-controls { gap: 8px; margin-top: 7px; padding-block: 12px 9px; }
+  .scoring-preview span { min-height: 42px; }
+  .scoring-confirm-action { min-height: 46px; }
+  .scoring-breakdown summary,
+  .scoring-dispute summary { min-height: 38px; padding-block: 9px; }
+}

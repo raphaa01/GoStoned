@@ -340,6 +340,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 disabled={busy || puzzle.solved || branchLine !== null}
                 lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
                 onIntersectionClick={submitMove}
+                previewColor={puzzle.toPlay}
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
               />
             </div>

@@ -657,3 +657,46 @@
   .loadingPanel b,
   .loadingPanel span { animation: none; }
 }
+
+/* Keep the board and the task visible together on laptop-sized screens. */
+@media (min-width: 901px) {
+  .page {
+    gap: 18px;
+    padding-bottom: 42px;
+    padding-top: 26px;
+  }
+
+  .hero { padding-bottom: 15px; }
+  .hero h1 { font-size: clamp(32px, 3.4vw, 46px); }
+  .tabs button { min-height: 42px; }
+
+  .boardColumn :global(.go-board-shell) {
+    margin-inline: auto;
+    max-width: min(100%, calc(100dvh - 245px));
+  }
+
+  .panel {
+    max-height: calc(100dvh - 245px);
+    min-height: 0;
+    overflow-y: auto;
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace,
+  .loadingWorkspace { min-width: 0; }
+  .boardColumn,
+  .panel { min-width: 0; }
+}
+
+@media (max-width: 620px) {
+  .page { overflow: clip; }
+  .hero { padding-bottom: 14px; }
+  .hero h1 { font-size: 34px; }
+  .tabs { gap: 16px; overflow-x: auto; }
+  .tabs button { flex: 0 0 auto; white-space: nowrap; }
+  .positionMeta { flex-wrap: wrap; }
+  .positionMeta > span:last-child { margin-left: 0; }
+  .panel { margin-inline: 0; }
+}

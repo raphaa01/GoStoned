@@ -454,6 +454,7 @@ export function TrainingGame() {
             disabled={phase !== "playing" || position.turn !== "black"}
             lastMove={lastPlayedMove(position)}
             onIntersectionClick={playAt}
+            previewColor="black"
             precisionRevision={`${gameId}:${position.moves.length}:${phase}`}
           />
         </section>

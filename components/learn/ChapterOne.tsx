@@ -377,7 +377,16 @@ export function ChapterOne({ embedded = false, nextChapterLabel, onFinish }: { e
                       {copy.nextLesson} <ArrowRight aria-hidden="true" size={17} />
                     </button>
                   ) : session.completed ? (
-                    <Link className="button button--primary" href={href("/play?size=9")}>{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></Link>
+                    <div className="learn-lesson-focus__finish-actions">
+                      {onFinish && nextChapterLabel ? (
+                        <button className="button button--primary" onClick={onFinish} type="button">
+                          {nextChapterLabel} <ArrowRight aria-hidden="true" size={17} />
+                        </button>
+                      ) : null}
+                      <Link className={onFinish ? "button button--secondary" : "button button--primary"} href={href("/play?size=9")}>
+                        {copy.playNine} <ArrowRight aria-hidden="true" size={17} />
+                      </Link>
+                    </div>
                   ) : (
                     <button className="button button--primary" disabled type="button">{copy.finishChapter} <ArrowRight aria-hidden="true" size={17} /></button>
                   )}

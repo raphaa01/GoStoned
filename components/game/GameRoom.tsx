@@ -1378,6 +1378,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   : null;
               })()}
               pendingMove={pendingMove}
+              previewColor={yourColor ?? "black"}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {
                   const dead = !game.scoring.deadStones.some(

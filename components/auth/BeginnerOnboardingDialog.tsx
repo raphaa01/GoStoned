@@ -4,12 +4,7 @@ import {
   ArrowLeft,
   Check,
   CircleDot,
-  Eye,
-  Flag,
-  Link2,
   LoaderCircle,
-  SkipForward,
-  Target,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -31,8 +26,47 @@ type BeginnerOnboardingDialogProps = {
   open: boolean;
 };
 
-const TUTORIAL_ICONS = [Target, CircleDot, Flag, Link2, SkipForward, Eye] as const;
 const KYU_OPTIONS = KNOWN_RANK_OPTIONS.filter((rank) => rank.endsWith("k"));
+
+type TutorialVisual = 0 | 1 | 2 | 3 | "rank" | 4 | 5;
+
+const TUTORIAL_STONES: Record<Exclude<TutorialVisual, "rank">, Array<[number, number, "black" | "white"]>> = {
+  0: [[1, 1, "black"], [3, 1, "white"], [1, 3, "white"], [3, 3, "black"]],
+  1: [[2, 2, "black"]],
+  2: [[2, 2, "white"], [2, 1, "black"], [1, 2, "black"], [3, 2, "black"]],
+  3: [[1, 1, "black"], [2, 1, "black"], [3, 1, "black"], [1, 2, "black"], [3, 2, "black"], [1, 3, "black"], [2, 3, "black"], [3, 3, "black"]],
+  4: [[1, 1, "black"], [3, 1, "white"], [1, 3, "white"], [3, 3, "black"]],
+  5: [[0, 1, "black"], [1, 1, "black"], [0, 2, "black"], [3, 2, "white"], [4, 2, "white"], [3, 3, "white"]],
+};
+
+function TutorialPosition({ visual }: { visual: TutorialVisual }) {
+  if (visual === "rank") {
+    return (
+      <div aria-hidden="true" className="beginner-rank-track">
+        {["30k", "20k", "10k", "1k"].map((rank, index) => (
+          <span className={index === 3 ? "is-current" : undefined} key={rank}>{rank}</span>
+        ))}
+      </div>
+    );
+  }
+
+  const points = [18, 34, 50, 66, 82];
+  return (
+    <svg aria-hidden="true" className="beginner-tutorial-board" viewBox="0 0 100 100">
+      <rect className="beginner-tutorial-board__wood" height="96" rx="4" width="96" x="2" y="2" />
+      {points.map((point) => (
+        <g className="beginner-tutorial-board__line" key={point}>
+          <path d={`M18 ${point}H82`} />
+          <path d={`M${point} 18V82`} />
+        </g>
+      ))}
+      {TUTORIAL_STONES[visual].map(([x, y, color], index) => (
+        <circle className={`beginner-tutorial-board__stone is-${color}`} cx={points[x]} cy={points[y]} key={`${x}-${y}-${index}`} r="7" />
+      ))}
+      {visual === 2 ? <circle className="beginner-tutorial-board__target" cx={points[2]} cy={points[3]} r="8.5" /> : null}
+    </svg>
+  );
+}
 
 export function BeginnerOnboardingDialog({
   busy,
@@ -81,9 +115,18 @@ export function BeginnerOnboardingDialog({
 
   if (!open) return null;
 
-  const slide = copy.slides[slideIndex];
-  const SlideIcon = TUTORIAL_ICONS[slideIndex];
-  const isLastSlide = slideIndex === copy.slides.length - 1;
+  const tutorialSlides = [
+    ...copy.slides.slice(0, 4).map((item, index) => ({ ...item, visual: index as TutorialVisual })),
+    {
+      title: copy.onboarding.rankTutorialTitle ?? copy.onboarding.rankTitle,
+      body: copy.onboarding.rankTutorialBody ?? copy.onboarding.rankBody,
+      note: copy.onboarding.rankTutorialNote ?? "30k → 20k → 10k → 1k",
+      visual: "rank" as const,
+    },
+    ...copy.slides.slice(4).map((item, index) => ({ ...item, visual: (index + 4) as TutorialVisual })),
+  ];
+  const slide = tutorialSlides[slideIndex];
+  const isLastSlide = slideIndex === tutorialSlides.length - 1;
   const title = step === "experience"
     ? copy.onboarding.canPlayTitle
     : step === "rank"
@@ -212,22 +255,22 @@ export function BeginnerOnboardingDialog({
 
       {step === "tutorial" ? (
         <div className="beginner-tutorial-body">
-          <div className="beginner-tutorial-visual" aria-hidden="true">
-            <SlideIcon size={38} strokeWidth={1.6} />
+          <div className="beginner-tutorial-example">
+            <TutorialPosition visual={slide.visual} />
+            <p className="beginner-tutorial-note">{slide.note}</p>
           </div>
-          <p className="beginner-tutorial-note">{slide.note}</p>
           <div className="beginner-tutorial-progress" aria-label={copy.onboarding.stepLabel
             .replace("{current}", String(slideIndex + 1))
-            .replace("{total}", String(copy.slides.length))}
+            .replace("{total}", String(tutorialSlides.length))}
           >
-            {copy.slides.map((item, index) => (
+            {tutorialSlides.map((item, index) => (
               <span aria-current={index === slideIndex ? "step" : undefined} key={item.title} />
             ))}
           </div>
           <span className="beginner-tutorial-step-label">
             {copy.onboarding.stepLabel
               .replace("{current}", String(slideIndex + 1))
-              .replace("{total}", String(copy.slides.length))}
+              .replace("{total}", String(tutorialSlides.length))}
           </span>
           <div className="beginner-tutorial-actions">
             <button
@@ -251,7 +294,7 @@ export function BeginnerOnboardingDialog({
               <button
                 className="button button--primary"
                 disabled={busy}
-                onClick={() => setSlideIndex((current) => Math.min(copy.slides.length - 1, current + 1))}
+                onClick={() => setSlideIndex((current) => Math.min(tutorialSlides.length - 1, current + 1))}
                 ref={firstAction}
                 type="button"
               >

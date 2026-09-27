@@ -32,6 +32,7 @@ type GoBoardProps = {
   selectedDeadStones?: Position[];
   lastMove?: Position | null;
   pendingMove?: (Position & { color: Stone }) | null;
+  previewColor?: Stone;
   precisionRevision: string;
 };
 
@@ -60,6 +61,7 @@ export function GoBoard({
   selectedDeadStones = [],
   lastMove = null,
   pendingMove = null,
+  previewColor = "black",
   precisionRevision,
 }: GoBoardProps) {
   const { dictionary, locale } = useI18n();
@@ -343,6 +345,7 @@ export function GoBoard({
           }
           data-size={boardSize}
           data-interaction-mode={interactionMode}
+          data-preview-color={previewColor}
           onPointerCancelCapture={handleBoardPointerCancel}
           onPointerDownCapture={handleBoardPointerDown}
           onPointerMoveCapture={handleBoardPointerMove}
