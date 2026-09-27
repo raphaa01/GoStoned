@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createEmptyBoard, scoreChinese } from "./goEngine";
 import {
@@ -20,6 +21,20 @@ import {
   resolveRulesPolicy,
   UnsupportedRulesPolicyError,
 } from "./rulesPolicy";
+
+const gameServiceSource = readFileSync(new URL("./gameService.ts", import.meta.url), "utf8");
+
+test("dead-group persistence changes only the selected connected group", () => {
+  assert.match(gameServiceSource, /ON CONFLICT \(game_id, x, y\) DO NOTHING/);
+  assert.match(
+    gameServiceSource,
+    /DELETE FROM game_dead_stones[\s\S]+UNNEST\(\$2::int\[\], \$3::int\[\]\)/,
+  );
+  assert.doesNotMatch(
+    gameServiceSource,
+    /client\.query\("DELETE FROM game_dead_stones WHERE game_id = \$1"/,
+  );
+});
 
 test("marked dead stones are presented as distinct selectable groups", () => {
   const board = createEmptyBoard(9);

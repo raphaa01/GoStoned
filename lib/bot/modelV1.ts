@@ -114,6 +114,7 @@ export type GoStoneJapaneseSettlementProposal = Readonly<{
   deadStones: readonly Position[];
   uncertainStones: readonly Position[];
   neutralRegionSeeds: readonly Position[];
+  estimate: JapaneseTerritoryScore | null;
   score: JapaneseTerritoryScore | null;
 }>;
 
