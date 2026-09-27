@@ -102,6 +102,7 @@ test("move submission binds the rendered version and uses an owned synchronous l
 test("a played stone is rendered optimistically while the server confirms it", () => {
   const room = source("components/game/GameRoom.tsx");
   const board = source("components/game/GoBoard.tsx");
+  const optimisticGame = source("lib/client/optimisticGame.ts");
   const move = section(room, "async function makeMove", "async function resign");
   assert.ok(
     move.indexOf("setPendingMove({ x: move.x, y: move.y, color: game.turn })")
@@ -109,7 +110,20 @@ test("a played stone is rendered optimistically while the server confirms it", (
   );
   assert.match(move, /setPendingMove\(null\)[\s\S]+setBusy\(false\)/);
   assert.match(room, /pendingMove=\{pendingMove\}/);
+  assert.match(room, /boardState=\{pendingMovePreview\?\.board \?\? game\.board\}/);
+  assert.match(room, /game\.moveCount \+ \(pendingMovePreview\?\.applied \? 1 : 0\)/);
   assert.match(board, /const stone = serverStone \?\? pendingStone/);
+  assert.match(optimisticGame, /applyMove\([\s\S]+result\.board/);
+});
+
+test("dead-stone groups update optimistically while the server confirms them", () => {
+  const room = source("components/game/GameRoom.tsx");
+  const scoring = section(room, "async function scoringAction", "async function estimateJapaneseScore");
+  assert.match(room, /const \[pendingDeadStones, setPendingDeadStones\]/);
+  assert.match(room, /const scoringDeadStones = pendingDeadStones \?\? game\?\.scoring\?\.deadStones/);
+  assert.match(room, /const preview = toggleDeadGroup\([\s\S]+void scoringAction\("dead-stones", \{ x, y, dead \}, preview\)/);
+  assert.match(scoring, /setPendingDeadStones\(deadStonePreview\)/);
+  assert.match(scoring, /setPendingDeadStones\(null\)/);
 });
 
 test("precision placement and version conflicts have English and German copy", () => {
