@@ -1746,7 +1746,7 @@ test("language switch preserves the play route, query, and fragment", async ({ p
 
   await page.goto("/play?size=19&source=browser#queue");
   let languageMenu = page.getByRole("button", { name: "Choose language: English" });
-  if ((page.viewportSize()?.width ?? 0) <= 1180) {
+  if ((page.viewportSize()?.width ?? 0) <= 840) {
     const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
     await page.locator(".mobile-nav > .icon-button").click();
     await expect(mobileNavigation).toBeVisible();
@@ -1768,8 +1768,8 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   await expectCleanHarness(harness);
 });
 
-test("Kyrgyz play and the tablet language menu stay translated and separated", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "chromium-1024", "Tablet width covers the reported collision.");
+test("Kyrgyz play keeps the desktop navigation visible at 1024 px", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "The 1024 px project covers the desktop navigation breakpoint.");
   const harness = await installApiHarness(page);
   const friends = getFriendsCopy("ky");
 
@@ -1777,15 +1777,18 @@ test("Kyrgyz play and the tablet language menu stay translated and separated", a
   await expect(page.locator("html")).toHaveAttribute("lang", "ky");
   await expect(page.getByRole("button", { name: ky.play.findOpponent, exact: true })).toBeVisible();
 
-  await page.locator(".mobile-nav > .icon-button").click();
-  const navigation = page.getByRole("navigation", { name: ky.nav.mobileLabel });
+  const desktopHeader = page.locator(".sidebar");
+  const navigation = desktopHeader.getByRole("navigation", { name: ky.nav.mainLabel });
+  await expect(desktopHeader).toBeVisible();
+  await expect(page.locator(".mobile-nav")).toBeHidden();
   const friendsLink = navigation.getByRole("link", { name: friends.nav, exact: true });
-  const language = navigation.getByRole("button", {
+  const language = desktopHeader.getByRole("button", {
     name: `${ky.language.switcherLabel}: Кыргызча`,
     exact: true,
   });
+  await expect(friendsLink).toBeVisible();
   await language.click();
-  const popover = navigation.getByRole("menu", { name: ky.language.switcherLabel });
+  const popover = desktopHeader.getByRole("menu", { name: ky.language.switcherLabel });
   await expect(popover).toBeVisible();
   const [friendsBox, languageBox, popoverBox] = await Promise.all([
     friendsLink.boundingBox(),
@@ -1795,7 +1798,7 @@ test("Kyrgyz play and the tablet language menu stay translated and separated", a
   expect(friendsBox).not.toBeNull();
   expect(languageBox).not.toBeNull();
   expect(popoverBox).not.toBeNull();
-  expect(friendsBox!.y + friendsBox!.height).toBeLessThanOrEqual(languageBox!.y + 1);
+  expect(friendsBox!.y).toBeGreaterThanOrEqual(languageBox!.y + languageBox!.height - 1);
   expect(popoverBox!.y).toBeGreaterThanOrEqual(languageBox!.y + languageBox!.height - 1);
   await expectNoDocumentOverflow(page);
   await expectCleanHarness(harness);
