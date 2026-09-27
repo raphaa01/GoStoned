@@ -2292,12 +2292,12 @@ async function rollbackTakebackMoves(
   const replay = replayMovesWithPrisoners(loaded.game.board_size, mapMoves(remainingRows));
   const consecutivePasses = remainingRows.at(-1)?.is_pass ? 1 : 0;
   const updated = await client.query<GameRow>(
-    `UPDATE games
-        SET phase = 'play', to_move = $2, consecutive_passes = $3,
-            turn_started_at = $4, updated_at = $4, version = version + 1
-      WHERE id = $1
-      RETURNING *`,
-    [loaded.game.id, restoredTurn, consecutivePasses, now],
+      `UPDATE games
+         SET phase = 'play', to_move = $2, consecutive_passes = $3,
+            turn_started_at = $4, updated_at = $5, version = version + 1
+       WHERE id = $1
+       RETURNING *`,
+    [loaded.game.id, restoredTurn, consecutivePasses, now, now],
   );
   return serializeGame({
     ...withUpdatedGame(loaded, updated.rows[0]),
