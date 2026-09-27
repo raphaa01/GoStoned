@@ -180,7 +180,7 @@ export function GamePanel({
         <div className="scoring-controls">
           <div className="scoring-heading">
             <div>
-              <strong>{copy.confirmFinalPosition}</strong>
+              <strong>{copy.confirmScore}</strong>
               <ScoringHelpButton onClick={onShowScoringHelp} />
             </div>
             <span>{copy.scoringInstructions}</span>

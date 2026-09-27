@@ -9,6 +9,9 @@ export type BeginnerGuideCopy = Readonly<{
     canPlayNo: string;
     rankTitle: string;
     rankBody: string;
+    rankTutorialTitle?: string;
+    rankTutorialBody?: string;
+    rankTutorialNote?: string;
     rankLabel: string;
     rankPlaceholder: string;
     useRank: string;
@@ -64,13 +67,13 @@ const en: BeginnerGuideCopy = {
     useRank: "Continue with this rank",
     skipRank: "Continue without a rank",
     tutorialOfferTitle: "Would you like a two-minute introduction?",
-    tutorialOfferBody: "Six short steps cover the goal, captures, passing and scoring.",
+    tutorialOfferBody: "A few short steps cover the goal, captures, ranks, passing and scoring.",
     startTutorial: "Show me the introduction",
     skipTutorial: "I will start without it",
     back: "Back",
     cancel: "Back to account form",
     creating: "Creating your account…",
-    tutorialTitle: "Go in six steps",
+    tutorialTitle: "Go: a quick guide",
     stepLabel: "Step {current} of {total}",
     previous: "Previous",
     next: "Next",
@@ -117,10 +120,10 @@ const en: BeginnerGuideCopy = {
     scoreBody: "Black and White show the current point totals. Open “Score breakdown” to see territory, prisoners and komi.",
     deadTitle: "Mark dead groups",
     deadBody: "Tap one stone in every group that cannot escape. The whole connected group is marked. Tap it again to restore it.",
-    confirmTitle: "If everything looks right",
-    confirmBody: "Choose “Confirm final score”. The game ends only after both players confirm the same position.",
-    disputeTitle: "If you disagree",
-    disputeBody: "Select the marked group under “Dispute a marked group” and continue play. Settle it on the board, then both pass again.",
+    confirmTitle: "If the position looks right, confirm it",
+    confirmBody: "Choose “Confirm final score”. The game ends when both players confirm the same position.",
+    disputeTitle: "If a group is marked incorrectly",
+    disputeBody: "Correct the mark on the board. If you still disagree, select the group below and continue play; settle it, then both pass again.",
     understood: "Understood",
     hideNextTime: "Do not show automatically again",
     reopen: "How scoring works",
@@ -141,13 +144,13 @@ const de: BeginnerGuideCopy = {
     useRank: "Mit diesem Rang weiter",
     skipRank: "Ohne Rang weiter",
     tutorialOfferTitle: "Möchtest du eine zweiminütige Einführung?",
-    tutorialOfferBody: "Sechs kurze Schritte erklären Ziel, Schlagen, Passen und Wertung.",
+    tutorialOfferBody: "Ein paar kurze Schritte erklären Ziel, Schlagen, Kyu-Ränge, Passen und Wertung.",
     startTutorial: "Einführung ansehen",
     skipTutorial: "Direkt loslegen",
     back: "Zurück",
     cancel: "Zurück zur Kontoerstellung",
     creating: "Dein Konto wird erstellt…",
-    tutorialTitle: "Go in sechs Schritten",
+    tutorialTitle: "Go kurz erklärt",
     stepLabel: "Schritt {current} von {total}",
     previous: "Zurück",
     next: "Weiter",
@@ -194,10 +197,10 @@ const de: BeginnerGuideCopy = {
     scoreBody: "Schwarz und Weiß zeigen die aktuellen Punktzahlen. Unter „Wertungsdetails“ siehst du Gebiet, Gefangene und Komi.",
     deadTitle: "Tote Gruppen markieren",
     deadBody: "Tippe in jeder Gruppe, die nicht mehr entkommen kann, einen Stein an. Die ganze verbundene Gruppe wird markiert. Erneutes Tippen macht das rückgängig.",
-    confirmTitle: "Wenn alles stimmt",
-    confirmBody: "Klicke auf „Endwertung bestätigen“. Die Partie endet erst, wenn beide dieselbe Position bestätigt haben.",
-    disputeTitle: "Wenn ihr euch nicht einig seid",
-    disputeBody: "Wähle die markierte Gruppe unter „Markierte Gruppe klären“ und spielt weiter. Klärt sie auf dem Brett und passt danach erneut beide.",
+    confirmTitle: "Wenn die Position stimmt, bestätige sie",
+    confirmBody: "Klicke auf „Endwertung bestätigen“. Die Partie endet, sobald beide dieselbe Position bestätigt haben.",
+    disputeTitle: "Wenn eine Gruppe falsch markiert ist",
+    disputeBody: "Korrigiere die Markierung auf dem Brett. Bleibt ihr uneinig, wähle die Gruppe unten aus, spielt weiter und passt danach erneut beide.",
     understood: "Verstanden",
     hideNextTime: "Nicht erneut automatisch anzeigen",
     reopen: "Wertung verstehen",
@@ -308,6 +311,28 @@ const ky: BeginnerGuideCopy = {
 
 const COPY: Record<Locale, BeginnerGuideCopy> = { de, en, es, fr, ja, ko, ky, zh };
 
+const RANK_TUTORIAL_COPY: Record<Locale, {
+  rankTutorialTitle: string;
+  rankTutorialBody: string;
+  rankTutorialNote: string;
+}> = {
+  de: { rankTutorialTitle: "Kyu-Ränge zeigen deinen Fortschritt", rankTutorialBody: "Anfänger starten meist ungefähr bei 30 Kyu. Mit wachsender Spielstärke sinkt die Zahl bis 1 Kyu; danach folgen Dan-Ränge. Der Rang hilft vor allem dabei, passende Gegner zu finden.", rankTutorialNote: "30 Kyu → 20 Kyu → 10 Kyu → 1 Kyu" },
+  en: { rankTutorialTitle: "Kyu ranks show your progress", rankTutorialBody: "Beginners usually start near 30 kyu. As you improve, the number falls toward 1 kyu; dan ranks come after that. Your rank is only a matchmaking guide, not a test you have to pass.", rankTutorialNote: "30 kyu → 20 kyu → 10 kyu → 1 kyu" },
+  es: { rankTutorialTitle: "Los rangos kyu muestran tu progreso", rankTutorialBody: "Los principiantes suelen empezar cerca de 30 kyu. Al mejorar, el número baja hasta 1 kyu; después vienen los rangos dan. El rango sirve para buscar rivales adecuados.", rankTutorialNote: "30 kyu → 20 kyu → 10 kyu → 1 kyu" },
+  fr: { rankTutorialTitle: "Les rangs kyu montrent votre progression", rankTutorialBody: "Les débutants commencent souvent vers 30 kyu. En progressant, le nombre descend jusqu’à 1 kyu, puis viennent les rangs dan. Le rang sert à trouver un adversaire adapté.", rankTutorialNote: "30 kyu → 20 kyu → 10 kyu → 1 kyu" },
+  ja: { rankTutorialTitle: "級位は上達の目安です", rankTutorialBody: "初心者は30級前後から始まり、上達すると数字が1級へ近づきます。その先が段位です。級位は主に実力の近い相手を見つけるために使います。", rankTutorialNote: "30級 → 20級 → 10級 → 1級" },
+  ko: { rankTutorialTitle: "급수는 실력 향상을 보여 줍니다", rankTutorialBody: "초보자는 보통 30급 부근에서 시작합니다. 실력이 늘면 숫자가 1급까지 낮아지고, 그다음은 단급입니다. 급수는 비슷한 상대를 찾는 기준입니다.", rankTutorialNote: "30급 → 20급 → 10급 → 1급" },
+  ky: { rankTutorialTitle: "Кю даражасы өсүшүңүздү көрсөтөт", rankTutorialBody: "Жаңы оюнчулар адатта 30 кюдан баштайт. Күч өскөндө сан 1 кюга чейин азаят, андан кийин дан даражалары келет. Даража тең атаандаш табууга жардам берет.", rankTutorialNote: "30 кю → 20 кю → 10 кю → 1 кю" },
+  zh: { rankTutorialTitle: "级位表示你的进步", rankTutorialBody: "初学者通常从30级左右开始。水平提高后数字会降到1级，之后进入段位。级位主要用于匹配实力相近的对手。", rankTutorialNote: "30级 → 20级 → 10级 → 1级" },
+};
+
 export function getBeginnerGuideCopy(locale: Locale): BeginnerGuideCopy {
-  return COPY[locale];
+  const copy = COPY[locale];
+  return {
+    ...copy,
+    onboarding: {
+      ...copy.onboarding,
+      ...RANK_TUTORIAL_COPY[locale],
+    },
+  };
 }

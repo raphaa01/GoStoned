@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, CheckCheck, HelpCircle, MousePointer2, RotateCcw } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import { type RefObject, useId, useRef } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -38,27 +38,20 @@ export function ScoringHelpDialog({
     >
       <header className="scoring-help-header">
         <span>{copy.kicker}</span>
-        <h2 id={titleId}>{copy.title}</h2>
-        <p id={descriptionId}>{copy.intro}</p>
+        <h2 className="sr-only" id={titleId}>{copy.title}</h2>
+        <h3>{copy.confirmTitle}</h3>
+        <p id={descriptionId}>{copy.confirmBody}</p>
       </header>
-      <ol className="scoring-help-steps">
-        <li>
-          <Calculator aria-hidden="true" size={20} />
-          <div><strong>{copy.scoreTitle}</strong><p>{copy.scoreBody}</p></div>
-        </li>
-        <li>
-          <MousePointer2 aria-hidden="true" size={20} />
-          <div><strong>{copy.deadTitle}</strong><p>{copy.deadBody}</p></div>
-        </li>
-        <li>
-          <CheckCheck aria-hidden="true" size={20} />
-          <div><strong>{copy.confirmTitle}</strong><p>{copy.confirmBody}</p></div>
-        </li>
-        <li>
-          <RotateCcw aria-hidden="true" size={20} />
-          <div><strong>{copy.disputeTitle}</strong><p>{copy.disputeBody}</p></div>
-        </li>
-      </ol>
+      <div className="scoring-help-steps">
+        <section>
+          <strong>{copy.scoreTitle}</strong>
+          <p>{copy.scoreBody}</p>
+        </section>
+        <aside>
+          <strong>{copy.disputeTitle}</strong>
+          <p>{copy.deadBody} {copy.disputeBody}</p>
+        </aside>
+      </div>
       <div className="scoring-help-actions">
         <button className="button button--primary" onClick={onClose} ref={understoodButton} type="button">
           {copy.understood}
