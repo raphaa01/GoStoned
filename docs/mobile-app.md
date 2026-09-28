@@ -111,11 +111,15 @@ KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
   generic failure. It stops at severe thermal pressure and never calls the
   server analysis route. The device test verifies actual multi-position model
   inference on Android API 36.
-- **iOS:** source contract, model verification, project wiring and an explicit
-  fail-closed bridge are ready. The Metal/CoreML core must still be compiled on
-  macOS and tested on real iPhones. Upstream commit
-  `fd0723fdbc0e9d82cf269c9630af8c27c57c07c4` does not provide an iOS
-  library/XCFramework target, so Windows cannot honestly complete that link.
+- **iOS:** the in-process bridge, model verification and Metal/MPSGraph build
+  recipe are ready for iOS 16 and newer. `npm run mobile:katago:ios` builds the
+  pinned upstream commit as arm64 device and Apple-silicon Simulator slices,
+  packages them as a local XCFramework, and makes the Swift plugin available.
+  Without that generated framework the same package deliberately stays
+  fail-closed. The simulator slice verifies compile/link integration but runtime
+  inference stays disabled because Xcode 26.6's simulator MPSGraph driver aborts
+  during execution. Real-iPhone performance, battery and thermal validation
+  remains a release gate.
 - **Website:** continues to use the existing server worker. Mobile native paths
   never silently fall back to Modal or the KataGo server.
 
@@ -128,13 +132,13 @@ See `native/gostone-katago/README.md` for the platform-specific release gates.
 1. Install Xcode 26 or newer, accept its license, install the iOS Simulator
    runtime, and select the project’s Apple Developer signing team.
 2. Clone the repository, run `npm ci`, `npm run mobile:build`, and
-   `npm run mobile:sync`; open `ios/App/App.xcworkspace` in Xcode.
-3. Build KataGo v1.18.2 at the pinned commit as an arm64 device plus simulator
-   XCFramework using Metal (CoreML may be evaluated only if it produces the same
-   contract). Link it to `GoStoneKataGoPlugin`, replace the fail-closed status,
-   and keep the pinned model hash check, cancellation, thermal handling,
-   progressive preview/quality events, adaptive 900-visit budget, and
-   90-second result-preserving safety boundary.
+   `npm run mobile:sync`; open `ios/App/App.xcodeproj` in Xcode. Capacitor's
+   Swift Package Manager project does not generate a top-level `.xcworkspace`.
+3. Install CMake and Ninja, then run `npm run mobile:katago:ios` before
+   `npm run mobile:sync`. This builds KataGo v1.18.2 at the pinned commit as an
+   arm64 device plus Apple-silicon Simulator XCFramework using Metal/MPSGraph
+   and links it to `GoStoneKataGoPlugin`. The generated framework stays ignored;
+   release CI must run the same command rather than reuse an opaque binary.
 4. Run contract tests in Simulator, then test model loading, a complete review,
    cancellation, background/foreground, memory pressure, and thermal handling
    on at least one real older iPhone and one current iPhone. Confirm that no
