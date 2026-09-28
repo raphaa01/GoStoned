@@ -39,7 +39,8 @@ public class GoStoneKataGoPlugin extends Plugin {
     private static final int MAX_VISITS = 80;
     private static final int MAX_MOVES = 1_000;
     private static final int TOTAL_VISIT_BUDGET = 900;
-    private static final long ANALYSIS_TIMEOUT_SECONDS = 28L;
+    private static final int PREVIEW_VISITS = 1;
+    private static final long MAX_ANALYSIS_SECONDS = 90L;
 
     private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -138,14 +139,16 @@ public class GoStoneKataGoPlugin extends Plugin {
     }
 
     private void runAnalysis(PluginCall call, ActiveAnalysis job, JSObject input, int visits) {
+        TreeMap<Integer, JSONObject> bestTurns = new TreeMap<>();
+        int qualityVisits = PREVIEW_VISITS;
         try {
             if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
                 throw new IllegalStateException("The device is too warm to start local analysis.");
             }
             RuntimeFiles runtime = ensureRuntime();
-            JSONObject request = buildRequest(job.id, input, visits);
-            int expectedTurns = request.getJSONArray("analyzeTurns").length();
-            int effectiveVisits = request.getInt("maxVisits");
+            qualityVisits = adaptiveVisits(input, visits);
+            JSONObject previewRequest = buildRequest(job.id + ":preview", input, PREVIEW_VISITS);
+            int expectedTurns = previewRequest.getJSONArray("analyzeTurns").length();
 
             Process process = new ProcessBuilder(
                 runtime.executable.getAbsolutePath(),
@@ -158,65 +161,119 @@ public class GoStoneKataGoPlugin extends Plugin {
             drainStderr(process, job);
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
             job.writer = writer;
-            writer.write(request.toString());
-            writer.newLine();
-            writer.flush();
-
             ScheduledFuture<?> timeout = timeoutExecutor.schedule(() -> {
                 if (process.isAlive()) {
                     job.timedOut.set(true);
                     stop(job, false);
                 }
-            }, ANALYSIS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }, MAX_ANALYSIS_SECONDS, TimeUnit.SECONDS);
 
-            TreeMap<Integer, JSONObject> turns = new TreeMap<>();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while (!job.cancelled.get() && (line = reader.readLine()) != null) {
-                    JSONObject response;
-                    try {
-                        response = new JSONObject(line);
-                    } catch (Exception ignored) {
-                        continue;
+            boolean qualityComplete = false;
+            try {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    boolean previewComplete = analyzePhase(
+                        job, writer, reader, previewRequest, "preview", PREVIEW_VISITS,
+                        expectedTurns, bestTurns
+                    );
+                    if (previewComplete && !job.cancelled.get() && !job.timedOut.get() && qualityVisits > PREVIEW_VISITS) {
+                        JSONObject qualityRequest = buildRequest(job.id + ":quality", input, qualityVisits);
+                        qualityComplete = analyzePhase(
+                            job, writer, reader, qualityRequest, "quality", qualityVisits,
+                            expectedTurns, bestTurns
+                        );
                     }
-                    if (!job.id.equals(response.optString("id"))) continue;
-                    if (response.has("error")) {
-                        throw new IllegalStateException("KataGo rejected the analysis: " + response.optString("error"));
-                    }
-                    if (response.optBoolean("isDuringSearch", false) || response.optBoolean("noResults", false)) continue;
-                    validateTurn(response);
-                    turns.put(response.getInt("turnNumber"), response);
-                    emitProgress(job.id, turns.size(), expectedTurns);
-                    if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
-                        stop(job, false);
-                        throw new IllegalStateException("Local analysis stopped because the device became too warm.");
-                    }
-                    if (turns.size() >= expectedTurns) break;
                 }
+            } finally {
+                timeout.cancel(false);
             }
-            timeout.cancel(false);
 
             if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
-            if (job.timedOut.get()) {
-                throw new IllegalStateException("Local analysis reached its 28 second device budget. Try again after closing other apps.");
-            }
-            if (turns.size() != expectedTurns) {
+            if (!hasUsableReview(bestTurns)) {
                 throw new IllegalStateException("KataGo stopped before every game position was analyzed.");
             }
-            JSArray resultTurns = new JSArray();
-            for (Map.Entry<Integer, JSONObject> turn : turns.entrySet()) resultTurns.put(turn.getValue());
-            JSObject result = new JSObject();
-            result.put("turns", resultTurns);
-            result.put("visitsPerTurn", effectiveVisits);
-            call.resolve(result);
+            resolveAnalysis(call, bestTurns, qualityComplete ? qualityVisits : PREVIEW_VISITS, qualityComplete, null);
         } catch (Exception exception) {
-            call.reject(safeMessage(exception), job.cancelled.get() ? "analysis_cancelled" : "native_analysis_failed", exception);
+            if (!job.cancelled.get() && hasUsableReview(bestTurns)) {
+                resolveAnalysis(call, bestTurns, PREVIEW_VISITS, false, safeMessage(exception));
+            } else {
+                call.reject(safeMessage(exception), job.cancelled.get() ? "analysis_cancelled" : "native_analysis_failed", exception);
+            }
         } finally {
             stop(job, false);
             synchronized (activeLock) {
                 if (activeAnalysis == job) activeAnalysis = null;
             }
         }
+    }
+
+    private boolean analyzePhase(
+        ActiveAnalysis job,
+        BufferedWriter writer,
+        BufferedReader reader,
+        JSONObject request,
+        String phase,
+        int visits,
+        int expectedTurns,
+        TreeMap<Integer, JSONObject> bestTurns
+    ) throws Exception {
+        writer.write(request.toString());
+        writer.newLine();
+        writer.flush();
+        TreeMap<Integer, JSONObject> phaseTurns = new TreeMap<>();
+        String requestId = request.getString("id");
+        String line;
+        while (!job.cancelled.get() && !job.timedOut.get() && (line = reader.readLine()) != null) {
+            JSONObject response;
+            try {
+                response = new JSONObject(line);
+            } catch (Exception ignored) {
+                continue;
+            }
+            if (!requestId.equals(response.optString("id"))) continue;
+            if (response.has("error")) {
+                throw new IllegalStateException("KataGo rejected the analysis: " + response.optString("error"));
+            }
+            if (response.optBoolean("isDuringSearch", false) || response.optBoolean("noResults", false)) continue;
+            validateTurn(response);
+            int turnNumber = response.getInt("turnNumber");
+            phaseTurns.put(turnNumber, response);
+            bestTurns.put(turnNumber, response);
+            emitProgress(job.id, phase, phaseTurns.size(), expectedTurns, visits, response);
+            if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
+                stop(job, false);
+                throw new IllegalStateException("Local analysis stopped because the device became too warm.");
+            }
+            if (phaseTurns.size() >= expectedTurns) return true;
+        }
+        return false;
+    }
+
+    private boolean hasUsableReview(TreeMap<Integer, JSONObject> turns) {
+        return turns.containsKey(0) && turns.containsKey(1);
+    }
+
+    private void resolveAnalysis(
+        PluginCall call,
+        TreeMap<Integer, JSONObject> turns,
+        int visits,
+        boolean complete,
+        String warning
+    ) {
+        JSArray resultTurns = new JSArray();
+        for (Map.Entry<Integer, JSONObject> turn : turns.entrySet()) resultTurns.put(turn.getValue());
+        JSObject result = new JSObject();
+        result.put("turns", resultTurns);
+        result.put("visitsPerTurn", visits);
+        result.put("complete", complete);
+        if (warning != null) result.put("warning", warning);
+        call.resolve(result);
+    }
+
+    private int adaptiveVisits(JSObject input, int requestedVisits) throws Exception {
+        JSONArray moves = input.getJSONArray("moves");
+        int positionCount = moves == null ? 1 : moves.length() + 1;
+        int budgetedVisits = Math.max(PREVIEW_VISITS, TOTAL_VISIT_BUDGET / positionCount);
+        return Math.max(PREVIEW_VISITS, Math.min(requestedVisits, budgetedVisits));
     }
 
     private JSONObject buildRequest(String id, JSObject input, int visits) throws Exception {
@@ -242,9 +299,7 @@ public class GoStoneKataGoPlugin extends Plugin {
         request.put("komi", input.getDouble("komi"));
         request.put("boardXSize", boardSize);
         request.put("boardYSize", boardSize);
-        int positionCount = moves.length() + 1;
-        int adaptiveVisits = Math.max(4, Math.min(visits, TOTAL_VISIT_BUDGET / positionCount));
-        request.put("maxVisits", adaptiveVisits);
+        request.put("maxVisits", visits);
         request.put("analysisPVLen", 12);
         request.put("includePolicy", true);
         JSONArray analyzeTurns = new JSONArray();
@@ -374,12 +429,22 @@ public class GoStoneKataGoPlugin extends Plugin {
         thread.start();
     }
 
-    private void emitProgress(String id, int completed, int total) {
+    private void emitProgress(
+        String id,
+        String phase,
+        int completed,
+        int total,
+        int visits,
+        JSONObject turn
+    ) {
         JSObject progress = new JSObject();
         progress.put("analysisId", id);
+        progress.put("phase", phase);
         progress.put("completedTurns", completed);
         progress.put("totalTurns", total);
+        progress.put("visitsPerTurn", visits);
         progress.put("thermalState", thermalStateName());
+        progress.put("turn", turn);
         notifyListeners("progress", progress);
     }
 

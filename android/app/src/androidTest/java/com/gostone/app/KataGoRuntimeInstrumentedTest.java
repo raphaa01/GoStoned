@@ -28,7 +28,7 @@ public class KataGoRuntimeInstrumentedTest {
         "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229";
 
     @Test
-    public void bundledRuntimeAnalyzesOnePositionWithoutNetwork() throws Exception {
+    public void bundledRuntimeProducesTenMovePreviewWithoutNetwork() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         File executable = new File(
             context.getApplicationInfo().nativeLibraryDir,
@@ -58,16 +58,29 @@ public class KataGoRuntimeInstrumentedTest {
             "-quit-without-waiting"
         ).redirectErrorStream(true).start();
         try {
+            JSONArray moves = new JSONArray()
+                .put(new JSONArray().put("B").put("D4"))
+                .put(new JSONArray().put("W").put("E5"))
+                .put(new JSONArray().put("B").put("C3"))
+                .put(new JSONArray().put("W").put("F6"))
+                .put(new JSONArray().put("B").put("C4"))
+                .put(new JSONArray().put("W").put("F5"))
+                .put(new JSONArray().put("B").put("D3"))
+                .put(new JSONArray().put("W").put("E6"))
+                .put(new JSONArray().put("B").put("D5"))
+                .put(new JSONArray().put("W").put("E4"));
+            JSONArray analyzeTurns = new JSONArray();
+            for (int turn = 0; turn <= moves.length(); turn++) analyzeTurns.put(turn);
             JSONObject request = new JSONObject()
                 .put("id", "android-instrumentation")
-                .put("moves", new JSONArray())
+                .put("moves", moves)
                 .put("rules", "japanese")
                 .put("komi", 6.5)
                 .put("boardXSize", 9)
                 .put("boardYSize", 9)
                 .put("maxVisits", 1)
                 .put("analysisPVLen", 3)
-                .put("analyzeTurns", new JSONArray().put(0));
+                .put("analyzeTurns", analyzeTurns);
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
                 process.getOutputStream(),
                 StandardCharsets.UTF_8
@@ -80,9 +93,11 @@ public class KataGoRuntimeInstrumentedTest {
                     process.getInputStream(),
                     StandardCharsets.UTF_8
                 ))) {
-                    long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(5);
+                    long startedAt = System.nanoTime();
+                    long deadline = startedAt + TimeUnit.SECONDS.toNanos(35);
                     String line;
                     JSONObject result = null;
+                    int results = 0;
                     StringBuilder diagnostics = new StringBuilder();
                     while (System.nanoTime() < deadline && (line = reader.readLine()) != null) {
                         diagnostics.append(line).append('\n');
@@ -90,12 +105,14 @@ public class KataGoRuntimeInstrumentedTest {
                         JSONObject candidate = new JSONObject(line);
                         if ("android-instrumentation".equals(candidate.optString("id"))) {
                             result = candidate;
-                            break;
+                            results += 1;
+                            if (results == analyzeTurns.length()) break;
                         }
                     }
                     assertTrue("No analysis result. KataGo output:\n" + diagnostics, result != null);
                     assertFalse(result.optString("error"), result.has("error"));
-                    assertEquals(0, result.getInt("turnNumber"));
+                    assertEquals(analyzeTurns.length(), results);
+                    assertTrue("Preview exceeded 35 seconds", System.nanoTime() - startedAt <= TimeUnit.SECONDS.toNanos(35));
                     assertTrue(result.getJSONObject("rootInfo").has("winrate"));
                     assertTrue(result.getJSONObject("rootInfo").has("scoreLead"));
                     assertTrue(result.has("moveInfos"));

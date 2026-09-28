@@ -103,12 +103,14 @@ Before an iOS release, add the production API hostname and `localhost` to
 KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
 
 - **Android:** enabled locally with the Eigen CPU backend. It exposes start,
-  progress and cancel, runs one analysis at a time, starts from a 20-visit
-  quality target and adapts visits to a 900-visit whole-game budget. A hard
-  28-second device deadline prevents a review from heating the phone for an
-  unbounded period. It stops at severe thermal pressure, persists only complete
-  results locally, and never calls the server analysis route. The device test
-  verifies an actual model inference on Android API 36.
+  progress and cancel and runs one analysis at a time. A one-visit preview makes
+  the first ten contiguous moves usable immediately; after 28 seconds the UI
+  opens whatever contiguous preview is ready. A second pass then replaces those
+  positions using the adaptive 900-visit quality budget. The 90-second safety
+  boundary returns and persists usable work instead of replacing it with a
+  generic failure. It stops at severe thermal pressure and never calls the
+  server analysis route. The device test verifies actual multi-position model
+  inference on Android API 36.
 - **iOS:** source contract, model verification, project wiring and an explicit
   fail-closed bridge are ready. The Metal/CoreML core must still be compiled on
   macOS and tested on real iPhones. Upstream commit
@@ -131,7 +133,8 @@ See `native/gostone-katago/README.md` for the platform-specific release gates.
    XCFramework using Metal (CoreML may be evaluated only if it produces the same
    contract). Link it to `GoStoneKataGoPlugin`, replace the fail-closed status,
    and keep the pinned model hash check, cancellation, thermal handling,
-   adaptive 900-visit budget, and 28-second deadline.
+   progressive preview/quality events, adaptive 900-visit budget, and
+   90-second result-preserving safety boundary.
 4. Run contract tests in Simulator, then test model loading, a complete review,
    cancellation, background/foreground, memory pressure, and thermal handling
    on at least one real older iPhone and one current iPhone. Confirm that no
@@ -154,7 +157,8 @@ codesign an iOS app, run the iOS Simulator, or produce an App Store archive.
    local/CI secrets (never commit it). Enable Google Play App Signing.
 2. Run `npm ci`, `npm run mobile:build`, `npm run mobile:sync`,
    `npm run mobile:android:build`, `npm run typecheck`, and `npm test`.
-3. Test the local 38 MB KataGo model and 28-second budget on real arm64 devices:
+3. Test the local 38 MB KataGo model, first-preview latency, and progressive
+   quality pass on real arm64 devices:
    one low/mid-range device and one current flagship. Verify cancellation,
    backgrounding, offline analysis, heat, memory, and that completed analyses
    reopen from local storage without a network call.

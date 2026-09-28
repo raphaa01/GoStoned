@@ -32,6 +32,12 @@
 .reviewHeader > div strong { margin-top: 3px; }
 .engineBadge { display: flex; justify-self: end; color: var(--color-text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .72rem; font-weight: 650; }
 .reviewMain { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(310px, .72fr); gap: clamp(22px, 3vw, 42px); width: 100%; max-width: 1240px; min-width: 0; margin: auto; }
+.analysisProgress { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 18px; padding: 11px 0; border-bottom: 1px solid var(--color-line); color: var(--color-text-muted); }
+.analysisProgress > div { display: grid; gap: 2px; }
+.analysisProgress strong { color: var(--color-ink); font-size: .9rem; }
+.analysisProgress span { font-size: .78rem; line-height: 1.45; }
+.analysisProgress > i { grid-column: 1 / -1; display: block; height: 3px; overflow: hidden; background: var(--color-line); }
+.analysisProgress b { display: block; height: 100%; background: var(--color-moss); transition: width 180ms ease; }
 .boardPanel, .insightPanel { min-width: 0; }
 .boardPanel { display: grid; align-content: start; justify-items: center; min-width: 0; }
 .board { display: block; width: min(100%, 690px); height: auto; max-width: 100%; filter: drop-shadow(0 12px 18px rgb(69 48 25 / .12)); }
@@ -149,6 +155,8 @@
   .reviewHeader { margin-bottom: 10px; }
   .reviewHeader > a { font-size: .88rem; }
   .engineBadge { font-size: .62rem; }
+  .analysisProgress { grid-template-columns: 1fr; }
+  .analysisProgress > span { justify-self: start; }
   .coachCard { padding: 14px 15px 15px; }
   .moveControls { grid-template-columns: 38px 38px minmax(74px, 1fr) 88px 38px; gap: 4px; }
   .moveControls button { height: 42px; padding-inline: 8px; }
