@@ -59,9 +59,11 @@ function run(command: string, args: string[], cwd = repository): void {
 if (platform() === "win32") {
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error("npm CLI path is unavailable.");
+  run(process.execPath, [npmCli, "run", "mobile:katago:android"]);
   run(process.execPath, [npmCli, "run", "mobile:sync"]);
   run("cmd.exe", ["/d", "/s", "/c", "gradlew.bat assembleDebug"], join(repository, "android"));
 } else {
+  run("npm", ["run", "mobile:katago:android"]);
   run("npm", ["run", "mobile:sync"]);
   run("./gradlew", ["assembleDebug"], join(repository, "android"));
 }

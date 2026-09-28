@@ -5,6 +5,21 @@ components, rulebook, polling, matchmaking and browser-bot code. Capacitor wraps
 the bundle for iOS and Android. The Next.js application remains the authoritative
 Vercel API and the only process with PostgreSQL access.
 
+## Repository separation
+
+| Target | Source boundary | Responsibility |
+| --- | --- | --- |
+| Website/API | `app/`, `components/`, `lib/` | Existing Next.js site, Vercel API, matchmaking and persistence |
+| Shared mobile client | `mobile/` | Bundled React entry point and native-safe navigation |
+| Android shell | `android/` | Gradle application, Android resources and device tests |
+| Android KataGo | `native/gostone-katago/android/` | Local CPU engine bridge and lifecycle/thermal controls |
+| iOS shell | `ios/` | Xcode/SPM application project |
+| iOS KataGo | `native/gostone-katago/ios/` | Separate Swift bridge and future XCFramework boundary |
+
+The website is not replaced or packaged as a remote WebView. Shared game UI and
+rules are reused, while platform-native code stays in the Android and iOS
+boundaries above.
+
 ## Runtime boundaries
 
 - Matchmaking, games, clocks, chat, ratings and final Japanese scoring stay on
@@ -52,22 +67,30 @@ npm run mobile:android:build
 ```
 
 The script discovers the standard Windows, macOS and Linux SDK/JDK locations,
-synchronizes verified assets, and runs Gradle `assembleDebug`.
+checks out pinned KataGo and Eigen sources into `.mobile-cache`, cross-compiles
+separate `arm64-v8a` and `x86_64` CPU runtimes, synchronizes verified assets,
+and runs Gradle `assembleDebug`. The first build downloads and compiles the
+pinned native sources; later builds are incremental.
 
 Before an iOS release, add the production API hostname and `localhost` to
 `WKAppBoundDomains` in the app's `Info.plist`, then enable
 `limitsNavigationsToAppBoundDomains` after OAuth/deep-link testing.
 
-## KataGo native milestone
+## KataGo native status
 
-KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities. The
-native implementation must expose start, progress and cancel through the shared
-contract, run one analysis at a time, default to 20 visits, stop at serious or
-critical thermal pressure, and serialize `GameAnalysisResult` exactly like the
-server worker. The native Metal/CoreML build and its thermal behavior must be
-compiled and measured on a Mac and real iPhones before this capability can be
-enabled in a release build. Upstream commit
-`fd0723fdbc0e9d82cf269c9630af8c27c57c07c4` currently produces a macOS
-executable and does not provide an iOS library/XCFramework target. The native
-plugin therefore fails closed and the mobile review path never falls back to
-the server. See `native/gostone-katago/README.md` for the enablement gate.
+KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
+
+- **Android:** enabled locally with the Eigen CPU backend. It exposes start,
+  progress and cancel, runs one analysis at a time, defaults to 20 and caps at
+  80 visits per position, stops at severe thermal pressure, persists completed
+  results locally, and never calls the server analysis route. The device test
+  verifies an actual model inference on Android API 36.
+- **iOS:** source contract, model verification, project wiring and an explicit
+  fail-closed bridge are ready. The Metal/CoreML core must still be compiled on
+  macOS and tested on real iPhones. Upstream commit
+  `fd0723fdbc0e9d82cf269c9630af8c27c57c07c4` does not provide an iOS
+  library/XCFramework target, so Windows cannot honestly complete that link.
+- **Website:** continues to use the existing server worker. Mobile native paths
+  never silently fall back to Modal or the KataGo server.
+
+See `native/gostone-katago/README.md` for the platform-specific release gates.

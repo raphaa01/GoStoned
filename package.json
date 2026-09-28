@@ -14,6 +14,7 @@
     "mobile:sync": "npm run mobile:build && cap sync",
     "mobile:add:ios": "npm run mobile:build && cap add ios --packagemanager SPM",
     "mobile:add:android": "npm run mobile:build && cap add android",
+    "mobile:katago:android": "tsx scripts/build-katago-android.ts",
     "mobile:android:build": "tsx scripts/build-mobile-android.ts",
     "mobile:doctor": "tsx scripts/mobile-doctor.ts",
     "mobile:typecheck": "tsc --noEmit -p tsconfig.mobile.json",

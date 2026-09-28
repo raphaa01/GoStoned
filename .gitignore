@@ -16,6 +16,7 @@ test-results/
 /.mobile-cache/
 /native/gostone-katago/android/.gradle/
 /native/gostone-katago/android/build/
+/native/gostone-katago/android/src/main/jniLibs/
 /native/gostone-katago/.build/
 
 # environment files
