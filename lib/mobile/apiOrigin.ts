@@ -1,10 +1,11 @@
 const DEVELOPMENT_API_ORIGIN = "http://localhost:3000";
+const PRODUCTION_API_ORIGIN = "https://gostone.app";
 
 export function normalizeMobileApiOrigin(
   configured: string | undefined,
   nativePlatform: boolean,
 ): string {
-  const value = configured?.trim() || DEVELOPMENT_API_ORIGIN;
+  const value = configured?.trim() || (nativePlatform ? PRODUCTION_API_ORIGIN : DEVELOPMENT_API_ORIGIN);
   const parsed = new URL(value);
   if (parsed.pathname !== "/" || parsed.search || parsed.hash || parsed.username || parsed.password) {
     throw new Error("VITE_GOSTONE_API_URL must contain only the GoStone origin.");

@@ -17,6 +17,7 @@
     "mobile:katago:android": "tsx scripts/build-katago-android.ts",
     "mobile:android:build": "tsx scripts/build-mobile-android.ts",
     "mobile:doctor": "tsx scripts/mobile-doctor.ts",
+    "mobile:splash": "node scripts/generate-mobile-splash.mjs",
     "mobile:typecheck": "tsc --noEmit -p tsconfig.mobile.json",
     "lint": "eslint . && npm run lint:i18n",
     "lint:i18n": "tsx scripts/check-i18n.ts",

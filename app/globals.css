@@ -1881,6 +1881,10 @@ a {
   width: 100%;
 }
 
+.finished-game-share { display: grid; gap: 6px; }
+.finished-game-share button { align-items: center; display: flex; justify-content: center; gap: 8px; width: 100%; }
+.finished-game-share > span { color: var(--color-danger, #9d3e35); font-size: .78rem; text-align: center; }
+
 .chat-panel {
   display: grid;
   grid-template-rows: auto minmax(180px, 1fr) auto;

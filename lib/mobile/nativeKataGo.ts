@@ -18,7 +18,7 @@ interface GoStoneKataGoPlugin {
     analysisId: string;
     input: ReturnType<typeof gameAnalysisInput>;
     visitsPerTurn: number;
-  }): Promise<{ turns: KataGoTurnResult[] }>;
+  }): Promise<{ turns: KataGoTurnResult[]; visitsPerTurn: number }>;
   cancel(options: { analysisId: string }): Promise<void>;
   addListener(
     eventName: "progress",
@@ -124,7 +124,7 @@ export async function runNativeKataGoAnalysis(game: GameState): Promise<Analysis
   const result = buildGameAnalysis(input, response.turns, {
     version: MOBILE_KATAGO.engineVersion,
     model: MOBILE_KATAGO.modelName,
-    visitsPerTurn: MOBILE_KATAGO.defaultVisitsPerTurn,
+    visitsPerTurn: response.visitsPerTurn,
   });
   await storeResult(game, result);
   return job(game, result)!;

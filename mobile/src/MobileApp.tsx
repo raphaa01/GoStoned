@@ -1,22 +1,30 @@
+import { ChevronLeft } from "lucide-react";
 import { useMemo } from "react";
-import { AuthForm } from "@/components/auth/AuthForm";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { GameRoom } from "@/components/game/GameRoom";
+import { SharedGameView } from "@/components/game/SharedGameView";
 import { PlayWorkspace } from "@/components/game/PlayWorkspace";
-import { Hero } from "@/components/home/Hero";
-import { I18nProvider } from "@/components/i18n/I18nProvider";
+import { I18nProvider, useI18n } from "@/components/i18n/I18nProvider";
 import { LeaderboardView } from "@/components/leaderboard/LeaderboardView";
 import { LearningGuide } from "@/components/learn/LearningGuide";
 import { TrainingGame } from "@/components/learn/TrainingGame";
-import { AppShell } from "@/components/layout/AppShell";
-import { ProfileView } from "@/components/profile/ProfileView";
+import { LegalNotice } from "@/components/legal/LegalNotice";
+import { PrivacyPolicy } from "@/components/legal/PrivacyPolicy";
 import { PuzzleWorkspace } from "@/components/puzzles/PuzzleWorkspace";
 import { AnalysisReview } from "@/components/review/AnalysisReview";
 import { ReviewGuide } from "@/components/review/ReviewGuide";
-import { getDictionary } from "@/lib/i18n/dictionary";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
-import { usePathname, useSearchParams } from "./next-navigation";
+import { getDictionary } from "@/lib/i18n/dictionary";
+import { getMobileCopy } from "@/lib/i18n/mobile";
+import { MobileAccountGate } from "./MobileAccountGate";
+import { MobileAuthScreen } from "./MobileAuthScreen";
+import { MobileHome } from "./MobileHome";
+import { MobileProfile } from "./MobileProfile";
+import { MobileShell } from "./MobileShell";
+import { MobileSplash } from "./MobileSplash";
+import { usePathname, useRouter, useSearchParams } from "./next-navigation";
+import { MobileThemeProvider } from "./theme";
 
 function routeFor(pathname: string): { locale: Locale; route: string } {
   const parts = pathname.split("/").filter(Boolean);
@@ -24,39 +32,65 @@ function routeFor(pathname: string): { locale: Locale; route: string } {
   return { locale, route: `/${parts.join("/")}` };
 }
 
+function PushedScreen({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { locale } = useI18n();
+  const copy = getMobileCopy(locale);
+  return (
+    <div className="mobile-pushed-screen">
+      <button aria-label={copy.back} className="mobile-back-button" onClick={() => router.back()} type="button">
+        <ChevronLeft aria-hidden="true" size={23} />
+        <span>{copy.back}</span>
+      </button>
+      {children}
+    </div>
+  );
+}
+
 function MobileRoute() {
   const pathname = usePathname();
   const search = useSearchParams();
-  const { route } = routeFor(pathname);
+  const { locale, route } = routeFor(pathname);
+  const { dictionary } = useI18n();
+  const copy = getMobileCopy(locale);
   const game = route.match(/^\/game\/([0-9a-f-]+)$/i);
   const review = route.match(/^\/review\/([0-9a-f-]+)$/i);
+  const sharedGame = route.match(/^\/shared-game\/([0-9a-f-]+)$/i);
   const size = Number(search.get("size"));
 
   if (game) return <GameRoom gameId={game[1]} />;
-  if (review) return <AnalysisReview gameId={review[1]} />;
+  if (sharedGame) return <SharedGameView token={sharedGame[1]} />;
+  if (route === "/login" || route === "/register") {
+    return <MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} />;
+  }
+  if (review) {
+    return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview gameId={review[1]} /></div></MobileShell>;
+  }
 
   let content: React.ReactNode;
+  let showPlayAction = false;
   switch (route) {
-    case "/": content = <Hero />; break;
-    case "/play": content = <PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} />; break;
-    case "/login": content = <AuthForm mode="login" returnTo={search.get("returnTo")} />; break;
-    case "/register": content = <AuthForm mode="register" returnTo={search.get("returnTo")} />; break;
-    case "/profile": content = <ProfileView />; break;
-    case "/friends": content = <FriendsHub />; break;
-    case "/learn": content = <LearningGuide />; break;
-    case "/learn/ai": content = <TrainingGame />; break;
-    case "/review": content = <ReviewGuide />; break;
-    case "/puzzles": content = <PuzzleWorkspace initialMode={search.get("mode") === "practice" ? "practice" : "daily"} />; break;
-    case "/leaderboard": content = <LeaderboardView />; break;
-    default:
-      content = (
-        <section className="mobile-not-found">
-          <h1>GoStone</h1>
-          <p>This page is not available in the mobile bundle yet.</p>
-        </section>
-      );
+    case "/":
+      content = <MobileHome />;
+      showPlayAction = true;
+      break;
+    case "/play": content = <PushedScreen><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
+    case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
+    case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub /></MobileAccountGate></PushedScreen>; break;
+    case "/learn": content = <div className="mobile-tab-screen mobile-learn-screen"><LearningGuide /></div>; break;
+    case "/learn/ai": content = <PushedScreen><TrainingGame /></PushedScreen>; break;
+    case "/review": content = <div className="mobile-tab-screen mobile-review-screen"><MobileAccountGate returnTo="/review" title={dictionary.nav.review}><ReviewGuide /></MobileAccountGate></div>; break;
+    case "/puzzles": content = <div className="mobile-tab-screen mobile-puzzle-screen"><PuzzleWorkspace initialMode={search.get("mode") === "practice" ? "practice" : "daily"} /></div>; break;
+    case "/leaderboard": content = <div className="mobile-tab-screen mobile-leaderboard-screen"><LeaderboardView /></div>; break;
+    case "/privacy": content = <PushedScreen><PrivacyPolicy locale={locale} /></PushedScreen>; break;
+    case "/impressum": content = <PushedScreen><LegalNotice locale={locale} /></PushedScreen>; break;
+    default: content = <section className="mobile-not-found"><h1>GoStone</h1><p>404</p></section>;
   }
-  return <AppShell>{content}</AppShell>;
+  return <MobileShell showPlayAction={showPlayAction}>{content}</MobileShell>;
+}
+
+function MobileRoot() {
+  return <><MobileRoute /><MobileSplash /></>;
 }
 
 export function MobileApp() {
@@ -65,7 +99,7 @@ export function MobileApp() {
   return (
     <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>
-        <MobileRoute />
+        <MobileThemeProvider><MobileRoot /></MobileThemeProvider>
       </AuthProvider>
     </I18nProvider>
   );

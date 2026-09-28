@@ -23,6 +23,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONArray;
@@ -37,6 +38,8 @@ public class GoStoneKataGoPlugin extends Plugin {
     private static final String EXECUTABLE_NAME = "libgostone_katago_exec.so";
     private static final int MAX_VISITS = 80;
     private static final int MAX_MOVES = 1_000;
+    private static final int TOTAL_VISIT_BUDGET = 900;
+    private static final long ANALYSIS_TIMEOUT_SECONDS = 28L;
 
     private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -59,6 +62,7 @@ public class GoStoneKataGoPlugin extends Plugin {
     private static final class ActiveAnalysis {
         final String id;
         final AtomicBoolean cancelled = new AtomicBoolean(false);
+        final AtomicBoolean timedOut = new AtomicBoolean(false);
         volatile Process process;
         volatile BufferedWriter writer;
 
@@ -141,7 +145,7 @@ public class GoStoneKataGoPlugin extends Plugin {
             RuntimeFiles runtime = ensureRuntime();
             JSONObject request = buildRequest(job.id, input, visits);
             int expectedTurns = request.getJSONArray("analyzeTurns").length();
-            long timeoutSeconds = Math.min(1_800L, Math.max(120L, expectedTurns * 20L));
+            int effectiveVisits = request.getInt("maxVisits");
 
             Process process = new ProcessBuilder(
                 runtime.executable.getAbsolutePath(),
@@ -158,9 +162,12 @@ public class GoStoneKataGoPlugin extends Plugin {
             writer.newLine();
             writer.flush();
 
-            timeoutExecutor.schedule(() -> {
-                if (process.isAlive()) stop(job, false);
-            }, timeoutSeconds, TimeUnit.SECONDS);
+            ScheduledFuture<?> timeout = timeoutExecutor.schedule(() -> {
+                if (process.isAlive()) {
+                    job.timedOut.set(true);
+                    stop(job, false);
+                }
+            }, ANALYSIS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             TreeMap<Integer, JSONObject> turns = new TreeMap<>();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -187,8 +194,12 @@ public class GoStoneKataGoPlugin extends Plugin {
                     if (turns.size() >= expectedTurns) break;
                 }
             }
+            timeout.cancel(false);
 
             if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
+            if (job.timedOut.get()) {
+                throw new IllegalStateException("Local analysis reached its 28 second device budget. Try again after closing other apps.");
+            }
             if (turns.size() != expectedTurns) {
                 throw new IllegalStateException("KataGo stopped before every game position was analyzed.");
             }
@@ -196,6 +207,7 @@ public class GoStoneKataGoPlugin extends Plugin {
             for (Map.Entry<Integer, JSONObject> turn : turns.entrySet()) resultTurns.put(turn.getValue());
             JSObject result = new JSObject();
             result.put("turns", resultTurns);
+            result.put("visitsPerTurn", effectiveVisits);
             call.resolve(result);
         } catch (Exception exception) {
             call.reject(safeMessage(exception), job.cancelled.get() ? "analysis_cancelled" : "native_analysis_failed", exception);
@@ -230,7 +242,9 @@ public class GoStoneKataGoPlugin extends Plugin {
         request.put("komi", input.getDouble("komi"));
         request.put("boardXSize", boardSize);
         request.put("boardYSize", boardSize);
-        request.put("maxVisits", visits);
+        int positionCount = moves.length() + 1;
+        int adaptiveVisits = Math.max(4, Math.min(visits, TOTAL_VISIT_BUDGET / positionCount));
+        request.put("maxVisits", adaptiveVisits);
         request.put("analysisPVLen", 12);
         request.put("includePolicy", true);
         JSONArray analyzeTurns = new JSONArray();

@@ -20,6 +20,25 @@ The website is not replaced or packaged as a remote WebView. Shared game UI and
 rules are reused, while platform-native code stays in the Android and iOS
 boundaries above.
 
+## Mobile experience
+
+The bundled client has its own app shell. It deliberately does not render the
+website navbar, landing-page hero, or footer.
+
+- The fixed tab bar contains Start, Puzzles, Learn, Review, and Leaderboard.
+- The Start screen keeps the Play action above the tab bar and obtains profile,
+  active-match, rating, recent-game, and friend data from the existing APIs.
+- Play, puzzles, lessons, reviews, profiles, friends, authentication, and legal
+  screens reuse the existing product components and backend contracts with
+  mobile-specific layouts.
+- Theme preference is System, Light, or Dark. Both palettes are purpose-built;
+  the iOS shell alone uses a progressive blurred/translucent dock treatment,
+  while Android surfaces remain opaque.
+- CSS safe-area insets, compact-phone rules, tablet split layouts, minimum touch
+  heights, and reduced-motion preferences are part of the shared mobile layer.
+- Android and iOS use generated light/dark native launch assets, followed by a
+  short in-app Go-stone crossfade. Regenerate them with `npm run mobile:splash`.
+
 ## Runtime boundaries
 
 - Matchmaking, games, clocks, chat, ratings and final Japanese scoring stay on
@@ -36,8 +55,11 @@ boundaries above.
 
 ## Local web-bundle development
 
-Copy `.env.mobile.example` to `.env.mobile.local` or set
-`VITE_GOSTONE_API_URL`. Run the Next.js API on port 3000, then:
+Native builds default to the canonical `https://gostone.app` API. Copy
+`.env.mobile.example` to `.env.mobile.local` or set `VITE_GOSTONE_API_URL` only
+when intentionally building against another HTTPS origin. For local browser
+development, run the Next.js API on port 3000; the Vite server proxies `/api`
+to it. Then run:
 
 ```powershell
 npm run mobile:dev
@@ -81,8 +103,10 @@ Before an iOS release, add the production API hostname and `localhost` to
 KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
 
 - **Android:** enabled locally with the Eigen CPU backend. It exposes start,
-  progress and cancel, runs one analysis at a time, defaults to 20 and caps at
-  80 visits per position, stops at severe thermal pressure, persists completed
+  progress and cancel, runs one analysis at a time, starts from a 20-visit
+  quality target and adapts visits to a 900-visit whole-game budget. A hard
+  28-second device deadline prevents a review from heating the phone for an
+  unbounded period. It stops at severe thermal pressure, persists only complete
   results locally, and never calls the server analysis route. The device test
   verifies an actual model inference on Android API 36.
 - **iOS:** source contract, model verification, project wiring and an explicit
@@ -94,3 +118,49 @@ KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
   never silently fall back to Modal or the KataGo server.
 
 See `native/gostone-katago/README.md` for the platform-specific release gates.
+
+## Exact release work still required
+
+### iOS — perform on a Mac
+
+1. Install Xcode 26 or newer, accept its license, install the iOS Simulator
+   runtime, and select the project’s Apple Developer signing team.
+2. Clone the repository, run `npm ci`, `npm run mobile:build`, and
+   `npm run mobile:sync`; open `ios/App/App.xcworkspace` in Xcode.
+3. Build KataGo v1.18.2 at the pinned commit as an arm64 device plus simulator
+   XCFramework using Metal (CoreML may be evaluated only if it produces the same
+   contract). Link it to `GoStoneKataGoPlugin`, replace the fail-closed status,
+   and keep the pinned model hash check, cancellation, thermal handling,
+   adaptive 900-visit budget, and 28-second deadline.
+4. Run contract tests in Simulator, then test model loading, a complete review,
+   cancellation, background/foreground, memory pressure, and thermal handling
+   on at least one real older iPhone and one current iPhone. Confirm that no
+   request reaches the server analysis endpoint.
+5. Configure the final bundle identifier, Associated Domains / OAuth callback
+   URLs, `WKAppBoundDomains`, privacy strings, app icons, Apple sign-in (when
+   the production login providers require it), and production API origin.
+6. Test all five tabs, auth, matchmaking and reconnect, a bot game, sharing,
+   Dynamic Type, VoiceOver, light/dark mode, iPhone SE-sized layout, a modern
+   iPhone, and iPad split layouts. Archive a Release build, validate it, upload
+   to TestFlight, complete App Privacy/export declarations, and submit.
+
+Windows can prepare the Xcode sources and assets, but cannot compile/link Metal,
+codesign an iOS app, run the iOS Simulator, or produce an App Store archive.
+
+### Android — finish the release build
+
+1. Open `android/` in Android Studio, set the final application ID/version,
+   production icons and store metadata, then configure a release keystore via
+   local/CI secrets (never commit it). Enable Google Play App Signing.
+2. Run `npm ci`, `npm run mobile:build`, `npm run mobile:sync`,
+   `npm run mobile:android:build`, `npm run typecheck`, and `npm test`.
+3. Test the local 38 MB KataGo model and 28-second budget on real arm64 devices:
+   one low/mid-range device and one current flagship. Verify cancellation,
+   backgrounding, offline analysis, heat, memory, and that completed analyses
+   reopen from local storage without a network call.
+4. Verify production OAuth/deep links, cookies, API hostname, notification and
+   privacy behavior; exercise all tabs, matchmaking/reconnect, the 10-second bot
+   fallback, static share links, TalkBack, font scaling, phones, and a tablet.
+5. Build a signed Release AAB, run Play pre-launch/internal testing, inspect
+   crashes and ANRs, complete Data safety/content rating/store listing, then
+   promote only the tested artifact to production.

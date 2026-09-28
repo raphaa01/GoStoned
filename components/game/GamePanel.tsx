@@ -12,6 +12,7 @@ import { getFriendsCopy } from "@/lib/i18n/friends";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { PlayerClock } from "./PlayerClock";
 import { ScoringHelpButton } from "./ScoringHelpDialog";
+import { FinishedGameShareButton } from "./FinishedGameShareButton";
 
 function deadStoneCounts(game: GameState) {
   return (game.scoring?.deadStones ?? []).reduce(
@@ -313,6 +314,7 @@ export function GamePanel({
               </span>
             </div>
           ) : null}
+          {yourColor ? <FinishedGameShareButton gameId={game.id} playerKey={playerKey} /> : null}
           <button className="button button--primary game-leave" onClick={onLeave} type="button">
             {copy.findAnother}
           </button>

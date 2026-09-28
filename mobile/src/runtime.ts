@@ -2,6 +2,9 @@ import { Capacitor } from "@capacitor/core";
 import { normalizeMobileApiOrigin, resolveMobileRequestUrl } from "@/lib/mobile/apiOrigin";
 
 export function mobileApiOrigin(): string {
+  if (!Capacitor.isNativePlatform() && import.meta.env.DEV && !import.meta.env.VITE_GOSTONE_API_URL) {
+    return window.location.origin;
+  }
   return normalizeMobileApiOrigin(
     import.meta.env.VITE_GOSTONE_API_URL,
     Capacitor.isNativePlatform(),
