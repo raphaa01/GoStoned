@@ -111,4 +111,10 @@ export type AnalysisJobView = {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  progress?: {
+    phase: "preview" | "quality";
+    completedMoves: number;
+    refinedMoves: number;
+    totalMoves: number;
+  };
 };

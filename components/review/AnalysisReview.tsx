@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { localizedApiError } from "@/lib/i18n/dictionary";
+import { getMobileAnalysisCopy } from "@/lib/i18n/mobileAnalysis";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
 import {
@@ -31,6 +32,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const { user, loading } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
+  const progressiveCopy = getMobileAnalysisCopy(locale);
   const [game, setGame] = useState<GameState | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisJobView | null>(null);
   const [selectedMove, setSelectedMove] = useState(1);
@@ -65,7 +67,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             startedAt: pendingAt,
             completedAt: null,
           });
-          setAnalysis(await runNativeKataGoAnalysis(body.game));
+          setAnalysis(await runNativeKataGoAnalysis(body.game, setAnalysis));
         } else {
           setAnalysis(await readNativeKataGoAnalysis(body.game));
         }
@@ -110,6 +112,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   }, [analysis?.status, load, nativeAnalysis]);
 
   const result = analysis?.result ?? null;
+  const progress = analysis?.progress;
   const current = result?.moves[selectedMove - 1] ?? null;
   const board = useMemo(() => game ? replayMoves(game.boardSize, game.moves.slice(0, selectedMove)) : null, [game, selectedMove]);
   const boardBefore = useMemo(
@@ -183,12 +186,24 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             {requesting ? <LoaderCircle className={styles.spin} size={18} /> : null}{copy.start}
           </button>
         </section>
-      ) : analysis.status === "queued" || analysis.status === "running" ? (
+      ) : (analysis.status === "queued" || analysis.status === "running") && !result ? (
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p className={styles.analysisNote}>{copy.runningNote}</p></section>
       ) : analysis.status === "failed" ? (
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
       ) : current && result && boardBefore && winrates && scoreLead ? (
         <main className={styles.reviewMain}>
+          {progress ? (
+            <section aria-live="polite" className={styles.analysisProgress}>
+              <div>
+                <strong>{progress.phase === "preview" ? progressiveCopy.preview : progressiveCopy.quality}</strong>
+                <span>{progress.phase === "preview" ? progressiveCopy.previewNote : progressiveCopy.qualityNote}</span>
+              </div>
+              <span>{progressiveCopy.progress
+                .replace("{done}", String(progress.phase === "quality" ? progress.refinedMoves : progress.completedMoves))
+                .replace("{total}", String(progress.totalMoves))}</span>
+              <i aria-hidden="true"><b style={{ width: `${Math.min(100, ((progress.phase === "quality" ? progress.refinedMoves : progress.completedMoves) / Math.max(1, progress.totalMoves)) * 100)}%` }} /></i>
+            </section>
+          ) : null}
           <section className={`${styles.coachCard} ${styles[current.classification]}`}>
             <div className={styles.coachCardHeading}>
               <span>{copy.classifications[current.classification]}</span>

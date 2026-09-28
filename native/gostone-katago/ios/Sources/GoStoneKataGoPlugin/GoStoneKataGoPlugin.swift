@@ -14,6 +14,8 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let engineVersion = "v1.18.2"
     private let modelSha256 = "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229"
+    private let previewVisits = 1
+    private let maximumRuntimeSeconds = 90
 
     @objc public func getStatus(_ call: CAPPluginCall) {
         guard let model = Bundle.main.url(
@@ -46,6 +48,10 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc public func analyze(_ call: CAPPluginCall) {
+        // The linked Metal core must emit this exact progressive contract:
+        // first a one-visit preview for every position, then quality replacements.
+        // The TypeScript layer opens the review after ten contiguous moves or
+        // after 28 seconds, and keeps applying replacements in the background.
         call.reject("The KataGo Metal core is unavailable.", "native_runtime_unavailable")
     }
 
@@ -61,5 +67,38 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         ]
         if let reason = reason { result["reason"] = reason }
         return result
+    }
+
+    private func emitProgress(
+        analysisId: String,
+        phase: String,
+        completedTurns: Int,
+        totalTurns: Int,
+        visitsPerTurn: Int,
+        turn: JSObject
+    ) {
+        notifyListeners("progress", data: [
+            "analysisId": analysisId,
+            "phase": phase,
+            "completedTurns": completedTurns,
+            "totalTurns": totalTurns,
+            "visitsPerTurn": visitsPerTurn,
+            "thermalState": ProcessInfo.processInfo.thermalState.progressiveName,
+            "turn": turn,
+            "previewVisits": previewVisits,
+            "maximumRuntimeSeconds": maximumRuntimeSeconds
+        ])
+    }
+}
+
+private extension ProcessInfo.ThermalState {
+    var progressiveName: String {
+        switch self {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "serious"
+        }
     }
 }

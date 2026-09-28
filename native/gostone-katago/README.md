@@ -15,10 +15,14 @@ sources, build trees and executables stay ignored so Git contains a reproducible
 recipe instead of opaque binaries.
 
 The Java plugin verifies the 38 MB model, permits one job at a time, caps each
-position at 80 visits, streams progress, supports cancellation, and stops at
-Android's severe thermal state. An instrumentation test runs real 9×9 inference
-through the local protocol. Real-phone performance and battery measurements are
-still required before a store release.
+position at 80 visits, streams the actual turn result, supports cancellation,
+and stops at Android's severe thermal state. It runs a one-visit preview first,
+so the review can open after ten contiguous moves (or after 28 seconds), then
+replaces those positions with an adaptive quality pass. A 90-second safety
+boundary preserves and returns every usable preview instead of discarding the
+review. An instrumentation test runs real 9×9 inference through the local
+protocol. Real-phone performance and battery measurements are still required
+before a store release.
 
 ## iOS runtime
 
@@ -28,8 +32,10 @@ not ship an iPhone static library/XCFramework target, and that native link canno
 be built or validated on Windows. Enabling `available: true` requires:
 
 1. Build an arm64 device library and simulator library with Xcode 26 or newer.
-2. Wrap the analysis API behind this plugin without spawning a process.
-3. Confirm cancellation, progress, one-job concurrency and thermal shutdown.
+2. Wrap the analysis API behind this plugin without spawning a process and emit
+   the checked-in `preview`/`quality` progress payload from `emitProgress`.
+3. Confirm cancellation, progressive turn replacement, one-job concurrency and
+   thermal shutdown.
 4. Compare every result field against the server worker on fixed fixtures.
 5. Run sustained 9×9, 13×13 and 19×19 analyses on representative iPhones.
 6. Package the outputs as `GoStoneKataGoCore.xcframework` and repeat the model

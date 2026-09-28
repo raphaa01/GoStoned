@@ -147,3 +147,27 @@ export function buildGameAnalysis(
     summary,
   };
 }
+
+export function buildProgressiveGameAnalysis(
+  input: AnalysisInput,
+  turns: KataGoTurnResult[],
+  engine: { version: string; model: string; visitsPerTurn: number },
+  analyzedAt = new Date().toISOString(),
+): GameAnalysisResult | null {
+  const byTurn = new Map(turns.map((turn) => [turn.turnNumber, turn]));
+  let completedMoves = 0;
+  while (
+    completedMoves < input.moves.length
+    && byTurn.has(completedMoves)
+    && byTurn.has(completedMoves + 1)
+  ) {
+    completedMoves += 1;
+  }
+  if (completedMoves === 0) return null;
+  return buildGameAnalysis(
+    { ...input, moves: input.moves.slice(0, completedMoves) },
+    turns.filter((turn) => turn.turnNumber <= completedMoves),
+    engine,
+    analyzedAt,
+  );
+}

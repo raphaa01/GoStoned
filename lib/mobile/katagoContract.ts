@@ -1,4 +1,4 @@
-import type { AnalysisInput, GameAnalysisResult } from "@/lib/analysis/types";
+import type { AnalysisInput, GameAnalysisResult, KataGoTurnResult } from "@/lib/analysis/types";
 
 export const MOBILE_KATAGO = Object.freeze({
   contractVersion: "gostone-mobile-katago-v1" as const,
@@ -17,9 +17,12 @@ export type MobileKataGoThermalState = "nominal" | "fair" | "serious" | "critica
 
 export type MobileKataGoProgress = Readonly<{
   analysisId: string;
+  phase: "preview" | "quality";
   completedTurns: number;
   totalTurns: number;
+  visitsPerTurn: number;
   thermalState: MobileKataGoThermalState;
+  turn?: KataGoTurnResult;
 }>;
 
 export type MobileKataGoStartOptions = Readonly<{

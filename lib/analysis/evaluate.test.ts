@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toGtpCoordinate } from "./coordinates";
-import { buildGameAnalysis, classifyMove } from "./evaluate";
+import { buildGameAnalysis, buildProgressiveGameAnalysis, classifyMove } from "./evaluate";
 import type { AnalysisInput, KataGoTurnResult } from "./types";
 
 test("converts board coordinates to GTP without the I column", () => {
@@ -77,4 +77,33 @@ test("accepts legacy percentage-scaled KataGo winrates without producing 10000 p
   assert.equal(result.moves[0].winrateBefore, 0.55);
   assert.equal(result.moves[0].winrateAfter, 0.48);
   assert.equal(result.moves[0].alternatives[0].winrate, 0.6);
+});
+
+test("builds a usable contiguous review while later turns are still loading", () => {
+  const input = {
+    contractVersion: 1 as const,
+    gameId: "progressive",
+    gameVersion: 3,
+    boardSize: 9 as const,
+    komi: 6.5,
+    rules: "japanese" as const,
+    moves: [
+      { color: "black" as const, move: "D4" },
+      { color: "white" as const, move: "E5" },
+      { color: "black" as const, move: "C3" },
+    ],
+  };
+  const turn = (turnNumber: number) => ({
+    turnNumber,
+    rootInfo: { currentPlayer: turnNumber % 2 === 0 ? "B" as const : "W" as const, visits: 1, winrate: 0.5, scoreLead: 0 },
+    moveInfos: [{ move: input.moves[turnNumber]?.move ?? "F6", order: 0, visits: 1, winrate: 0.5, scoreLead: 0, pv: ["F6"] }],
+  });
+  const partial = buildProgressiveGameAnalysis(
+    input,
+    [turn(0), turn(1), turn(3)],
+    { version: "test", model: "test", visitsPerTurn: 1 },
+  );
+  assert.equal(partial?.moves.length, 1);
+  assert.equal(partial?.moves[0].playedMove, "D4");
+  assert.equal(buildProgressiveGameAnalysis(input, [turn(1)], { version: "test", model: "test", visitsPerTurn: 1 }), null);
 });
