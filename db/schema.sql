@@ -113,6 +113,15 @@ CREATE TABLE IF NOT EXISTS moves (
   )
 );
 
+CREATE TABLE IF NOT EXISTS game_share_links (
+  game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  token UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+  created_by_player_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_share_links_token ON game_share_links(token);
+
 CREATE TABLE IF NOT EXISTS game_scoring_state (
   game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
   board_hash TEXT NOT NULL,
@@ -1530,6 +1539,7 @@ ALTER TABLE auth_identities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oauth_registration_intents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_share_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_rating_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
@@ -1560,7 +1570,7 @@ REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM PUBLIC;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, game_share_links, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,
@@ -1570,7 +1580,7 @@ BEGIN
     REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, game_share_links, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,

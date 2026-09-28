@@ -1,0 +1,13 @@
+.page { min-height: 100dvh; padding: max(24px, env(safe-area-inset-top)) 18px max(32px, env(safe-area-inset-bottom)); background: var(--color-surface, #f5f3eb); color: var(--color-ink, #171914); }
+.shell { display: grid; gap: 18px; width: min(100%, 700px); margin: 0 auto; }
+.header { display: grid; gap: 7px; text-align: center; }
+.eyebrow { color: var(--color-accent, #3f7255); font-size: .75rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.header h1 { margin: 0; font-size: clamp(1.55rem, 5vw, 2.3rem); font-weight: 650; letter-spacing: -.035em; }
+.header p { margin: 0; color: var(--color-ink-soft, #6d7068); }
+.players { display: flex; justify-content: center; gap: 9px; align-items: center; font-size: .95rem; }
+.stone { width: 15px; height: 15px; border-radius: 50%; background: #111; box-shadow: inset 2px 2px 3px rgb(255 255 255 / 12%); }
+.stoneWhite { background: #f5f3eb; border: 1px solid rgb(0 0 0 / 20%); }
+.board { width: min(100%, 620px); margin: 0 auto; pointer-events: none; }
+.meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px 15px; color: var(--color-ink-soft, #6d7068); font-size: .84rem; }
+.status { display: grid; min-height: 70dvh; place-items: center; color: var(--color-ink-soft, #6d7068); text-align: center; }
+@media (prefers-color-scheme: dark) { .page { background: #111310; color: #f3f2ec; } .header p, .meta, .status { color: #a9aca4; } }

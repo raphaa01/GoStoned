@@ -51,6 +51,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Typecheck and build bundled mobile client
+        run: |
+          npm run mobile:typecheck
+          npm run mobile:build
+
       - name: Install Chromium for browser tests
         run: npx playwright install --with-deps chromium
 

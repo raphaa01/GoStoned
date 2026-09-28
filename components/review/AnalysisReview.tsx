@@ -17,6 +17,11 @@ import {
 } from "@/lib/analysis/presentation";
 import { replayMoves } from "@/lib/game/goEngine";
 import type { GameState } from "@/lib/game/types";
+import {
+  readNativeKataGoAnalysis,
+  runNativeKataGoAnalysis,
+  usesNativeKataGoAnalysis,
+} from "@/lib/mobile/nativeKataGo";
 import { AnalysisBoard } from "./AnalysisBoard";
 import styles from "./review.module.css";
 
@@ -33,11 +38,40 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const [requesting, setRequesting] = useState(false);
   const [quotaRetryAt, setQuotaRetryAt] = useState<Date | null>(null);
   const [supportPrice, setSupportPrice] = useState<number | null>(null);
+  const nativeAnalysis = usesNativeKataGoAnalysis();
 
   const load = useCallback(async (method: "GET" | "POST" = "GET") => {
     if (!user) return;
     if (method === "POST") setRequesting(true);
     try {
+      if (nativeAnalysis) {
+        const response = await fetch(`/api/games/${gameId}`, {
+          cache: "no-store",
+          headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
+        });
+        const body = await readApi<{ game: GameState }>(response);
+        setGame(body.game);
+        if (method === "POST") {
+          const pendingAt = new Date().toISOString();
+          setAnalysis({
+            id: `local:pending:${body.game.id}:${body.game.version}`,
+            gameId: body.game.id,
+            gameVersion: body.game.version,
+            status: "running",
+            attempts: 1,
+            result: null,
+            errorCode: null,
+            createdAt: pendingAt,
+            startedAt: pendingAt,
+            completedAt: null,
+          });
+          setAnalysis(await runNativeKataGoAnalysis(body.game));
+        } else {
+          setAnalysis(await readNativeKataGoAnalysis(body.game));
+        }
+        setError(null);
+        return;
+      }
       const response = await fetch(`/api/games/${gameId}/analysis`, {
         method,
         cache: "no-store",
@@ -62,17 +96,18 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
     } finally {
       if (method === "POST") setRequesting(false);
     }
-  }, [copy.failed, dictionary, gameId, user]);
+  }, [copy.failed, dictionary, gameId, nativeAnalysis, user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
   useEffect(() => {
+    if (nativeAnalysis) return;
     if (analysis?.status !== "queued" && analysis?.status !== "running") return;
     const timer = window.setInterval(() => void load(), 2_500);
     return () => window.clearInterval(timer);
-  }, [analysis?.status, load]);
+  }, [analysis?.status, load, nativeAnalysis]);
 
   const result = analysis?.result ?? null;
   const current = result?.moves[selectedMove - 1] ?? null;

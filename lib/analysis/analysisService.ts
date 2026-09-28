@@ -1,14 +1,11 @@
 import { query, withTransaction } from "@/lib/db";
 import { GameServiceError, getGameState } from "@/lib/game/gameService";
-import type { GameState } from "@/lib/game/types";
-import { toGtpCoordinate } from "./coordinates";
 import {
-  ANALYSIS_ENGINE_CONTRACT_VERSION,
-  type AnalysisInput,
   type AnalysisJobStatus,
   type AnalysisJobView,
   type GameAnalysisResult,
 } from "./types";
+import { gameAnalysisInput } from "./input";
 
 type AnalysisJobRow = {
   id: string;
@@ -58,22 +55,7 @@ function jobView(row: AnalysisJobRow): AnalysisJobView {
   };
 }
 
-function analysisInput(game: GameState): AnalysisInput {
-  return {
-    contractVersion: ANALYSIS_ENGINE_CONTRACT_VERSION,
-    gameId: game.id,
-    gameVersion: game.version,
-    boardSize: game.boardSize,
-    komi: game.komi,
-    rules: game.ruleset,
-    moves: game.moves.map((move) => ({
-      color: move.color,
-      move: toGtpCoordinate(game.boardSize, move),
-    })),
-  };
-}
-
-function assertAnalyzable(game: GameState): void {
+function assertAnalyzable(game: import("@/lib/game/types").GameState): void {
   if (game.status !== "finished") {
     throw new GameServiceError("Only completed games can be analyzed.", 409, "analysis_game_active");
   }
@@ -98,7 +80,7 @@ export async function readGameAnalysis(gameId: string, playerKey: string) {
 export async function queueGameAnalysis(gameId: string, playerKey: string, userId: string) {
   const game = await getGameState(gameId, playerKey);
   assertAnalyzable(game);
-  const input = analysisInput(game);
+  const input = gameAnalysisInput(game);
   const row = await withTransaction(async (client) => {
     const accountResult = await client.query<AnalysisAccountRow>(
       `SELECT COALESCE(
