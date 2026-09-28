@@ -30,6 +30,7 @@ import {
 } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
+import { previewPendingMove } from "@/lib/client/optimisticGame";
 import { createOperationLatch } from "@/lib/client/operationLatch";
 import {
   deriveGameOpponent,
@@ -47,7 +48,7 @@ import {
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
 import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
-import { groupMarkedDeadStones } from "@/lib/game/scoring";
+import { groupMarkedDeadStones, toggleDeadGroup } from "@/lib/game/scoring";
 import type { GamePollResponse, GameState, Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
@@ -96,6 +97,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [messages, setMessages] = useState<GameMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
+  const [pendingDeadStones, setPendingDeadStones] = useState<Position[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<GoStoneJapaneseSettlementProposal | null>(null);
   const [estimateBusy, setEstimateBusy] = useState(false);
@@ -195,6 +197,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     resultShownForGame.current = null;
     setGame(null);
     setPendingMove(null);
+    setPendingDeadStones(null);
     setEstimate(null);
     setMessages([]);
     setChatAvailable(false);
@@ -742,8 +745,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && game.phase === "scoring"
     && game.scoring,
   ) && gameInteractionAllowed && !busy;
+  const pendingMovePreview = useMemo(
+    () => game
+      ? previewPendingMove(game.board, pendingMove)
+      : null,
+    [game, pendingMove],
+  );
   const scoringBoard = game?.board ?? null;
-  const scoringDeadStones = game?.scoring?.deadStones ?? null;
+  const scoringDeadStones = pendingDeadStones ?? game?.scoring?.deadStones ?? null;
   const scoringBoardHash = game?.scoring?.boardHash ?? null;
   const disputeGroups = useMemo(
     () => scoringBoard
@@ -866,9 +875,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
   async function scoringAction(
     action: "dead-stones" | "confirm" | "resume",
     body: Record<string, unknown>,
+    deadStonePreview?: Position[],
   ) {
     if (!game || !game.scoring || !playerKey || !gameInteractionAllowed || busy) return;
     const requestIdentity = identityAuthority.current.capture();
+    if (deadStonePreview !== undefined) setPendingDeadStones(deadStonePreview);
     setBusy(true);
     setError(null);
     try {
@@ -897,7 +908,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setError(localizedApiError(dictionary, requestError, copy.scoringFailed));
       reconcileAfterOperation(requestError);
     } finally {
-      if (identityAuthority.current.isCurrent(requestIdentity)) setBusy(false);
+      if (identityAuthority.current.isCurrent(requestIdentity)) {
+        if (deadStonePreview !== undefined) setPendingDeadStones(null);
+        setBusy(false);
+      }
     }
   }
 
@@ -1378,17 +1392,21 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     ? copy.confirmFinalPosition
                     : copy.opponentTurn}
             </strong>
-            <span>{game.boardSize}×{game.boardSize} · {copy.move} {game.moveCount}</span>
+            <span>
+              {game.boardSize}×{game.boardSize} · {copy.move}{" "}
+              {game.moveCount + (pendingMovePreview?.applied ? 1 : 0)}
+            </span>
           </div>
           <div className="focused-board-wrap">
             <GoBoard
               boardSize={game.boardSize}
-              boardState={game.board}
-              deadStones={game.scoring?.deadStones}
+              boardState={pendingMovePreview?.board ?? game.board}
+              deadStones={scoringDeadStones ?? undefined}
               selectedDeadStones={selectedDisputeGroup?.stones}
               disabled={!canMove && !canMarkDead}
               interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
               lastMove={(() => {
+                if (pendingMovePreview?.applied && pendingMove) return pendingMove;
                 const move = game.moves.at(-1);
                 return move && !move.isPass && move.x !== null && move.y !== null
                   ? { x: move.x, y: move.y }
@@ -1398,13 +1416,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
               previewColor={yourColor ?? "black"}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {
-                  const dead = !game.scoring.deadStones.some(
+                  const currentDeadStones = scoringDeadStones ?? [];
+                  const dead = !currentDeadStones.some(
                     (stone) => stone.x === x && stone.y === y,
                   );
+                  const preview = toggleDeadGroup(
+                    game.board,
+                    currentDeadStones,
+                    { x, y },
+                    dead,
+                  ).deadStones;
                   setSelectedDisputeSelection(dead
                     ? { boardHash: game.scoring.boardHash, stone: { x, y } }
                     : null);
-                  void scoringAction("dead-stones", { x, y, dead });
+                  void scoringAction("dead-stones", { x, y, dead }, preview);
                 } else {
                   void makeMove({ x, y }, game.version);
                 }

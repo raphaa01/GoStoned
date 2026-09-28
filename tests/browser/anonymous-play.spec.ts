@@ -114,6 +114,10 @@ type GameReadGateControl = Readonly<{
   requestStarted: Promise<void>;
   release: () => void;
 }>;
+type MutationGateControl = Readonly<{
+  requestStarted: Promise<void>;
+  release: () => void;
+}>;
 type FaultDiagnostic = {
   code: string;
   fault: GameReadFault;
@@ -136,6 +140,7 @@ type BrowserDiagnostics = {
 
 type ApiHarness = {
   armGameReadGate: () => GameReadGateControl;
+  armMutationGate: () => MutationGateControl;
   armScoringRevisionConflict: () => ScoringConflictControl;
   chatReadStartedAt: number[];
   contractErrors: string[];
@@ -376,6 +381,9 @@ async function installApiHarness(
   let gameReadGateActive = false;
   let notifyGameReadStarted: () => void = () => undefined;
   let gameReadGate = Promise.resolve();
+  let mutationGateActive = false;
+  let notifyMutationStarted: () => void = () => undefined;
+  let mutationGate = Promise.resolve();
 
   const tickClock = () => {
     clockTick += 1;
@@ -460,6 +468,18 @@ async function installApiHarness(
       });
       const requestStarted = new Promise<void>((resolve) => {
         notifyGameReadStarted = resolve;
+      });
+      return { requestStarted, release };
+    },
+    armMutationGate() {
+      if (mutationGateActive) throw new Error("Only one mutation gate may be active.");
+      mutationGateActive = true;
+      let release: () => void = () => undefined;
+      mutationGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const requestStarted = new Promise<void>((resolve) => {
+        notifyMutationStarted = resolve;
       });
       return { requestStarted, release };
     },
@@ -822,10 +842,20 @@ async function installApiHarness(
       } else if (passMove) {
         const move = body as { expectedVersion: number; isPass: true };
         harness.moveBodies.push(move);
+        if (mutationGateActive) {
+          mutationGateActive = false;
+          notifyMutationStarted();
+          await mutationGate;
+        }
         appendPass("black");
       } else {
         const move = body as { expectedVersion: number; x: number; y: number };
         harness.moveBodies.push(move);
+        if (mutationGateActive) {
+          mutationGateActive = false;
+          notifyMutationStarted();
+          await mutationGate;
+        }
         game.board[move.y][move.x] = "black";
         const storedMove: StoredMove = {
           moveNumber: game.moveCount + 1,
@@ -1103,6 +1133,27 @@ async function waitForHarnessSignal(
 }
 
 const SCORING_AND_RECONNECT_PROJECTS = ["chromium-320-touch", "chromium-1024"];
+
+test("a move is fully previewed before its server mutation finishes", async ({ page }) => {
+  const harness = await installApiHarness(page);
+  const gate = harness.armMutationGate();
+
+  await page.goto(`/game/${GAME_ID}`);
+  const firstIntersection = page.locator('.go-board [role="gridcell"]').first();
+  try {
+    await firstIntersection.focus();
+    await firstIntersection.press("Enter");
+    await waitForHarnessSignal(gate.requestStarted, "the delayed move mutation");
+
+    await expect(firstIntersection.locator(".stone--black")).toHaveCount(1);
+    await expect(page.getByText("19×19 · Move 1", { exact: true })).toBeVisible();
+  } finally {
+    gate.release();
+  }
+
+  await expect.poll(() => harness.moveBodies.length).toBe(1);
+  await expectCleanHarness(harness);
+});
 
 for (const locale of ["en", "de"] as const) {
   test(`${locale.toUpperCase()} scoring lifecycle reconciles conflict and dispute`, async ({ page }, testInfo) => {
