@@ -271,7 +271,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     { id: "gokyo_life" as const, title: copy.gokyoLife, description: copy.gokyoLifeDescription },
     { id: "gokyo_death" as const, title: copy.gokyoDeath, description: copy.gokyoDeathDescription },
     { id: "gokyo_ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription },
-  ];
+  ].filter((category) => (hub?.categoryCounts[category.id] ?? 0) > 0);
   const categories = [...trainingCategories, ...historicalCategories];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
   const puzzleCategoryCopy = categories.find((entry) => entry.id === puzzle?.category);
@@ -317,6 +317,8 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
         <div className={styles.state} role="alert"><p>{copy.identityError}</p><button className="button button--secondary" onClick={retry} type="button">{copy.retry}</button></div>
       ) : error && !hub ? (
         <div className={styles.state} role="alert"><p>{error}</p><button className="button button--secondary" onClick={() => void load()} type="button">{copy.retry}</button></div>
+      ) : mode === "practice" && !hub ? (
+        <PuzzleLoading label={copy.loading} />
       ) : mode === "practice" && selectedCategory === null ? (
         <section className={styles.catalog} aria-labelledby="puzzle-category-title">
           <div className={styles.catalogHeader}>

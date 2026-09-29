@@ -12,6 +12,7 @@ type SchemaRow = {
   queue_profile_constraint: string | null;
   queue_adaptive_constraint: string | null;
   initial_rating_policy_constraint: string | null;
+  puzzle_category_constraint: string | null;
   takeback_rls: boolean;
 };
 
@@ -55,6 +56,11 @@ async function checkProductionSchema(): Promise<void> {
          WHERE conname = 'player_initial_rating_claims_policy_version_check'
            AND conrelid = 'public.player_initial_rating_claims'::regclass)
          AS initial_rating_policy_constraint,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'puzzles_category_shape_check'
+           AND conrelid = 'public.puzzles'::regclass)
+         AS puzzle_category_constraint,
        EXISTS (
          SELECT 1
            FROM pg_class relation
@@ -77,6 +83,7 @@ async function checkProductionSchema(): Promise<void> {
     queueProfileConstraint: row.queue_profile_constraint,
     queueAdaptiveConstraint: row.queue_adaptive_constraint,
     initialRatingPolicyConstraint: row.initial_rating_policy_constraint,
+    puzzleCategoryConstraint: row.puzzle_category_constraint,
     takebackRls: row.takeback_rls,
   });
 
