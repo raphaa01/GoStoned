@@ -283,8 +283,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     ? hub?.categoryCounts[selectedCategory] ?? hub?.expectedPerCategory ?? 10
     : hub?.expectedPerCategory ?? 10;
   const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
-  const historicalPuzzle = puzzle?.category?.startsWith("gokyo_") === true;
-
   function categoryButton(category: typeof categories[number]) {
     const ready = puzzles.filter((entry) => entry.category === category.id).length;
     const total = hub?.categoryCounts[category.id] ?? hub?.expectedPerCategory ?? 10;
@@ -325,14 +323,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
             <h2 id="puzzle-category-title">{copy.chooseCategory}</h2>
           </div>
           <div className={styles.categoryGrid}>
-            {trainingCategories.map(categoryButton)}
-          </div>
-          <div className={styles.historicalHeader}>
-            <span>{copy.historicalCollection}</span>
-            <p>{copy.historicalCollectionDescription}</p>
-          </div>
-          <div className={`${styles.categoryGrid} ${styles.historicalGrid}`}>
-            {historicalCategories.map(categoryButton)}
+            {categories.map(categoryButton)}
           </div>
         </section>
       ) : !puzzle || !displayBoard ? (
@@ -386,7 +377,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <span className={styles.problemLabel}>{mode === "daily"
                   ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
                   : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
-                {historicalPuzzle ? <small className={styles.historicalSource}>{copy.historicalSource}</small> : null}
                 <h2>{mode === "daily" && puzzleCategoryCopy
                   ? puzzleCategoryCopy.description
                   : puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>

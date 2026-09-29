@@ -530,34 +530,6 @@
   max-width: 34rem;
 }
 
-.historicalHeader {
-  border-bottom: 1px solid var(--color-line);
-  margin-top: 34px;
-  padding: 0 0 16px;
-}
-.historicalHeader > span {
-  color: var(--color-moss-strong);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.historicalHeader p {
-  color: var(--color-text-muted);
-  line-height: 1.55;
-  margin: 8px 0 0;
-  max-width: 760px;
-}
-.historicalGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.historicalGrid > button,
-.historicalGrid > button:nth-child(odd),
-.historicalGrid > button:nth-child(even) {
-  border-right: 1px solid var(--color-line);
-  padding: 18px 22px;
-}
-.historicalGrid > button:first-child { padding-left: 0; }
-.historicalGrid > button:last-child { border-right: 0; padding-right: 0; }
-
 .collectionBar {
   background: transparent;
   border: 0;
@@ -609,12 +581,6 @@
 }
 
 .problemLabel { color: var(--color-moss-strong); font-size: 12px; font-weight: 650; }
-.historicalSource {
-  color: var(--color-text-muted);
-  display: block;
-  font-size: 11px;
-  margin-top: 6px;
-}
 .panel h2 { margin-top: 8px; }
 .incorrect, .continue, .error, .solution { background: transparent; border-left: 3px solid currentColor; border-radius: 0; padding: 10px 12px; }
 .incorrect { color: #8b5c21; }
@@ -632,13 +598,8 @@
 }
 
 @media (max-width: 900px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
   .panel { border-left: 0; border-top: 1px solid var(--color-line); padding: 24px 0 0; }
-  .historicalGrid { grid-template-columns: 1fr; }
-  .historicalGrid > button,
-  .historicalGrid > button:first-child,
-  .historicalGrid > button:last-child,
-  .historicalGrid > button:nth-child(odd),
-  .historicalGrid > button:nth-child(even) { border-right: 0; padding: 16px 0; }
 }
 
 @media (max-width: 620px) {
@@ -763,5 +724,9 @@
   .tabs button { flex: 0 0 auto; white-space: nowrap; }
   .positionMeta { flex-wrap: wrap; }
   .positionMeta > span:last-child { margin-left: 0; }
+  .boardColumn :global(.go-board[data-size="13"]) {
+    max-width: 100%;
+    width: 100%;
+  }
   .panel { margin-inline: 0; }
 }
