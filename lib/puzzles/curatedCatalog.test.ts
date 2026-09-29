@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyMove, countLiberties, getGroup } from "@/lib/game/goEngine";
-import { PUZZLE_CATEGORIES, PUZZLES_PER_CATEGORY } from "./types";
+import { CURATED_PUZZLE_CATEGORIES, PUZZLES_PER_CATEGORY } from "./types";
 import { curatedPuzzle, curatedPuzzleCount } from "./curatedCatalog";
 
 test("curated catalog contains 40 genuinely different legal positions", () => {
   assert.equal(curatedPuzzleCount(), 40);
   const hashes = new Set<string>();
   const sourceIds = new Set<string>();
-  for (const category of PUZZLE_CATEGORIES) {
+  for (const category of CURATED_PUZZLE_CATEGORIES) {
     for (let order = 1; order <= PUZZLES_PER_CATEGORY; order += 1) {
       const puzzle = curatedPuzzle(category, order);
       const hash = JSON.stringify(puzzle.board);

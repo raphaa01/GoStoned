@@ -8,6 +8,7 @@ const variationMigration = readFileSync(new URL("../../db/migrations/020_puzzle_
 const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curated_puzzle_board_guard.sql", import.meta.url), "utf8");
 const dailyCycleMigration = readFileSync(new URL("../../db/migrations/036_daily_puzzle_cycle.sql", import.meta.url), "utf8");
 const staticDailyMigration = readFileSync(new URL("../../db/migrations/038_static_daily_puzzle_rotation.sql", import.meta.url), "utf8");
+const historicalMigration = readFileSync(new URL("../../db/migrations/041_gokyo_shumyo_puzzles.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
@@ -43,6 +44,10 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
     schema.replaceAll("\r\n", "\n").includes(staticDailyMigration.replaceAll("\r\n", "\n")),
     "Canonical schema must contain migration 038 exactly.",
   );
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").includes(historicalMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must contain migration 041 exactly.",
+  );
   assert.match(service, /ensureStaticDailyPuzzle/);
   assert.match(service, /STATIC_DAILY_ENGINE_VERSION/);
   assert.match(service, /daily\.acceptedMoves\.map/);
@@ -58,6 +63,10 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(dailyCycleMigration, /collection_order BETWEEN 1 AND 20/);
   assert.match(staticDailyMigration, /DELETE FROM puzzle_generation_jobs\s+WHERE kind = 'daily'/);
   assert.match(staticDailyMigration, /visits BETWEEN 0 AND 10000/);
+  assert.match(historicalMigration, /category = 'gokyo_life'/);
+  assert.match(historicalMigration, /board_size = 19/);
+  assert.match(service, /ensureGokyoShumyoCatalog/);
+  assert.match(service, /jsonb_to_recordset/);
 });
 
 test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {

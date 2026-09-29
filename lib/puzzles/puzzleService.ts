@@ -6,10 +6,12 @@ import { GameServiceError } from "@/lib/game/gameService";
 import type { Board, BoardSize, Stone } from "@/lib/game/types";
 import { SUPPORTED_LOCALES, type LocalizedText } from "@/lib/i18n/config";
 import {
-  PUZZLE_CATEGORIES,
+  CURATED_PUZZLE_CATEGORIES,
   DAILY_PUZZLE_CYCLE_LENGTH,
+  GOKYO_SHUMYO_CATEGORIES,
   PUZZLE_KYU_LADDER,
   PUZZLES_PER_CATEGORY,
+  type CuratedPuzzleCategory,
   type PuzzleAttemptResult,
   type PuzzleCategory,
   type PuzzleDifficulty,
@@ -20,6 +22,10 @@ import {
   type PuzzleVariation,
   type PuzzleView,
 } from "./types";
+import {
+  GOKYO_SHUMYO_CATEGORY_COUNTS,
+  gokyoShumyoPuzzles,
+} from "./gokyoShumyo";
 import {
   STATIC_DAILY_ENGINE_VERSION,
   staticDailyPuzzleForDate,
@@ -132,7 +138,7 @@ function parseVariation(row: PuzzleRow): PuzzleVariation | null {
     throw new Error("Stored puzzle variation is incomplete.");
   }
   const mainLine = row.variation.mainLine.map((ply) => parsePly(ply, row.board_size));
-  const minimumLineLength = row.kind === "daily" ? 1 : 3;
+  const minimumLineLength = row.kind === "daily" || row.category?.startsWith("gokyo_") ? 1 : 3;
   if (mainLine.length < minimumLineLength || mainLine.length > 5) {
     throw new Error("Stored puzzle main line has an invalid length.");
   }
@@ -323,18 +329,99 @@ async function ensureStaticDailyPuzzle(): Promise<StaticDailyPuzzleRecord> {
   });
 }
 
+async function ensureGokyoShumyoCatalog(): Promise<void> {
+  const existing = await query<{ count: number }>(
+    `SELECT COUNT(*)::int AS count
+       FROM puzzles
+      WHERE kind = 'practice' AND category = ANY($1::text[])`,
+    [[...GOKYO_SHUMYO_CATEGORIES]],
+  );
+  if (existing.rows[0]?.count === 200) return;
+  const catalog = gokyoShumyoPuzzles();
+  const records = catalog.map((puzzle) => ({
+    category: puzzle.category,
+    collectionOrder: puzzle.collectionOrder,
+    toPlay: puzzle.toPlay,
+    board: puzzle.board,
+    solutionMove: puzzle.solution.move,
+    solutionX: puzzle.solution.x,
+    solutionY: puzzle.solution.y,
+    difficulty: puzzle.difficulty,
+    rankKyu: puzzle.rankKyu,
+    explanation: puzzle.explanation,
+    variation: puzzle.variation,
+    engineVersion: puzzle.engineVersion,
+    modelName: puzzle.modelName,
+    visits: puzzle.visits,
+    sourceMoveNumber: Number(puzzle.sourceId.slice(-3)),
+  }));
+  await query(
+    `INSERT INTO puzzles (
+       kind, daily_date, board_size, to_play, position_moves, board,
+       solution_move, solution_x, solution_y, alternatives, difficulty,
+       explanation, engine_version, model_name, visits,
+       source_game_id, source_move_number, category, rank_kyu,
+       collection_order, variation
+     )
+     SELECT 'practice', NULL, 19, catalog.to_play, '[]'::jsonb, catalog.board,
+            catalog.solution_move, catalog.solution_x, catalog.solution_y,
+            '[]'::jsonb, catalog.difficulty, catalog.explanation,
+            catalog.engine_version, catalog.model_name, catalog.visits,
+            NULL, catalog.source_move_number, catalog.category,
+            catalog.rank_kyu, catalog.collection_order, catalog.variation
+       FROM jsonb_to_recordset($1::jsonb) AS catalog(
+         category text, collection_order int, to_play text, board jsonb,
+         solution_move text, solution_x int, solution_y int, difficulty text,
+         rank_kyu int, explanation jsonb, variation jsonb,
+         engine_version text, model_name text, visits int,
+         source_move_number int
+       )
+     ON CONFLICT (category, collection_order)
+       WHERE kind = 'practice' AND category IS NOT NULL
+     DO NOTHING`,
+    [JSON.stringify(records.map((record) => ({
+      category: record.category,
+      collection_order: record.collectionOrder,
+      to_play: record.toPlay,
+      board: record.board,
+      solution_move: record.solutionMove,
+      solution_x: record.solutionX,
+      solution_y: record.solutionY,
+      difficulty: record.difficulty,
+      rank_kyu: record.rankKyu,
+      explanation: record.explanation,
+      variation: record.variation,
+      engine_version: record.engineVersion,
+      model_name: record.modelName,
+      visits: record.visits,
+      source_move_number: record.sourceMoveNumber,
+    })))],
+  );
+}
+
 export async function readPuzzleHub(
   playerKey: string,
   mode: PuzzleKind,
 ): Promise<PuzzleHub> {
   const daily = mode === "daily" ? await ensureStaticDailyPuzzle() : null;
+  if (mode === "practice") await ensureGokyoShumyoCatalog();
   const suffix = mode === "daily"
     ? "WHERE puzzle.kind = 'daily' AND puzzle.daily_date = CURRENT_DATE ORDER BY puzzle.id LIMIT 1"
     : `WHERE puzzle.kind = 'practice' AND puzzle.category IS NOT NULL
        ORDER BY puzzle.category, puzzle.collection_order, puzzle.id`;
   const result = await query<PuzzleRow>(`${SELECT_PUZZLE} ${suffix}`, [playerKey]);
+  const categoryCounts = {
+    life_and_death: PUZZLES_PER_CATEGORY,
+    tesuji: PUZZLES_PER_CATEGORY,
+    capturing_race: PUZZLES_PER_CATEGORY,
+    endgame: PUZZLES_PER_CATEGORY,
+    ...GOKYO_SHUMYO_CATEGORY_COUNTS,
+  } satisfies PuzzleHub["categoryCounts"];
+  const curatedReady = CURATED_PUZZLE_CATEGORIES.every((category) => (
+    result.rows.filter((row) => row.category === category).length >= PUZZLES_PER_CATEGORY
+  ));
   return {
-    status: result.rows.length > 0 ? "ready" : "generating",
+    status: mode === "daily" || curatedReady ? "ready" : "generating",
     mode,
     puzzles: result.rows.map((row) => view(daily ? {
       ...row,
@@ -343,6 +430,7 @@ export async function readPuzzleHub(
       collection_order: daily.cycleOrder,
     } : row)),
     expectedPerCategory: PUZZLES_PER_CATEGORY,
+    categoryCounts,
     dailyCycleLength: DAILY_PUZZLE_CYCLE_LENGTH,
   };
 }
@@ -350,10 +438,10 @@ export async function readPuzzleHub(
 export async function reservePuzzleGenerationDispatch(mode: PuzzleKind): Promise<string | null> {
   if (mode === "daily") return null;
   return withTransaction(async (client) => {
-    const categories: PuzzleCategory[] = [];
+    const categories: CuratedPuzzleCategory[] = [];
     const ranks: number[] = [];
     const orders: number[] = [];
-    for (const category of PUZZLE_CATEGORIES) {
+    for (const category of CURATED_PUZZLE_CATEGORIES) {
       for (let index = 0; index < PUZZLES_PER_CATEGORY; index += 1) {
         categories.push(category);
         ranks.push(PUZZLE_KYU_LADDER[index] ?? 15);

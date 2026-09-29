@@ -13,10 +13,10 @@ import { applyMove, countLiberties, createEmptyBoard, getGroup, replayMoves } fr
 import type { Board, BoardSize, Stone, StoredMove } from "@/lib/game/types";
 import type { LocalizedText } from "@/lib/i18n/config";
 import {
-  PUZZLE_CATEGORIES,
+  CURATED_PUZZLE_CATEGORIES,
   PUZZLE_KYU_LADDER,
   PUZZLES_PER_CATEGORY,
-  type PuzzleCategory,
+  type CuratedPuzzleCategory,
   type PuzzleDifficulty,
   type PuzzleKind,
   type PuzzlePly,
@@ -30,7 +30,7 @@ type PuzzleJob = {
   kind: PuzzleKind;
   target_date: string | Date | null;
   board_size: BoardSize;
-  category: PuzzleCategory | null;
+  category: CuratedPuzzleCategory | null;
   rank_kyu: number | null;
   collection_order: number | null;
   attempts: number;
@@ -60,7 +60,7 @@ type PuzzlePosition = {
   sourceMoveNumber: number;
   sourceCandidates?: string[];
   localMoves?: string[];
-  puzzleCategory?: PuzzleCategory;
+  puzzleCategory?: CuratedPuzzleCategory;
   rankKyu?: number;
   collectionOrder?: number;
 };
@@ -149,7 +149,7 @@ async function sourceFromGame(job: PuzzleJob): Promise<PuzzlePosition | null> {
 function catalogPosition(
   job: PuzzleJob,
   catalog: ReturnType<typeof curatedPuzzle>,
-  metadata: { category: PuzzleCategory; rankKyu: number; collectionOrder: number },
+  metadata: { category: CuratedPuzzleCategory; rankKyu: number; collectionOrder: number },
 ): PuzzlePosition {
   if (job.board_size !== 13) throw new Error("Curated puzzles require a 13x13 board.");
   const curated = catalog;
@@ -353,7 +353,7 @@ function lineFromCandidate(
 }
 
 function categoryExplanation(
-  category: PuzzleCategory,
+  category: CuratedPuzzleCategory,
   userMove: string,
   reply: string | null,
 ) {
@@ -420,7 +420,7 @@ function categoryExplanation(
 }
 
 function categorySolutionExplanation(
-  category: PuzzleCategory,
+  category: CuratedPuzzleCategory,
   move: string,
   reply: string | null,
 ): LocalizedText {
@@ -599,10 +599,10 @@ async function ensurePuzzleInventory(): Promise<void> {
       "SELECT pg_try_advisory_xact_lock(hashtext('gostone:puzzle-inventory')) AS locked",
     );
     if (!lock.rows[0]?.locked) return;
-    const categories: PuzzleCategory[] = [];
+    const categories: CuratedPuzzleCategory[] = [];
     const ranks: number[] = [];
     const orders: number[] = [];
-    for (const category of PUZZLE_CATEGORIES) {
+    for (const category of CURATED_PUZZLE_CATEGORIES) {
       for (let index = 0; index < PUZZLES_PER_CATEGORY; index += 1) {
         categories.push(category);
         ranks.push(PUZZLE_KYU_LADDER[index] ?? 15);

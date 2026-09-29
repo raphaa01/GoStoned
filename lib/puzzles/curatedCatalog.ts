@@ -1,6 +1,9 @@
 import type { Board, Position } from "@/lib/game/types";
 import { createEmptyBoard } from "@/lib/game/goEngine";
-import { PUZZLE_CATEGORIES, type PuzzleCategory } from "./types";
+import {
+  CURATED_PUZZLE_CATEGORIES,
+  type CuratedPuzzleCategory,
+} from "./types";
 
 export const CURATED_PUZZLE_SOURCE = {
   repository: "https://github.com/sanderland/tsumego",
@@ -15,7 +18,7 @@ type SourceProblem = {
   solutions: readonly string[];
 };
 
-const CATALOG: Record<PuzzleCategory, readonly SourceProblem[]> = {
+const CATALOG: Record<CuratedPuzzleCategory, readonly SourceProblem[]> = {
   life_and_death: [
     { id: "5-2-2-1", black: ["bq","br","eq","er"], white: ["bp","cp","dp","bn","eo","fp","fq","fr","hr"], solutions: ["bs","dq","es","aq"] },
     { id: "5-2-2-2", black: ["br","cr","eq","fq","gq","fr","gs"], white: ["ir","gr","hr","hq","hp","gp","fp","ep","dp","cq","bq","cn"], solutions: ["ds"] },
@@ -95,8 +98,8 @@ export type CuratedPuzzle = {
   localRegion: Position[];
 };
 
-export function curatedPuzzle(category: PuzzleCategory, collectionOrder: number): CuratedPuzzle {
-  if (!PUZZLE_CATEGORIES.includes(category) || collectionOrder < 1 || collectionOrder > 10) {
+export function curatedPuzzle(category: CuratedPuzzleCategory, collectionOrder: number): CuratedPuzzle {
+  if (!CURATED_PUZZLE_CATEGORIES.includes(category) || collectionOrder < 1 || collectionOrder > 10) {
     throw new Error("Unknown curated puzzle.");
   }
   const source = CATALOG[category][collectionOrder - 1];
@@ -122,5 +125,5 @@ export function curatedPuzzle(category: PuzzleCategory, collectionOrder: number)
 }
 
 export function curatedPuzzleCount(): number {
-  return PUZZLE_CATEGORIES.reduce((count, category) => count + CATALOG[category].length, 0);
+  return CURATED_PUZZLE_CATEGORIES.reduce((count, category) => count + CATALOG[category].length, 0);
 }
