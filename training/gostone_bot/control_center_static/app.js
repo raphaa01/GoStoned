@@ -5,7 +5,7 @@ const phaseLabels = {
   data: "KataGo generates teaching positions",
   training: "Student AI is learning",
   export: "ONNX export",
-  validation: "Final validation",
+  validation: "Locked tests & promotion arena",
 };
 const statusLabels = {
   idle: "Ready",
@@ -18,7 +18,7 @@ const statusLabels = {
   failed: "Failed",
 };
 let presets = [];
-let selectedPreset = "short";
+let selectedPreset = "serious";
 let lastArtifact = "";
 let arenaState = null;
 let arenaBusy = false;
