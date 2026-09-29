@@ -236,6 +236,55 @@
   padding: 5px 9px;
 }
 
+.taskPrompt {
+  align-items: center;
+  border-top: 1px solid var(--color-line);
+  display: none;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-top: 12px;
+}
+
+.panelPrompt {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.panelPrompt h2 { margin-bottom: 0; }
+
+.taskPrompt > div {
+  display: grid;
+  gap: 3px;
+}
+
+.taskPrompt p {
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.hintButton {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  color: var(--color-moss-strong);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.hintButton:disabled { cursor: wait; opacity: .45; }
+.hintButton:focus-visible { outline: 2px solid var(--color-moss); outline-offset: 2px; }
+
 .colorStone {
   border-radius: 50%;
   display: inline-block;
@@ -389,6 +438,9 @@
   .panel {
     min-height: 0;
   }
+
+  .taskPrompt { display: flex; }
+  .panelPrompt { display: none; }
 
   .collectionBar {
     grid-template-columns: auto 1fr;
@@ -611,6 +663,8 @@
   .categoryGrid > button:nth-child(even) { border-right: 0; min-height: 64px; padding: 14px 0; }
   .boardColumn { margin-inline: -16px; }
   .positionMeta { padding-inline: 16px; }
+  .taskPrompt { margin-inline: 16px; }
+  .taskPrompt p { font-size: 14px; }
 }
 
 .loadingWorkspace {

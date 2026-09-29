@@ -12,6 +12,7 @@ const historicalMigration = readFileSync(new URL("../../db/migrations/041_gokyo_
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
+const hintRoute = readFileSync(new URL("../../app/api/puzzles/[puzzleId]/hint/route.ts", import.meta.url), "utf8");
 
 test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   for (const source of [schema, migration]) {
@@ -69,6 +70,15 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(service, /supportsGokyoShumyoCatalogSchema/);
   assert.match(service, /pg_get_constraintdef/);
   assert.match(service, /jsonb_to_recordset/);
+});
+
+test("hints reveal only the current move on demand and retain player binding", () => {
+  assert.match(service, /export async function readPuzzleHint/);
+  assert.match(service, /variation\?\.mainLine\[progress\.length\]/);
+  assert.match(hintRoute, /assertExpectedPlayer\(request, playerKey\)/);
+  assert.match(hintRoute, /RATE_LIMIT_POLICIES\.puzzleAttempt/);
+  assert.match(hintRoute, /hint: await readPuzzleHint/);
+  assert.doesNotMatch(hintRoute, /solution|variation/);
 });
 
 test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {
