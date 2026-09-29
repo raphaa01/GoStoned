@@ -11,9 +11,15 @@ import numpy as np
 from .download_teacher import download_teacher
 from .generate import generate_game_samples, save_game_archive
 from .presets import TrainingPreset
-from .runtime import ControlGate, RunJournal, StopRequested, load_json
+from .runtime import ControlGate, RunJournal, StopRequested, atomic_json, load_json
 from .teacher import KataGoTeacher
-from .train import MAX_MODEL_BYTES, train_student
+from .train import (
+    DEFAULT_LOSS_WEIGHTS,
+    MAX_MODEL_BYTES,
+    evaluate_checkpoint,
+    split_training_archives,
+    train_student,
+)
 
 
 def _count_positions(data_dir: Path) -> int:
@@ -148,8 +154,21 @@ def run(run_dir: Path) -> None:
                 phase_progress=fraction,
                 overall_progress=_overall("training", fraction),
                 completed_epochs=epoch,
-                metrics=metrics,
                 message=f"Epoch {epoch}/{total} completed.",
+                **({"metrics": metrics} if metrics else {}),
+            )
+
+        def on_batch(epoch: int, total_epochs: int, batch: int, total_batches: int) -> None:
+            epoch_fraction = (epoch - 1 + batch / max(1, total_batches)) / total_epochs
+            journal.update(
+                status="running",
+                phase="training",
+                phase_progress=epoch_fraction,
+                overall_progress=_overall("training", epoch_fraction),
+                current_epoch=epoch,
+                current_batch=batch,
+                target_batches=total_batches,
+                message=f"Epoch {epoch}/{total_epochs}, batch {batch}/{total_batches} saved.",
             )
 
         journal.update(phase="training", phase_progress=0.0, overall_progress=_overall("training", 0.0))
@@ -166,7 +185,13 @@ def run(run_dir: Path) -> None:
             initial_checkpoint=base_checkpoint,
             control=gate.checkpoint,
             on_epoch=on_epoch,
+            on_batch=on_batch,
             resume=True,
+            loss_weights=(
+                config.get("adaptive_loss_weights")
+                if isinstance(config.get("adaptive_loss_weights"), dict)
+                else None
+            ),
         )
         journal.update(phase="export", phase_progress=1.0, overall_progress=_overall("export", 1.0))
         journal.event("The ONNX model was exported and structurally verified.")
@@ -181,7 +206,101 @@ def run(run_dir: Path) -> None:
             training_seed=config.get("seed"),
             base_model_version=config.get("base_model_version"),
         )
+        quality_gate: dict[str, object]
+        if preset.id == "smoke":
+            quality_gate = {
+                "approved": False,
+                "technical_test": True,
+                "reason": "Technical tests are never promoted as playing-strength versions.",
+            }
+        else:
+            _, validation_archives = split_training_archives(data_dir)
+            if not validation_archives:
+                raise RuntimeError("A real model needs held-out KataGo games for quality validation")
+            candidate_checkpoint = artifact_dir / "gostone-japanese-v1.pt"
+            journal.update(
+                phase="validation",
+                phase_progress=0.25,
+                overall_progress=_overall("validation", 0.25),
+                message="Comparing the candidate with the previous AI on held-out KataGo positions.",
+            )
+            candidate_metrics = evaluate_checkpoint(
+                candidate_checkpoint,
+                validation_archives,
+                batch_size=preset.batch_size,
+                cpu_threads=cpu_threads,
+            )
+            if base_checkpoint is None:
+                quality_gate = {
+                    "approved": True,
+                    "reason": "First real model; no previous released checkpoint exists.",
+                    "candidate": candidate_metrics,
+                    "validation_games": len(validation_archives),
+                }
+            else:
+                baseline_metrics = evaluate_checkpoint(
+                    base_checkpoint,
+                    validation_archives,
+                    batch_size=preset.batch_size,
+                    cpu_threads=cpu_threads,
+                )
+                ratios = {
+                    key: candidate_metrics[key] / max(1e-12, baseline_metrics[key])
+                    for key in DEFAULT_LOSS_WEIGHTS
+                }
+                regressions = [key for key, ratio in ratios.items() if ratio > 1.03]
+                composite_improvement = (
+                    baseline_metrics["composite"] - candidate_metrics["composite"]
+                ) / max(1e-12, baseline_metrics["composite"])
+                approved = composite_improvement >= 0.005 and not regressions
+                weaknesses = sorted(ratios, key=ratios.get, reverse=True)[:2]
+                adaptive_weights = {
+                    key: round(
+                        DEFAULT_LOSS_WEIGHTS[key]
+                        * (min(2.0, max(1.0, ratios[key] * 1.25)) if key in weaknesses else 1.0),
+                        6,
+                    )
+                    for key in DEFAULT_LOSS_WEIGHTS
+                }
+                quality_gate = {
+                    "approved": approved,
+                    "reason": (
+                        "Candidate improved the held-out KataGo score without a critical regression."
+                        if approved
+                        else "Candidate did not yet beat the released AI safely; continue this run."
+                    ),
+                    "candidate": candidate_metrics,
+                    "baseline": baseline_metrics,
+                    "ratios": ratios,
+                    "composite_improvement": composite_improvement,
+                    "regressions": regressions,
+                    "weaknesses": weaknesses,
+                    "next_loss_weights": adaptive_weights,
+                    "validation_games": len(validation_archives),
+                }
+                if not approved:
+                    config["adaptive_loss_weights"] = adaptive_weights
+                    config["quality_attempts"] = int(config.get("quality_attempts", 0)) + 1
+                    atomic_json(run_dir / "config.json", config)
+        metadata["quality_gate"] = quality_gate
         metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        if quality_gate.get("approved") is False and preset.id != "smoke":
+            journal.update(
+                status="quality_rejected",
+                pid=None,
+                phase="validation",
+                phase_progress=1.0,
+                overall_progress=0.99,
+                quality_gate=quality_gate,
+                artifact=None,
+                metadata=str(metadata_path.resolve()),
+                message="Candidate kept as a checkpoint, but not released. Resume to train its weak areas.",
+            )
+            journal.event(
+                "Quality gate kept the previous AI. Candidate checkpoint is safe and resumable.",
+                "warning",
+            )
+            return
         journal.update(
             status="completed",
             phase="validation",
@@ -190,6 +309,7 @@ def run(run_dir: Path) -> None:
             artifact=str(model_path.resolve()),
             artifact_bytes=model_path.stat().st_size,
             metadata=str(metadata_path.resolve()),
+            quality_gate=quality_gate,
             message="Training completed. The AI model and metadata are ready.",
         )
         journal.event("Training completed successfully.")
