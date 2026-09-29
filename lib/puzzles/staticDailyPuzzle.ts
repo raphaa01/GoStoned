@@ -3,14 +3,14 @@ import type { Board } from "@/lib/game/types";
 import type { LocalizedText } from "@/lib/i18n/config";
 import { dailyPuzzleForDate } from "./dailyCatalog";
 import type {
-  PuzzleCategory,
+  CuratedPuzzleCategory,
   PuzzleDifficulty,
   PuzzleVariation,
 } from "./types";
 
 export const STATIC_DAILY_ENGINE_VERSION = "static-daily-v2";
 
-const SOLUTION_EXPLANATIONS: Record<PuzzleCategory, LocalizedText> = {
+const SOLUTION_EXPLANATIONS: Record<CuratedPuzzleCategory, LocalizedText> = {
   life_and_death: {
     en: "This is the vital point that decides the local group's eye space.",
     de: "Dies ist der vitale Punkt, der über den Augenraum der lokalen Gruppe entscheidet.",
@@ -53,7 +53,7 @@ const SOLUTION_EXPLANATIONS: Record<PuzzleCategory, LocalizedText> = {
   },
 };
 
-const RETRY_EXPLANATIONS: Record<PuzzleCategory, LocalizedText> = {
+const RETRY_EXPLANATIONS: Record<CuratedPuzzleCategory, LocalizedText> = {
   life_and_death: {
     en: "That move misses the vital point of the local eye space.",
     de: "Dieser Zug verpasst den vitalen Punkt des lokalen Augenraums.",
@@ -99,7 +99,7 @@ const RETRY_EXPLANATIONS: Record<PuzzleCategory, LocalizedText> = {
 export type StaticDailyPuzzleRecord = {
   dailyDate: string;
   cycleOrder: number;
-  category: PuzzleCategory;
+  category: CuratedPuzzleCategory;
   rankKyu: number;
   board: Board;
   solutionMove: string;

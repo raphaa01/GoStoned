@@ -99,6 +99,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       mode: data.mode,
       puzzles: data.puzzles,
       expectedPerCategory: data.expectedPerCategory,
+      categoryCounts: data.categoryCounts,
       dailyCycleLength: data.dailyCycleLength,
     } satisfies PuzzleHub;
   }, [mode, playerKey, user]);
@@ -139,11 +140,14 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   useEffect(() => {
     const incompleteCatalog = mode === "practice"
-      && (hub?.puzzles.length ?? 0) < PUZZLE_CATEGORIES.length * (hub?.expectedPerCategory ?? 10);
+      && PUZZLE_CATEGORIES.some((category) => (
+        puzzles.filter((entry) => entry.category === category).length
+          < (hub?.categoryCounts[category] ?? hub?.expectedPerCategory ?? 10)
+      ));
     if (hub?.status !== "generating" && !incompleteCatalog) return;
     const timer = window.setInterval(() => void load(), 5_000);
     return () => window.clearInterval(timer);
-  }, [hub?.expectedPerCategory, hub?.puzzles.length, hub?.status, load, mode]);
+  }, [hub?.categoryCounts, hub?.expectedPerCategory, hub?.status, load, mode, puzzles]);
 
   const categoryPuzzles = useMemo(() => (
     selectedCategory
@@ -257,20 +261,40 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     clearTransientState();
   }
 
-  const categories = [
+  const trainingCategories = [
     { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription },
     { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription },
     { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription },
     { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription },
   ];
+  const historicalCategories = [
+    { id: "gokyo_life" as const, title: copy.gokyoLife, description: copy.gokyoLifeDescription },
+    { id: "gokyo_death" as const, title: copy.gokyoDeath, description: copy.gokyoDeathDescription },
+    { id: "gokyo_ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription },
+  ];
+  const categories = [...trainingCategories, ...historicalCategories];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
   const puzzleCategoryCopy = categories.find((entry) => entry.id === puzzle?.category);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
   const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
-  const expected = hub?.expectedPerCategory ?? 10;
+  const expected = selectedCategory
+    ? hub?.categoryCounts[selectedCategory] ?? hub?.expectedPerCategory ?? 10
+    : hub?.expectedPerCategory ?? 10;
   const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
+  const historicalPuzzle = puzzle?.category?.startsWith("gokyo_") === true;
+
+  function categoryButton(category: typeof categories[number]) {
+    const ready = puzzles.filter((entry) => entry.category === category.id).length;
+    const total = hub?.categoryCounts[category.id] ?? hub?.expectedPerCategory ?? 10;
+    return (
+      <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
+        <span><strong>{category.title}</strong><span>{category.description}</span></span>
+        <small>{copy.catalogProgress.replace("{ready}", String(ready)).replace("{total}", String(total))}</small>
+      </button>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -299,18 +323,17 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
             <h2 id="puzzle-category-title">{copy.chooseCategory}</h2>
           </div>
           <div className={styles.categoryGrid}>
-            {categories.map((category) => {
-              const ready = puzzles.filter((entry) => entry.category === category.id).length;
-              return (
-                <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
-                  <strong>{category.title}</strong>
-                  <small>{copy.catalogProgress.replace("{ready}", String(ready)).replace("{total}", String(expected))}</small>
-                </button>
-              );
-            })}
+            {trainingCategories.map(categoryButton)}
+          </div>
+          <div className={styles.historicalHeader}>
+            <span>{copy.historicalCollection}</span>
+            <p>{copy.historicalCollectionDescription}</p>
+          </div>
+          <div className={`${styles.categoryGrid} ${styles.historicalGrid}`}>
+            {historicalCategories.map(categoryButton)}
           </div>
         </section>
-      ) : hub?.status === "generating" || !puzzle || !displayBoard ? (
+      ) : !puzzle || !displayBoard ? (
         <PuzzleLoading label={copy.generating} />
       ) : (
         <>
@@ -318,12 +341,23 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
             <div className={styles.collectionBar}>
               <button className={styles.backButton} onClick={() => { setSelectedCategory(null); clearTransientState(); }} type="button"><ArrowLeft size={16} /> {copy.backToCategories}</button>
               <div><strong>{categoryCopy?.title}</strong><span>{copy.approximateRank.replace("{rank}", String(puzzle.rankKyu ?? "–"))}</span></div>
-              <nav aria-label={copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))}>
-                {Array.from({ length: expected }, (_, index) => index + 1).map((order) => {
-                  const entry = categoryPuzzles.find((candidate) => candidate.collectionOrder === order);
-                  return <button aria-current={order === selectedOrder ? "step" : undefined} disabled={!entry} key={order} onClick={() => chooseProblem(order)} type="button">{order}</button>;
-                })}
-              </nav>
+              {expected > 20 ? (
+                <label className={styles.problemJump}>
+                  <span>{copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))}</span>
+                  <select aria-label={copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))} onChange={(event) => chooseProblem(Number(event.target.value))} value={selectedOrder}>
+                    {Array.from({ length: expected }, (_, index) => index + 1).map((order) => (
+                      <option disabled={!categoryPuzzles.some((candidate) => candidate.collectionOrder === order)} key={order} value={order}>{order}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <nav aria-label={copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))}>
+                  {Array.from({ length: expected }, (_, index) => index + 1).map((order) => {
+                    const entry = categoryPuzzles.find((candidate) => candidate.collectionOrder === order);
+                    return <button aria-current={order === selectedOrder ? "step" : undefined} disabled={!entry} key={order} onClick={() => chooseProblem(order)} type="button">{order}</button>;
+                  })}
+                </nav>
+              )}
             </div>
           ) : null}
 
@@ -350,6 +384,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <span className={styles.problemLabel}>{mode === "daily"
                   ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
                   : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
+                {historicalPuzzle ? <small className={styles.historicalSource}>{copy.historicalSource}</small> : null}
                 <h2>{mode === "daily" && puzzleCategoryCopy
                   ? puzzleCategoryCopy.description
                   : puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>

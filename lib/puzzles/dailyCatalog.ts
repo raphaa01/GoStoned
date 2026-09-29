@@ -2,16 +2,16 @@ import type { Board, Position } from "@/lib/game/types";
 import { curatedPuzzle } from "./curatedCatalog";
 import {
   DAILY_PUZZLE_CYCLE_LENGTH,
-  PUZZLE_CATEGORIES,
+  CURATED_PUZZLE_CATEGORIES,
   PUZZLE_KYU_LADDER,
-  type PuzzleCategory,
+  type CuratedPuzzleCategory,
 } from "./types";
 
 export { DAILY_PUZZLE_CYCLE_LENGTH } from "./types";
 export const DAILY_PUZZLE_CYCLE_START = "2026-09-08";
 
 type DailyPuzzleSource = {
-  category: PuzzleCategory;
+  category: CuratedPuzzleCategory;
   sourceOrder: number;
   rankKyu: number;
 };
@@ -19,7 +19,7 @@ type DailyPuzzleSource = {
 // Interleave all ten positions from every curated category. Each of the 40
 // problems appears exactly once before the deterministic rotation repeats.
 const DAILY_SOURCES: readonly DailyPuzzleSource[] = PUZZLE_KYU_LADDER.flatMap(
-  (rankKyu, index) => PUZZLE_CATEGORIES.map((category) => ({
+  (rankKyu, index) => CURATED_PUZZLE_CATEGORIES.map((category) => ({
     category,
     sourceOrder: index + 1,
     rankKyu,
@@ -28,7 +28,7 @@ const DAILY_SOURCES: readonly DailyPuzzleSource[] = PUZZLE_KYU_LADDER.flatMap(
 
 export type DailyPuzzle = {
   cycleOrder: number;
-  category: PuzzleCategory;
+  category: CuratedPuzzleCategory;
   rankKyu: number;
   sourceId: string;
   board: Board;

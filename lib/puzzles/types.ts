@@ -3,15 +3,26 @@ import type { LocalizedText } from "@/lib/i18n/config";
 
 export type PuzzleKind = "daily" | "practice";
 export type PuzzleDifficulty = "beginner" | "intermediate" | "advanced";
-export const PUZZLE_CATEGORIES = [
+export const CURATED_PUZZLE_CATEGORIES = [
   "life_and_death",
   "tesuji",
   "capturing_race",
   "endgame",
 ] as const;
+export const GOKYO_SHUMYO_CATEGORIES = [
+  "gokyo_life",
+  "gokyo_death",
+  "gokyo_ko",
+] as const;
+export const PUZZLE_CATEGORIES = [
+  ...CURATED_PUZZLE_CATEGORIES,
+  ...GOKYO_SHUMYO_CATEGORIES,
+] as const;
 export type PuzzleCategory = typeof PUZZLE_CATEGORIES[number];
+export type CuratedPuzzleCategory = typeof CURATED_PUZZLE_CATEGORIES[number];
+export type GokyoShumyoCategory = typeof GOKYO_SHUMYO_CATEGORIES[number];
 export const PUZZLES_PER_CATEGORY = 10;
-export const DAILY_PUZZLE_CYCLE_LENGTH = PUZZLE_CATEGORIES.length * PUZZLES_PER_CATEGORY;
+export const DAILY_PUZZLE_CYCLE_LENGTH = CURATED_PUZZLE_CATEGORIES.length * PUZZLES_PER_CATEGORY;
 export const PUZZLE_KYU_LADDER = [30, 28, 26, 24, 22, 20, 19, 18, 17, 15] as const;
 
 export type PuzzlePly = {
@@ -65,6 +76,7 @@ export type PuzzleHub = {
   mode: PuzzleKind;
   puzzles: PuzzleView[];
   expectedPerCategory: number;
+  categoryCounts: Record<PuzzleCategory, number>;
   dailyCycleLength: number;
 };
 
