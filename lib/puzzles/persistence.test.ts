@@ -66,6 +66,8 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(historicalMigration, /category = 'gokyo_life'/);
   assert.match(historicalMigration, /board_size = 19/);
   assert.match(service, /ensureGokyoShumyoCatalog/);
+  assert.match(service, /supportsGokyoShumyoCatalogSchema/);
+  assert.match(service, /pg_get_constraintdef/);
   assert.match(service, /jsonb_to_recordset/);
 });
 

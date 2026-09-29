@@ -17,6 +17,8 @@ const currentSnapshot: ProductionSchemaSnapshot = {
     "CHECK (rules_snapshot = 'japanese' AND rules_version_snapshot = 'japanese-1989-gostone-v1' AND scoring_method_snapshot = 'territory' AND komi_snapshot = 6.5)",
   initialRatingPolicyConstraint:
     "CHECK (policy_version IN ('starting-strength-v1', 'starting-strength-v2'))",
+  puzzleCategoryConstraint:
+    "CHECK (board_size = 19 AND category IN ('gokyo_life', 'gokyo_death', 'gokyo_ko'))",
   takebackRls: true,
 };
 
@@ -54,5 +56,16 @@ test("rejects a rating-policy constraint that blocks new accounts", () => {
         "CHECK (policy_version = 'starting-strength-v1')",
     }),
     /new-account rating-policy constraint/,
+  );
+});
+
+test("rejects a puzzle schema that cannot store the historical catalog", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      puzzleCategoryConstraint:
+        "CHECK (board_size = 13 AND category IN ('life_and_death', 'tesuji'))",
+    }),
+    /historical puzzle-category constraint/,
   );
 });

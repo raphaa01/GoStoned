@@ -7,6 +7,7 @@ export type ProductionSchemaSnapshot = Readonly<{
   queueProfileConstraint: string | null;
   queueAdaptiveConstraint: string | null;
   initialRatingPolicyConstraint: string | null;
+  puzzleCategoryConstraint: string | null;
   takebackRls: boolean;
 }>;
 
@@ -28,6 +29,13 @@ export function validateProductionSchemaContract(
     "starting-strength-v2",
     "new-account rating-policy constraint",
   );
+  for (const fragment of ["gokyo_life", "gokyo_death", "gokyo_ko", "board_size = 19"]) {
+    requireFragment(
+      snapshot.puzzleCategoryConstraint,
+      fragment,
+      "historical puzzle-category constraint",
+    );
+  }
   requireFragment(snapshot.gameRulesDefault, "japanese", "games.rules default");
   requireFragment(
     snapshot.gameRulesProfileDefault,

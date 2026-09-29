@@ -329,14 +329,29 @@ async function ensureStaticDailyPuzzle(): Promise<StaticDailyPuzzleRecord> {
   });
 }
 
-async function ensureGokyoShumyoCatalog(): Promise<void> {
-  const existing = await query<{ count: number }>(
-    `SELECT COUNT(*)::int AS count
-       FROM puzzles
-      WHERE kind = 'practice' AND category = ANY($1::text[])`,
+export function supportsGokyoShumyoCatalogSchema(definition: string | null): boolean {
+  return definition?.includes("gokyo_life") === true
+    && definition.includes("gokyo_death")
+    && definition.includes("gokyo_ko")
+    && definition.includes("board_size = 19");
+}
+
+async function ensureGokyoShumyoCatalog(): Promise<boolean> {
+  const existing = await query<{ count: number; category_shape: string | null }>(
+    `SELECT
+       (SELECT COUNT(*)::int
+          FROM puzzles
+         WHERE kind = 'practice' AND category = ANY($1::text[])) AS count,
+       (SELECT pg_get_constraintdef(constraint_row.oid)
+          FROM pg_constraint constraint_row
+         WHERE constraint_row.conname = 'puzzles_category_shape_check'
+           AND constraint_row.conrelid = 'public.puzzles'::regclass) AS category_shape`,
     [[...GOKYO_SHUMYO_CATEGORIES]],
   );
-  if (existing.rows[0]?.count === 200) return;
+  if (existing.rows[0]?.count === 200) return true;
+  if (!supportsGokyoShumyoCatalogSchema(existing.rows[0]?.category_shape ?? null)) {
+    return false;
+  }
   const catalog = gokyoShumyoPuzzles();
   const records = catalog.map((puzzle) => ({
     category: puzzle.category,
@@ -397,6 +412,7 @@ async function ensureGokyoShumyoCatalog(): Promise<void> {
       source_move_number: record.sourceMoveNumber,
     })))],
   );
+  return true;
 }
 
 export async function readPuzzleHub(
@@ -404,7 +420,9 @@ export async function readPuzzleHub(
   mode: PuzzleKind,
 ): Promise<PuzzleHub> {
   const daily = mode === "daily" ? await ensureStaticDailyPuzzle() : null;
-  if (mode === "practice") await ensureGokyoShumyoCatalog();
+  const historicalCatalogReady = mode === "practice"
+    ? await ensureGokyoShumyoCatalog()
+    : true;
   const suffix = mode === "daily"
     ? "WHERE puzzle.kind = 'daily' AND puzzle.daily_date = CURRENT_DATE ORDER BY puzzle.id LIMIT 1"
     : `WHERE puzzle.kind = 'practice' AND puzzle.category IS NOT NULL
@@ -415,7 +433,9 @@ export async function readPuzzleHub(
     tesuji: PUZZLES_PER_CATEGORY,
     capturing_race: PUZZLES_PER_CATEGORY,
     endgame: PUZZLES_PER_CATEGORY,
-    ...GOKYO_SHUMYO_CATEGORY_COUNTS,
+    gokyo_life: historicalCatalogReady ? GOKYO_SHUMYO_CATEGORY_COUNTS.gokyo_life : 0,
+    gokyo_death: historicalCatalogReady ? GOKYO_SHUMYO_CATEGORY_COUNTS.gokyo_death : 0,
+    gokyo_ko: historicalCatalogReady ? GOKYO_SHUMYO_CATEGORY_COUNTS.gokyo_ko : 0,
   } satisfies PuzzleHub["categoryCounts"];
   const curatedReady = CURATED_PUZZLE_CATEGORIES.every((category) => (
     result.rows.filter((row) => row.category === category).length >= PUZZLES_PER_CATEGORY
