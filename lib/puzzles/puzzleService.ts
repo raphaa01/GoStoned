@@ -16,6 +16,7 @@ import {
   type PuzzleCategory,
   type PuzzleDifficulty,
   type PuzzleHub,
+  type PuzzleHint,
   type PuzzleKind,
   type PuzzlePly,
   type PuzzleSolution,
@@ -108,7 +109,7 @@ function kyrgyzPuzzleFallback(
     if (category === "tesuji") return "Бул жүрүш туура мажбур тартипти баштап, тактикалык учурду сактайт.";
     if (category === "capturing_race") return "Бул жүрүш дем жарышындагы негизги демди алып, топту алдыга чыгарат.";
     if (category === "endgame") return "Бул жүрүш эндшпилдеги чоң маанини алып, демилгени сактайт.";
-    return "Бул — KataGo текшерген эң күчтүү жүрүш; ал форманы жана кийинки мүмкүнчүлүктөрдү сактайт.";
+    return "Бул эң күчтүү жүрүш; ал форманы жана кийинки мүмкүнчүлүктөрдү сактайт.";
   }
   if (category === "life_and_death") return "Бул вариант көз мейкиндигин чечкен маанилүү чекитти өткөрүп жиберет.";
   if (category === "tesuji") return "Бул вариант мажбур тартипти жоготуп, атаандашка натыйжалуу жооп берүүгө мүмкүндүк берет.";
@@ -337,18 +338,29 @@ export function supportsGokyoShumyoCatalogSchema(definition: string | null): boo
 }
 
 async function ensureGokyoShumyoCatalog(): Promise<boolean> {
-  const existing = await query<{ count: number; category_shape: string | null }>(
+  const existing = await query<{
+    count: number;
+    category_shape: string | null;
+    copy_ready: boolean;
+  }>(
     `SELECT
        (SELECT COUNT(*)::int
           FROM puzzles
          WHERE kind = 'practice' AND category = ANY($1::text[])) AS count,
+       NOT EXISTS (
+         SELECT 1
+           FROM puzzles
+          WHERE kind = 'practice'
+            AND category = ANY($1::text[])
+            AND (explanation::text ILIKE '%KataGo%' OR variation::text ILIKE '%KataGo%')
+       ) AS copy_ready,
        (SELECT pg_get_constraintdef(constraint_row.oid)
           FROM pg_constraint constraint_row
          WHERE constraint_row.conname = 'puzzles_category_shape_check'
            AND constraint_row.conrelid = 'public.puzzles'::regclass) AS category_shape`,
     [[...GOKYO_SHUMYO_CATEGORIES]],
   );
-  if (existing.rows[0]?.count === 200) return true;
+  if (existing.rows[0]?.count === 200 && existing.rows[0]?.copy_ready) return true;
   if (!supportsGokyoShumyoCatalogSchema(existing.rows[0]?.category_shape ?? null)) {
     return false;
   }
@@ -393,7 +405,11 @@ async function ensureGokyoShumyoCatalog(): Promise<boolean> {
        )
      ON CONFLICT (category, collection_order)
        WHERE kind = 'practice' AND category IS NOT NULL
-     DO NOTHING`,
+     DO UPDATE
+       SET explanation = EXCLUDED.explanation,
+           variation = EXCLUDED.variation
+     WHERE puzzles.explanation::text ILIKE '%KataGo%'
+        OR puzzles.variation::text ILIKE '%KataGo%'`,
     [JSON.stringify(records.map((record) => ({
       category: record.category,
       collection_order: record.collectionOrder,
@@ -850,4 +866,28 @@ export async function attemptPuzzle(
     }
     return attemptDailyPuzzle(client, puzzle, playerKey, selected);
   });
+}
+
+export async function readPuzzleHint(
+  puzzleId: string,
+  playerKey: string,
+  accountAccess: boolean,
+): Promise<PuzzleHint> {
+  const result = await query<PuzzleRow>(
+    `${SELECT_PUZZLE}
+      WHERE puzzle.id = $2
+        AND puzzle.published_at <= NOW()`,
+    [playerKey, puzzleId],
+  );
+  const puzzle = result.rows[0];
+  if (!puzzle) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
+  if (puzzle.kind === "practice" && !accountAccess) {
+    throw new GameServiceError("Please log in first.", 401, "authentication_required");
+  }
+  const variation = parseVariation(puzzle);
+  const progress = parseProgress(puzzle);
+  const next = variation?.mainLine[progress.length];
+  return next
+    ? { x: next.x, y: next.y }
+    : { x: puzzle.solution_x, y: puzzle.solution_y };
 }

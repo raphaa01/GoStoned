@@ -93,3 +93,8 @@ export type PuzzleAttemptResult = {
   feedback: LocalizedText | null;
   solution: PuzzleSolution | null;
 };
+
+export type PuzzleHint = {
+  x: number;
+  y: number;
+};
