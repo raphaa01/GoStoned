@@ -31,6 +31,9 @@ test("mobile boards open a guarded press-and-drag touch lens", () => {
   assert.match(board, /onPointerDownCapture=[\s\S]+suppressTouchClickUntilRef\.current > 0[\s\S]+suppressTouchClickUntilRef\.current = 0/);
   assert.match(board, /setPointerCapture\(gesture\.pointerId\)/);
   assert.match(board, /touchLensRef\.current[\s\S]+event\.preventDefault\(\)/);
+  assert.match(board, /isClientPointInsideBoard\(event\.clientX, event\.clientY, boardBounds\)/);
+  assert.match(board, /gesture\.cancelled = true;[\s\S]+clearTouchLens\(\)/);
+  assert.match(board, /gesture\.cancelled \|\| gesture\.moved/);
 });
 
 test("the touch lens keeps keyboard activation and submits only on release", () => {
@@ -45,6 +48,7 @@ test("the touch lens keeps keyboard activation and submits only on release", () 
 
 test("responsive CSS keeps the full board fitted and the magnifier local", () => {
   const styles = source("app/globals.css");
+  assert.match(styles, /\.go-board\s*\{[\s\S]*?-webkit-touch-callout: none;[\s\S]*?user-select: none;/);
   assert.match(styles, /\.go-board\[data-size="19"\]\[data-interaction-mode="play"\]\s*\{[\s\S]*?max-width: 100%;[\s\S]*?width: 100%;/);
   assert.match(styles, /\.touch-magnifier\s*\{[\s\S]*?height: 168px;[\s\S]*?pointer-events: none;/);
   assert.match(styles, /--touch-lens-gap: 56px/);
