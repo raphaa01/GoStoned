@@ -2,6 +2,7 @@ import { query } from "@/lib/db";
 import type { BoardSize } from "@/lib/game/types";
 import type { RatingDisplayPreference } from "@/lib/rating/rankPolicy";
 import type { BotMatchPreference, StartingStrengthEstimate } from "@/lib/rating/preferences";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import type { LeaderboardEntry } from "./leaderboardContract";
 
 export type LeaderboardSnapshot = {
@@ -34,6 +35,7 @@ export type GlobalRatingSummary = {
 export type PublicRatingPreferences = {
   displayPreference: RatingDisplayPreference;
   botMatchPreference: BotMatchPreference;
+  boardPlacement: BoardPlacementPreference;
   handicapPreference: "even-only" | "verified-handicap-ok";
   preferenceRevision: number;
   startingStrengthEstimate: StartingStrengthEstimate | null;
@@ -80,6 +82,7 @@ type GlobalRatingRow = {
   rating_change_30_days: number;
   display_preference: RatingDisplayPreference;
   bot_match_preference: BotMatchPreference;
+  board_placement: BoardPlacementPreference;
   handicap_preference: "even-only" | "verified-handicap-ok";
   preference_revision: number;
   starting_strength_estimate: StartingStrengthEstimate | null;
@@ -244,6 +247,7 @@ export async function getPlayerProfileStats(playerKey: string) {
               ), 0) AS rating_change_30_days,
               preference.display_preference,
               preference.bot_match_preference,
+              preference.board_placement,
               preference.handicap_preference,
               preference.preference_revision,
               claim.estimate AS starting_strength_estimate,
@@ -348,6 +352,7 @@ export async function getPlayerProfileStats(playerKey: string) {
   const preferences: PublicRatingPreferences = {
     displayPreference: row.display_preference,
     botMatchPreference: row.bot_match_preference,
+    boardPlacement: row.board_placement,
     handicapPreference: row.handicap_preference,
     preferenceRevision: row.preference_revision,
     startingStrengthEstimate: row.starting_strength_estimate,

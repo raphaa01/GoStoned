@@ -712,7 +712,7 @@ export const ko = {
     "gokyoLifeDescription": "고전 103문제: 국지 돌을 살리는 급소를 찾으세요.",
     "gokyoDeath": "Gokyo Shumyo · 죽음",
     "gokyoDeathDescription": "고전 71문제: 수비 측의 눈 공간을 없애세요.",
-    "gokyoKo": "Gokyo Shumyo · 패",
+    "gokyoKo": "패",
     "gokyoKoDescription": "고전 패 문제 중 첫 26문제: 최선의 국지 결과를 찾으세요.",
     "historicalSource": "고전 국면 · 1812",
     "catalogProgress": "{ready} 중 {total} 준비 완료",

@@ -13,12 +13,16 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { useBoardPlacement } from "@/components/game/BoardPlacementProvider";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingHistoryChart } from "@/components/profile/RatingHistoryChart";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { readApi } from "@/lib/client/api";
 import type { Locale } from "@/lib/i18n/config";
 import { localizedApiError } from "@/lib/i18n/dictionary";
+import { getBoardPlacementCopy } from "@/lib/i18n/boardPlacement";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
+import type { RatingPreferences } from "@/lib/rating/preferences";
 import {
   DEFAULT_PROFILE_AVATAR_STYLE,
   type ProfileAvatarStyle,
@@ -55,6 +59,8 @@ export function ProfileView() {
   const { user, loading, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.profile;
+  const placementCopy = getBoardPlacementCopy(locale);
+  const { setPreference: applyBoardPlacement } = useBoardPlacement();
   const [rating, setRating] = useState<GlobalRatingSummary | null>(null);
   const [preferences, setPreferences] = useState<PublicRatingPreferences | null>(null);
   const [history, setHistory] = useState<RatingHistoryEntry[]>([]);
@@ -65,6 +71,9 @@ export function ProfileView() {
   const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<ProfileAvatarStyle>(DEFAULT_PROFILE_AVATAR_STYLE);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarStatus, setAvatarStatus] = useState<string | null>(null);
+  const [selectedBoardPlacement, setSelectedBoardPlacement] = useState<BoardPlacementPreference>("zoom");
+  const [placementSaving, setPlacementSaving] = useState(false);
+  const [placementStatus, setPlacementStatus] = useState<string | null>(null);
   const avatarPickerId = useId();
   const avatarPickerTitleId = useId();
   const avatarTriggerRef = useRef<HTMLButtonElement>(null);
@@ -98,6 +107,7 @@ export function ProfileView() {
       .then((body) => {
         setRating(body.rating ?? null);
         setPreferences(body.preferences ?? null);
+        if (body.preferences) setSelectedBoardPlacement(body.preferences.boardPlacement);
         setHistory(body.history ?? []);
         setRecentGames(body.recentGames ?? []);
         setError(null);
@@ -133,6 +143,33 @@ export function ProfileView() {
       setAvatarStatus(localizedApiError(dictionary, requestError, copy.avatarSaveFailed));
     } finally {
       setAvatarSaving(false);
+    }
+  };
+
+  const saveBoardPlacement = async () => {
+    if (!preferences || placementSaving || selectedBoardPlacement === preferences.boardPlacement) return;
+    setPlacementSaving(true);
+    setPlacementStatus(null);
+    try {
+      const response = await fetch("/api/profile/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayPreference: preferences.displayPreference,
+          botMatchPreference: preferences.botMatchPreference,
+          boardPlacement: selectedBoardPlacement,
+        }),
+      });
+      const body = await readApi<{
+        preferences: RatingPreferences & { preferenceRevision: number };
+      }>(response);
+      setPreferences((current) => current ? { ...current, ...body.preferences } : current);
+      applyBoardPlacement(body.preferences.boardPlacement);
+      setPlacementStatus(placementCopy.saved);
+    } catch {
+      setPlacementStatus(placementCopy.failed);
+    } finally {
+      setPlacementSaving(false);
     }
   };
 
@@ -238,6 +275,32 @@ export function ProfileView() {
       </section>
     ) : null}
     {error ? <div className="profile-error" role="alert">{error}</div> : null}
+
+    {preferences ? (
+      <section aria-labelledby="board-placement-title" className="profile-board-placement">
+        <header>
+          <h2 id="board-placement-title">{placementCopy.settingsTitle}</h2>
+          <p>{placementCopy.settingsBody}</p>
+        </header>
+        <fieldset>
+          <legend className="sr-only">{placementCopy.settingsTitle}</legend>
+          <label>
+            <input checked={selectedBoardPlacement === "zoom"} name="board-placement" onChange={() => { setSelectedBoardPlacement("zoom"); setPlacementStatus(null); }} type="radio" value="zoom" />
+            <span><strong>{placementCopy.zoom}</strong><small>{placementCopy.zoomBody}</small></span>
+          </label>
+          <label>
+            <input checked={selectedBoardPlacement === "direct"} name="board-placement" onChange={() => { setSelectedBoardPlacement("direct"); setPlacementStatus(null); }} type="radio" value="direct" />
+            <span><strong>{placementCopy.direct}</strong><small>{placementCopy.directBody}</small></span>
+          </label>
+        </fieldset>
+        <div className="profile-board-placement__actions">
+          <button className="button button--secondary" disabled={placementSaving || selectedBoardPlacement === preferences.boardPlacement} onClick={() => void saveBoardPlacement()} type="button">
+            {placementSaving ? placementCopy.saving : placementCopy.save}
+          </button>
+          <span aria-live="polite" role="status">{placementStatus}</span>
+        </div>
+      </section>
+    ) : null}
 
     {rating && preferences ? <>
       <section aria-label={copy.ratingsLabel} className="profile-performance">

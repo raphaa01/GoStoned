@@ -452,7 +452,7 @@ export const ky = {
     "gokyoLifeDescription": "103 классикалык тапшырма: жергиликтүү топту жашаткан жүрүштү табыңыз.",
     "gokyoDeath": "Gokyo Shumyo · Өлүм",
     "gokyoDeathDescription": "71 классикалык тапшырма: коргонуучунун көз мейкиндигин жок кылыңыз.",
-    "gokyoKo": "Gokyo Shumyo · Коо",
+    "gokyoKo": "Коо",
     "gokyoKoDescription": "Алгачкы 26 классикалык коо тапшырмасы: эң жакшы жергиликтүү натыйжаны табыңыз.",
     "historicalSource": "Тарыхый позиция · 1812",
     "catalogProgress": "{total} ичинен {ready} даяр",

@@ -45,6 +45,7 @@ function credentialRequest(
         password: "password123",
         startingStrength: "unspecified",
         knownRank: null,
+        boardPlacement: "zoom",
       }
     : { username: "named_player", password: "password123" }),
 ) {
@@ -499,6 +500,7 @@ test("successful registration exposes only the committed user and hardened sessi
       password: "password123",
       startingStrength: "known",
       knownRank: "12k",
+      boardPlacement: "direct",
     }),
   )));
 
@@ -632,6 +634,7 @@ test("registration failures roll back the account and never set a session cookie
             password: "password123",
             startingStrength: "unspecified",
             knownRank: null,
+            boardPlacement: "zoom",
           }),
         )));
 

@@ -712,7 +712,7 @@ export const es = {
     "gokyoLifeDescription": "103 problemas clásicos: encuentra la jugada que hace vivir al grupo local.",
     "gokyoDeath": "Gokyo Shumyo · Muerte",
     "gokyoDeathDescription": "71 problemas clásicos: elimina el espacio de ojos del defensor.",
-    "gokyoKo": "Gokyo Shumyo · Ko",
+    "gokyoKo": "Ko",
     "gokyoKoDescription": "Los primeros 26 problemas clásicos de ko: encuentra el mejor resultado local.",
     "historicalSource": "Posición histórica · 1812",
     "catalogProgress": "{ready} de {total} listo",

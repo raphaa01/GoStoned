@@ -5,23 +5,30 @@ import {
   Check,
   CircleDot,
   LoaderCircle,
+  MousePointer2,
+  ScanSearch,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
 import { getBeginnerGuideCopy } from "@/lib/i18n/beginnerGuide";
+import { getBoardPlacementCopy } from "@/lib/i18n/boardPlacement";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import {
   KNOWN_RANK_OPTIONS,
   type StartingStrength,
 } from "@/lib/rating/preferences";
 
-type OnboardingStep = "experience" | "rank" | "tutorial-offer" | "tutorial";
+type OnboardingStep = "experience" | "placement" | "rank" | "tutorial-offer" | "tutorial";
 
 type BeginnerOnboardingDialogProps = {
   busy: boolean;
   onCancel: () => void;
-  onCreateAccount: (strength: StartingStrength) => Promise<boolean>;
+  onCreateAccount: (
+    strength: StartingStrength,
+    boardPlacement: BoardPlacementPreference,
+  ) => Promise<boolean>;
   onFinish: (destination?: "/learn") => Promise<void>;
   open: boolean;
 };
@@ -77,7 +84,10 @@ export function BeginnerOnboardingDialog({
 }: BeginnerOnboardingDialogProps) {
   const { locale } = useI18n();
   const copy = getBeginnerGuideCopy(locale);
+  const placementCopy = getBoardPlacementCopy(locale);
   const [step, setStep] = useState<OnboardingStep>("experience");
+  const [boardPlacement, setBoardPlacement] = useState<BoardPlacementPreference>("zoom");
+  const [stepAfterPlacement, setStepAfterPlacement] = useState<"rank" | "tutorial-offer">("rank");
   const [rank, setRank] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
   const [accountCreated, setAccountCreated] = useState(false);
@@ -93,7 +103,7 @@ export function BeginnerOnboardingDialog({
 
   async function createAccount(strength: StartingStrength) {
     if (accountCreated) return true;
-    const created = await onCreateAccount(strength);
+    const created = await onCreateAccount(strength, boardPlacement);
     if (created) setAccountCreated(true);
     return created;
   }
@@ -113,6 +123,16 @@ export function BeginnerOnboardingDialog({
     await onFinish();
   }
 
+  function chooseExperience(nextStep: "rank" | "tutorial-offer") {
+    setStepAfterPlacement(nextStep);
+    setStep("placement");
+  }
+
+  function chooseBoardPlacement(preference: BoardPlacementPreference) {
+    setBoardPlacement(preference);
+    setStep(stepAfterPlacement);
+  }
+
   if (!open) return null;
 
   const tutorialSlides = [
@@ -129,6 +149,8 @@ export function BeginnerOnboardingDialog({
   const isLastSlide = slideIndex === tutorialSlides.length - 1;
   const title = step === "experience"
     ? copy.onboarding.canPlayTitle
+    : step === "placement"
+      ? placementCopy.title
     : step === "rank"
       ? copy.onboarding.rankTitle
       : step === "tutorial-offer"
@@ -136,6 +158,8 @@ export function BeginnerOnboardingDialog({
         : slide.title;
   const description = step === "experience"
     ? copy.onboarding.canPlayBody
+    : step === "placement"
+      ? `${placementCopy.body} ${placementCopy.settingsHint}`
     : step === "rank"
       ? copy.onboarding.rankBody
       : step === "tutorial-offer"
@@ -176,7 +200,7 @@ export function BeginnerOnboardingDialog({
           <button
             className="beginner-choice"
             disabled={busy}
-            onClick={() => setStep("rank")}
+            onClick={() => chooseExperience("rank")}
             ref={firstAction}
             type="button"
           >
@@ -186,11 +210,38 @@ export function BeginnerOnboardingDialog({
           <button
             className="beginner-choice"
             disabled={busy}
-            onClick={() => setStep("tutorial-offer")}
+            onClick={() => chooseExperience("tutorial-offer")}
             type="button"
           >
             <CircleDot aria-hidden="true" size={20} />
             <span>{copy.onboarding.canPlayNo}</span>
+          </button>
+        </div>
+      ) : null}
+
+      {step === "placement" ? (
+        <div className="beginner-onboarding-body beginner-choice-grid">
+          <button
+            className="beginner-choice"
+            disabled={busy}
+            onClick={() => chooseBoardPlacement("zoom")}
+            ref={firstAction}
+            type="button"
+          >
+            <ScanSearch aria-hidden="true" size={20} />
+            <span><strong>{placementCopy.zoom}</strong><small>{placementCopy.zoomBody}</small></span>
+          </button>
+          <button
+            className="beginner-choice"
+            disabled={busy}
+            onClick={() => chooseBoardPlacement("direct")}
+            type="button"
+          >
+            <MousePointer2 aria-hidden="true" size={20} />
+            <span><strong>{placementCopy.direct}</strong><small>{placementCopy.directBody}</small></span>
+          </button>
+          <button className="beginner-back-action" disabled={busy} onClick={() => setStep("experience")} type="button">
+            <ArrowLeft aria-hidden="true" size={16} /> {copy.onboarding.back}
           </button>
         </div>
       ) : null}
@@ -226,7 +277,7 @@ export function BeginnerOnboardingDialog({
           >
             {copy.onboarding.skipRank}
           </button>
-          <button className="beginner-back-action" disabled={busy} onClick={() => setStep("experience")} type="button">
+          <button className="beginner-back-action" disabled={busy} onClick={() => setStep("placement")} type="button">
             <ArrowLeft aria-hidden="true" size={16} /> {copy.onboarding.back}
           </button>
         </div>
@@ -247,7 +298,7 @@ export function BeginnerOnboardingDialog({
           <button className="beginner-text-action" disabled={busy} onClick={() => void chooseTutorial(false)} type="button">
             {copy.onboarding.skipTutorial}
           </button>
-          <button className="beginner-back-action" disabled={busy} onClick={() => setStep("experience")} type="button">
+          <button className="beginner-back-action" disabled={busy} onClick={() => setStep("placement")} type="button">
             <ArrowLeft aria-hidden="true" size={16} /> {copy.onboarding.back}
           </button>
         </div>

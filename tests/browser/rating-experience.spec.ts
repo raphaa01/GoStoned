@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import { de } from "../../lib/i18n/catalogs/de";
 import { en } from "../../lib/i18n/catalogs/en";
 import { getBeginnerGuideCopy } from "../../lib/i18n/beginnerGuide";
+import { getBoardPlacementCopy } from "../../lib/i18n/boardPlacement";
 
 const USER = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -32,6 +33,7 @@ async function assertNoHorizontalOverflow(page: Page) {
 for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
   test(`${locale.toUpperCase()} onboarding, global leaderboard, and account protection are honest and responsive`, async ({ page }) => {
     const onboarding = getBeginnerGuideCopy(locale).onboarding;
+    const placement = getBoardPlacementCopy(locale);
     let signedIn = false;
     let registrationBody: unknown;
 
@@ -80,6 +82,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
           preferences: {
             displayPreference: "both",
             botMatchPreference: "never",
+            boardPlacement: "zoom",
             handicapPreference: "even-only",
             preferenceRevision: 1,
             startingStrengthEstimate: "known",
@@ -137,6 +140,9 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     const onboardingDialog = page.getByRole("dialog", { name: onboarding.canPlayTitle });
     await expect(onboardingDialog).toBeVisible();
     await onboardingDialog.getByRole("button", { name: onboarding.canPlayYes }).click();
+    const placementDialog = page.getByRole("dialog", { name: placement.title });
+    await expect(placementDialog).toContainText(placement.settingsHint);
+    await placementDialog.getByRole("button", { name: new RegExp(placement.zoom) }).click();
     const rankDialog = page.getByRole("dialog", { name: onboarding.rankTitle });
     await expect(rankDialog).toBeVisible();
     await rankDialog.getByRole("combobox", { name: onboarding.rankLabel }).selectOption("3k");
@@ -147,6 +153,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
       password: "correct-horse-battery",
       startingStrength: "known",
       knownRank: "3k",
+      boardPlacement: "zoom",
     });
     await assertNoHorizontalOverflow(page);
 

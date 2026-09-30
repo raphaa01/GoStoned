@@ -8,6 +8,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields } from "@/lib/auth/errorFields";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import type { StartingStrength } from "@/lib/rating/preferences";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import { useAuth } from "./AuthProvider";
 import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
 
@@ -23,7 +24,10 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
   const errorId = useId();
   const usernameInput = useRef<HTMLInputElement>(null);
 
-  async function createAccount(strength: StartingStrength): Promise<boolean> {
+  async function createAccount(
+    strength: StartingStrength,
+    boardPlacement: BoardPlacementPreference,
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -34,6 +38,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
           username,
           startingStrength: strength.estimate,
           knownRank: strength.knownRank,
+          boardPlacement,
         }),
       });
       const body = (await response.json()) as { ok: boolean; code?: string };

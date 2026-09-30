@@ -10,6 +10,7 @@ import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 import type { StartingStrength } from "@/lib/rating/preferences";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
 
 type FormError = {
@@ -51,7 +52,10 @@ export function AuthForm({
     return `/api/auth/oauth/${provider}?${parameters.toString()}`;
   }
 
-  async function authenticate(strength?: StartingStrength): Promise<boolean> {
+  async function authenticate(
+    strength?: StartingStrength,
+    boardPlacement: BoardPlacementPreference = "zoom",
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -64,6 +68,7 @@ export function AuthForm({
               password,
               startingStrength: strength?.estimate ?? "unspecified",
               knownRank: strength?.knownRank ?? null,
+              boardPlacement,
             }
           : { username, password }),
       });

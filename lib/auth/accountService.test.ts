@@ -159,6 +159,7 @@ test("registration commits the user, session, and bounded cleanup before exposin
     350,
     0.06,
     "glicko2-v1-tau-0.5",
+    "zoom",
   ]);
   assert.deepEqual(database.statements[3].values, [
     database.userId,

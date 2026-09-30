@@ -81,8 +81,13 @@ function parseProblems(source) {
 function localMoves(problem) {
   const stones = [...problem.black, ...problem.white];
   const occupied = new Set(stones.map(({ x, y }) => `${x}:${y}`));
-  const maxX = Math.min(18, Math.max(...stones.map(({ x }) => x)) + 2);
-  const maxY = Math.min(18, Math.max(...stones.map(({ y }) => y)) + 2);
+  // These classical diagrams describe a local corner problem. Letting normal
+  // whole-board analysis play into the surrounding empty board rewards remote
+  // territory moves instead of solving the life-and-death shape. Restrict both
+  // players to the rectangle occupied by the diagram so every candidate is an
+  // answer to the local problem rather than an unrelated opening move.
+  const maxX = Math.max(...stones.map(({ x }) => x));
+  const maxY = Math.max(...stones.map(({ y }) => y));
   const result = [];
   for (let y = 0; y <= maxY; y += 1) {
     for (let x = 0; x <= maxX; x += 1) {

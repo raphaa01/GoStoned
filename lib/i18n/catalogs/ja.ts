@@ -712,7 +712,7 @@ export const ja = {
     "gokyoLifeDescription": "古典103題：局所の石を生かす急所を見つけます。",
     "gokyoDeath": "碁経衆妙 · 死之部",
     "gokyoDeathDescription": "古典71題：守る側の眼形を奪います。",
-    "gokyoKo": "碁経衆妙 · 劫之部",
+    "gokyoKo": "コウ",
     "gokyoKoDescription": "古典コウ問題の最初の26題：最善の局所結果を探します。",
     "historicalSource": "古典局面 · 1812",
     "catalogProgress": "{total} の {ready} 準備完了",

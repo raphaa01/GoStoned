@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 const migration = readFileSync(join(process.cwd(), "db/migrations/024_rating_preferences_and_match_pools.sql"), "utf8");
+const placementMigration = readFileSync(join(process.cwd(), "db/migrations/043_board_placement_preference.sql"), "utf8");
 const schema = readFileSync(join(process.cwd(), "db/schema.sql"), "utf8");
 const preflight = readFileSync(join(process.cwd(), "scripts/check-mvp.ts"), "utf8");
 const matchmaking = readFileSync(join(process.cwd(), "lib/matchmaking/matchmakingService.ts"), "utf8");
@@ -12,6 +13,14 @@ test("bootstrap schema contains the exact preferences and adaptive-pool migratio
   const offset = schema.indexOf(migration);
   assert.ok(offset >= 0);
   assert.equal(schema.slice(offset, offset + migration.length), migration);
+});
+
+test("bootstrap schema contains the exact board placement preference migration", () => {
+  const offset = schema.indexOf(placementMigration);
+  assert.ok(offset >= 0);
+  assert.equal(schema.slice(offset, offset + placementMigration.length), placementMigration);
+  assert.match(placementMigration, /board_placement TEXT NOT NULL DEFAULT 'zoom'/);
+  assert.match(placementMigration, /CHECK \(board_placement IN \('zoom', 'direct'\)\)/);
 });
 
 test("starting strength is one-time evidence and existing accounts are not opted into bots", () => {
@@ -35,6 +44,7 @@ test("adaptive queue snapshots identity, rules, rating provenance, and preferenc
   assert.match(migration, /match_pool = 'registered-rated'[\s\S]*player_key LIKE 'user:%'/);
   assert.match(preflight, /idx_matchmaking_adaptive_waiting/);
   assert.match(preflight, /player_initial_rating_claims/);
+  assert.match(preflight, /player_rating_preferences_board_placement_check/);
 });
 
 test("polling preserves queue age and prefilters eligible candidates before the lock cap", () => {
