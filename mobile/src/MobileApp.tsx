@@ -1,5 +1,5 @@
 import { ChevronLeft } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { GameRoom } from "@/components/game/GameRoom";
@@ -23,6 +23,7 @@ import { MobileHome } from "./MobileHome";
 import { MobileProfile } from "./MobileProfile";
 import { MobileShell } from "./MobileShell";
 import { MobileSplash } from "./MobileSplash";
+import { updateNativeChrome } from "./nativeChrome";
 import { usePathname, useRouter, useSearchParams } from "./next-navigation";
 import { MobileThemeProvider } from "./theme";
 
@@ -47,6 +48,13 @@ function PushedScreen({ children }: { children: React.ReactNode }) {
   );
 }
 
+function NativeChromeHidden({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    updateNativeChrome({ activeRoute: null, tabs: [], type: "state", visible: false });
+  }, []);
+  return children;
+}
+
 function MobileRoute() {
   const pathname = usePathname();
   const search = useSearchParams();
@@ -58,10 +66,10 @@ function MobileRoute() {
   const sharedGame = route.match(/^\/shared-game\/([0-9a-f-]+)$/i);
   const size = Number(search.get("size"));
 
-  if (game) return <GameRoom gameId={game[1]} />;
-  if (sharedGame) return <SharedGameView token={sharedGame[1]} />;
+  if (game) return <NativeChromeHidden><GameRoom gameId={game[1]} /></NativeChromeHidden>;
+  if (sharedGame) return <NativeChromeHidden><SharedGameView token={sharedGame[1]} /></NativeChromeHidden>;
   if (route === "/login" || route === "/register") {
-    return <MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} />;
+    return <NativeChromeHidden><MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} /></NativeChromeHidden>;
   }
   if (review) {
     return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview gameId={review[1]} /></div></MobileShell>;

@@ -5,8 +5,14 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
+import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
 import type { RecentGame } from "@/lib/stats/statsService";
 import styles from "./review.module.css";
+
+function signed(value: number) {
+  const rounded = Math.round(value);
+  return rounded > 0 ? `+${rounded}` : String(rounded);
+}
 
 export function ReviewGuide() {
   const { user } = useAuth();
@@ -50,13 +56,22 @@ export function ReviewGuide() {
             <p className={styles.empty}>{copy.empty}</p>
           ) : (
             <div className={styles.gameList}>
-              {games.map((game) => (
-                <Link className={styles.gameRow} href={href(`/review/${game.gameId}`)} key={game.gameId}>
-                  <span className={`${styles.result} ${styles[game.result]}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}</span>
-                  <span><strong>{game.boardSize}×{game.boardSize} {copy.versus} {game.opponentName}</strong><small>{new Date(game.finishedAt).toLocaleDateString(locale)} · {game.gameResult ?? copy.finished}</small></span>
-                  <span className={styles.open}>{copy.analyze}</span>
-                </Link>
-              ))}
+              {games.map((game) => {
+                const rating = getRecentGameRatingPresentation(game);
+                return (
+                  <Link className={styles.gameRow} href={href(`/review/${game.gameId}`)} key={game.gameId}>
+                    <span className={`${styles.result} ${styles[game.result]}`}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : copy.drawShort}</span>
+                    <span>
+                      <strong>{game.opponentName}</strong>
+                      <small>{game.boardSize}×{game.boardSize} · {dictionary.timeControls[game.timeControl].name} · {new Date(game.finishedAt).toLocaleDateString(locale)}</small>
+                      <small>{game.gameResult ?? copy.finished}</small>
+                    </span>
+                    <span className={rating.kind === "change" && rating.value > 0 ? "is-positive" : rating.kind === "change" && rating.value < 0 ? "is-negative" : styles.open}>
+                      {rating.kind === "change" ? signed(rating.value) : copy.analyze}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>
