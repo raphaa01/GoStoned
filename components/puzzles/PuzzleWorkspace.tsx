@@ -408,6 +408,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 onIntersectionClick={submitMove}
                 previewColor={puzzle.toPlay}
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
+                touchMagnifier
               />
             </div>
 

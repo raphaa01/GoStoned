@@ -6,6 +6,7 @@ import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
+  touchLensLayout,
   TOUCH_LENS_RADIUS,
   touchLensCoordinates,
 } from "@/lib/client/precisionPlacement";
@@ -32,12 +33,15 @@ type GoBoardProps = {
   previewColor?: Stone;
   precisionRevision: string;
   hintMove?: Position | null;
+  touchMagnifier?: boolean;
 };
 
 type TouchLens = {
   pointerId: number;
   position: Position;
   left: number;
+  placement: "above" | "below";
+  tetherOffsetX: number;
   top: number;
   revision: string;
 };
@@ -110,6 +114,7 @@ export function GoBoard({
   previewColor = "black",
   precisionRevision,
   hintMove = null,
+  touchMagnifier = false,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
   const copy = dictionary.game;
@@ -152,7 +157,7 @@ export function GoBoard({
     return boardPositionFromClientPoint(clientX, clientY, board.getBoundingClientRect(), boardSize);
   };
 
-  const preciseTouchEnabled = () => boardSize === 19
+  const preciseTouchEnabled = () => (boardSize === 19 || touchMagnifier)
     && interactionMode === "play"
     && !disabled
     && window.matchMedia("(pointer: coarse) and (max-width: 620px)").matches;
@@ -171,7 +176,7 @@ export function GoBoard({
   useEffect(() => {
     clearTouchGesture();
     touchLensRef.current = null;
-  }, [precisionRevision, boardSize, disabled, interactionMode]);
+  }, [precisionRevision, boardSize, disabled, interactionMode, touchMagnifier]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -188,11 +193,11 @@ export function GoBoard({
     const position = positionAt(clientX, clientY);
     if (!board || !position) return;
     const bounds = board.getBoundingClientRect();
+    const layout = touchLensLayout(clientX, clientY, bounds, window.innerHeight);
     const lens = {
       pointerId,
       position,
-      left: clientX - bounds.left,
-      top: clientY - bounds.top,
+      ...layout,
       revision: precisionRevision,
     };
     touchLensRef.current = lens;
@@ -334,7 +339,12 @@ export function GoBoard({
       {visibleTouchLens ? (
         <div
           className="touch-magnifier"
-          style={{ "--touch-x": `${visibleTouchLens.left}px`, "--touch-y": `${visibleTouchLens.top}px` } as React.CSSProperties}
+          data-placement={visibleTouchLens.placement}
+          style={{
+            "--lens-x": `${visibleTouchLens.left}px`,
+            "--touch-y": `${visibleTouchLens.top}px`,
+            "--tether-offset-x": `${visibleTouchLens.tetherOffsetX}px`,
+          } as React.CSSProperties}
         >
           <TouchMagnifier board={boardState} center={visibleTouchLens.position} previewColor={previewColor} />
         </div>
