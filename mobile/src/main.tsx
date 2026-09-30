@@ -6,11 +6,15 @@ import "@/app/globals.css";
 import "@/app/redesign.css";
 import "./mobile.css";
 import { MobileApp } from "./MobileApp";
+import { installNativeChromeBridge } from "./nativeChrome";
 import { installMobileFetchBridge } from "./runtime";
 
 installMobileFetchBridge();
-document.documentElement.dataset.mobilePlatform = Capacitor.getPlatform();
+installNativeChromeBridge();
+const mobilePlatform = Capacitor.getPlatform();
+document.documentElement.dataset.mobilePlatform = mobilePlatform;
 document.documentElement.dataset.mobileApp = "true";
+if (mobilePlatform === "ios") document.documentElement.dataset.nativeTabBar = "true";
 
 void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
   const opened = new URL(url);

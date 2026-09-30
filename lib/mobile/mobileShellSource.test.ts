@@ -19,15 +19,20 @@ test("the native bundle uses its app shell instead of the website chrome", () =>
   assert.match(shell, /mobile-play-dock/);
 });
 
-test("mobile chrome is fixed, inset-safe, responsive, and only glassy on iOS", () => {
+test("mobile chrome is inset-safe, responsive, and delegates iOS glass to UIKit", () => {
   const css = source("mobile", "src", "mobile.css");
+  const sceneDelegate = source("ios", "App", "App", "SceneDelegate.swift");
 
   assert.match(css, /\.mobile-tab-bar\s*\{[\s\S]*?position:\s*fixed/);
   assert.match(css, /env\(safe-area-inset-bottom/);
   assert.match(css, /@media\s*\(min-width:\s*760px\)/);
   assert.match(css, /@media\s*\(max-width:\s*370px\)/);
-  assert.match(css, /data-mobile-platform="ios"[\s\S]*?backdrop-filter/);
-  assert.doesNotMatch(css, /data-mobile-platform="android"[\s\S]*?backdrop-filter/);
+  assert.match(css, /data-native-tab-bar="true"[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(css, /backdrop-filter/);
+  assert.match(sceneDelegate, /UITabBar\(\)/);
+  assert.match(sceneDelegate, /nativeTabBar\.isTranslucent = true/);
+  assert.match(sceneDelegate, /GoStoneBridgeViewController\(\)/);
+  assert.doesNotMatch(sceneDelegate, /UIGlassEffect|UIBlurEffect/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });
 

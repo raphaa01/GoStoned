@@ -1,4 +1,10 @@
 :root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
   --mobile-safe-top: env(safe-area-inset-top, 0px);
   --mobile-safe-right: env(safe-area-inset-right, 0px);
   --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -14,13 +20,19 @@
   --mobile-accent-soft: #dce8e1;
   --mobile-bg: #f5f2eb;
   --mobile-surface: #faf8f3;
+  --mobile-surface-secondary: #efebe2;
   --mobile-surface-raised: #fffdf9;
+  --mobile-surface-elevated: #fffdf9;
   --mobile-text: #171816;
-  --mobile-muted: #666961;
-  --mobile-subtle: #7b7e76;
+  --mobile-text-secondary: #575b54;
+  --mobile-muted: #6e7169;
+  --mobile-subtle: #858880;
   --mobile-border: rgb(23 24 22 / 10%);
   --mobile-border-strong: rgb(23 24 22 / 17%);
   --mobile-danger: #7b302c;
+  --mobile-positive: #315f4e;
+  --mobile-selected: #e2ebe5;
+  --mobile-nav: #fbf9f4;
   --mobile-board: #d4ae70;
 }
 
@@ -30,13 +42,19 @@ html[data-mobile-theme="dark"] {
   --mobile-accent-soft: #263a32;
   --mobile-bg: #111310;
   --mobile-surface: #181b17;
+  --mobile-surface-secondary: #20231f;
   --mobile-surface-raised: #20231f;
+  --mobile-surface-elevated: #272b26;
   --mobile-text: #f3f2ec;
+  --mobile-text-secondary: #c1c4bc;
   --mobile-muted: #a9aca4;
   --mobile-subtle: #858981;
   --mobile-border: rgb(255 255 255 / 8%);
   --mobile-border-strong: rgb(255 255 255 / 13%);
   --mobile-danger: #d58b84;
+  --mobile-positive: #91b5a5;
+  --mobile-selected: #263a32;
+  --mobile-nav: #181b17;
   --mobile-board: #bf965c;
 }
 
@@ -47,6 +65,7 @@ html[data-mobile-app="true"] {
 }
 
 html[data-mobile-app="true"][data-mobile-theme="dark"] { color-scheme: dark; }
+html[data-mobile-platform="ios"][data-native-tab-bar="true"] { --mobile-tab-height: 49px; }
 
 html[data-mobile-app="true"] body {
   --color-canvas: var(--mobile-bg);
@@ -54,7 +73,7 @@ html[data-mobile-app="true"] body {
   --color-surface: var(--mobile-surface);
   --color-surface-raised: var(--mobile-surface-raised);
   --color-ink: var(--mobile-text);
-  --color-ink-soft: var(--mobile-text);
+  --color-ink-soft: var(--mobile-text-secondary);
   --color-text-muted: var(--mobile-muted);
   --color-text-subtle: var(--mobile-subtle);
   --color-line: var(--mobile-border);
@@ -67,7 +86,7 @@ html[data-mobile-app="true"] body {
   --bg: var(--mobile-bg);
   --bg-deep: var(--mobile-surface);
   --panel: var(--mobile-surface-raised);
-  --panel-soft: var(--mobile-surface);
+  --panel-soft: var(--mobile-surface-secondary);
   --panel-raised: var(--mobile-surface-raised);
   --line: var(--mobile-border);
   --line-strong: var(--mobile-border-strong);
@@ -118,7 +137,7 @@ html[data-mobile-app="true"] a { min-height: 44px; }
 
 .mobile-tab-bar {
   align-items: stretch;
-  background: color-mix(in srgb, var(--mobile-surface-raised) 96%, transparent);
+  background: var(--mobile-nav);
   border-top: 1px solid var(--mobile-border);
   bottom: 0;
   display: grid;
@@ -155,12 +174,11 @@ html[data-mobile-app="true"] a { min-height: 44px; }
 
 .mobile-tab-bar a.is-active { color: var(--mobile-accent-strong); }
 
-html[data-mobile-platform="ios"] .mobile-tab-bar {
-  background: color-mix(in srgb, var(--mobile-surface-raised) 72%, transparent);
-  border-top-color: color-mix(in srgb, var(--mobile-text) 11%, transparent);
-  box-shadow: inset 0 1px rgb(255 255 255 / 12%);
-  -webkit-backdrop-filter: saturate(165%) blur(22px);
-  backdrop-filter: saturate(165%) blur(22px);
+html[data-mobile-platform="ios"][data-native-tab-bar="true"] .mobile-tab-bar { display: none; }
+
+html[data-mobile-platform="android"] .mobile-tab-bar a.is-active {
+  background: var(--mobile-selected);
+  border-radius: 10px;
 }
 
 .mobile-play-dock {
@@ -175,9 +193,7 @@ html[data-mobile-platform="ios"] .mobile-tab-bar {
 }
 
 html[data-mobile-platform="ios"] .mobile-play-dock {
-  background: color-mix(in srgb, var(--mobile-bg) 78%, transparent);
-  -webkit-backdrop-filter: saturate(150%) blur(18px);
-  backdrop-filter: saturate(150%) blur(18px);
+  background: var(--mobile-bg);
 }
 
 .mobile-play-action {
@@ -415,4 +431,260 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
   .mobile-splash, .mobile-splash__mark i, .mobile-splash__mark span, .mobile-progress-track i { animation: none !important; transition: none !important; }
   .mobile-splash__mark i { opacity: 1; }
   .mobile-splash__mark span { transform: none; }
+}
+
+/* Mobile design system v2: compact, board-led product surfaces. */
+.mobile-app-content h1,
+.mobile-app-content h2,
+.mobile-app-content h3 { text-wrap: balance; }
+
+.mobile-app-content :where(input, select, textarea) {
+  font-size: 16px;
+}
+
+.mobile-home {
+  gap: var(--space-4);
+  padding-top: var(--space-1);
+}
+
+.mobile-home-header { min-height: 52px; }
+.mobile-home-section { padding-top: var(--space-4); }
+.mobile-home-section h2 { font-size: 17px; }
+.mobile-puzzle-entry { padding: var(--space-3); }
+.mobile-learning-entry .mobile-section-heading small { letter-spacing: 0; text-transform: none; }
+.mobile-game-list > a { min-height: 52px; padding-block: var(--space-2); }
+
+.mobile-play-dock { padding-block: var(--space-2); }
+.mobile-play-action { height: 52px; }
+
+.mobile-pushed-screen { padding-top: 2px; }
+.mobile-back-button { margin-bottom: 0; }
+.mobile-tab-screen { padding-top: var(--space-3); }
+.mobile-tab-screen .product-page-title,
+.mobile-tab-screen .page-header h1 { font-size: 25px !important; }
+
+/* Play keeps the real preview, selectors and primary action in one viewport. */
+.mobile-app-content .play-experience {
+  gap: var(--space-3) !important;
+  max-width: 560px !important;
+  padding: 0 0 var(--space-3) !important;
+}
+
+.mobile-app-content .play-board-column {
+  gap: var(--space-2) !important;
+  justify-items: center;
+}
+
+.mobile-app-content .play-board-preview,
+.mobile-app-content .play-board-column .size-selector {
+  width: min(calc(100vw - var(--mobile-page-inline) - var(--mobile-page-inline)), 34dvh, 316px) !important;
+}
+
+.mobile-app-content .play-board-preview {
+  box-shadow: 0 8px 18px rgb(61 43 21 / 13%);
+}
+
+.mobile-app-content .size-selector { padding: 3px; }
+.mobile-app-content .size-selector button { min-height: 40px; }
+.mobile-app-content .play-pace-column { max-width: none; padding: 0 !important; width: 100%; }
+.mobile-app-content .play-pace-heading { border-bottom: 0; padding: 0; }
+.mobile-app-content .play-pace-heading h1 { font-size: 18px !important; margin: 0 0 var(--space-2) !important; }
+.mobile-app-content .time-selector { gap: var(--space-1) !important; }
+.mobile-app-content .time-selector button {
+  border-radius: 8px !important;
+  min-height: 48px;
+  padding: 7px var(--space-3) !important;
+}
+.mobile-app-content .time-selector button.is-selected { padding-left: 15px !important; }
+.mobile-app-content .time-selector strong { font-size: 14px !important; }
+.mobile-app-content .time-selector-copy span { font-size: 10px; }
+.mobile-app-content .play-matchmaking { margin-top: var(--space-2) !important; }
+.mobile-app-content .matchmaking-summary { display: none !important; }
+.mobile-app-content .play-match-status { margin-block: 0 var(--space-2); min-height: 0; }
+.mobile-app-content .play-match-status span { font-size: 12px; }
+.mobile-app-content .play-match-action { min-height: 50px !important; }
+.mobile-app-content .match-error { font-size: 12px; margin-block: var(--space-2) 0; }
+
+/* Puzzle hierarchy: title, mode, turn, board and task stay together. */
+.mobile-puzzle-screen > div { gap: var(--space-3) !important; padding: 0 0 var(--space-4) !important; }
+.mobile-puzzle-screen [class*="hero"] { padding: 0 0 var(--space-3) !important; }
+.mobile-puzzle-screen [class*="hero"] h1 { font-size: 25px !important; }
+.mobile-puzzle-screen [class*="tabs"] { gap: var(--space-6) !important; }
+.mobile-puzzle-screen [class*="tabs"] button { min-height: 42px !important; padding-bottom: var(--space-2) !important; }
+.mobile-puzzle-screen [class*="workspace"] { gap: var(--space-3) !important; }
+.mobile-puzzle-screen [class*="boardColumn"] { margin-inline: 0 !important; }
+.mobile-puzzle-screen [class*="positionMeta"] { margin: 0 0 var(--space-2) !important; padding-inline: 0 !important; }
+.mobile-puzzle-screen [class*="boardColumn"] .go-board-shell {
+  margin-inline: auto;
+  max-width: min(calc(100vw - var(--mobile-page-inline) - var(--mobile-page-inline)), calc(100dvh - 330px), 430px);
+}
+.mobile-puzzle-screen [class*="taskPrompt"] {
+  margin: var(--space-2) 0 0 !important;
+  padding-top: var(--space-2) !important;
+}
+.mobile-puzzle-screen [class*="panel"] {
+  gap: var(--space-2) !important;
+  min-height: 0 !important;
+  padding: var(--space-3) 0 0 !important;
+}
+.mobile-puzzle-screen [class*="catalog"] { background: transparent !important; border-radius: 0 !important; padding: 0 !important; }
+.mobile-puzzle-screen [class*="catalogHeader"] { padding: var(--space-3) 0 var(--space-2) !important; }
+.mobile-puzzle-screen [class*="catalogHeader"] h2 { font-size: 19px !important; }
+.mobile-puzzle-screen [class*="catalogHeader"] p { display: none; }
+.mobile-puzzle-screen [class*="categoryGrid"] { grid-template-columns: 1fr !important; }
+.mobile-puzzle-screen [class*="categoryGrid"] > button {
+  border-right: 0 !important;
+  min-height: 58px !important;
+  padding: var(--space-3) 0 !important;
+}
+.mobile-puzzle-screen [class*="categoryGrid"] > button > span > span { display: none; }
+.mobile-puzzle-screen [class*="categoryGrid"] strong { font-size: 15px !important; }
+
+/* Learning is a course list, not a game map. */
+.mobile-app-content .learning-guide { gap: var(--space-3) !important; }
+.mobile-app-content .learn-practice-entry {
+  align-items: center;
+  flex-direction: row;
+  gap: var(--space-3);
+  margin: 0 !important;
+  padding: var(--space-3) 0 !important;
+}
+.mobile-app-content .learn-practice-entry > div { min-width: 0; }
+.mobile-app-content .learn-practice-entry > div span { display: none; }
+.mobile-app-content .learn-practice-entry .button { min-height: 40px; padding-inline: var(--space-3); white-space: nowrap; }
+.mobile-app-content .learning-chapters { margin: 0 0 var(--space-3) !important; }
+.mobile-app-content .learn-map__header { margin-bottom: var(--space-3); padding: var(--space-3) 0 var(--space-4); }
+.mobile-app-content .learn-map__header h1 { font-size: 25px !important; }
+.mobile-app-content .learn-map__header > p { font-size: 12px; margin-block: var(--space-2); }
+.mobile-app-content .learn-pathway__item { min-height: 82px; }
+.mobile-app-content .learn-node,
+.mobile-app-content .learn-pathway__item:nth-of-type(even) .learn-node {
+  gap: var(--space-3);
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: var(--space-2) 0;
+}
+.mobile-app-content .learn-node__tile { height: 48px; width: 48px; }
+.mobile-app-content .learn-symbol,
+.mobile-app-content .learn-concept-preview { height: 40px; width: 40px; }
+.mobile-app-content .learn-node__copy { gap: 3px; }
+.mobile-app-content .learn-node__copy strong { font-size: 15px; }
+.mobile-app-content .learn-node__copy small { letter-spacing: .04em; text-transform: none; }
+.mobile-app-content .learn-lesson-focus__intro h1 { font-size: 25px; }
+.mobile-app-content .learn-lesson-focus__intro > p { font-size: 13px; }
+.mobile-app-content .learn-lesson-focus__workspace .lesson-board {
+  max-width: min(calc(100vw - var(--mobile-page-inline) - var(--mobile-page-inline)), calc(100dvh - 330px), 430px);
+}
+
+/* Review, leaderboard, friends and profile share compact record rows. */
+.mobile-review-screen [class*="hub"] { gap: var(--space-4) !important; padding: 0 0 var(--space-4) !important; }
+.mobile-review-screen [class*="hero"] { border-bottom: 1px solid var(--mobile-border); padding: 0 0 var(--space-3) !important; }
+.mobile-review-screen [class*="hero"]::before,
+.mobile-review-screen [class*="hero"]::after { display: none !important; }
+.mobile-review-screen [class*="gamePicker"] { background: transparent !important; border: 0 !important; padding: 0 !important; }
+.mobile-review-screen [class*="sectionHeading"] { margin-bottom: var(--space-2) !important; }
+.mobile-review-screen [class*="sectionHeading"] h2 { font-size: 17px !important; }
+.mobile-review-screen [class*="gameRow"] {
+  gap: var(--space-3) !important;
+  grid-template-columns: 32px minmax(0, 1fr) auto !important;
+  min-height: 66px;
+  padding: var(--space-2) 0 !important;
+}
+.mobile-review-screen [class*="gameRow"] > :last-child { display: block !important; font-size: 12px; }
+.mobile-review-screen [class*="gameRow"] small { font-size: 10px; }
+.mobile-review-screen [class*="result"] { border-radius: 7px !important; height: 30px !important; width: 30px !important; }
+
+.mobile-app-content .leaderboard-method {
+  display: -webkit-box;
+  margin-block: var(--space-2) var(--space-3);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.mobile-app-content .leaderboard-table tbody tr { min-height: 54px; }
+.mobile-app-content .leaderboard-viewer { margin-bottom: var(--space-2); }
+
+.mobile-app-content .friends-page { gap: var(--space-4) !important; }
+.mobile-app-content .friends-hero { min-height: 44px !important; padding: 0 !important; }
+.mobile-app-content .friends-hero h1 { font-size: 25px !important; }
+.mobile-app-content .friends-summary { border: 0 !important; display: flex !important; gap: 5px; padding: 0 !important; }
+.mobile-app-content .friends-summary strong { font-size: 18px !important; }
+.mobile-app-content .friends-summary span { font-size: 11px; }
+.mobile-app-content .player-search { border-bottom: 0 !important; padding: 0 !important; }
+.mobile-app-content .player-search > label { font-size: 14px; margin-bottom: var(--space-2); }
+.mobile-app-content .player-search__field { border-radius: 10px !important; }
+.mobile-app-content .player-search__field input { min-height: 46px; }
+.mobile-app-content .friends-card { border-radius: 0 !important; }
+.mobile-app-content .friends-card > header { padding-bottom: var(--space-2) !important; }
+.mobile-app-content .friends-card > header h2 { font-size: 17px !important; }
+.mobile-app-content .friend-row { min-height: 62px; padding-block: var(--space-2); }
+.mobile-app-content .friend-row__actions button { min-height: 40px; min-width: 40px; }
+
+.mobile-profile-screen { gap: var(--space-4); }
+.mobile-app-content .profile-header {
+  align-items: center !important;
+  display: flex !important;
+  margin-bottom: var(--space-3) !important;
+  min-height: 0 !important;
+  padding: var(--space-2) 0 var(--space-4) !important;
+}
+.mobile-app-content .profile-header__primary { align-items: center; display: flex; gap: var(--space-3); }
+.mobile-app-content .profile-header__primary > .profile-avatar-trigger { flex: 0 0 auto; }
+.mobile-app-content .profile-header__identity { text-align: left; }
+.mobile-app-content .profile-header__identity .section-kicker { display: none; }
+.mobile-app-content .profile-header__identity h1 { font-size: 23px !important; margin: 0 0 3px !important; }
+.mobile-app-content .profile-performance { background: transparent !important; border: 0 !important; overflow: visible; }
+.mobile-app-content .profile-rating-band {
+  background: var(--mobile-surface-secondary) !important;
+  border: 1px solid var(--mobile-border) !important;
+  border-radius: 11px !important;
+  color: var(--mobile-text) !important;
+  display: grid !important;
+  gap: var(--space-2);
+  padding: var(--space-4) !important;
+}
+.mobile-app-content .profile-rating-band::before { display: none !important; }
+.mobile-app-content .profile-rating-band__eyebrow,
+.mobile-app-content .profile-rating-band > p,
+.mobile-app-content .profile-rating-band > strong small { color: var(--mobile-muted) !important; margin: 0 !important; }
+.mobile-app-content .profile-rating-band > p { font-size: 11px; }
+.mobile-app-content .profile-rating-band > strong { font-size: 16px; margin: 0 !important; }
+.mobile-app-content .profile-rating-plot { padding: var(--space-4) 0 var(--space-2) !important; }
+.mobile-app-content .profile-rating-plot h2 { font-size: 19px !important; }
+.mobile-app-content .profile-performance .profile-metrics { display: grid; grid-template-columns: 1fr !important; }
+.mobile-app-content .profile-performance .profile-metrics article {
+  border-bottom: 1px solid var(--mobile-border);
+  border-right: 0 !important;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: var(--space-3) 0 !important;
+}
+.mobile-app-content .profile-history { background: transparent !important; border: 0 !important; margin-top: var(--space-4) !important; padding-inline: 0 !important; }
+.mobile-app-content .profile-history__heading h2 { font-size: 19px !important; }
+.mobile-app-content .history-game { min-height: 58px; padding-block: var(--space-2) !important; }
+
+.mobile-settings { gap: var(--space-3); padding-top: var(--space-4); }
+.mobile-theme-picker { background: var(--mobile-surface-secondary); }
+
+/* Modals and transient states use one calm system surface. */
+html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal) {
+  background: var(--mobile-surface-elevated);
+  border-color: var(--mobile-border);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+}
+
+@media (max-height: 740px) and (max-width: 759px) {
+  .mobile-app-content .play-board-preview,
+  .mobile-app-content .play-board-column .size-selector { width: min(calc(100vw - var(--mobile-page-inline) - var(--mobile-page-inline)), 30dvh, 250px) !important; }
+  .mobile-app-content .time-selector button { min-height: 44px; }
+  .mobile-app-content .play-match-action { min-height: 46px !important; }
+}
+
+@media (min-width: 760px) {
+  .mobile-app-content .play-board-preview,
+  .mobile-app-content .play-board-column .size-selector { width: min(40vw, 42dvh, 390px) !important; }
+  .mobile-app-content .play-pace-column { padding-top: var(--space-3) !important; }
+  .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(56vw, calc(100dvh - 230px), 680px); }
 }

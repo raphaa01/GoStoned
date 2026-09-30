@@ -114,6 +114,7 @@ export function MobileHome() {
       + ADVANCED_CHAPTERS.tactics.lessons.length
   );
   const learningPercent = Math.min(100, Math.round((learned / totalLessons) * 100));
+  const learningTitle = learned === 0 ? copy.startLearning : copy.continueLearning;
   const activeGame = currentData.matchmaking?.status === "matched" && currentData.matchmaking.gameId
     ? currentData.matchmaking
     : null;
@@ -176,7 +177,7 @@ export function MobileHome() {
 
       <section className="mobile-home-section mobile-learning-entry">
         <div className="mobile-section-heading">
-          <div><small>{dictionary.nav.learn}</small><h2>{copy.continueLearning}</h2></div>
+          <div><small>{copy.learningBasics}</small><h2>{learningTitle}</h2></div>
           <Link href={href("/learn")}><BookOpen aria-hidden="true" size={19} /><ArrowRight aria-hidden="true" size={17} /></Link>
         </div>
         <div className="mobile-progress-track" aria-label={copy.lessonsComplete.replace("{done}", String(learned)).replace("{total}", String(totalLessons))}><i style={{ width: `${learningPercent}%` }} /></div>
