@@ -34,7 +34,8 @@ test("mobile puzzles put the problem label and hint directly before a viewport-b
 
 test("all puzzle categories share one catalog without provenance callouts", () => {
   assert.match(workspace, /\{categories\.map\(categoryButton\)\}/);
-  assert.match(workspace, /sources: \["life_and_death", "gokyo_life", "gokyo_death"\]/);
+  assert.match(workspace, /sources: PUZZLE_CATALOG_SOURCES\.life_and_death/);
+  assert.match(workspace, /setSelectedProblemIndex\(resumePuzzleIndex\(puzzles, category\)\)/);
   assert.match(workspace, /id: "ko"/);
   assert.doesNotMatch(workspace, /id: "gokyo_(?:life|death|ko)"/);
   assert.doesNotMatch(workspace, /historicalHeader|historicalSource|historicalCollectionDescription/);

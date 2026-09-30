@@ -31,11 +31,16 @@ import {
   type PuzzlePly,
 } from "@/lib/puzzles/types";
 import { localPuzzleViewportSize } from "@/lib/puzzles/puzzleViewport";
+import {
+  PUZZLE_CATALOG_SOURCES,
+  puzzlesForCatalogCategory,
+  resumePuzzleIndex,
+  type PuzzleCatalogCategory,
+} from "@/lib/puzzles/categoryProgress";
 import styles from "./puzzles.module.css";
 
 type PuzzleApiResponse = PuzzleHub & { actor: string };
 type Feedback = "correct" | "incorrect" | "continue" | null;
-type CatalogCategory = "life_and_death" | "tesuji" | "capturing_race" | "endgame" | "ko";
 
 function PuzzleLoading({ label }: { label: string }) {
   return (
@@ -70,7 +75,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   );
   const [mode, setMode] = useState<PuzzleKind>(initialMode);
   const [hub, setHub] = useState<PuzzleHub | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<PuzzleCatalogCategory | null>(null);
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -157,20 +162,9 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     return () => window.clearInterval(timer);
   }, [hub?.categoryCounts, hub?.expectedPerCategory, hub?.status, load, mode, puzzles]);
 
-  const selectedSourceCategories: readonly PuzzleCategory[] = selectedCategory === "life_and_death"
-    ? ["life_and_death", "gokyo_life", "gokyo_death"]
-    : selectedCategory === "ko"
-      ? ["gokyo_ko"]
-      : selectedCategory ? [selectedCategory] : [];
-  const categoryPuzzles = puzzles.filter((entry) => (
-    entry.category !== null && selectedSourceCategories.includes(entry.category)
-  )).sort((left, right) => {
-    const leftSource = left.category ? selectedSourceCategories.indexOf(left.category) : -1;
-    const rightSource = right.category ? selectedSourceCategories.indexOf(right.category) : -1;
-    return leftSource - rightSource
-      || (left.collectionOrder ?? 0) - (right.collectionOrder ?? 0)
-      || left.id.localeCompare(right.id);
-  });
+  const categoryPuzzles = selectedCategory
+    ? puzzlesForCatalogCategory(puzzles, selectedCategory)
+    : [];
   const puzzle = mode === "daily"
     ? puzzles[0] ?? null
     : categoryPuzzles[selectedProblemIndex] ?? null;
@@ -283,9 +277,9 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     clearTransientState();
   }
 
-  function chooseCategory(category: CatalogCategory) {
+  function chooseCategory(category: PuzzleCatalogCategory) {
     setSelectedCategory(category);
-    setSelectedProblemIndex(0);
+    setSelectedProblemIndex(resumePuzzleIndex(puzzles, category));
     clearTransientState();
   }
 
@@ -302,11 +296,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   const categories = [
-    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription, sources: ["life_and_death", "gokyo_life", "gokyo_death"] as const },
-    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription, sources: ["tesuji"] as const },
-    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription, sources: ["capturing_race"] as const },
-    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription, sources: ["endgame"] as const },
-    { id: "ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription, sources: ["gokyo_ko"] as const },
+    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription, sources: PUZZLE_CATALOG_SOURCES.life_and_death },
+    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription, sources: PUZZLE_CATALOG_SOURCES.tesuji },
+    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription, sources: PUZZLE_CATALOG_SOURCES.capturing_race },
+    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription, sources: PUZZLE_CATALOG_SOURCES.endgame },
+    { id: "ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription, sources: PUZZLE_CATALOG_SOURCES.ko },
   ];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
