@@ -15,6 +15,7 @@
     "mobile:add:ios": "npm run mobile:build && cap add ios --packagemanager SPM",
     "mobile:add:android": "npm run mobile:build && cap add android",
     "mobile:katago:android": "tsx scripts/build-katago-android.ts",
+    "mobile:katago:ios": "tsx scripts/build-katago-ios.ts",
     "mobile:android:build": "tsx scripts/build-mobile-android.ts",
     "mobile:doctor": "tsx scripts/mobile-doctor.ts",
     "mobile:splash": "node scripts/generate-mobile-splash.mjs",
