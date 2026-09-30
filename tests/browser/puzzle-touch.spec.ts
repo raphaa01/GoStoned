@@ -13,6 +13,10 @@ function dailyBoard() {
 
 async function installDailyPuzzleHarness(page: Page) {
   const attempts: unknown[] = [];
+  let releaseAttemptResponse!: () => void;
+  const attemptResponseGate = new Promise<void>((resolve) => {
+    releaseAttemptResponse = resolve;
+  });
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -78,6 +82,7 @@ async function installDailyPuzzleHarness(page: Page) {
       && url.pathname === `/api/puzzles/${PUZZLE_ID}/attempt`
     ) {
       attempts.push(request.postDataJSON());
+      await attemptResponseGate;
       await fulfill({
         ok: true,
         actor: PLAYER_KEY,
@@ -106,12 +111,12 @@ async function installDailyPuzzleHarness(page: Page) {
 
     await fulfill({ ok: false, code: "not_found", error: "Unexpected test request." }, 404);
   });
-  return attempts;
+  return { attempts, releaseAttemptResponse };
 }
 
 test("daily 13x13 puzzles cancel outside drags and place only valid releases", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.endsWith("-touch"), "Touch interaction is mobile-only.");
-  const attempts = await installDailyPuzzleHarness(page);
+  const harness = await installDailyPuzzleHarness(page);
   await page.goto("/de/puzzles");
 
   const board = page.locator('.go-board[data-size="13"]');
@@ -156,7 +161,7 @@ test("daily 13x13 puzzles cancel outside drags and place only valid releases", a
   await expect(magnifier).toBeHidden();
   await touchSession.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await page.waitForTimeout(250);
-  expect(attempts).toEqual([]);
+  expect(harness.attempts).toEqual([]);
 
   await touchSession.send("Input.dispatchTouchEvent", {
     type: "touchStart",
@@ -175,6 +180,10 @@ test("daily 13x13 puzzles cancel outside drags and place only valid releases", a
   await touchSession.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await touchSession.detach();
 
-  await expect.poll(() => attempts.length).toBe(1);
-  expect(attempts[0]).toEqual({ x: 0, y: 0, revision: 0 });
+  await expect(firstIntersection.locator(".stone--black")).toHaveCount(1);
+  await expect(firstIntersection).toHaveClass(/is-pending-move/);
+  await expect.poll(() => harness.attempts.length).toBe(1);
+  expect(harness.attempts[0]).toEqual({ x: 0, y: 0, revision: 0 });
+  harness.releaseAttemptResponse();
+  await expect(firstIntersection).not.toHaveClass(/is-pending-move/);
 });

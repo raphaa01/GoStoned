@@ -11,7 +11,7 @@ const styles = readFileSync(
   "utf8",
 );
 
-test("mobile puzzles put the task and hint directly before a viewport-bound board", () => {
+test("mobile puzzles put the problem label and hint directly before a viewport-bound board", () => {
   assert.match(
     styles,
     /@media \(max-width: 900px\)[\s\S]*?\.workspace \{ grid-template-columns: minmax\(0, 1fr\); \}/,
@@ -27,6 +27,8 @@ test("mobile puzzles put the task and hint directly before a viewport-bound boar
   assert.match(workspace, /CircleHelp/);
   assert.match(workspace, /\/api\/puzzles\/\$\{puzzle\.id\}\/hint/);
   assert.match(workspace, /hintMove=\{hintMove\}/);
+  assert.match(workspace, /pendingMove=\{pendingMove\}/);
+  assert.doesNotMatch(workspace, /copy\.choose(?:Variation)?Move/);
   assert.match(workspace, /<GoBoard[\s\S]*?touchMagnifier[\s\S]*?\/>/);
 });
 
