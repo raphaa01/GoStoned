@@ -1634,8 +1634,20 @@ for (const locale of ["en", "de"] as const) {
         }],
       });
       await expect(page.locator(".go-board-shell")).toHaveAttribute("data-touch-lens", "true");
-      await expect(page.locator(".touch-magnifier")).toBeVisible();
+      const magnifier = page.locator(".touch-magnifier");
+      await expect(magnifier).toBeVisible();
+      await expect(magnifier).toHaveAttribute("data-placement", /above|below/);
       await expect(page.locator(".touch-magnifier-crosshair")).toHaveCount(1);
+      const magnifierBounds = await magnifier.boundingBox();
+      const touchY = boardBounds.y + boardBounds.height / 2;
+      expect(magnifierBounds).not.toBeNull();
+      expect(
+        magnifierBounds
+          ? magnifierBounds.y + magnifierBounds.height <= touchY - 48
+            || magnifierBounds.y >= touchY + 48
+          : false,
+        "the touch lens must stay clear of the finger",
+      ).toBe(true);
       expect(harness.moveBodies).toEqual([]);
 
       await touchSession.send("Input.dispatchTouchEvent", {

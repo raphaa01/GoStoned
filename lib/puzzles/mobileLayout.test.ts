@@ -27,6 +27,7 @@ test("mobile puzzles put the task and hint directly before a viewport-bound boar
   assert.match(workspace, /CircleHelp/);
   assert.match(workspace, /\/api\/puzzles\/\$\{puzzle\.id\}\/hint/);
   assert.match(workspace, /hintMove=\{hintMove\}/);
+  assert.match(workspace, /<GoBoard[\s\S]*?touchMagnifier[\s\S]*?\/>/);
 });
 
 test("all puzzle categories share one catalog without provenance callouts", () => {

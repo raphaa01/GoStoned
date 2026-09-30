@@ -2441,16 +2441,41 @@ a {
   min-width: 0;
 }
 
+.go-board-shell[data-touch-lens="true"] .go-board {
+  overflow: visible;
+}
+
 .touch-magnifier {
+  --touch-lens-gap: 56px;
   filter: drop-shadow(0 10px 16px rgb(32 20 8 / .28));
   height: 168px;
-  left: clamp(88px, var(--touch-x), calc(100% - 88px));
+  left: var(--lens-x);
   pointer-events: none;
   position: absolute;
-  top: clamp(176px, calc(var(--touch-y) - 24px), calc(100% - 8px));
-  transform: translate(-50%, -100%);
+  top: var(--touch-y);
+  transform: translate(-50%, calc(-100% - var(--touch-lens-gap)));
   width: 168px;
   z-index: 20;
+}
+
+.touch-magnifier[data-placement="below"] {
+  transform: translate(-50%, var(--touch-lens-gap));
+}
+
+.touch-magnifier::after {
+  background: rgb(255 255 255 / .9);
+  box-shadow: 0 0 0 1px rgb(40 89 63 / .38);
+  content: "";
+  height: calc(var(--touch-lens-gap) - 8px);
+  left: calc(50% + var(--tether-offset-x));
+  position: absolute;
+  top: calc(100% + 4px);
+  width: 2px;
+}
+
+.touch-magnifier[data-placement="below"]::after {
+  bottom: calc(100% + 4px);
+  top: auto;
 }
 
 .touch-magnifier-board {

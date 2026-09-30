@@ -4,6 +4,7 @@ import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
+  touchLensLayout,
   touchLensCoordinates,
 } from "./precisionPlacement";
 
@@ -36,4 +37,26 @@ test("the touch lens always describes a centered seven by seven neighborhood", (
   assert.equal(corner[0], null);
   assert.deepEqual(corner[24], { x: 0, y: 0 });
   assert.deepEqual(corner[48], { x: 3, y: 3 });
+});
+
+test("the touch lens stays clear of the finger and flips at the top edge", () => {
+  const bounds = { left: 24, top: 200, width: 342 };
+  assert.deepEqual(touchLensLayout(195, 500, bounds, 844), {
+    left: 171,
+    placement: "above",
+    tetherOffsetX: 0,
+    top: 300,
+  });
+  assert.deepEqual(touchLensLayout(50, 220, bounds, 844), {
+    left: 92,
+    placement: "below",
+    tetherOffsetX: -66,
+    top: 20,
+  });
+  assert.deepEqual(touchLensLayout(366, 700, bounds, 844), {
+    left: 250,
+    placement: "above",
+    tetherOffsetX: 72,
+    top: 500,
+  });
 });

@@ -13,10 +13,11 @@ function section(value: string, start: string, end: string): string {
   return value.slice(startIndex, endIndex);
 }
 
-test("the 19x19 overview opens a guarded press-and-drag touch lens", () => {
+test("mobile boards open a guarded press-and-drag touch lens", () => {
   const board = source("components/game/GoBoard.tsx");
   assert.match(board, /event\.pointerType !== "touch"/);
   assert.match(board, /\(pointer: coarse\) and \(max-width: 620px\)/);
+  assert.match(board, /boardSize === 19 \|\| touchMagnifier/);
   assert.match(board, /onPointerDownCapture=\{handleBoardPointerDown\}/);
   assert.match(board, /onPointerMoveCapture=\{handleBoardPointerMove\}/);
   assert.match(board, /onPointerUpCapture=\{handleBoardPointerEnd\}/);
@@ -46,6 +47,9 @@ test("responsive CSS keeps the full board fitted and the magnifier local", () =>
   const styles = source("app/globals.css");
   assert.match(styles, /\.go-board\[data-size="19"\]\[data-interaction-mode="play"\]\s*\{[\s\S]*?max-width: 100%;[\s\S]*?width: 100%;/);
   assert.match(styles, /\.touch-magnifier\s*\{[\s\S]*?height: 168px;[\s\S]*?pointer-events: none;/);
+  assert.match(styles, /--touch-lens-gap: 56px/);
+  assert.match(styles, /\.touch-magnifier\[data-placement="below"\]/);
+  assert.match(styles, /\.touch-magnifier::after[\s\S]*?--tether-offset-x/);
   assert.match(styles, /\.touch-magnifier-board[\s\S]*?border-radius: 50%/);
   assert.doesNotMatch(styles, /data-precision/);
   assert.match(styles, /\.intersection\.is-precision-preview::after[\s\S]*?border: 3px solid[\s\S]*?box-shadow:/);
