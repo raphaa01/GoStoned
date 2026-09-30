@@ -4,6 +4,7 @@ import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
+  isClientPointInsideBoard,
   touchLensLayout,
   touchLensCoordinates,
 } from "./precisionPlacement";
@@ -11,6 +12,16 @@ import {
 test("the board grid is symmetrical inside its wooden surface", () => {
   assert.equal(BOARD_GRID_INSET_RATIO, 0.07);
   assert.equal(BOARD_GRID_INSET_RATIO * 2 + BOARD_GRID_SPAN_RATIO, 1);
+});
+
+test("touch points leave the board instead of snapping back to its edge", () => {
+  const bounds = { left: 24, top: 100, width: 342, height: 342 };
+  assert.equal(isClientPointInsideBoard(24, 100, bounds), true);
+  assert.equal(isClientPointInsideBoard(366, 442, bounds), true);
+  assert.equal(isClientPointInsideBoard(23.9, 200, bounds), false);
+  assert.equal(isClientPointInsideBoard(366.1, 200, bounds), false);
+  assert.equal(isClientPointInsideBoard(100, 99.9, bounds), false);
+  assert.equal(isClientPointInsideBoard(100, 442.1, bounds), false);
 });
 
 test("board-surface touch coordinates map to the nearest Go intersection", () => {

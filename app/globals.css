@@ -2419,6 +2419,8 @@ a {
 }
 
 .go-board {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   aspect-ratio: 1;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 28%),
@@ -2432,6 +2434,7 @@ a {
   container-type: inline-size;
   overflow: hidden;
   position: relative;
+  user-select: none;
   width: 100%;
 }
 

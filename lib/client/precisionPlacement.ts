@@ -20,6 +20,17 @@ export type TouchLensLayout = {
   top: number;
 };
 
+export function isClientPointInsideBoard(
+  clientX: number,
+  clientY: number,
+  bounds: { left: number; top: number; width: number; height: number },
+): boolean {
+  return clientX >= bounds.left
+    && clientX <= bounds.left + bounds.width
+    && clientY >= bounds.top
+    && clientY <= bounds.top + bounds.height;
+}
+
 export function touchLensLayout(
   clientX: number,
   clientY: number,

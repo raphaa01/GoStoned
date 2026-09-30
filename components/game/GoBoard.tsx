@@ -6,6 +6,7 @@ import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
+  isClientPointInsideBoard,
   touchLensLayout,
   TOUCH_LENS_RADIUS,
   touchLensCoordinates,
@@ -127,6 +128,7 @@ export function GoBoard({
     pointerId: number;
     startX: number;
     startY: number;
+    cancelled: boolean;
     moved: boolean;
     multiTouch: boolean;
     timer: number;
@@ -217,12 +219,18 @@ export function GoBoard({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      cancelled: false,
       moved: false,
       multiTouch: false,
       timer: 0,
     };
     gesture.timer = window.setTimeout(() => {
-      if (touchGestureRef.current !== gesture || gesture.moved || gesture.multiTouch) return;
+      if (
+        touchGestureRef.current !== gesture
+        || gesture.cancelled
+        || gesture.moved
+        || gesture.multiTouch
+      ) return;
       boardRef.current?.setPointerCapture(gesture.pointerId);
       suppressTouchClickUntilRef.current = performance.now() + 1_000;
       updateTouchLens(gesture.pointerId, gesture.startX, gesture.startY);
@@ -234,6 +242,14 @@ export function GoBoard({
     const gesture = touchGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (touchLensRef.current?.pointerId === event.pointerId) {
+      const boardBounds = boardRef.current?.getBoundingClientRect();
+      if (!boardBounds || !isClientPointInsideBoard(event.clientX, event.clientY, boardBounds)) {
+        gesture.cancelled = true;
+        suppressTouchClickUntilRef.current = performance.now() + 1_000;
+        event.preventDefault();
+        clearTouchLens();
+        return;
+      }
       event.preventDefault();
       updateTouchLens(event.pointerId, event.clientX, event.clientY);
       return;
@@ -267,7 +283,7 @@ export function GoBoard({
       if (!boardState[y]?.[x]) onIntersectionClick(x, y);
       return;
     }
-    if (gesture.moved || gesture.multiTouch || touchPointersRef.current.size > 0) {
+    if (gesture.cancelled || gesture.moved || gesture.multiTouch || touchPointersRef.current.size > 0) {
       suppressTouchClickUntilRef.current = performance.now() + 750;
       event.preventDefault();
       return;

@@ -18,6 +18,7 @@ import { accountRegistrationPath } from "@/lib/auth/returnPath";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
+import type { Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
   DAILY_PUZZLE_CYCLE_LENGTH,
@@ -76,6 +77,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [error, setError] = useState<string | null>(null);
   const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
+  const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
   const puzzles = useMemo(() => hub?.puzzles ?? [], [hub?.puzzles]);
 
   const redirectAccountFailure = useCallback((requestError: unknown) => {
@@ -189,6 +191,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   async function submitMove(x: number, y: number) {
     if (!puzzle || !playerKey || busy || puzzle.solved || branchLine) return;
+    setPendingMove({ x, y, color: puzzle.toPlay });
     setBusy(true);
     setHintMove(null);
     setError(null);
@@ -220,6 +223,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       if (redirectAccountFailure(attemptError)) return;
       setError(localizedApiError(dictionary, attemptError, copy.attemptFailed));
     } finally {
+      setPendingMove(null);
       setBusy(false);
     }
   }
@@ -250,6 +254,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     setBranchExplanation(null);
     setError(null);
     setHintMove(null);
+    setPendingMove(null);
   }
 
   function changeMode(nextMode: PuzzleKind) {
@@ -391,7 +396,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                   <span className={styles.problemLabel}>{mode === "daily"
                     ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
                     : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
-                  <p>{puzzle.variationProgress.length > 0 ? copy.chooseVariationMove : copy.chooseMove}</p>
                 </div>
                 {!puzzle.solved && !branchLine ? (
                   <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
@@ -406,6 +410,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
                 hintMove={hintMove}
                 onIntersectionClick={submitMove}
+                pendingMove={pendingMove}
                 previewColor={puzzle.toPlay}
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
                 touchMagnifier
@@ -418,7 +423,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                   <span className={styles.problemLabel}>{mode === "daily"
                     ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
                     : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
-                  <h2>{puzzle.variationProgress.length > 0 ? copy.chooseVariationMove : copy.chooseMove}</h2>
                 </div>
                 {!puzzle.solved && !branchLine ? (
                   <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">

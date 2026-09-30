@@ -13,6 +13,10 @@ function dailyBoard() {
 
 async function installDailyPuzzleHarness(page: Page) {
   const attempts: unknown[] = [];
+  let releaseAttemptResponse!: () => void;
+  const attemptResponseGate = new Promise<void>((resolve) => {
+    releaseAttemptResponse = resolve;
+  });
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -78,6 +82,7 @@ async function installDailyPuzzleHarness(page: Page) {
       && url.pathname === `/api/puzzles/${PUZZLE_ID}/attempt`
     ) {
       attempts.push(request.postDataJSON());
+      await attemptResponseGate;
       await fulfill({
         ok: true,
         actor: PLAYER_KEY,
@@ -106,16 +111,17 @@ async function installDailyPuzzleHarness(page: Page) {
 
     await fulfill({ ok: false, code: "not_found", error: "Unexpected test request." }, 404);
   });
-  return attempts;
+  return { attempts, releaseAttemptResponse };
 }
 
-test("daily 13x13 puzzles use the offset press-and-drag touch lens", async ({ page }, testInfo) => {
+test("daily 13x13 puzzles cancel outside drags and place only valid releases", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.endsWith("-touch"), "Touch interaction is mobile-only.");
-  const attempts = await installDailyPuzzleHarness(page);
+  const harness = await installDailyPuzzleHarness(page);
   await page.goto("/de/puzzles");
 
   const board = page.locator('.go-board[data-size="13"]');
   await expect(board).toBeVisible();
+  expect(await board.evaluate((element) => getComputedStyle(element).userSelect)).toBe("none");
   await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const boardBounds = await board.boundingBox();
   const firstIntersection = board.getByRole("gridcell").first();
@@ -145,6 +151,26 @@ test("daily 13x13 puzzles use the offset press-and-drag touch lens", async ({ pa
 
   await touchSession.send("Input.dispatchTouchEvent", {
     type: "touchMove",
+    touchPoints: [{ x: boardBounds.x - 12, y: touchY }],
+  });
+  await expect(magnifier).toBeHidden();
+  await touchSession.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: touchX, y: touchY }],
+  });
+  await expect(magnifier).toBeHidden();
+  await touchSession.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(250);
+  expect(harness.attempts).toEqual([]);
+
+  await touchSession.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: touchX, y: touchY }],
+  });
+  await expect(magnifier).toBeVisible();
+
+  await touchSession.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
     touchPoints: [{
       x: firstIntersectionBounds.x + firstIntersectionBounds.width / 2,
       y: firstIntersectionBounds.y + firstIntersectionBounds.height / 2,
@@ -154,6 +180,10 @@ test("daily 13x13 puzzles use the offset press-and-drag touch lens", async ({ pa
   await touchSession.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await touchSession.detach();
 
-  await expect.poll(() => attempts.length).toBe(1);
-  expect(attempts[0]).toEqual({ x: 0, y: 0, revision: 0 });
+  await expect(firstIntersection.locator(".stone--black")).toHaveCount(1);
+  await expect(firstIntersection).toHaveClass(/is-pending-move/);
+  await expect.poll(() => harness.attempts.length).toBe(1);
+  expect(harness.attempts[0]).toEqual({ x: 0, y: 0, revision: 0 });
+  harness.releaseAttemptResponse();
+  await expect(firstIntersection).not.toHaveClass(/is-pending-move/);
 });
