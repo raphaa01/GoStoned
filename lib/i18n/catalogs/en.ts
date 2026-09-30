@@ -446,7 +446,7 @@ export const en = {
     gokyoLifeDescription: "103 classical problems: find the move that makes the local group live.",
     gokyoDeath: "Gokyo Shumyo · Death",
     gokyoDeathDescription: "71 classical problems: remove the defender's eye space.",
-    gokyoKo: "Gokyo Shumyo · Ko",
+    gokyoKo: "Ko",
     gokyoKoDescription: "The first 26 classical ko problems: find the strongest local result.",
     historicalSource: "Historical board position · 1812",
     catalogProgress: "{ready} of {total} ready",

@@ -108,6 +108,9 @@ function oauthPool(options: {
           rowCount: 1,
         };
       }
+      if (statement.startsWith("UPDATE player_rating_preferences")) {
+        return { rows: [], rowCount: 1 };
+      }
       if (statement.startsWith("INSERT INTO user_sessions")) return { rows: [], rowCount: 1 };
       if (statement.startsWith("WITH expired_sessions AS MATERIALIZED")) return { rows: [], rowCount: 0 };
       if (statement.startsWith("DELETE FROM oauth_registration_intents WHERE")) {
@@ -219,6 +222,7 @@ test("username completion creates the account atomically with the player's chose
     350,
     0.06,
     "glicko2-v1-tau-0.5",
+    "zoom",
   ]);
   assert.equal(
     database.statements.some(({ sql }) => sql.startsWith("DELETE FROM oauth_registration_intents WHERE")),

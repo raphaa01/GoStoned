@@ -9,6 +9,10 @@ import {
   type StartingStrength,
 } from "@/lib/rating/preferences";
 import {
+  DEFAULT_BOARD_PLACEMENT,
+  type BoardPlacementPreference,
+} from "@/lib/boardPlacement";
+import {
   GLICKO2_ALGORITHM_VERSION,
 } from "@/lib/rating/glicko2";
 import {
@@ -78,6 +82,7 @@ export async function registerAccount(
   username: string,
   password: string,
   startingStrength: StartingStrength = { estimate: "unspecified", knownRank: null },
+  boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
 ): Promise<Registration> {
   const passwordHash = await hashPassword(password);
   const initialRating = initialRatingForStartingStrength(startingStrength);
@@ -89,9 +94,9 @@ export async function registerAccount(
          RETURNING id, username, display_name, avatar_style
        ), preference AS (
          INSERT INTO player_rating_preferences
-           (user_id,display_preference,bot_match_preference,handicap_preference,
+           (user_id,display_preference,bot_match_preference,handicap_preference,board_placement,
             preference_revision)
-         SELECT id,'both','never','even-only',1 FROM account
+         SELECT id,'both','never','even-only',$10,1 FROM account
        ), rating_state AS (
          INSERT INTO player_glicko2_ratings
            (user_id,player_key,rating,rating_deviation,volatility,rated_game_count,
@@ -117,6 +122,7 @@ export async function registerAccount(
         GLICKO2_INITIAL_RATING_DEVIATION,
         GLICKO2_INITIAL_VOLATILITY,
         GLICKO2_ALGORITHM_VERSION,
+        boardPlacement,
       ],
     ).catch((error: unknown) => {
       const authError = registrationDatabaseError(error);

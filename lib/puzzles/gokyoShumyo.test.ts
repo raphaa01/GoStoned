@@ -6,6 +6,7 @@ import {
   GOKYO_SHUMYO_SOURCE,
   gokyoShumyoPuzzles,
 } from "./gokyoShumyo";
+import { localPuzzleViewportSize } from "./puzzleViewport";
 
 test("the static Gokyo Shumyo catalog contains 200 ordered historical positions", () => {
   const puzzles = gokyoShumyoPuzzles();
@@ -39,6 +40,26 @@ test("every KataGo line is legal from its historical 19x19 position", () => {
       if (!moved.ok) break;
       board = moved.board;
       color = color === "black" ? "white" : "black";
+    }
+  }
+});
+
+test("every generated answer stays inside its historical local diagram", () => {
+  for (const puzzle of gokyoShumyoPuzzles()) {
+    assert.ok(localPuzzleViewportSize(puzzle.board) < 19, puzzle.sourceId);
+    const occupied = puzzle.board.flatMap((row, y) => row.flatMap((stone, x) => (
+      stone ? [{ x, y }] : []
+    )));
+    const maxX = Math.max(...occupied.map(({ x }) => x));
+    const maxY = Math.max(...occupied.map(({ y }) => y));
+    const generatedMoves = [
+      ...puzzle.variation.mainLine,
+      ...puzzle.variation.refutations.flatMap(({ userMove, reply }) => (
+        reply ? [userMove, reply] : [userMove]
+      )),
+    ];
+    for (const move of generatedMoves) {
+      assert.ok(move.x <= maxX && move.y <= maxY, `${puzzle.sourceId}: ${move.move}`);
     }
   }
 });

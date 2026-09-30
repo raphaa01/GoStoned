@@ -17,7 +17,8 @@ test("mobile boards open a guarded press-and-drag touch lens", () => {
   const board = source("components/game/GoBoard.tsx");
   assert.match(board, /event\.pointerType !== "touch"/);
   assert.match(board, /\(pointer: coarse\) and \(max-width: 620px\)/);
-  assert.match(board, /boardSize === 19 \|\| touchMagnifier/);
+  assert.match(board, /boardPlacement === "zoom"/);
+  assert.match(board, /useBoardPlacement\(\)/);
   assert.match(board, /onPointerDownCapture=\{handleBoardPointerDown\}/);
   assert.match(board, /onPointerMoveCapture=\{handleBoardPointerMove\}/);
   assert.match(board, /onPointerUpCapture=\{handleBoardPointerEnd\}/);
@@ -34,6 +35,8 @@ test("mobile boards open a guarded press-and-drag touch lens", () => {
   assert.match(board, /isClientPointInsideBoard\(event\.clientX, event\.clientY, boardBounds\)/);
   assert.match(board, /gesture\.cancelled = true;[\s\S]+clearTouchLens\(\)/);
   assert.match(board, /gesture\.cancelled \|\| gesture\.moved/);
+  assert.match(board, /viewportSize/);
+  assert.match(board, /data-visible-size=\{visibleBoardSize\}/);
 });
 
 test("the touch lens keeps keyboard activation and submits only on release", () => {

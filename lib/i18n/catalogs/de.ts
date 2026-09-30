@@ -448,7 +448,7 @@ export const de = {
     gokyoLifeDescription: "103 klassische Aufgaben: Finde den Zug, der die lokale Gruppe leben lässt.",
     gokyoDeath: "Gokyo Shumyo · Töten",
     gokyoDeathDescription: "71 klassische Aufgaben: Nimm der verteidigenden Gruppe den Augenraum.",
-    gokyoKo: "Gokyo Shumyo · Ko",
+    gokyoKo: "Ko",
     gokyoKoDescription: "Die ersten 26 klassischen Ko-Aufgaben: Finde das stärkste lokale Ergebnis.",
     historicalSource: "Historische Brettstellung · 1812",
     catalogProgress: "{ready} von {total} bereit",

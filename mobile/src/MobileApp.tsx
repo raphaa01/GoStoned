@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { GameRoom } from "@/components/game/GameRoom";
+import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { SharedGameView } from "@/components/game/SharedGameView";
 import { PlayWorkspace } from "@/components/game/PlayWorkspace";
 import { I18nProvider, useI18n } from "@/components/i18n/I18nProvider";
@@ -99,7 +100,7 @@ export function MobileApp() {
   return (
     <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>
-        <MobileThemeProvider><MobileRoot /></MobileThemeProvider>
+        <BoardPlacementProvider><MobileThemeProvider><MobileRoot /></MobileThemeProvider></BoardPlacementProvider>
       </AuthProvider>
     </I18nProvider>
   );

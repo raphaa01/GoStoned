@@ -712,7 +712,7 @@ export const fr = {
     "gokyoLifeDescription": "103 problèmes classiques : trouvez le coup qui fait vivre le groupe local.",
     "gokyoDeath": "Gokyo Shumyo · Mort",
     "gokyoDeathDescription": "71 problèmes classiques : supprimez l'espace d'yeux du défenseur.",
-    "gokyoKo": "Gokyo Shumyo · Ko",
+    "gokyoKo": "Ko",
     "gokyoKoDescription": "Les 26 premiers problèmes classiques de ko : trouvez le meilleur résultat local.",
     "historicalSource": "Position historique · 1812",
     "catalogProgress": "{ready} de {total} prêt",

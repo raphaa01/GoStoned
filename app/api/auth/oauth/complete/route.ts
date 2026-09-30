@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       request.cookies.get(OAUTH_REGISTRATION_COOKIE)?.value,
       registration.username,
       registration.startingStrength,
+      registration.boardPlacement,
     );
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {

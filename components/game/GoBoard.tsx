@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { useBoardPlacement } from "@/components/game/BoardPlacementProvider";
 import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
@@ -34,7 +35,7 @@ type GoBoardProps = {
   previewColor?: Stone;
   precisionRevision: string;
   hintMove?: Position | null;
-  touchMagnifier?: boolean;
+  viewportSize?: number;
 };
 
 type TouchLens = {
@@ -115,9 +116,10 @@ export function GoBoard({
   previewColor = "black",
   precisionRevision,
   hintMove = null,
-  touchMagnifier = false,
+  viewportSize,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
+  const { preference: boardPlacement } = useBoardPlacement();
   const copy = dictionary.game;
   const instructionsId = useId();
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -142,12 +144,13 @@ export function GoBoard({
     const firstStone = boardState.flat().findIndex(Boolean);
     return firstStone >= 0 ? firstStone : 0;
   });
-  const gridLines = Array.from({ length: boardSize });
-  const gridPosition = (value: number) => `${(value / (boardSize - 1)) * 100}%`;
+  const visibleBoardSize = Math.min(boardSize, Math.max(2, viewportSize ?? boardSize));
+  const gridLines = Array.from({ length: visibleBoardSize });
+  const gridPosition = (value: number) => `${(value / (visibleBoardSize - 1)) * 100}%`;
   const intersectionPosition = (value: number) =>
     `${(
       BOARD_GRID_INSET_RATIO
-      + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO
+      + (value / (visibleBoardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
   const selectedDeadStoneKeys = new Set(
@@ -156,10 +159,10 @@ export function GoBoard({
   const positionAt = (clientX: number, clientY: number) => {
     const board = boardRef.current;
     if (!board) return null;
-    return boardPositionFromClientPoint(clientX, clientY, board.getBoundingClientRect(), boardSize);
+    return boardPositionFromClientPoint(clientX, clientY, board.getBoundingClientRect(), visibleBoardSize);
   };
 
-  const preciseTouchEnabled = () => (boardSize === 19 || touchMagnifier)
+  const preciseTouchEnabled = () => boardPlacement === "zoom"
     && interactionMode === "play"
     && !disabled
     && window.matchMedia("(pointer: coarse) and (max-width: 620px)").matches;
@@ -178,7 +181,7 @@ export function GoBoard({
   useEffect(() => {
     clearTouchGesture();
     touchLensRef.current = null;
-  }, [precisionRevision, boardSize, disabled, interactionMode, touchMagnifier]);
+  }, [precisionRevision, visibleBoardSize, disabled, interactionMode, boardPlacement]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -204,7 +207,7 @@ export function GoBoard({
     };
     touchLensRef.current = lens;
     setTouchLens(lens);
-    setFocusIndex(position.y * boardSize + position.x);
+    setFocusIndex(position.y * visibleBoardSize + position.x);
   }
 
   const handleBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -328,22 +331,23 @@ export function GoBoard({
     >
       <div className="go-board-viewport">
         <div
-          aria-colcount={boardSize}
+          aria-colcount={visibleBoardSize}
           aria-describedby={instructionsId}
           aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
-          aria-rowcount={boardSize}
+          aria-rowcount={visibleBoardSize}
           className="go-board"
           ref={boardRef}
           style={
             {
-              "--board-size": boardSize,
+              "--board-size": visibleBoardSize,
               "--board-grid-inset": `${BOARD_GRID_INSET_RATIO * 100}%`,
               "--board-grid-span": `${BOARD_GRID_SPAN_RATIO * 100}%`,
-              "--grid-step": `${100 / (boardSize - 1)}%`,
-              "--intersection-size": `${(BOARD_GRID_SPAN_RATIO * 100) / (boardSize - 1)}%`,
+              "--grid-step": `${100 / (visibleBoardSize - 1)}%`,
+              "--intersection-size": `${(BOARD_GRID_SPAN_RATIO * 100) / (visibleBoardSize - 1)}%`,
             } as React.CSSProperties
           }
           data-size={boardSize}
+          data-visible-size={visibleBoardSize}
           data-interaction-mode={interactionMode}
           data-preview-color={previewColor}
           onPointerCancelCapture={handleBoardPointerCancel}
@@ -412,7 +416,7 @@ export function GoBoard({
         {gridLines.map((_, y) => (
           <div aria-rowindex={y + 1} key={`row-${y}`} role="row">
             {gridLines.map((__, x) => {
-              const index = y * boardSize + x;
+              const index = y * visibleBoardSize + x;
               const serverStone = boardState[y]?.[x] ?? null;
               const pendingStone = !serverStone
                 && pendingMove?.x === x
@@ -489,7 +493,7 @@ export function GoBoard({
                     const nextIndex = moveBoardFocus(
                       index,
                       event.key,
-                      boardSize,
+                      visibleBoardSize,
                       event.ctrlKey || event.metaKey,
                     );
                     if (isBoardNavigationKey(event.key)) event.preventDefault();

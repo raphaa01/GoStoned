@@ -1,4 +1,4 @@
-import type { BoardSize, Position } from "@/lib/game/types";
+import type { Position } from "@/lib/game/types";
 
 /**
  * The playable grid occupies one shared, square region inside the wooden board.
@@ -66,7 +66,7 @@ export function boardPositionFromClientPoint(
   clientX: number,
   clientY: number,
   bounds: { left: number; top: number; width: number; height: number },
-  boardSize: BoardSize,
+  boardSize: number,
 ): Position | null {
   if (bounds.width <= 0 || bounds.height <= 0) return null;
   const xRatio = (
@@ -82,7 +82,7 @@ export function boardPositionFromClientPoint(
   };
 }
 
-export function touchLensCoordinates(center: Position, boardSize: BoardSize): Array<Position | null> {
+export function touchLensCoordinates(center: Position, boardSize: number): Array<Position | null> {
   const coordinates: Array<Position | null> = [];
   for (let dy = -TOUCH_LENS_RADIUS; dy <= TOUCH_LENS_RADIUS; dy += 1) {
     for (let dx = -TOUCH_LENS_RADIUS; dx <= TOUCH_LENS_RADIUS; dx += 1) {

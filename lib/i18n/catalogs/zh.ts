@@ -712,7 +712,7 @@ export const zh = {
     "gokyoLifeDescription": "103道古典题：找出使局部棋块做活的要点。",
     "gokyoDeath": "棋经众妙 · 杀",
     "gokyoDeathDescription": "71道古典题：破坏防守方的眼位。",
-    "gokyoKo": "棋经众妙 · 劫",
+    "gokyoKo": "劫",
     "gokyoKoDescription": "前26道古典劫题：找出最佳局部结果。",
     "historicalSource": "历史局面 · 1812",
     "catalogProgress": "{ready} 的 {total} 已准备好",
