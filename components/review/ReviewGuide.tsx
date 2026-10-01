@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
+import { localizedApiError } from "@/lib/i18n/dictionary";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
 import type { RecentGame } from "@/lib/stats/statsService";
 import styles from "./review.module.css";
@@ -20,6 +21,8 @@ export function ReviewGuide() {
   const copy = dictionary.analysisReview;
   const [games, setGames] = useState<RecentGame[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -28,9 +31,14 @@ export function ReviewGuide() {
     fetch("/api/profile", { cache: "no-store", signal: controller.signal })
       .then((response) => readApi<{ recentGames?: RecentGame[] }>(response))
       .then((body) => {
-        if (active) setGames((body.recentGames ?? []).filter((game) => game.moveCount > 0));
+        if (!active) return;
+        setGames((body.recentGames ?? []).filter((game) => game.moveCount > 0));
+        setError(null);
       })
-      .catch(() => undefined)
+      .catch((loadError: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        setError(localizedApiError(dictionary, loadError, dictionary.apiErrors.internal_error));
+      })
       .finally(() => {
         if (active) setLoaded(true);
       });
@@ -38,7 +46,7 @@ export function ReviewGuide() {
       active = false;
       controller.abort();
     };
-  }, [user]);
+  }, [dictionary, retryRevision, user]);
 
   return (
     <div className={styles.hub}>
@@ -52,7 +60,16 @@ export function ReviewGuide() {
             <h2 id="review-games-title">{copy.recent}</h2>
             <Link href={href("/play")}>{copy.play}</Link>
           </div>
-          {!loaded ? <div className={styles.loading} role="status">…</div> : games.length === 0 ? (
+          {!loaded ? <div className={styles.loading} role="status">…</div> : error ? (
+            <div className={styles.empty} role="alert">
+              <p>{error}</p>
+              <button className="button button--secondary" onClick={() => {
+                setLoaded(false);
+                setError(null);
+                setRetryRevision((current) => current + 1);
+              }} type="button">{copy.retry}</button>
+            </div>
+          ) : games.length === 0 ? (
             <p className={styles.empty}>{copy.empty}</p>
           ) : (
             <div className={styles.gameList}>

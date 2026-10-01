@@ -16,9 +16,14 @@ test("bootstrap schema contains the exact preferences and adaptive-pool migratio
 });
 
 test("bootstrap schema contains the exact board placement preference migration", () => {
-  const offset = schema.indexOf(placementMigration);
+  const normalizedSchema = schema.replaceAll("\r\n", "\n");
+  const normalizedMigration = placementMigration.replaceAll("\r\n", "\n");
+  const offset = normalizedSchema.indexOf(normalizedMigration);
   assert.ok(offset >= 0);
-  assert.equal(schema.slice(offset, offset + placementMigration.length), placementMigration);
+  assert.equal(
+    normalizedSchema.slice(offset, offset + normalizedMigration.length),
+    normalizedMigration,
+  );
   assert.match(placementMigration, /board_placement TEXT NOT NULL DEFAULT 'zoom'/);
   assert.match(placementMigration, /CHECK \(board_placement IN \('zoom', 'direct'\)\)/);
 });

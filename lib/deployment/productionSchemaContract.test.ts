@@ -19,6 +19,10 @@ const currentSnapshot: ProductionSchemaSnapshot = {
     "CHECK (policy_version IN ('starting-strength-v1', 'starting-strength-v2'))",
   puzzleCategoryConstraint:
     "CHECK (board_size = 19 AND category IN ('gokyo_life', 'gokyo_death', 'gokyo_ko'))",
+  boardPlacementDataType: "text",
+  boardPlacementDefault: "'zoom'::text",
+  boardPlacementNullable: "NO",
+  boardPlacementConstraint: "CHECK (board_placement IN ('zoom', 'direct'))",
   takebackRls: true,
 };
 
@@ -67,5 +71,25 @@ test("rejects a puzzle schema that cannot store the historical catalog", () => {
         "CHECK (board_size = 13 AND category IN ('life_and_death', 'tesuji'))",
     }),
     /historical puzzle-category constraint/,
+  );
+});
+
+test("rejects a missing or incomplete board-placement preference", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      boardPlacementDataType: null,
+      boardPlacementDefault: null,
+      boardPlacementNullable: null,
+      boardPlacementConstraint: null,
+    }),
+    /board-placement preference column/,
+  );
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      boardPlacementConstraint: "CHECK (board_placement = 'zoom')",
+    }),
+    /board-placement preference constraint/,
   );
 });

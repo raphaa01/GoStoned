@@ -446,7 +446,7 @@ async function ensureGokyoShumyoCatalog(): Promise<boolean> {
        DELETE FROM puzzle_attempts attempt
         USING changed
         WHERE attempt.puzzle_id = changed.id
-       RETURNING attempt.id
+       RETURNING attempt.puzzle_id
      )
      SELECT
        (SELECT COUNT(*) FROM upserted) AS upserted_count,
