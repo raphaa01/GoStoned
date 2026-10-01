@@ -10,12 +10,15 @@ test("converts board coordinates to GTP without the I column", () => {
   assert.equal(toGtpCoordinate(9, { x: null, y: null, isPass: true }), "pass");
 });
 
-test("classifies engine loss with a deliberately narrow brilliant threshold", () => {
-  assert.equal(classifyMove(0.005, true, 0.1), "brilliant");
-  assert.equal(classifyMove(0.01, false, 0), "great");
-  assert.equal(classifyMove(0.08, false, 0), "inaccuracy");
-  assert.equal(classifyMove(0.18, false, 0), "mistake");
-  assert.equal(classifyMove(0.3, false, 0), "blunder");
+test("reserves brilliant and blunder for strong, corroborated evidence", () => {
+  assert.equal(classifyMove(0.003, true, 0.16, 0.3, 160), "brilliant");
+  assert.equal(classifyMove(0.003, true, 0.16, 0.3, 4), "best");
+  assert.equal(classifyMove(0.01, false, 0, 0.5, 160), "great");
+  assert.equal(classifyMove(0.12, false, 0, 2, 160), "inaccuracy");
+  assert.equal(classifyMove(0.2, false, 0, 3, 160), "mistake");
+  assert.equal(classifyMove(0.4, false, 0, 6, 160), "blunder");
+  assert.equal(classifyMove(0.4, false, 0, 6, 4), "inaccuracy");
+  assert.equal(classifyMove(0.4, false, 0, 2, 160), "mistake");
 });
 
 test("compares a played move with KataGo alternatives from the mover perspective", () => {

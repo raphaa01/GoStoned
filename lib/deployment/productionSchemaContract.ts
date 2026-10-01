@@ -12,6 +12,8 @@ export type ProductionSchemaSnapshot = Readonly<{
   boardPlacementDefault: string | null;
   boardPlacementNullable: string | null;
   boardPlacementConstraint: string | null;
+  analysisProgressDataType: string | null;
+  analysisProgressConstraint: string | null;
   takebackRls: boolean;
 }>;
 
@@ -28,6 +30,18 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (snapshot.analysisProgressDataType !== "jsonb") {
+    throw new Error(
+      "Production database schema is stale: progressive analysis column.",
+    );
+  }
+  for (const fragment of ["status = 'running'", "progress IS NOT NULL"]) {
+    requireFragment(
+      snapshot.analysisProgressConstraint,
+      fragment,
+      "progressive analysis result constraint",
+    );
+  }
   if (
     snapshot.boardPlacementDataType !== "text"
     || snapshot.boardPlacementNullable !== "NO"

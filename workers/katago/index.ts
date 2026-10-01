@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { hostname } from "node:os";
-import { buildGameAnalysis } from "@/lib/analysis/evaluate";
 import type { AnalysisInput } from "@/lib/analysis/types";
 import { closePool, query } from "@/lib/db";
+import { completeClaimedAnalysis } from "./analysis";
 import { publishWorkerHeartbeat } from "./bot";
 import { KataGoEngine } from "./engine";
 import { runPuzzleLoop, type PuzzleLoopState } from "./puzzles";
@@ -13,6 +13,8 @@ type ClaimedJob = { id: string; input: AnalysisInput; attempts: number };
 const workerId = `${hostname()}:${randomUUID()}`;
 const pollMs = Math.max(500, Number(process.env.KATAGO_POLL_INTERVAL_MS) || 2_000);
 const maxVisits = Math.max(20, Number(process.env.KATAGO_MAX_VISITS) || 20);
+const previewVisits = Math.max(1, Number(process.env.KATAGO_PREVIEW_VISITS) || 4);
+const chunkMoves = Math.max(1, Number(process.env.KATAGO_ANALYSIS_CHUNK_MOVES) || 10);
 const engineVersion = process.env.KATAGO_VERSION || "v1.17.0";
 const modelName = process.env.KATAGO_MODEL_NAME || "b10c384h6nbttflrs";
 const engineOptions = {
@@ -54,20 +56,13 @@ async function claimJob(): Promise<ClaimedJob | null> {
 }
 
 async function finishJob(job: ClaimedJob) {
-  const turns = await analysisEngine.analyze(job.id, job.input, maxVisits);
-  const result = buildGameAnalysis(job.input, turns, {
-    version: engineVersion,
-    model: modelName,
-    visitsPerTurn: maxVisits,
+  await completeClaimedAnalysis(analysisEngine, job, workerId, {
+    engineVersion,
+    modelName,
+    maxVisits,
+    previewVisits,
+    chunkMoves,
   });
-  await query(
-    `UPDATE game_analysis_jobs
-        SET status = 'completed', result = $2::jsonb, completed_at = NOW(),
-            lease_expires_at = NULL, error_code = NULL, error_message = NULL,
-            updated_at = NOW()
-      WHERE id = $1 AND status = 'running' AND worker_id = $3`,
-    [job.id, JSON.stringify(result), workerId],
-  );
 }
 
 async function failJob(job: ClaimedJob, error: unknown) {
@@ -75,7 +70,8 @@ async function failJob(job: ClaimedJob, error: unknown) {
   const finalAttempt = job.attempts >= 3;
   await query(
     `UPDATE game_analysis_jobs
-        SET status = $2, error_code = $3, error_message = $4,
+        SET status = $2, result = NULL, progress = NULL,
+            error_code = $3, error_message = $4,
             lease_expires_at = NULL, worker_id = NULL, updated_at = NOW()
       WHERE id = $1 AND status = 'running' AND worker_id = $5`,
     [job.id, finalAttempt ? "failed" : "queued", "katago_analysis_failed", message.slice(0, 1_000), workerId],

@@ -21,6 +21,8 @@ async function main() {
         engineVersion,
         modelName,
         maxVisits: Math.max(20, Number(process.env.KATAGO_MAX_VISITS) || 160),
+        previewVisits: Math.max(1, Number(process.env.KATAGO_PREVIEW_VISITS) || 4),
+        chunkMoves: Math.max(1, Number(process.env.KATAGO_ANALYSIS_CHUNK_MOVES) || 10),
         jobId: targetId,
       });
       break;
