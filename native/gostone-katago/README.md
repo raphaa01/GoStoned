@@ -14,15 +14,18 @@ builds it, and `npm run mobile:android:build` includes that step. Generated
 sources, build trees and executables stay ignored so Git contains a reproducible
 recipe instead of opaque binaries.
 
-The Java plugin verifies the 38 MB model, permits one job at a time, caps each
-position at 80 visits, streams the actual turn result, supports cancellation,
-and stops at Android's severe thermal state. It runs a one-visit preview first,
-so the review can open after ten contiguous moves (or after 28 seconds), then
-replaces those positions with an adaptive quality pass. A 90-second safety
-boundary preserves and returns every usable preview instead of discarding the
-review. An instrumentation test runs real 9×9 inference through the local
-protocol. Real-phone performance and battery measurements are still required
-before a store release.
+The Java plugin verifies the 38 MB model, warms one engine session and keeps it
+alive between reviews, permits one job at a time, caps each selected position
+at 80 visits, streams the actual turn result, supports cancellation, and stops
+at Android's severe thermal state. It first requests positions 0–10 with one
+visit, a three-move PV and no policy payload, then continues the preview in
+16-position blocks. Every usable block is persisted by the mobile client. Only
+the largest fixed-player win-rate or score swings receive the adaptive
+900-visit quality budget. The review can therefore open after ten contiguous
+moves (or after 28 seconds). A 90-second safety boundary preserves and returns
+every usable preview instead of discarding the review. An instrumentation test
+runs real 9×9 inference through the local protocol. Real-phone performance and
+battery measurements are still required before a store release.
 
 ## iOS runtime
 
@@ -42,9 +45,11 @@ plugin remains explicitly fail-closed, so normal web and source-only builds do
 not claim that local inference is available.
 
 The iOS plugin runs the analysis protocol in process, verifies the model hash,
-permits one job, streams preview and quality replacements, preserves partial
-results at the 90-second limit, and stops on cancellation, backgrounding, or
-serious thermal pressure. It requires iOS 16 because KataGo's current MPSGraph
+retains a warm engine between reviews, and uses the same 0–10-first,
+16-position preview chunks and selective quality pass as Android. It permits
+one job, streams preview and quality replacements, preserves partial results at
+the 90-second limit, and stops on cancellation, backgrounding, or serious
+thermal pressure. It requires iOS 16 because KataGo's current MPSGraph
 implementation uses APIs introduced there.
 
 The Simulator slice is a compile/link contract only. Xcode 26.6's simulator

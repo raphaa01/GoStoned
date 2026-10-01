@@ -29,6 +29,8 @@ interface GoStoneKataGoPlugin {
 const NativeKataGo = registerPlugin<GoStoneKataGoPlugin>("GoStoneKataGo");
 const DATABASE_NAME = "gostone-mobile-analysis-v1";
 const STORE_NAME = "analyses";
+const PREVIEW_PERSIST_INTERVAL = 16;
+const QUALITY_PERSIST_INTERVAL = 4;
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -145,6 +147,14 @@ export async function runNativeKataGoAnalysis(
   let latestVisitsPerTurn = 1;
   let lastPublishedMoves = 0;
   let lastPublishedRefined = 0;
+  let lastPersistedMoves = 0;
+  let lastPersistedRefined = 0;
+  let persistence = Promise.resolve();
+  const queuePersistence = (result: GameAnalysisResult) => {
+    persistence = persistence
+      .catch(() => undefined)
+      .then(() => storeResult(game, result));
+  };
   const publish = (force: boolean) => {
     if (!latestProgress) return;
     const ordered = [...turns.values()].sort((left, right) => left.turnNumber - right.turnNumber);
@@ -156,7 +166,7 @@ export async function runNativeKataGoAnalysis(
     if (!result) return;
     const completedMoves = result.moves.length;
     const refinedMoves = latestProgress.phase === "quality"
-      ? Math.min(input.moves.length, Math.max(0, latestProgress.completedTurns - 1))
+      ? Math.min(input.moves.length, Math.max(0, latestProgress.completedTurns))
       : 0;
     const previewThreshold = Math.min(10, input.moves.length);
     if (!force && completedMoves < previewThreshold) return;
@@ -169,6 +179,14 @@ export async function runNativeKataGoAnalysis(
       refinedMoves,
       totalMoves: input.moves.length,
     }));
+    const firstPreviewReady = lastPersistedMoves === 0 && completedMoves >= previewThreshold;
+    const previewChunkReady = completedMoves - lastPersistedMoves >= PREVIEW_PERSIST_INTERVAL;
+    const qualityChunkReady = refinedMoves - lastPersistedRefined >= QUALITY_PERSIST_INTERVAL;
+    if (force || firstPreviewReady || previewChunkReady || qualityChunkReady) {
+      lastPersistedMoves = completedMoves;
+      lastPersistedRefined = refinedMoves;
+      queuePersistence(result);
+    }
   };
   const listener = await NativeKataGo.addListener("progress", (progress) => {
     if (progress.analysisId !== analysisId) return;
@@ -196,6 +214,7 @@ export async function runNativeKataGoAnalysis(
       },
     );
     if (!partial) throw analysisError;
+    await persistence.catch(() => undefined);
     await storeResult(game, partial);
     return job(game, partial)!;
   } finally {
@@ -216,6 +235,7 @@ export async function runNativeKataGoAnalysis(
         visitsPerTurn: response.visitsPerTurn,
       });
   if (!result) throw new Error("KataGo did not finish enough positions for a review.");
+  await persistence.catch(() => undefined);
   await storeResult(game, result);
   return job(game, result)!;
 }
