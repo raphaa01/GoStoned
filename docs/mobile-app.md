@@ -100,8 +100,12 @@ in `docs/mobile-store-release.md`. The release bundle contains arm64 only.
 `Info.plist` includes the production API hostname and Capacitor's internal
 `localhost` asset hostname in `WKAppBoundDomains`. The release API remains
 `https://gostone.app`; the internal hostname does not make network requests to
-a development server. The app-bound navigation switch remains off until OAuth
-and link behavior is verified with the production account.
+a development server. The app-bound navigation switch remains off until the
+native OAuth callback and link behavior are verified with production accounts.
+Native Google and Apple sign-in uses the system browser, a verifier-bound
+one-use callback at `com.gostone.app://oauth`, and migration
+`043_mobile_oauth_handoffs.sql` to establish the existing HttpOnly session
+cookie in the bundled app. Provider sign-in still needs a live device test.
 
 ## KataGo native status
 

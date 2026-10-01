@@ -5,7 +5,7 @@ import { normalizeMobileApiOrigin, resolveMobileRequestUrl } from "./apiOrigin";
 test("normalizes the configured mobile API origin", () => {
   assert.equal(normalizeMobileApiOrigin(" https://play.gostone.example/ ", true), "https://play.gostone.example");
   assert.equal(normalizeMobileApiOrigin(undefined, true), "https://gostone.app");
-  assert.equal(normalizeMobileApiOrigin(undefined, false), "http://localhost:3000");
+  assert.equal(normalizeMobileApiOrigin(undefined, false), "https://gostone.app");
 });
 
 test("rejects unsafe or non-origin native API configuration", () => {

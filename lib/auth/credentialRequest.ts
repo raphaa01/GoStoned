@@ -58,8 +58,10 @@ export function assertAuthMutationRequest(
     .trim()
     .toLowerCase();
   const requestOrigin = request.headers.get("origin");
+  const nativeOrigin = requestOrigin === "capacitor://localhost"
+    || requestOrigin === "https://localhost";
   let originMatches = true;
-  if (requestOrigin) {
+  if (requestOrigin && !nativeOrigin) {
     try {
       const actualOrigin = exactRequestOrigin(requestOrigin);
       const expectedOrigin = expectedMutationOrigin(request);
@@ -73,7 +75,7 @@ export function assertAuthMutationRequest(
 
   if (
     (requireJson && contentType !== "application/json")
-    || request.headers.get("sec-fetch-site") === "cross-site"
+    || (request.headers.get("sec-fetch-site") === "cross-site" && !nativeOrigin)
     || !originMatches
   ) {
     throw new AuthError(

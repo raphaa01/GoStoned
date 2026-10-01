@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { delimiter, join } from "node:path";
@@ -20,6 +20,16 @@ function windowsJdk(): string | undefined {
   return firstExisting(releases);
 }
 
+function macJdk(): string | undefined {
+  try {
+    return execFileSync("/usr/libexec/java_home", ["-v", "21"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
 const androidHome = firstExisting([
   process.env.ANDROID_HOME,
   process.env.ANDROID_SDK_ROOT,
@@ -31,6 +41,7 @@ const androidHome = firstExisting([
 ]);
 const javaHome = firstExisting([
   process.env.JAVA_HOME,
+  platform() === "darwin" ? macJdk() : undefined,
   platform() === "win32" ? windowsJdk() : undefined,
   platform() === "win32" ? "C:\\Program Files\\Android\\Android Studio\\jbr" : undefined,
 ]);

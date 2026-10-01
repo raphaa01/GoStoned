@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { OAuthUsernameForm } from "@/components/auth/OAuthUsernameForm";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { GameRoom } from "@/components/game/GameRoom";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
@@ -70,7 +71,10 @@ function MobileRoute() {
   if (game) return <NativeChromeHidden><GameRoom gameId={game[1]} /></NativeChromeHidden>;
   if (sharedGame) return <NativeChromeHidden><SharedGameView token={sharedGame[1]} /></NativeChromeHidden>;
   if (route === "/login" || route === "/register") {
-    return <NativeChromeHidden><MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} /></NativeChromeHidden>;
+    return <NativeChromeHidden><MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} oauthError={search.get("oauthError")} /></NativeChromeHidden>;
+  }
+  if (route === "/register/username") {
+    return <NativeChromeHidden><main className="mobile-auth-screen" id="main-content"><OAuthUsernameForm returnTo={search.get("returnTo")} /></main></NativeChromeHidden>;
   }
   if (review) {
     return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview gameId={review[1]} /></div></MobileShell>;

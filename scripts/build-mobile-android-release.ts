@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,8 +21,18 @@ if (process.env.VITE_GOSTONE_API_URL && process.env.VITE_GOSTONE_API_URL !== "ht
 }
 
 const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || join(homedir(), "Library/Android/sdk");
-const javaHome = process.env.JAVA_HOME || join(homedir(), "Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home");
-if (!existsSync(sdk) || !existsSync(javaHome)) throw new Error("Android SDK or JDK 21 is unavailable.");
+let detectedJavaHome: string | undefined;
+if (process.platform === "darwin") {
+  try {
+    detectedJavaHome = execFileSync("/usr/libexec/java_home", ["-v", "21"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch { /* JAVA_HOME can still provide a supported JDK. */ }
+}
+const javaHome = process.env.JAVA_HOME || detectedJavaHome;
+if (!existsSync(sdk) || !javaHome || !existsSync(javaHome)) {
+  throw new Error("Android SDK or JDK 21 is unavailable.");
+}
 const environment = {
   ...process.env,
   ANDROID_HOME: sdk,

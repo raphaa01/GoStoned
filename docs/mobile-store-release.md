@@ -82,14 +82,19 @@ device architecture, model hash and dSYMs, then exports using Xcode 26's
 `artifacts/release/<version>-<build>/ios/`. Neither binaries nor signing
 material belong in Git.
 
-## Remaining validation outside the build
+## Native sign-in and remaining validation
 
-The current main exposes Google and Apple OAuth in the mobile sign-in UI, but
-its web OAuth callback lands on the website and does not hand a session back
-to the bundled app. Store release requires a native-safe OAuth handoff and
-live provider test; a successful Xcode/Gradle build does not validate this.
-Static game share URLs remain on `gostone.app`; native universal links are not
-enabled without a verified association file and the final signing identity.
+Google and Apple sign-in opens in the system browser. Their existing HTTPS
+callbacks issue a three-minute, one-use code bound to a verifier stored in the
+app. The custom URL callback `com.gostone.app://oauth` returns that code to the
+app, which exchanges it for the existing HttpOnly session or registration
+cookie. This requires migration `043_mobile_oauth_handoffs.sql` on production.
+The website continues to use its original callback and navigation. The
+browser-to-app flow still needs a live Google and Apple provider test on real
+devices; compiling the app does not verify provider configuration or cookie
+handling. Static game share URLs remain on `gostone.app`; native universal
+links are not enabled without a verified association file and the final
+signing identity.
 Real-phone battery, thermal, background, and full-game tests plus TestFlight
 and Play internal testing have not been performed by the build process.
 
@@ -100,7 +105,8 @@ npm run check:production-schema
 ```
 
 The check now verifies the schema and every numbered migration in the current
-repository, including `041_gokyo_shumyo_puzzles.sql` and
-`042_board_placement_preference.sql`. If migrations are missing, the authorized
+repository, including `041_gokyo_shumyo_puzzles.sql`,
+`042_board_placement_preference.sql`, and `043_mobile_oauth_handoffs.sql`.
+If migrations are missing, the authorized
 operator must use `npm run db:migrate` with the same safe connection, then rerun
 the check. No production migration runs during artifact builds.

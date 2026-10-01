@@ -50,6 +50,9 @@ const signedTeam = run("codesign", ["-dv", "--verbose=4", app], true);
 if (!signedTeam.includes(`TeamIdentifier=${team}`)) throw new Error("The archive uses an unexpected signing team.");
 const architectures = run("lipo", ["-archs", executable], true).trim();
 if (architectures !== "arm64") throw new Error(`The device archive has unexpected architectures: ${architectures}`);
+if (!readFileSync(executable).includes(Buffer.from("KataGo v1.18.2"))) {
+  throw new Error("The archived app does not contain the linked KataGo device core.");
+}
 const hash = createHash("sha256").update(readFileSync(model)).digest("hex");
 if (hash !== "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229") {
   throw new Error("The archived model failed SHA-256 verification.");
