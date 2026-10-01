@@ -401,3 +401,93 @@
 @media (max-width: 620px) {
   .hero h1 { font-size: 38px; }
 }
+
+/* Mobile review keeps the board and move controls in the first viewport. */
+@media (max-width: 620px) {
+  .reviewWorkspace {
+    padding: 6px 8px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .reviewHeader {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding: 3px 1px 7px;
+  }
+
+  .reviewHeader > a {
+    font-size: .8rem;
+    white-space: nowrap;
+  }
+
+  .reviewHeader > div {
+    grid-row: auto;
+    grid-column: auto;
+    min-width: 0;
+    padding-top: 0;
+  }
+
+  .reviewHeader > div span { display: none; }
+  .reviewHeader > div strong {
+    margin: 0;
+    overflow: hidden;
+    font-size: .78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .engineBadge { font-size: .56rem; white-space: nowrap; }
+
+  .reviewMain { gap: 7px; }
+
+  .analysisProgress {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+    padding: 4px 0;
+  }
+
+  .analysisProgress > div { display: block; }
+  .analysisProgress strong { font-size: .72rem; }
+  .analysisProgress > div span { display: none; }
+  .analysisProgress > span {
+    justify-self: end;
+    font-size: .68rem;
+  }
+  .analysisProgress > i { height: 2px; }
+
+  .coachCard {
+    display: block;
+    padding: 8px 11px;
+    border-radius: 7px;
+  }
+
+  .coachCardHeading span { font-size: .92rem; }
+  .coachCardHeading strong { font-size: 1rem; }
+  .coachCardLabel,
+  .coachCard p { display: none; }
+
+  .board {
+    width: min(100%, calc(100dvh - 180px));
+  }
+
+  .moveControls {
+    grid-template-columns: 36px 36px minmax(64px, 1fr) 84px 36px;
+    margin-top: 5px;
+  }
+
+  .moveControls button { height: 38px; }
+  .moveSlider { margin: 2px 0 4px; }
+
+  .classification { display: none; }
+  .explanationBlock {
+    display: block;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .explanationBlock .explanation {
+    margin-top: 7px;
+    font-size: .86rem;
+    line-height: 1.5;
+  }
+}

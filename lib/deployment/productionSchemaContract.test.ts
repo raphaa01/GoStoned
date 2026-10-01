@@ -29,6 +29,9 @@ const currentSnapshot: ProductionSchemaSnapshot = {
   boardPlacementDefault: "'zoom'::text",
   boardPlacementNullable: "NO",
   boardPlacementConstraint: "CHECK (board_placement IN ('zoom', 'direct'))",
+  analysisProgressDataType: "jsonb",
+  analysisProgressConstraint:
+    "CHECK (status = 'running' AND (result IS NULL OR progress IS NOT NULL))",
   takebackRls: true,
 };
 
@@ -106,4 +109,16 @@ test("production preflight respects the private migration ledger", () => {
     /SELECT filename FROM public\.schema_migrations/,
   );
   assert.match(productionPreflight, /board_placement_constraint/);
+  assert.match(productionPreflight, /analysis_progress_constraint/);
+});
+
+test("rejects a schema that cannot expose running analysis previews", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      analysisProgressDataType: null,
+      analysisProgressConstraint: null,
+    }),
+    /progressive analysis column/,
+  );
 });

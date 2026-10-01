@@ -29,6 +29,8 @@ worker_environment = {
     "DATABASE_SSL": "require",
     "DATABASE_POOL_MAX": "1",
     "KATAGO_MAX_VISITS": "160",
+    "KATAGO_PREVIEW_VISITS": "4",
+    "KATAGO_ANALYSIS_CHUNK_MOVES": "10",
     "KATAGO_PUZZLE_MAX_VISITS": "80",
 }
 

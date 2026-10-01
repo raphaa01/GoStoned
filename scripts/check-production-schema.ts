@@ -17,6 +17,8 @@ type SchemaRow = {
   board_placement_default: string | null;
   board_placement_nullable: string | null;
   board_placement_constraint: string | null;
+  analysis_progress_data_type: string | null;
+  analysis_progress_constraint: string | null;
   takeback_rls: boolean;
 };
 
@@ -85,6 +87,16 @@ async function checkProductionSchema(): Promise<void> {
          WHERE conname = 'player_rating_preferences_board_placement_check'
            AND conrelid = 'public.player_rating_preferences'::regclass)
          AS board_placement_constraint,
+       (SELECT data_type FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'game_analysis_jobs'
+           AND column_name = 'progress')
+         AS analysis_progress_data_type,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'game_analysis_jobs_result_shape_check'
+           AND conrelid = 'public.game_analysis_jobs'::regclass)
+         AS analysis_progress_constraint,
        EXISTS (
          SELECT 1
            FROM pg_class relation
@@ -112,6 +124,8 @@ async function checkProductionSchema(): Promise<void> {
     boardPlacementDefault: row.board_placement_default,
     boardPlacementNullable: row.board_placement_nullable,
     boardPlacementConstraint: row.board_placement_constraint,
+    analysisProgressDataType: row.analysis_progress_data_type,
+    analysisProgressConstraint: row.analysis_progress_constraint,
     takebackRls: row.takeback_rls,
   });
 
