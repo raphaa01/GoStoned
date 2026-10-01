@@ -339,6 +339,35 @@
   margin: 8px 0 14px;
 }
 
+.inlineIncorrect {
+  background: color-mix(in srgb, var(--color-moss) 9%, var(--color-surface));
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-moss-strong);
+  border-radius: 9px;
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+}
+
+.feedbackActions {
+  display: flex;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.feedbackActions button {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 0;
+  gap: 7px;
+  justify-content: center;
+  min-height: 44px;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
 .continue {
   background: #2b3825;
   color: #d9efc7;

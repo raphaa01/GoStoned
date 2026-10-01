@@ -2603,12 +2603,18 @@ a {
 }
 
 .intersection.is-precision-preview::after {
+  aspect-ratio: 1;
   border: 3px solid #17230e;
+  box-sizing: border-box;
   border-radius: 50%;
   box-shadow: 0 0 0 2px #fff;
   content: "";
-  inset: 10%;
+  height: 80%;
+  left: 50%;
   position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
   z-index: 4;
 }
 
