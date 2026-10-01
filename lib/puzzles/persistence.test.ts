@@ -9,6 +9,7 @@ const boardGuardMigration = readFileSync(new URL("../../db/migrations/022_curate
 const dailyCycleMigration = readFileSync(new URL("../../db/migrations/036_daily_puzzle_cycle.sql", import.meta.url), "utf8");
 const staticDailyMigration = readFileSync(new URL("../../db/migrations/038_static_daily_puzzle_rotation.sql", import.meta.url), "utf8");
 const historicalMigration = readFileSync(new URL("../../db/migrations/041_gokyo_shumyo_puzzles.sql", import.meta.url), "utf8");
+const boardPlacementRepairMigration = readFileSync(new URL("../../db/migrations/044_repair_board_placement_preference.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../../workers/katago/puzzles.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("./puzzleService.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/puzzles/route.ts", import.meta.url), "utf8");
@@ -49,6 +50,10 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
     schema.replaceAll("\r\n", "\n").includes(historicalMigration.replaceAll("\r\n", "\n")),
     "Canonical schema must contain migration 041 exactly.",
   );
+  assert.ok(
+    schema.replaceAll("\r\n", "\n").includes(boardPlacementRepairMigration.replaceAll("\r\n", "\n")),
+    "Canonical schema must contain migration 044 exactly.",
+  );
   assert.match(service, /ensureStaticDailyPuzzle/);
   assert.match(service, /STATIC_DAILY_ENGINE_VERSION/);
   assert.match(service, /daily\.acceptedMoves\.map/);
@@ -70,6 +75,8 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(service, /supportsGokyoShumyoCatalogSchema/);
   assert.match(service, /pg_get_constraintdef/);
   assert.match(service, /jsonb_to_recordset/);
+  assert.match(service, /RETURNING attempt\.puzzle_id/);
+  assert.doesNotMatch(service, /RETURNING attempt\.id/);
 });
 
 test("hints reveal only the current move on demand and retain player binding", () => {

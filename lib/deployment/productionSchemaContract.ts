@@ -8,6 +8,10 @@ export type ProductionSchemaSnapshot = Readonly<{
   queueAdaptiveConstraint: string | null;
   initialRatingPolicyConstraint: string | null;
   puzzleCategoryConstraint: string | null;
+  boardPlacementDataType: string | null;
+  boardPlacementDefault: string | null;
+  boardPlacementNullable: string | null;
+  boardPlacementConstraint: string | null;
   takebackRls: boolean;
 }>;
 
@@ -24,6 +28,26 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (
+    snapshot.boardPlacementDataType !== "text"
+    || snapshot.boardPlacementNullable !== "NO"
+  ) {
+    throw new Error(
+      "Production database schema is stale: board-placement preference column.",
+    );
+  }
+  requireFragment(
+    snapshot.boardPlacementDefault,
+    "zoom",
+    "board-placement preference default",
+  );
+  for (const fragment of ["zoom", "direct"]) {
+    requireFragment(
+      snapshot.boardPlacementConstraint,
+      fragment,
+      "board-placement preference constraint",
+    );
+  }
   requireFragment(
     snapshot.initialRatingPolicyConstraint,
     "starting-strength-v2",
