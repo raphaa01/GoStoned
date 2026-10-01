@@ -18,7 +18,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +44,13 @@ public class GoStoneKataGoPlugin extends Plugin {
     private static final int MAX_MOVES = 1_000;
     private static final int TOTAL_VISIT_BUDGET = 900;
     private static final int PREVIEW_VISITS = 1;
+    private static final int PREVIEW_PV_LENGTH = 3;
+    private static final int QUALITY_PV_LENGTH = 12;
+    private static final int INITIAL_PREVIEW_POSITIONS = 11;
+    private static final int PREVIEW_CHUNK_POSITIONS = 16;
+    private static final int MAX_QUALITY_MOVES = 12;
+    private static final double IMPORTANT_WINRATE_SWING = 0.05;
+    private static final double IMPORTANT_SCORE_SWING = 2.5;
     private static final long MAX_ANALYSIS_SECONDS = 90L;
 
     private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
@@ -47,6 +58,7 @@ public class GoStoneKataGoPlugin extends Plugin {
     private final Object activeLock = new Object();
     private ActiveAnalysis activeAnalysis;
     private volatile RuntimeFiles verifiedRuntime;
+    private WarmSession warmSession;
 
     private static final class RuntimeFiles {
         final File executable;
@@ -72,11 +84,33 @@ public class GoStoneKataGoPlugin extends Plugin {
         }
     }
 
+    private static final class WarmSession {
+        final Process process;
+        final BufferedWriter writer;
+        final BufferedReader reader;
+
+        WarmSession(Process process) {
+            this.process = process;
+            this.writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
+            this.reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+        }
+    }
+
+    private static final class ImportantMove {
+        final int moveNumber;
+        final double impact;
+
+        ImportantMove(int moveNumber, double impact) {
+            this.moveNumber = moveNumber;
+            this.impact = impact;
+        }
+    }
+
     @PluginMethod
     public void getStatus(PluginCall call) {
         analysisExecutor.execute(() -> {
             try {
-                ensureRuntime();
+                ensureWarmSession(ensureRuntime());
                 call.resolve(status(true, null));
             } catch (Exception exception) {
                 call.resolve(status(false, safeMessage(exception)));
@@ -124,6 +158,7 @@ public class GoStoneKataGoPlugin extends Plugin {
             job = activeAnalysis;
         }
         if (job != null) stop(job, true);
+        else discardWarmSession(null);
     }
 
     @Override
@@ -133,6 +168,7 @@ public class GoStoneKataGoPlugin extends Plugin {
             job = activeAnalysis;
         }
         if (job != null) stop(job, true);
+        else discardWarmSession(null);
         analysisExecutor.shutdownNow();
         timeoutExecutor.shutdownNow();
         super.handleOnDestroy();
@@ -141,57 +177,81 @@ public class GoStoneKataGoPlugin extends Plugin {
     private void runAnalysis(PluginCall call, ActiveAnalysis job, JSObject input, int visits) {
         TreeMap<Integer, JSONObject> bestTurns = new TreeMap<>();
         int qualityVisits = PREVIEW_VISITS;
+        boolean keepWarm = false;
+        ScheduledFuture<?> timeout = null;
         try {
             if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
                 throw new IllegalStateException("The device is too warm to start local analysis.");
             }
             RuntimeFiles runtime = ensureRuntime();
-            qualityVisits = adaptiveVisits(input, visits);
-            JSONObject previewRequest = buildRequest(job.id + ":preview", input, PREVIEW_VISITS);
-            int expectedTurns = previewRequest.getJSONArray("analyzeTurns").length();
-
-            Process process = new ProcessBuilder(
-                runtime.executable.getAbsolutePath(),
-                "analysis",
-                "-model", runtime.model.getAbsolutePath(),
-                "-config", runtime.config.getAbsolutePath(),
-                "-quit-without-waiting"
-            ).start();
-            job.process = process;
-            drainStderr(process, job);
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
-            job.writer = writer;
-            ScheduledFuture<?> timeout = timeoutExecutor.schedule(() -> {
-                if (process.isAlive()) {
+            WarmSession session = ensureWarmSession(runtime);
+            job.process = session.process;
+            job.writer = session.writer;
+            timeout = timeoutExecutor.schedule(() -> {
+                if (session.process.isAlive()) {
                     job.timedOut.set(true);
                     stop(job, false);
                 }
             }, MAX_ANALYSIS_SECONDS, TimeUnit.SECONDS);
 
-            boolean qualityComplete = false;
-            try {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    boolean previewComplete = analyzePhase(
-                        job, writer, reader, previewRequest, "preview", PREVIEW_VISITS,
-                        expectedTurns, bestTurns
-                    );
-                    if (previewComplete && !job.cancelled.get() && !job.timedOut.get() && qualityVisits > PREVIEW_VISITS) {
-                        JSONObject qualityRequest = buildRequest(job.id + ":quality", input, qualityVisits);
-                        qualityComplete = analyzePhase(
-                            job, writer, reader, qualityRequest, "quality", qualityVisits,
-                            expectedTurns, bestTurns
-                        );
-                    }
+            int moveCount = input.getJSONArray("moves").length();
+            int totalPositions = moveCount + 1;
+            int chunkStart = 0;
+            int chunkIndex = 0;
+            while (chunkStart < totalPositions && !job.cancelled.get() && !job.timedOut.get()) {
+                int chunkSize = chunkIndex == 0 ? INITIAL_PREVIEW_POSITIONS : PREVIEW_CHUNK_POSITIONS;
+                int chunkEnd = Math.min(totalPositions, chunkStart + chunkSize);
+                JSONArray chunkTurns = turnRange(chunkStart, chunkEnd);
+                JSONObject previewRequest = buildRequest(
+                    job.id + ":preview:" + chunkIndex,
+                    input,
+                    PREVIEW_VISITS,
+                    PREVIEW_PV_LENGTH,
+                    chunkTurns
+                );
+                if (!analyzePhase(
+                    job, session, previewRequest, "preview", PREVIEW_VISITS,
+                    chunkTurns.length(), totalPositions, bestTurns
+                )) {
+                    break;
                 }
-            } finally {
-                timeout.cancel(false);
+                chunkStart = chunkEnd;
+                chunkIndex += 1;
             }
 
             if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
             if (!hasUsableReview(bestTurns)) {
-                throw new IllegalStateException("KataGo stopped before every game position was analyzed.");
+                throw new IllegalStateException("KataGo stopped before the first review block was analyzed.");
             }
-            resolveAnalysis(call, bestTurns, qualityComplete ? qualityVisits : PREVIEW_VISITS, qualityComplete, null);
+            boolean previewComplete = bestTurns.size() >= totalPositions;
+            boolean qualityComplete = false;
+            if (previewComplete && !job.timedOut.get()) {
+                JSONArray qualityTurns = importantTurns(bestTurns, moveCount);
+                qualityVisits = adaptiveVisits(qualityTurns.length(), visits);
+                if (qualityTurns.length() > 0 && qualityVisits > PREVIEW_VISITS) {
+                    JSONObject qualityRequest = buildRequest(
+                        job.id + ":quality",
+                        input,
+                        qualityVisits,
+                        QUALITY_PV_LENGTH,
+                        qualityTurns
+                    );
+                    qualityComplete = analyzePhase(
+                        job, session, qualityRequest, "quality", qualityVisits,
+                        qualityTurns.length(), qualityTurns.length(), bestTurns
+                    );
+                } else {
+                    qualityComplete = true;
+                }
+            }
+            keepWarm = previewComplete && !job.timedOut.get();
+            resolveAnalysis(
+                call,
+                bestTurns,
+                qualityComplete ? qualityVisits : PREVIEW_VISITS,
+                previewComplete,
+                qualityComplete ? null : "The quick review is complete; some detail passes were skipped."
+            );
         } catch (Exception exception) {
             if (!job.cancelled.get() && hasUsableReview(bestTurns)) {
                 resolveAnalysis(call, bestTurns, PREVIEW_VISITS, false, safeMessage(exception));
@@ -199,7 +259,8 @@ public class GoStoneKataGoPlugin extends Plugin {
                 call.reject(safeMessage(exception), job.cancelled.get() ? "analysis_cancelled" : "native_analysis_failed", exception);
             }
         } finally {
-            stop(job, false);
+            if (timeout != null) timeout.cancel(false);
+            if (!keepWarm) discardWarmSession(job.process);
             synchronized (activeLock) {
                 if (activeAnalysis == job) activeAnalysis = null;
             }
@@ -208,21 +269,21 @@ public class GoStoneKataGoPlugin extends Plugin {
 
     private boolean analyzePhase(
         ActiveAnalysis job,
-        BufferedWriter writer,
-        BufferedReader reader,
+        WarmSession session,
         JSONObject request,
         String phase,
         int visits,
-        int expectedTurns,
+        int expectedPhaseTurns,
+        int totalProgressTurns,
         TreeMap<Integer, JSONObject> bestTurns
     ) throws Exception {
-        writer.write(request.toString());
-        writer.newLine();
-        writer.flush();
+        session.writer.write(request.toString());
+        session.writer.newLine();
+        session.writer.flush();
         TreeMap<Integer, JSONObject> phaseTurns = new TreeMap<>();
         String requestId = request.getString("id");
         String line;
-        while (!job.cancelled.get() && !job.timedOut.get() && (line = reader.readLine()) != null) {
+        while (!job.cancelled.get() && !job.timedOut.get() && (line = session.reader.readLine()) != null) {
             JSONObject response;
             try {
                 response = new JSONObject(line);
@@ -238,12 +299,13 @@ public class GoStoneKataGoPlugin extends Plugin {
             int turnNumber = response.getInt("turnNumber");
             phaseTurns.put(turnNumber, response);
             bestTurns.put(turnNumber, response);
-            emitProgress(job.id, phase, phaseTurns.size(), expectedTurns, visits, response);
+            int completed = "preview".equals(phase) ? bestTurns.size() : phaseTurns.size();
+            emitProgress(job.id, phase, completed, totalProgressTurns, visits, response);
             if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
                 stop(job, false);
                 throw new IllegalStateException("Local analysis stopped because the device became too warm.");
             }
-            if (phaseTurns.size() >= expectedTurns) return true;
+            if (phaseTurns.size() >= expectedPhaseTurns) return true;
         }
         return false;
     }
@@ -269,14 +331,18 @@ public class GoStoneKataGoPlugin extends Plugin {
         call.resolve(result);
     }
 
-    private int adaptiveVisits(JSObject input, int requestedVisits) throws Exception {
-        JSONArray moves = input.getJSONArray("moves");
-        int positionCount = moves == null ? 1 : moves.length() + 1;
-        int budgetedVisits = Math.max(PREVIEW_VISITS, TOTAL_VISIT_BUDGET / positionCount);
+    private int adaptiveVisits(int positionCount, int requestedVisits) {
+        int budgetedVisits = Math.max(PREVIEW_VISITS, TOTAL_VISIT_BUDGET / Math.max(1, positionCount));
         return Math.max(PREVIEW_VISITS, Math.min(requestedVisits, budgetedVisits));
     }
 
-    private JSONObject buildRequest(String id, JSObject input, int visits) throws Exception {
+    private JSONObject buildRequest(
+        String id,
+        JSObject input,
+        int visits,
+        int pvLength,
+        JSONArray analyzeTurns
+    ) throws Exception {
         JSONArray sourceMoves = input.getJSONArray("moves");
         if (sourceMoves == null || sourceMoves.length() > MAX_MOVES) {
             throw new IllegalArgumentException("The game move list is invalid or too large.");
@@ -300,13 +366,58 @@ public class GoStoneKataGoPlugin extends Plugin {
         request.put("boardXSize", boardSize);
         request.put("boardYSize", boardSize);
         request.put("maxVisits", visits);
-        request.put("analysisPVLen", 12);
-        request.put("includePolicy", true);
-        JSONArray analyzeTurns = new JSONArray();
-        for (int turn = 0; turn <= moves.length(); turn++) analyzeTurns.put(turn);
+        request.put("analysisPVLen", pvLength);
+        request.put("includePolicy", false);
         request.put("analyzeTurns", analyzeTurns);
         copyOptionalPositionFields(input, request);
         return request;
+    }
+
+    private JSONArray turnRange(int startInclusive, int endExclusive) {
+        JSONArray turns = new JSONArray();
+        for (int turn = startInclusive; turn < endExclusive; turn++) turns.put(turn);
+        return turns;
+    }
+
+    private JSONArray importantTurns(TreeMap<Integer, JSONObject> previewTurns, int moveCount) throws Exception {
+        List<ImportantMove> candidates = new ArrayList<>();
+        for (int moveNumber = 1; moveNumber <= moveCount; moveNumber++) {
+            JSONObject before = previewTurns.get(moveNumber - 1);
+            JSONObject after = previewTurns.get(moveNumber);
+            if (before == null || after == null) continue;
+            double winrateSwing = Math.abs(blackWinrate(before) - blackWinrate(after));
+            double scoreSwing = Math.abs(blackScoreLead(before) - blackScoreLead(after));
+            double impact = Math.max(
+                winrateSwing / IMPORTANT_WINRATE_SWING,
+                scoreSwing / IMPORTANT_SCORE_SWING
+            );
+            candidates.add(new ImportantMove(moveNumber, impact));
+        }
+        candidates.sort(Comparator.comparingDouble((ImportantMove item) -> item.impact).reversed());
+        TreeSet<Integer> selected = new TreeSet<>();
+        int selectedMoves = 0;
+        for (ImportantMove candidate : candidates) {
+            if (selectedMoves >= MAX_QUALITY_MOVES) break;
+            if (candidate.impact < 1.0 && selectedMoves >= Math.min(3, candidates.size())) break;
+            selected.add(candidate.moveNumber - 1);
+            selected.add(candidate.moveNumber);
+            selectedMoves += 1;
+        }
+        JSONArray turns = new JSONArray();
+        for (Integer turn : selected) turns.put(turn);
+        return turns;
+    }
+
+    private double blackWinrate(JSONObject turn) throws Exception {
+        JSONObject root = turn.getJSONObject("rootInfo");
+        double value = root.getDouble("winrate");
+        return "B".equals(root.getString("currentPlayer")) ? value : 1.0 - value;
+    }
+
+    private double blackScoreLead(JSONObject turn) throws Exception {
+        JSONObject root = turn.getJSONObject("rootInfo");
+        double value = root.getDouble("scoreLead");
+        return "B".equals(root.getString("currentPlayer")) ? value : -value;
     }
 
     private void copyOptionalPositionFields(JSObject input, JSONObject request) throws Exception {
@@ -370,6 +481,21 @@ public class GoStoneKataGoPlugin extends Plugin {
         return verifiedRuntime;
     }
 
+    private synchronized WarmSession ensureWarmSession(RuntimeFiles runtime) throws Exception {
+        if (warmSession != null && warmSession.process.isAlive()) return warmSession;
+        discardWarmSession(null);
+        Process process = new ProcessBuilder(
+            runtime.executable.getAbsolutePath(),
+            "analysis",
+            "-model", runtime.model.getAbsolutePath(),
+            "-config", runtime.config.getAbsolutePath(),
+            "-quit-without-waiting"
+        ).start();
+        warmSession = new WarmSession(process);
+        drainStderr(process);
+        return warmSession;
+    }
+
     private void ensureVerifiedAsset(String asset, File destination, String expectedSha256) throws Exception {
         if (destination.isFile() && expectedSha256.equals(sha256(destination))) return;
         File temporary = new File(destination.getParentFile(), destination.getName() + ".tmp");
@@ -415,10 +541,10 @@ public class GoStoneKataGoPlugin extends Plugin {
         }
     }
 
-    private void drainStderr(Process process, ActiveAnalysis job) {
+    private void drainStderr(Process process) {
         Thread thread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-                while (!job.cancelled.get() && reader.readLine() != null) {
+                while (reader.readLine() != null) {
                     // Diagnostics are drained but never exposed to the web view.
                 }
             } catch (Exception ignored) {
@@ -464,21 +590,14 @@ public class GoStoneKataGoPlugin extends Plugin {
 
     private void stop(ActiveAnalysis job, boolean cancelled) {
         if (cancelled) job.cancelled.set(true);
-        try {
-            if (job.writer != null) {
-                JSONObject terminate = new JSONObject();
-                terminate.put("id", "terminate:" + job.id);
-                terminate.put("action", "terminate");
-                terminate.put("terminateId", job.id);
-                job.writer.write(terminate.toString());
-                job.writer.newLine();
-                job.writer.flush();
-                job.writer.close();
-            }
-        } catch (Exception ignored) {
-            // Destroying the process below is the final cancellation boundary.
-        }
-        Process process = job.process;
+        discardWarmSession(job.process);
+    }
+
+    private synchronized void discardWarmSession(Process expectedProcess) {
+        WarmSession session = warmSession;
+        if (session == null || (expectedProcess != null && session.process != expectedProcess)) return;
+        warmSession = null;
+        Process process = session.process;
         if (process != null && process.isAlive()) {
             process.destroy();
             try {
@@ -487,6 +606,16 @@ public class GoStoneKataGoPlugin extends Plugin {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
             }
+        }
+        try {
+            session.writer.close();
+        } catch (Exception ignored) {
+            // Process shutdown already provides the cancellation boundary.
+        }
+        try {
+            session.reader.close();
+        } catch (Exception ignored) {
+            // Process shutdown already provides the cancellation boundary.
         }
     }
 

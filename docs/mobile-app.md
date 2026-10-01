@@ -112,20 +112,25 @@ cookie in the bundled app. Provider sign-in still needs a live device test.
 KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
 
 - **Android:** enabled locally with the Eigen CPU backend. It exposes start,
-  progress and cancel and runs one analysis at a time. A one-visit preview makes
-  the first ten contiguous moves usable immediately; after 28 seconds the UI
-  opens whatever contiguous preview is ready. A second pass then replaces those
-  positions using the adaptive 900-visit quality budget. The 90-second safety
-  boundary returns and persists usable work instead of replacing it with a
-  generic failure. It stops at severe thermal pressure and never calls the
-  server analysis route. The device test verifies actual multi-position model
-  inference on Android API 36.
+  progress and cancel and runs one analysis at a time. The verified engine is
+  warmed once and retained between reviews instead of reloading the model for
+  every request. A one-visit, three-move-PV preview analyzes positions 0–10
+  first, publishes them immediately, and continues in 16-position blocks with
+  policy output disabled. Each usable block is persisted locally. Only the
+  largest win-rate or score swings receive the adaptive 900-visit quality
+  budget. After 28 seconds the UI opens whatever contiguous preview is ready.
+  The 90-second safety boundary returns usable work instead of replacing it
+  with a generic failure. It stops at severe thermal pressure and never calls
+  the server analysis route. The device test verifies actual multi-position
+  model inference on Android API 36.
 - **iOS:** the in-process bridge, model verification and Metal/MPSGraph build
   recipe are ready for iOS 16 and newer. `npm run mobile:katago:ios` builds the
   pinned upstream commit as arm64 device and Apple-silicon Simulator slices,
   packages them as a local XCFramework, and makes the Swift plugin available.
   Without that generated framework the same package deliberately stays
-  fail-closed. The simulator slice verifies compile/link integration but runtime
+  fail-closed. Its engine follows the same warm-session, preview-chunk,
+  incremental-persistence and selective-quality contract as Android. The
+  simulator slice verifies compile/link integration but runtime
   inference stays disabled because Xcode 26.6's simulator MPSGraph driver aborts
   during execution. Real-iPhone performance, battery and thermal validation
   remains untested on physical devices.

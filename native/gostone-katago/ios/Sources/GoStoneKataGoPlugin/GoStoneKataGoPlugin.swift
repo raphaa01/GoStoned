@@ -9,6 +9,13 @@ import GoStoneKataGoCore
 private let engineVersion = "v1.18.2"
 private let modelSha256 = "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229"
 private let previewVisits = 1
+private let previewPVLength = 3
+private let qualityPVLength = 12
+private let initialPreviewPositions = 11
+private let previewChunkPositions = 16
+private let maximumQualityMoves = 12
+private let importantWinrateSwing = 0.05
+private let importantScoreSwing = 2.5
 private let maximumVisits = 80
 private let totalVisitBudget = 900
 private let maximumRuntimeSeconds = 90
@@ -23,14 +30,19 @@ private final class ActiveAnalysis {
     let id: String
     let call: CAPPluginCall
     let input: JSObject
-    let qualityVisits: Int
-    let expectedTurns: Int
+    let requestedVisits: Int
+    let totalTurns: Int
+    var qualityVisits = previewVisits
     var phase = "preview"
+    var currentRequestId = ""
+    var expectedPhaseTurns = 0
+    var nextPreviewStart = 0
+    var previewChunkIndex = 0
+    var qualityTurns: [Int] = []
     var phaseTurns: [Int: JSObject] = [:]
     var bestTurns: [Int: JSObject] = [:]
     var cancelled = false
     var resolved = false
-    var engine: OpaquePointer?
     var timeout: DispatchWorkItem?
 
     init(
@@ -38,15 +50,25 @@ private final class ActiveAnalysis {
         id: String,
         call: CAPPluginCall,
         input: JSObject,
-        qualityVisits: Int,
-        expectedTurns: Int
+        requestedVisits: Int,
+        totalTurns: Int
     ) {
         self.owner = owner
         self.id = id
         self.call = call
         self.input = input
-        self.qualityVisits = qualityVisits
-        self.expectedTurns = expectedTurns
+        self.requestedVisits = requestedVisits
+        self.totalTurns = totalTurns
+    }
+}
+
+private final class EngineSession {
+    weak var owner: GoStoneKataGoPlugin?
+    var engine: OpaquePointer?
+    var stopping = false
+
+    init(owner: GoStoneKataGoPlugin) {
+        self.owner = owner
     }
 }
 
@@ -72,6 +94,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let stateQueue = DispatchQueue(label: "com.gostone.katago.ios")
     private var activeAnalysis: ActiveAnalysis?
+    private var warmEngine: EngineSession?
     private var verifiedRuntime: RuntimeFiles?
     private var lifecycleObservers: [NSObjectProtocol] = []
 
@@ -91,6 +114,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     deinit {
         for observer in lifecycleObservers { NotificationCenter.default.removeObserver(observer) }
         if let job = activeAnalysis { stop(job) }
+        else { stopWarmEngine() }
     }
 
     @objc public func getStatus(_ call: CAPPluginCall) {
@@ -103,11 +127,12 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             ))
             #else
             do {
-                _ = try self.ensureRuntime()
+                let runtime = try self.ensureRuntime()
                 let nativeVersion = String(cString: gostone_katago_version())
                 guard nativeVersion == engineVersion else {
                     throw NativeError.message("The linked KataGo core has an unexpected version.")
                 }
+                _ = try self.ensureWarmEngine(runtime)
                 call.resolve(self.status(available: true))
             } catch {
                 call.resolve(self.status(available: false, reason: self.safeMessage(error)))
@@ -143,52 +168,18 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                     throw NativeError.message("The device is too warm to start local analysis.")
                 }
                 let runtime = try self.ensureRuntime()
-                let preview = try self.request(id: "\(analysisId):preview", input: input, visits: previewVisits)
-                let expectedTurns = (preview["analyzeTurns"] as? [Int])?.count ?? 0
                 let moveCount = (input["moves"] as? [Any])?.count ?? 0
-                let budgetedVisits = max(previewVisits, totalVisitBudget / max(1, moveCount + 1))
-                let qualityVisits = max(previewVisits, min(requestedVisits, budgetedVisits))
                 let job = ActiveAnalysis(
                     owner: self,
                     id: analysisId,
                     call: call,
                     input: input,
-                    qualityVisits: qualityVisits,
-                    expectedTurns: expectedTurns
+                    requestedVisits: requestedVisits,
+                    totalTurns: moveCount + 1
                 )
                 self.activeAnalysis = job
-                let retainedContext = Unmanaged.passRetained(job).toOpaque()
-                let engine = runtime.model.path.withCString { modelPath in
-                    runtime.config.path.withCString { configPath in
-                        gostone_katago_start(
-                            modelPath,
-                            configPath,
-                            { line, context in
-                                guard let line, let context else { return }
-                                let job = Unmanaged<ActiveAnalysis>.fromOpaque(context).takeUnretainedValue()
-                                job.owner?.receive(line: String(cString: line), for: job)
-                            },
-                            { exitCode, error, context in
-                                guard let context else { return }
-                                let job = Unmanaged<ActiveAnalysis>.fromOpaque(context).takeRetainedValue()
-                                let message = error.map { String(cString: $0) }
-                                if let owner = job.owner {
-                                    owner.engineExited(job, exitCode: exitCode, error: message)
-                                } else if let engine = job.engine {
-                                    DispatchQueue.global().async { gostone_katago_destroy(engine) }
-                                }
-                            },
-                            retainedContext
-                        )
-                    }
-                }
-                guard let engine else {
-                    Unmanaged<ActiveAnalysis>.fromOpaque(retainedContext).release()
-                    self.activeAnalysis = nil
-                    throw NativeError.message("The KataGo Metal core could not be started.")
-                }
-                job.engine = engine
-                try self.send(preview, to: job)
+                _ = try self.ensureWarmEngine(runtime)
+                try self.sendNextPreviewChunk(job)
                 let timeout = DispatchWorkItem { [weak self, weak job] in
                     guard let self, let job, self.activeAnalysis === job, !job.resolved else { return }
                     self.fail(job, message: "Local analysis reached the 90-second safety limit.")
@@ -199,6 +190,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let job = self.activeAnalysis, job.id == analysisId {
                     job.resolved = true
                     self.stop(job)
+                    self.activeAnalysis = nil
                 }
                 call.reject(self.safeMessage(error), "native_analysis_failed")
             }
@@ -219,6 +211,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                     job.call.reject("Local analysis was cancelled.", "analysis_cancelled")
                 }
                 self.stop(job)
+                if self.activeAnalysis === job { self.activeAnalysis = nil }
             }
             call.resolve()
         }
@@ -226,13 +219,17 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func cancelForLifecycle(_ message: String) {
         stateQueue.async {
-            guard let job = self.activeAnalysis else { return }
+            guard let job = self.activeAnalysis else {
+                self.stopWarmEngine()
+                return
+            }
             job.cancelled = true
             if !job.resolved {
                 job.resolved = true
                 job.call.reject(message, "analysis_cancelled")
             }
             self.stop(job)
+            if self.activeAnalysis === job { self.activeAnalysis = nil }
         }
     }
 
@@ -278,7 +275,53 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         return runtime
     }
 
-    private func request(id: String, input: JSObject, visits: Int) throws -> JSObject {
+    private func ensureWarmEngine(_ runtime: RuntimeFiles) throws -> EngineSession {
+        if let warmEngine, warmEngine.engine != nil, !warmEngine.stopping { return warmEngine }
+        if warmEngine != nil {
+            throw NativeError.message("The previous KataGo session is still closing.")
+        }
+        let session = EngineSession(owner: self)
+        let retainedContext = Unmanaged.passRetained(session).toOpaque()
+        let engine = runtime.model.path.withCString { modelPath in
+            runtime.config.path.withCString { configPath in
+                gostone_katago_start(
+                    modelPath,
+                    configPath,
+                    { line, context in
+                        guard let line, let context else { return }
+                        let session = Unmanaged<EngineSession>.fromOpaque(context).takeUnretainedValue()
+                        session.owner?.receive(line: String(cString: line))
+                    },
+                    { exitCode, error, context in
+                        guard let context else { return }
+                        let session = Unmanaged<EngineSession>.fromOpaque(context).takeRetainedValue()
+                        let message = error.map { String(cString: $0) }
+                        if let owner = session.owner {
+                            owner.engineExited(session, exitCode: exitCode, error: message)
+                        } else if let engine = session.engine {
+                            DispatchQueue.global().async { gostone_katago_destroy(engine) }
+                        }
+                    },
+                    retainedContext
+                )
+            }
+        }
+        guard let engine else {
+            Unmanaged<EngineSession>.fromOpaque(retainedContext).release()
+            throw NativeError.message("The KataGo Metal core could not be started.")
+        }
+        session.engine = engine
+        warmEngine = session
+        return session
+    }
+
+    private func request(
+        id: String,
+        input: JSObject,
+        visits: Int,
+        pvLength: Int,
+        analyzeTurns: [Int]
+    ) throws -> JSObject {
         guard let sourceMoves = input["moves"] as? [JSObject], sourceMoves.count <= 1_000 else {
             throw NativeError.message("The game move list is invalid or too large.")
         }
@@ -302,9 +345,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             "boardXSize": boardSize,
             "boardYSize": boardSize,
             "maxVisits": visits,
-            "analysisPVLen": 12,
-            "includePolicy": true,
-            "analyzeTurns": Array(0...moves.count)
+            "analysisPVLen": pvLength,
+            "includePolicy": false,
+            "analyzeTurns": analyzeTurns
         ]
         if let initialPlayer = input["initialPlayer"] as? String {
             value["initialPlayer"] = initialPlayer == "black" ? "B" : "W"
@@ -335,7 +378,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func send(_ value: JSObject, to job: ActiveAnalysis) throws {
-        guard let engine = job.engine else { throw NativeError.message("The KataGo Metal core stopped.") }
+        guard let engine = warmEngine?.engine, warmEngine?.stopping == false else {
+            throw NativeError.message("The KataGo Metal core stopped.")
+        }
         let data = try JSONSerialization.data(withJSONObject: value)
         guard let line = String(data: data, encoding: .utf8),
               line.withCString({ gostone_katago_send(engine, $0) }) == 1 else {
@@ -343,13 +388,58 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func receive(line: String, for job: ActiveAnalysis) {
+    private func sendNextPreviewChunk(_ job: ActiveAnalysis) throws {
+        let start = job.nextPreviewStart
+        guard start < job.totalTurns else {
+            try startQualityPass(job)
+            return
+        }
+        let size = job.previewChunkIndex == 0 ? initialPreviewPositions : previewChunkPositions
+        let end = min(job.totalTurns, start + size)
+        let turns = Array(start..<end)
+        job.phase = "preview"
+        job.currentRequestId = "\(job.id):preview:\(job.previewChunkIndex)"
+        job.expectedPhaseTurns = turns.count
+        job.phaseTurns.removeAll(keepingCapacity: true)
+        job.nextPreviewStart = end
+        job.previewChunkIndex += 1
+        try send(request(
+            id: job.currentRequestId,
+            input: job.input,
+            visits: previewVisits,
+            pvLength: previewPVLength,
+            analyzeTurns: turns
+        ), to: job)
+    }
+
+    private func startQualityPass(_ job: ActiveAnalysis) throws {
+        job.qualityTurns = importantTurns(job.bestTurns, moveCount: max(0, job.totalTurns - 1))
+        let budgetedVisits = max(previewVisits, totalVisitBudget / max(1, job.qualityTurns.count))
+        job.qualityVisits = max(previewVisits, min(job.requestedVisits, budgetedVisits))
+        guard !job.qualityTurns.isEmpty, job.qualityVisits > previewVisits else {
+            resolve(job, visits: previewVisits, complete: true)
+            return
+        }
+        job.phase = "quality"
+        job.currentRequestId = "\(job.id):quality"
+        job.expectedPhaseTurns = job.qualityTurns.count
+        job.phaseTurns.removeAll(keepingCapacity: true)
+        try send(request(
+            id: job.currentRequestId,
+            input: job.input,
+            visits: job.qualityVisits,
+            pvLength: qualityPVLength,
+            analyzeTurns: job.qualityTurns
+        ), to: job)
+    }
+
+    private func receive(line: String) {
         stateQueue.async {
+            guard let job = self.activeAnalysis else { return }
             guard self.activeAnalysis === job, !job.resolved,
                   let data = line.data(using: .utf8),
                   let response = try? JSONSerialization.jsonObject(with: data) as? JSObject else { return }
-            let requestId = "\(job.id):\(job.phase)"
-            guard response["id"] as? String == requestId else { return }
+            guard response["id"] as? String == job.currentRequestId else { return }
             if let error = response["error"] as? String {
                 self.fail(job, message: "KataGo rejected the analysis: \(error)")
                 return
@@ -373,50 +463,96 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 self.fail(job, message: "Local analysis stopped because the device became too warm.")
                 return
             }
-            guard job.phaseTurns.count >= job.expectedTurns else { return }
-            if job.phase == "preview" && job.qualityVisits > previewVisits {
-                job.phase = "quality"
-                job.phaseTurns.removeAll(keepingCapacity: true)
-                do {
-                    try self.send(
-                        self.request(id: "\(job.id):quality", input: job.input, visits: job.qualityVisits),
-                        to: job
-                    )
-                } catch {
-                    self.fail(job, message: self.safeMessage(error))
+            guard job.phaseTurns.count >= job.expectedPhaseTurns else { return }
+            do {
+                if job.phase == "preview" {
+                    try self.sendNextPreviewChunk(job)
+                } else {
+                    self.resolve(job, visits: job.qualityVisits, complete: true)
                 }
-            } else {
-                self.resolve(job, visits: job.phase == "quality" ? job.qualityVisits : previewVisits, complete: true)
+            } catch {
+                self.fail(job, message: self.safeMessage(error))
             }
         }
     }
 
-    private func engineExited(_ job: ActiveAnalysis, exitCode: Int32, error: String?) {
+    private func importantTurns(_ turns: [Int: JSObject], moveCount: Int) -> [Int] {
+        guard moveCount > 0 else { return [] }
+        let candidates = (1...moveCount).compactMap { moveNumber -> (Int, Double)? in
+            guard let before = turns[moveNumber - 1], let after = turns[moveNumber],
+                  let beforeWinrate = blackWinrate(before), let afterWinrate = blackWinrate(after),
+                  let beforeScore = blackScoreLead(before), let afterScore = blackScoreLead(after) else { return nil }
+            let impact = max(
+                abs(beforeWinrate - afterWinrate) / importantWinrateSwing,
+                abs(beforeScore - afterScore) / importantScoreSwing
+            )
+            return (moveNumber, impact)
+        }.sorted { $0.1 > $1.1 }
+        var selected = Set<Int>()
+        var selectedMoves = 0
+        for candidate in candidates {
+            if selectedMoves >= maximumQualityMoves { break }
+            if candidate.1 < 1.0 && selectedMoves >= min(3, candidates.count) { break }
+            selected.insert(candidate.0 - 1)
+            selected.insert(candidate.0)
+            selectedMoves += 1
+        }
+        return selected.sorted()
+    }
+
+    private func blackWinrate(_ turn: JSObject) -> Double? {
+        guard let root = turn["rootInfo"] as? JSObject,
+              let player = root["currentPlayer"] as? String,
+              let value = root["winrate"] as? NSNumber else { return nil }
+        return player == "B" ? value.doubleValue : 1.0 - value.doubleValue
+    }
+
+    private func blackScoreLead(_ turn: JSObject) -> Double? {
+        guard let root = turn["rootInfo"] as? JSObject,
+              let player = root["currentPlayer"] as? String,
+              let value = root["scoreLead"] as? NSNumber else { return nil }
+        return player == "B" ? value.doubleValue : -value.doubleValue
+    }
+
+    private func engineExited(_ session: EngineSession, exitCode: Int32, error: String?) {
         stateQueue.async {
-            if self.activeAnalysis === job && !job.resolved {
+            if self.warmEngine === session, let job = self.activeAnalysis, !job.resolved {
                 let detail = error?.isEmpty == false ? error! : "KataGo stopped unexpectedly (exit \(exitCode))."
                 self.fail(job, message: detail, stopEngine: false)
             }
-            job.timeout?.cancel()
-            if let engine = job.engine {
-                gostone_katago_destroy(engine)
-                job.engine = nil
+            if let engine = session.engine {
+                session.engine = nil
+                DispatchQueue.global().async { gostone_katago_destroy(engine) }
             }
-            if self.activeAnalysis === job { self.activeAnalysis = nil }
+            if self.warmEngine === session { self.warmEngine = nil }
         }
+    }
+
+    private func stopWarmEngine() {
+        guard let session = warmEngine, !session.stopping else { return }
+        session.stopping = true
+        if let engine = session.engine { gostone_katago_stop(engine) }
     }
 
     private func stop(_ job: ActiveAnalysis) {
         job.timeout?.cancel()
-        if let engine = job.engine { gostone_katago_stop(engine) }
+        stopWarmEngine()
     }
     #else
     private func stop(_ job: ActiveAnalysis) {}
+    private func stopWarmEngine() {}
     #endif
 
-    private func resolve(_ job: ActiveAnalysis, visits: Int, complete: Bool, warning: String? = nil) {
+    private func resolve(
+        _ job: ActiveAnalysis,
+        visits: Int,
+        complete: Bool,
+        warning: String? = nil,
+        keepEngine: Bool = true
+    ) {
         guard !job.resolved else { return }
         job.resolved = true
+        job.timeout?.cancel()
         var result: JSObject = [
             "turns": job.bestTurns.sorted { $0.key < $1.key }.map(\.value),
             "visitsPerTurn": visits,
@@ -424,17 +560,20 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         ]
         if let warning { result["warning"] = warning }
         job.call.resolve(result)
-        stop(job)
+        if activeAnalysis === job { activeAnalysis = nil }
+        if !keepEngine { stopWarmEngine() }
     }
 
     private func fail(_ job: ActiveAnalysis, message: String, stopEngine: Bool = true) {
         guard !job.resolved else { return }
         if job.bestTurns[0] != nil && job.bestTurns[1] != nil && !job.cancelled {
-            resolve(job, visits: previewVisits, complete: false, warning: message)
+            resolve(job, visits: previewVisits, complete: false, warning: message, keepEngine: !stopEngine)
         } else {
             job.resolved = true
+            job.timeout?.cancel()
             job.call.reject(message, job.cancelled ? "analysis_cancelled" : "native_analysis_failed")
-            if stopEngine { stop(job) }
+            if activeAnalysis === job { activeAnalysis = nil }
+            if stopEngine { stopWarmEngine() }
         }
     }
 
@@ -453,11 +592,13 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func emitProgress(job: ActiveAnalysis, visits: Int, turn: JSObject) {
+        let completedTurns = job.phase == "preview" ? job.bestTurns.count : job.phaseTurns.count
+        let totalTurns = job.phase == "preview" ? job.totalTurns : job.qualityTurns.count
         let data: JSObject = [
             "analysisId": job.id,
             "phase": job.phase,
-            "completedTurns": job.phaseTurns.count,
-            "totalTurns": job.expectedTurns,
+            "completedTurns": completedTurns,
+            "totalTurns": totalTurns,
             "visitsPerTurn": visits,
             "thermalState": ProcessInfo.processInfo.thermalState.progressiveName,
             "turn": turn
