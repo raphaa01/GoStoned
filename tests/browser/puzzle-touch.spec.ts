@@ -11,7 +11,7 @@ function dailyBoard() {
   return board;
 }
 
-async function installDailyPuzzleHarness(page: Page) {
+async function installDailyPuzzleHarness(page: Page, incorrectAttempt = false) {
   const attempts: unknown[] = [];
   let releaseAttemptResponse!: () => void;
   const attemptResponseGate = new Promise<void>((resolve) => {
@@ -82,6 +82,26 @@ async function installDailyPuzzleHarness(page: Page) {
       && url.pathname === `/api/puzzles/${PUZZLE_ID}/attempt`
     ) {
       attempts.push(request.postDataJSON());
+      if (incorrectAttempt) {
+        await fulfill({
+          ok: true,
+          actor: PLAYER_KEY,
+          attempt: {
+            puzzleId: PUZZLE_ID,
+            correct: false,
+            outcome: "retry",
+            solved: false,
+            attemptCount: 1,
+            firstAttemptCorrect: false,
+            variationProgress: [],
+            variationRevision: 1,
+            displayLine: [],
+            feedback: null,
+            solution: null,
+          },
+        });
+        return;
+      }
       await attemptResponseGate;
       await fulfill({
         ok: true,
@@ -113,6 +133,39 @@ async function installDailyPuzzleHarness(page: Page) {
   });
   return { attempts, releaseAttemptResponse };
 }
+
+test("daily puzzle mistakes show compact retry and undo controls below the board", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.endsWith("-touch"), "Touch interaction is mobile-only.");
+  await installDailyPuzzleHarness(page, true);
+  await page.goto("/de/puzzles");
+
+  const board = page.locator('.go-board[data-size="13"]');
+  await expect(board).toBeVisible();
+  await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await board.getByRole("gridcell").first().click();
+
+  const feedback = page.getByRole("status");
+  await expect(feedback).toHaveText("Noch nicht ganz.");
+  const retry = page.getByRole("button", { name: "Erneut versuchen" });
+  const undo = page.getByRole("button", { name: "Zug zurück" });
+  await expect(retry).toBeVisible();
+  await expect(undo).toBeVisible();
+  const boardBounds = await board.boundingBox();
+  const feedbackBounds = await feedback.boundingBox();
+  const retryBounds = await retry.boundingBox();
+  expect(boardBounds).not.toBeNull();
+  expect(feedbackBounds).not.toBeNull();
+  expect(retryBounds).not.toBeNull();
+  if (boardBounds && feedbackBounds && retryBounds) {
+    expect(feedbackBounds.y + feedbackBounds.height).toBeLessThanOrEqual(boardBounds.y);
+    expect(retryBounds.y).toBeGreaterThanOrEqual(boardBounds.y + boardBounds.height);
+    expect(retryBounds.y + retryBounds.height).toBeLessThanOrEqual(await page.evaluate(() => window.innerHeight));
+  }
+
+  await undo.click();
+  await expect(feedback).toHaveCount(0);
+  await expect(retry).toHaveCount(0);
+});
 
 test("daily 13x13 puzzles cancel outside drags and place only valid releases", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.endsWith("-touch"), "Touch interaction is mobile-only.");

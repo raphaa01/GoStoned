@@ -5,6 +5,8 @@ import {
   ArrowRight,
   Check,
   CircleHelp,
+  RotateCcw,
+  Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,7 +14,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import type { LocalizedText } from "@/lib/i18n/config";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { accountRegistrationPath } from "@/lib/auth/returnPath";
 import { ApiRequestError, readApi } from "@/lib/client/api";
@@ -80,7 +81,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [branchLine, setBranchLine] = useState<PuzzlePly[] | null>(null);
-  const [branchExplanation, setBranchExplanation] = useState<LocalizedText | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
@@ -216,7 +216,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       if (data.attempt.outcome === "retry") {
         if (puzzle.category) {
           setBranchLine([...priorProgress, ...data.attempt.displayLine]);
-          setBranchExplanation(data.attempt.feedback);
         }
         setFeedback("incorrect");
       } else if (data.attempt.outcome === "continue") {
@@ -256,7 +255,20 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   function clearTransientState() {
     setFeedback(null);
     setBranchLine(null);
-    setBranchExplanation(null);
+    setError(null);
+    setHintMove(null);
+    setPendingMove(null);
+  }
+
+  function undoPuzzleMove() {
+    if (!branchLine?.length) {
+      clearTransientState();
+      return;
+    }
+
+    const previousLine = branchLine.slice(0, -1);
+    setBranchLine(previousLine.length ? previousLine : null);
+    setFeedback(previousLine.length ? "incorrect" : null);
     setError(null);
     setHintMove(null);
     setPendingMove(null);
@@ -404,6 +416,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                   </button>
                 ) : null}
               </div>
+              {feedback === "incorrect" ? (
+                <div className={styles.inlineIncorrect} role="status">
+                  <strong>{copy.incorrect}</strong>
+                </div>
+              ) : null}
               <GoBoard
                 boardSize={puzzle.boardSize}
                 boardState={displayBoard}
@@ -416,6 +433,16 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
                 viewportSize={puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined}
               />
+              {feedback === "incorrect" ? (
+                <div className={styles.feedbackActions}>
+                  <button className="button button--primary" onClick={clearTransientState} type="button">
+                    <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+                  </button>
+                  <button className="button button--secondary" onClick={undoPuzzleMove} type="button">
+                    <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <aside className={styles.panel}>
@@ -432,13 +459,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 ) : null}
               </div>
               {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}
-              {feedback === "incorrect" ? (
-                <div className={styles.incorrect} role="status">
-                  <strong>{copy.incorrect}</strong>
-                  {branchExplanation ? <p>{branchExplanation[locale] ?? branchExplanation.en}</p> : null}
-                  {branchLine ? <button className="button button--secondary" onClick={clearTransientState} type="button">{copy.retryVariation}</button> : null}
-                </div>
-              ) : null}
               {puzzle.solved ? (
                 <div className={styles.solution} role="status">
                   <span><Check size={18} /> {feedback === "correct" ? copy.correct : copy.solved}</span>

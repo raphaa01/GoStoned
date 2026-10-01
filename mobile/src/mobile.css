@@ -688,3 +688,51 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
   .mobile-app-content .play-pace-column { padding-top: var(--space-3) !important; }
   .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(56vw, calc(100dvh - 230px), 680px); }
 }
+
+/* Give mobile subpages the same quiet, grouped surfaces as the home screen. */
+.mobile-puzzle-screen [class*="workspace"],
+.mobile-learn-screen .learn-practice-entry,
+.mobile-learn-screen .learning-chapters,
+.mobile-learn-screen .learn-chapter,
+.mobile-learn-screen .learn-lesson-focus,
+.mobile-review-screen [class*="gamePicker"],
+.mobile-tab-screen .leaderboard-card,
+.mobile-pushed-screen .friends-page .player-search,
+.mobile-pushed-screen .friends-page .friends-card,
+.mobile-pushed-screen .profile-board-placement,
+.mobile-pushed-screen .profile-history,
+.mobile-pushed-screen .training-game {
+  background: color-mix(in srgb, var(--mobile-surface) 78%, transparent);
+  border: 1px solid var(--mobile-border);
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgb(30 26 18 / 4%);
+}
+
+.mobile-puzzle-screen [class*="workspace"] { padding: var(--space-3) !important; }
+.mobile-puzzle-screen [class*="boardColumn"] { margin-inline: 0 !important; }
+.mobile-puzzle-screen [class*="inlineIncorrect"] { margin-bottom: var(--space-2); padding: 7px 10px; }
+.mobile-puzzle-screen [class*="feedbackActions"] { gap: var(--space-2); margin-top: var(--space-2); }
+.mobile-puzzle-screen [class*="feedbackActions"] button { font-size: 13px; min-height: 42px; }
+
+.mobile-learn-screen .learn-practice-entry,
+.mobile-learn-screen .learning-chapters,
+.mobile-learn-screen .learn-chapter,
+.mobile-learn-screen .learn-lesson-focus,
+.mobile-review-screen [class*="gamePicker"],
+.mobile-tab-screen .leaderboard-card,
+.mobile-pushed-screen .friends-page .player-search,
+.mobile-pushed-screen .friends-page .friends-card,
+.mobile-pushed-screen .profile-board-placement,
+.mobile-pushed-screen .profile-history,
+.mobile-pushed-screen .training-game { padding: var(--space-3) !important; }
+
+.mobile-review-screen [class*="gamePicker"] { border-left: 1px solid var(--mobile-border) !important; }
+.mobile-pushed-screen .friends-page .player-search { border-bottom: 1px solid var(--mobile-border) !important; }
+.mobile-pushed-screen .friends-page .friends-card { border-radius: 14px !important; }
+.mobile-pushed-screen .profile-history { margin-top: var(--space-2) !important; }
+.mobile-pushed-screen .profile-performance { background: color-mix(in srgb, var(--mobile-surface) 78%, transparent); border: 1px solid var(--mobile-border) !important; border-radius: 14px; padding: var(--space-3); }
+.mobile-pushed-screen .profile-rating-band { margin-inline: 0; }
+
+@media (max-width: 370px) {
+  .mobile-puzzle-screen [class*="feedbackActions"] button { gap: 5px; padding-inline: 6px; }
+}
