@@ -154,6 +154,21 @@ test("auth mutation guard rejects non-JSON and cross-origin credential requests"
   )));
 });
 
+test("auth mutations accept only the two exact Capacitor origins", () => {
+  for (const origin of ["capacitor://localhost", "https://localhost"]) {
+    assert.doesNotThrow(() => assertAuthMutationRequest(new NextRequest(
+      "https://gostone.app/api/auth/login",
+      { method: "POST", headers: { Origin: origin, "Sec-Fetch-Site": "cross-site" } },
+    )));
+  }
+  for (const origin of ["capacitor://attacker", "http://localhost", "https://localhost.attacker.example"]) {
+    assert.throws(() => assertAuthMutationRequest(new NextRequest(
+      "https://gostone.app/api/auth/login",
+      { method: "POST", headers: { Origin: origin, "Sec-Fetch-Site": "cross-site" } },
+    )), (error) => error instanceof AuthError && error.code === "request_rejected");
+  }
+});
+
 test("auth mutation guard recovers only the exact addressed loopback origin", () => {
   for (const origin of [
     "http://localhost:3100",

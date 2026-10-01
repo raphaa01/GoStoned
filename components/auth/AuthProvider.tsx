@@ -109,6 +109,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
+    const onMobileAuth = () => { void refresh().catch(() => undefined); };
+    window.addEventListener("gostone:auth-change", onMobileAuth);
+    return () => window.removeEventListener("gostone:auth-change", onMobileAuth);
+  }, [refresh]);
+
+  useEffect(() => {
     if (loading) return;
     const timeout = window.setTimeout(() => {
       refreshRating().catch(() => undefined);

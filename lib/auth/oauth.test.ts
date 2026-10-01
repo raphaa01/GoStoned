@@ -5,6 +5,7 @@ import test from "node:test";
 import { NextRequest } from "next/server";
 import { GET as oauthCallback } from "@/app/api/auth/oauth/[provider]/callback/route";
 import { GET as startOAuth } from "@/app/api/auth/oauth/[provider]/route";
+import { mobileOAuthChallenge } from "./mobileOAuthHandoff";
 import {
   configuredOAuthProviders,
   oauthTransactionCookie,
@@ -89,6 +90,22 @@ test("an unconfigured provider returns to the localized form with a safe error",
   });
 });
 
+test("an unconfigured mobile provider returns to the native app", async () => {
+  await withEnvironment({
+    NEXT_PUBLIC_APP_URL: "https://gostone.test",
+    GOOGLE_CLIENT_ID: undefined,
+    GOOGLE_CLIENT_SECRET: undefined,
+  }, async () => {
+    const challenge = mobileOAuthChallenge("v".repeat(43));
+    assert.ok(challenge);
+    const response = await startOAuth(new NextRequest(
+      `https://gostone.test/api/auth/oauth/google?mobileChallenge=${challenge}`,
+    ), { params: Promise.resolve({ provider: "google" }) });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "com.gostone.app://oauth?error=provider_unavailable");
+  });
+});
+
 test("only fully configured OAuth providers are presented to users", async () => {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const applePrivateKey = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
@@ -149,6 +166,47 @@ test("the callback rejects mismatched state before contacting a provider", async
     assert.equal(response.headers.get("location"), "https://gostone.test/login?oauthError=oauth_failed");
     assert.match(response.headers.get("set-cookie") ?? "", /Max-Age=0/i);
   });
+});
+
+test("mobile OAuth binds a browser transaction to an app-held challenge", async () => {
+  const verifier = "v".repeat(43);
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  assert.equal(mobileOAuthChallenge(verifier), challenge);
+  assert.equal(mobileOAuthChallenge("short"), null);
+  await withEnvironment({
+    NEXT_PUBLIC_APP_URL: "https://gostone.test",
+    GOOGLE_CLIENT_ID: "google-client-id",
+    GOOGLE_CLIENT_SECRET: "google-client-secret",
+  }, async () => {
+    const response = await startOAuth(new NextRequest(
+      `https://gostone.test/api/auth/oauth/google?mobileChallenge=${challenge}`,
+    ), { params: Promise.resolve({ provider: "google" }) });
+    assert.equal(response.status, 307);
+    const transaction = parseOAuthTransaction(response.cookies.get(oauthTransactionCookie("google"))?.value);
+    assert.equal(transaction?.mobileCodeChallenge, challenge);
+
+    const callback = await oauthCallback(new NextRequest(
+      "https://gostone.test/api/auth/oauth/google/callback?state=wrong&code=unused",
+      { headers: { Cookie: `${oauthTransactionCookie("google")}=${serializeOAuthTransaction(transaction!)}` } },
+    ), { params: Promise.resolve({ provider: "google" }) });
+    assert.equal(callback.status, 303);
+    assert.equal(callback.headers.get("location"), "com.gostone.app://oauth?error=oauth_failed");
+  });
+});
+
+test("mobile handoff ledger is one-use and private to the app server", async () => {
+  const [schema, migration, handoff] = await Promise.all([
+    readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../db/migrations/043_mobile_oauth_handoffs.sql", import.meta.url), "utf8"),
+    readFile(new URL("./mobileOAuthHandoff.ts", import.meta.url), "utf8"),
+  ]);
+  for (const sql of [schema, migration]) {
+    assert.match(sql, /CREATE TABLE(?: IF NOT EXISTS)? mobile_oauth_handoffs/);
+    assert.match(sql, /ALTER TABLE mobile_oauth_handoffs ENABLE ROW LEVEL SECURITY/);
+    assert.match(sql, /REVOKE ALL ON mobile_oauth_handoffs FROM PUBLIC/);
+    assert.match(sql, /CREATE POLICY gostone_app_mobile_oauth_access ON mobile_oauth_handoffs/);
+  }
+  assert.match(handoff, /DELETE FROM mobile_oauth_handoffs\s+WHERE code_hash = \$1\s+AND code_challenge = \$2\s+AND expires_at > statement_timestamp\(\)\s+RETURNING/);
 });
 
 test("the canonical schema and numbered migration protect social identities", async () => {

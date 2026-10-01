@@ -143,6 +143,9 @@ for (const abi of ABIS) {
   ], repository, environment);
 
   const destination = join(destinationDirectory, "libgostone_katago_exec.so");
+  const symbols = join(cache, "katago-android", "symbols", abi);
+  mkdirSync(symbols, { recursive: true });
+  copyFileSync(join(build, "katago"), join(symbols, "libgostone_katago_exec.so"));
   copyFileSync(join(build, "katago"), destination);
   run(strip, [destination], repository, environment);
   console.log(`Built KataGo ${KATAGO_VERSION} for ${abi}: ${destination}`);

@@ -22,6 +22,7 @@ type AuthFormProps = {
   configuredOAuthProviders?: readonly OAuthProvider[];
   mode: "login" | "register";
   oauthError?: string | null;
+  onOAuthStart?: (provider: OAuthProvider, href: string) => void;
   reauthenticate?: boolean;
   returnTo?: string | null;
 };
@@ -30,6 +31,7 @@ export function AuthForm({
   configuredOAuthProviders = [],
   mode,
   oauthError = null,
+  onOAuthStart,
   reauthenticate = false,
   returnTo = null,
 }: AuthFormProps) {
@@ -152,13 +154,19 @@ export function AuthForm({
   const socialOptions = configuredOAuthProviders.length ? (
     <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
       {configuredOAuthProviders.includes("google") ? (
-        <a className="auth-social-button" href={socialHref("google")}>
+        <a className="auth-social-button" href={socialHref("google")} onClick={onOAuthStart ? (event) => {
+          event.preventDefault();
+          onOAuthStart("google", socialHref("google"));
+        } : undefined}>
           <GoogleIcon />
           <span>{dictionary.auth.continueWithGoogle}</span>
         </a>
       ) : null}
       {configuredOAuthProviders.includes("apple") ? (
-        <a className="auth-social-button" href={socialHref("apple")}>
+        <a className="auth-social-button" href={socialHref("apple")} onClick={onOAuthStart ? (event) => {
+          event.preventDefault();
+          onOAuthStart("apple", socialHref("apple"));
+        } : undefined}>
           <AppleIcon />
           <span>{dictionary.auth.continueWithApple}</span>
         </a>

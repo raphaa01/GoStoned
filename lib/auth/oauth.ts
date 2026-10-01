@@ -19,6 +19,7 @@ export type OAuthTransaction = Readonly<{
   mode: OAuthMode;
   locale: Locale;
   returnTo: string | null;
+  mobileCodeChallenge?: string;
   expiresAt: number;
 }>;
 
@@ -136,7 +137,7 @@ function randomToken(): string {
 
 export function createOAuthAuthorization(
   provider: OAuthProvider,
-  input: Pick<OAuthTransaction, "mode" | "locale" | "returnTo">,
+  input: Pick<OAuthTransaction, "mode" | "locale" | "returnTo"> & { mobileCodeChallenge?: string },
 ): { authorizationUrl: URL; transaction: OAuthTransaction } {
   const credentials = providerCredentials(provider);
   const redirectUri = oauthCallbackUrl(provider);
@@ -191,6 +192,9 @@ export function parseOAuthTransaction(value: string | undefined): OAuthTransacti
       || (parsed.mode !== "login" && parsed.mode !== "register")
       || typeof parsed.locale !== "string"
       || (parsed.returnTo !== null && typeof parsed.returnTo !== "string")
+      || (parsed.mobileCodeChallenge !== undefined
+        && (typeof parsed.mobileCodeChallenge !== "string"
+          || !/^[A-Za-z0-9_-]{43}$/.test(parsed.mobileCodeChallenge)))
       || typeof parsed.expiresAt !== "number"
       || parsed.expiresAt < Date.now()
     ) return null;

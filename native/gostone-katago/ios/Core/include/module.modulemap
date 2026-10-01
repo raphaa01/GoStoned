@@ -1,0 +1,4 @@
+module GoStoneKataGoCore {
+    header "GoStoneKataGoCore.h"
+    export *
+}

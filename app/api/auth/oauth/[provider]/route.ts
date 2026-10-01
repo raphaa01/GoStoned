@@ -44,12 +44,17 @@ export async function GET(
   const returnTo = safeAuthReturnPath(
     request.nextUrl.searchParams.get("returnTo") ?? undefined,
   );
+  const mobileCodeChallenge = request.nextUrl.searchParams.get("mobileChallenge");
+  if (mobileCodeChallenge !== null && !/^[A-Za-z0-9_-]{43}$/.test(mobileCodeChallenge)) {
+    return new NextResponse("Invalid mobile OAuth challenge.", { status: 400 });
+  }
 
   try {
     const { authorizationUrl, transaction } = createOAuthAuthorization(providerValue, {
       mode,
       locale,
       returnTo,
+      ...(mobileCodeChallenge ? { mobileCodeChallenge } : {}),
     });
     const response = NextResponse.redirect(authorizationUrl);
     response.headers.set("Cache-Control", "no-store, max-age=0");
@@ -65,6 +70,11 @@ export async function GET(
   } catch (error) {
     if (!(error instanceof OAuthConfigurationError)) {
       console.error(`Could not start ${providerValue} sign-in:`, error);
+    }
+    if (mobileCodeChallenge) {
+      const callback = new URL("com.gostone.app://oauth");
+      callback.searchParams.set("error", "provider_unavailable");
+      return NextResponse.redirect(callback, 303);
     }
     return NextResponse.redirect(
       authPage(mode, locale, request.nextUrl.origin, "provider_unavailable", returnTo),

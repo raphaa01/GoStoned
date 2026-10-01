@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { closePool, query } from "../lib/db";
 import { getDatabaseUrl, isLocalDatabase } from "../lib/env";
 import { validateProductionSchemaContract } from "../lib/deployment/productionSchemaContract";
@@ -87,7 +89,19 @@ async function checkProductionSchema(): Promise<void> {
     takebackRls: row.takeback_rls,
   });
 
-  console.log("Production schema requirements are current.");
+  const expectedMigrations = (await readdir(join(process.cwd(), "db", "migrations")))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .sort();
+  const migrationResult = await query<{ filename: string }>(
+    "SELECT filename FROM public.schema_migrations ORDER BY filename",
+  );
+  const applied = new Set(migrationResult.rows.map((migration) => migration.filename));
+  const missing = expectedMigrations.filter((name) => !applied.has(name));
+  if (missing.length) {
+    throw new Error(`Production migrations are missing: ${missing.join(", ")}.`);
+  }
+
+  console.log(`Production schema requirements are current (${expectedMigrations.length} migrations).`);
 }
 
 checkProductionSchema()
