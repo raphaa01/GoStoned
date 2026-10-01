@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   validateProductionSchemaContract,
   type ProductionSchemaSnapshot,
 } from "./productionSchemaContract";
+
+const productionPreflight = readFileSync(
+  new URL("../../scripts/check-production-schema.ts", import.meta.url),
+  "utf8",
+);
 
 const currentSnapshot: ProductionSchemaSnapshot = {
   gameRulesDefault: "'japanese'::text",
@@ -92,4 +98,12 @@ test("rejects a missing or incomplete board-placement preference", () => {
     }),
     /board-placement preference constraint/,
   );
+});
+
+test("production preflight respects the private migration ledger", () => {
+  assert.doesNotMatch(
+    productionPreflight,
+    /SELECT filename FROM public\.schema_migrations/,
+  );
+  assert.match(productionPreflight, /board_placement_constraint/);
 });
