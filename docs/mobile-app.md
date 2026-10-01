@@ -92,11 +92,16 @@ The script discovers the standard Windows, macOS and Linux SDK/JDK locations,
 checks out pinned KataGo and Eigen sources into `.mobile-cache`, cross-compiles
 separate `arm64-v8a` and `x86_64` CPU runtimes, synchronizes verified assets,
 and runs Gradle `assembleDebug`. The first build downloads and compiles the
-pinned native sources; later builds are incremental.
+pinned native sources; later builds are incremental. For a signed Play bundle,
+use `npm run mobile:android:release` with an existing production upload key
+provided through the four `GOSTONE_ANDROID_*` environment variables documented
+in `docs/mobile-store-release.md`. The release bundle contains arm64 only.
 
-Before an iOS release, add the production API hostname and `localhost` to
-`WKAppBoundDomains` in the app's `Info.plist`, then enable
-`limitsNavigationsToAppBoundDomains` after OAuth/deep-link testing.
+`Info.plist` includes the production API hostname and Capacitor's internal
+`localhost` asset hostname in `WKAppBoundDomains`. The release API remains
+`https://gostone.app`; the internal hostname does not make network requests to
+a development server. The app-bound navigation switch remains off until OAuth
+and link behavior is verified with the production account.
 
 ## KataGo native status
 
@@ -111,60 +116,19 @@ KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
   generic failure. It stops at severe thermal pressure and never calls the
   server analysis route. The device test verifies actual multi-position model
   inference on Android API 36.
-- **iOS:** source contract, model verification, project wiring and an explicit
-  fail-closed bridge are ready. The Metal/CoreML core must still be compiled on
-  macOS and tested on real iPhones. Upstream commit
-  `fd0723fdbc0e9d82cf269c9630af8c27c57c07c4` does not provide an iOS
-  library/XCFramework target, so Windows cannot honestly complete that link.
+- **iOS:** the in-process bridge, model verification and Metal/MPSGraph build
+  recipe are ready for iOS 16 and newer. `npm run mobile:katago:ios` builds the
+  pinned upstream commit as arm64 device and Apple-silicon Simulator slices,
+  packages them as a local XCFramework, and makes the Swift plugin available.
+  Without that generated framework the same package deliberately stays
+  fail-closed. The simulator slice verifies compile/link integration but runtime
+  inference stays disabled because Xcode 26.6's simulator MPSGraph driver aborts
+  during execution. Real-iPhone performance, battery and thermal validation
+  remains untested on physical devices.
 - **Website:** continues to use the existing server worker. Mobile native paths
   never silently fall back to Modal or the KataGo server.
 
-See `native/gostone-katago/README.md` for the platform-specific release gates.
-
-## Exact release work still required
-
-### iOS — perform on a Mac
-
-1. Install Xcode 26 or newer, accept its license, install the iOS Simulator
-   runtime, and select the project’s Apple Developer signing team.
-2. Clone the repository, run `npm ci`, `npm run mobile:build`, and
-   `npm run mobile:sync`; open `ios/App/App.xcworkspace` in Xcode.
-3. Build KataGo v1.18.2 at the pinned commit as an arm64 device plus simulator
-   XCFramework using Metal (CoreML may be evaluated only if it produces the same
-   contract). Link it to `GoStoneKataGoPlugin`, replace the fail-closed status,
-   and keep the pinned model hash check, cancellation, thermal handling,
-   progressive preview/quality events, adaptive 900-visit budget, and
-   90-second result-preserving safety boundary.
-4. Run contract tests in Simulator, then test model loading, a complete review,
-   cancellation, background/foreground, memory pressure, and thermal handling
-   on at least one real older iPhone and one current iPhone. Confirm that no
-   request reaches the server analysis endpoint.
-5. Configure the final bundle identifier, Associated Domains / OAuth callback
-   URLs, `WKAppBoundDomains`, privacy strings, app icons, Apple sign-in (when
-   the production login providers require it), and production API origin.
-6. Test all five tabs, auth, matchmaking and reconnect, a bot game, sharing,
-   Dynamic Type, VoiceOver, light/dark mode, iPhone SE-sized layout, a modern
-   iPhone, and iPad split layouts. Archive a Release build, validate it, upload
-   to TestFlight, complete App Privacy/export declarations, and submit.
-
-Windows can prepare the Xcode sources and assets, but cannot compile/link Metal,
-codesign an iOS app, run the iOS Simulator, or produce an App Store archive.
-
-### Android — finish the release build
-
-1. Open `android/` in Android Studio, set the final application ID/version,
-   production icons and store metadata, then configure a release keystore via
-   local/CI secrets (never commit it). Enable Google Play App Signing.
-2. Run `npm ci`, `npm run mobile:build`, `npm run mobile:sync`,
-   `npm run mobile:android:build`, `npm run typecheck`, and `npm test`.
-3. Test the local 38 MB KataGo model, first-preview latency, and progressive
-   quality pass on real arm64 devices:
-   one low/mid-range device and one current flagship. Verify cancellation,
-   backgrounding, offline analysis, heat, memory, and that completed analyses
-   reopen from local storage without a network call.
-4. Verify production OAuth/deep links, cookies, API hostname, notification and
-   privacy behavior; exercise all tabs, matchmaking/reconnect, the 10-second bot
-   fallback, static share links, TalkBack, font scaling, phones, and a tablet.
-5. Build a signed Release AAB, run Play pre-launch/internal testing, inspect
-   crashes and ANRs, complete Data safety/content rating/store listing, then
-   promote only the tested artifact to production.
+See `native/gostone-katago/README.md` for the native build details and
+`docs/mobile-store-release.md` for the reproducible signing, archive,
+verification, and remaining account gates. Open `ios/App/App.xcodeproj` in
+Xcode; a top-level `ios/App/App.xcworkspace` does not exist.
