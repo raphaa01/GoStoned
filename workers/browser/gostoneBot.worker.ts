@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import * as ort from "onnxruntime-web/wasm";
+import { chooseLearnBotMove } from "@/lib/learn/lessonEngine";
 import {
   applyMove,
   boardHash,
@@ -385,6 +386,9 @@ function settlementProposal(
 
 async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneBotWorkerResponse> {
   try {
+    if (request.kind === "capture-go") {
+      return { id: request.id, ok: true, kind: "capture-go", point: chooseLearnBotMove(request.position) };
+    }
     const lastColor = request.position.moves.at(-1)?.color;
     const modelPosition: GoStoneBotPosition = request.kind === "move"
       ? request.position
