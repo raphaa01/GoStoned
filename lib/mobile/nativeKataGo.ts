@@ -44,7 +44,7 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 function analysisKey(game: GameState) {
-  return `${game.id}:${game.version}:${MOBILE_KATAGO.engineVersion}:${MOBILE_KATAGO.modelSha256}`;
+  return `${game.id}:${game.version}:${MOBILE_KATAGO.engineVersion}:${MOBILE_KATAGO.modelSha256}:preview-${MOBILE_KATAGO.previewVisits}`;
 }
 
 async function storedResult(game: GameState): Promise<GameAnalysisResult | null> {
@@ -66,11 +66,11 @@ async function storeResult(game: GameState, result: GameAnalysisResult): Promise
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
-      const request = database.transaction(STORE_NAME, "readwrite")
-        .objectStore(STORE_NAME)
-        .put({ key: analysisKey(game), result });
-      request.onerror = () => reject(request.error ?? new Error("Local analysis storage failed."));
-      request.onsuccess = () => resolve();
+      const transaction = database.transaction(STORE_NAME, "readwrite");
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Local analysis storage failed."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Local analysis storage was interrupted."));
+      transaction.objectStore(STORE_NAME).put({ key: analysisKey(game), result });
     });
   } finally {
     database.close();
@@ -110,7 +110,7 @@ export function assertNativeKataGoStatus(status: NativeKataGoStatus): void {
 }
 
 export async function readNativeKataGoAnalysis(game: GameState): Promise<AnalysisJobView | null> {
-  return job(game, await storedResult(game));
+  return job(game, await storedResult(game).catch(() => null));
 }
 
 function runningJob(
@@ -145,6 +145,7 @@ export async function runNativeKataGoAnalysis(
   const turns = new Map<number, KataGoTurnResult>();
   let latestProgress: MobileKataGoProgress | null = null;
   let latestVisitsPerTurn = 1;
+  let revealElapsed = false;
   let lastPublishedMoves = 0;
   let lastPublishedRefined = 0;
   let lastPersistedMoves = 0;
@@ -152,8 +153,8 @@ export async function runNativeKataGoAnalysis(
   let persistence = Promise.resolve();
   const queuePersistence = (result: GameAnalysisResult) => {
     persistence = persistence
-      .catch(() => undefined)
-      .then(() => storeResult(game, result));
+      .then(() => storeResult(game, result))
+      .catch(() => undefined);
   };
   const publish = (force: boolean) => {
     if (!latestProgress) return;
@@ -162,14 +163,14 @@ export async function runNativeKataGoAnalysis(
       version: MOBILE_KATAGO.engineVersion,
       model: MOBILE_KATAGO.modelName,
       visitsPerTurn: latestProgress.visitsPerTurn,
-    });
+    }, undefined, { allowRootOnly: true });
     if (!result) return;
     const completedMoves = result.moves.length;
     const refinedMoves = latestProgress.phase === "quality"
       ? Math.min(input.moves.length, Math.max(0, latestProgress.completedTurns))
       : 0;
     const previewThreshold = Math.min(10, input.moves.length);
-    if (!force && completedMoves < previewThreshold) return;
+    if (!force && !revealElapsed && completedMoves < previewThreshold) return;
     if (!force && completedMoves === lastPublishedMoves && refinedMoves - lastPublishedRefined < 2) return;
     lastPublishedMoves = completedMoves;
     lastPublishedRefined = refinedMoves;
@@ -195,7 +196,10 @@ export async function runNativeKataGoAnalysis(
     if (progress.turn) turns.set(progress.turn.turnNumber, progress.turn);
     publish(false);
   });
-  const revealTimer = window.setTimeout(() => publish(true), 28_000);
+  const revealTimer = window.setTimeout(() => {
+    revealElapsed = true;
+    publish(true);
+  }, 10_000);
   let response: Awaited<ReturnType<GoStoneKataGoPlugin["analyze"]>>;
   try {
     response = await NativeKataGo.analyze({
@@ -212,10 +216,12 @@ export async function runNativeKataGoAnalysis(
         model: MOBILE_KATAGO.modelName,
         visitsPerTurn: latestVisitsPerTurn,
       },
+      undefined,
+      { allowRootOnly: true },
     );
     if (!partial) throw analysisError;
     await persistence.catch(() => undefined);
-    await storeResult(game, partial);
+    await storeResult(game, partial).catch(() => undefined);
     return job(game, partial)!;
   } finally {
     window.clearTimeout(revealTimer);
@@ -228,14 +234,14 @@ export async function runNativeKataGoAnalysis(
         version: MOBILE_KATAGO.engineVersion,
         model: MOBILE_KATAGO.modelName,
         visitsPerTurn: response.visitsPerTurn,
-      })
+      }, undefined, { allowRootOnly: true })
     : buildGameAnalysis(input, ordered, {
         version: MOBILE_KATAGO.engineVersion,
         model: MOBILE_KATAGO.modelName,
         visitsPerTurn: response.visitsPerTurn,
-      });
+      }, undefined, { allowRootOnly: true });
   if (!result) throw new Error("KataGo did not finish enough positions for a review.");
   await persistence.catch(() => undefined);
-  await storeResult(game, result);
+  await storeResult(game, result).catch(() => undefined);
   return job(game, result)!;
 }

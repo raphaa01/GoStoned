@@ -54,7 +54,7 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(android, /MAX_VISITS = 80/);
   assert.match(android, /THERMAL_STATUS_SEVERE/);
   assert.match(android, /notifyListeners\("progress"/);
-  assert.match(android, /PREVIEW_VISITS = 1/);
+  assert.match(android, new RegExp(`PREVIEW_VISITS = ${MOBILE_KATAGO.previewVisits}`));
   assert.match(android, /PREVIEW_PV_LENGTH = 3/);
   assert.match(android, /INITIAL_PREVIEW_POSITIONS = 11/);
   assert.match(android, /PREVIEW_CHUNK_POSITIONS = 16/);
@@ -65,7 +65,7 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(android, /"preview"/);
   assert.match(android, /"quality"/);
   assert.match(ios, /notifyListeners\("progress"/);
-  assert.match(ios, /previewVisits = 1/);
+  assert.match(ios, new RegExp(`previewVisits = ${MOBILE_KATAGO.previewVisits}`));
   assert.match(ios, /previewPVLength = 3/);
   assert.match(ios, /initialPreviewPositions = 11/);
   assert.match(ios, /previewChunkPositions = 16/);
@@ -75,7 +75,7 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(ios, /maximumRuntimeSeconds = 90/);
   assert.match(ios, /totalVisitBudget = 900/);
   assert.match(ios, /didEnterBackgroundNotification/);
-  assert.match(client, /setTimeout\(\(\) => publish\(true\), 28_000\)/);
+  assert.match(client, /revealElapsed = true;\s+publish\(true\);\s+}, 10_000\)/);
   assert.match(client, /PREVIEW_PERSIST_INTERVAL = 16/);
   assert.match(client, /QUALITY_PERSIST_INTERVAL = 4/);
   assert.match(client, /queuePersistence\(result\)/);

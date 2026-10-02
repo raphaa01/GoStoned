@@ -103,24 +103,59 @@ function emptySummary(): Record<MoveClassification, number> {
   return { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
 }
 
+const previewExplanation: LocalizedText = {
+  en: "Quick position estimate. No searched move recommendation is available for this move yet.",
+  de: "Schnelle Stellungsbewertung. Für diesen Zug liegt noch keine geprüfte Zugempfehlung vor.",
+  fr: "Estimation rapide de la position. Aucune recommandation de coup approfondie n’est encore disponible.",
+  es: "Estimación rápida de la posición. Aún no hay una recomendación de jugada comprobada.",
+  zh: "快速局面评估。此手棋尚无经过搜索的落子建议。",
+  ja: "局面の簡易評価です。この手の探索済み候補はまだありません。",
+  ko: "빠른 형세 평가입니다. 이 수에 대한 탐색 기반 추천은 아직 없습니다.",
+  ky: "Позициянын тез баасы. Бул жүрүш үчүн изилденген сунуш азырынча жок.",
+};
+
+type AnalysisBuildOptions = { allowRootOnly?: boolean };
+
 export function buildGameAnalysis(
   input: AnalysisInput,
   turns: KataGoTurnResult[],
   engine: { version: string; model: string; visitsPerTurn: number },
   analyzedAt = new Date().toISOString(),
+  options: AnalysisBuildOptions = {},
 ): GameAnalysisResult {
   const byTurn = new Map(turns.map((turn) => [turn.turnNumber, turn]));
   const analyses: MoveAnalysis[] = input.moves.map((played, index) => {
     const before = byTurn.get(index);
     const after = byTurn.get(index + 1);
-    if (!before || !after || before.moveInfos.length === 0) {
+    if (!before || !after) {
       throw new Error(`KataGo did not return a complete result for move ${index + 1}.`);
+    }
+    const actualWinrate = moverPerspective(normalizeWinrate(after.rootInfo.winrate), after.rootInfo.currentPlayer, played.color);
+    const actualScore = moverScore(after.rootInfo.scoreLead, after.rootInfo.currentPlayer, played.color);
+    if (before.moveInfos.length === 0) {
+      if (!options.allowRootOnly) {
+        throw new Error(`KataGo did not return a complete result for move ${index + 1}.`);
+      }
+      return {
+        moveNumber: index + 1,
+        color: played.color,
+        playedMove: played.move,
+        classification: null,
+        provisional: true,
+        winrateBefore: normalizeWinrate(before.rootInfo.winrate),
+        winrateAfter: actualWinrate,
+        winrateLoss: null,
+        scoreLeadBefore: before.rootInfo.scoreLead,
+        scoreLeadAfter: actualScore,
+        scoreLoss: null,
+        bestMove: null,
+        alternatives: [],
+        explanation: previewExplanation,
+      };
     }
     const ranked = [...before.moveInfos].sort((a, b) => a.order - b.order);
     const best = ranked[0];
     const second = ranked[1];
-    const actualWinrate = moverPerspective(normalizeWinrate(after.rootInfo.winrate), after.rootInfo.currentPlayer, played.color);
-    const actualScore = moverScore(after.rootInfo.scoreLead, after.rootInfo.currentPlayer, played.color);
     const bestWinrate = normalizeWinrate(best.winrate);
     const loss = Math.max(0, bestWinrate - actualWinrate);
     const scoreLoss = Math.max(0, best.scoreLead - actualScore);
@@ -137,6 +172,7 @@ export function buildGameAnalysis(
       color: played.color,
       playedMove: played.move,
       classification,
+      ...(options.allowRootOnly ? { provisional: Math.min(before.rootInfo.visits, after.rootInfo.visits) < 40 } : {}),
       winrateBefore: normalizeWinrate(before.rootInfo.winrate),
       winrateAfter: actualWinrate,
       winrateLoss: loss,
@@ -155,7 +191,9 @@ export function buildGameAnalysis(
     };
   });
   const summary = emptySummary();
-  for (const move of analyses) summary[move.classification] += 1;
+  for (const move of analyses) {
+    if (move.classification !== null) summary[move.classification] += 1;
+  }
   return {
     contractVersion: ANALYSIS_ENGINE_CONTRACT_VERSION,
     engine: { name: "KataGo", ...engine },
@@ -173,6 +211,7 @@ export function buildProgressiveGameAnalysis(
   turns: KataGoTurnResult[],
   engine: { version: string; model: string; visitsPerTurn: number },
   analyzedAt = new Date().toISOString(),
+  options: AnalysisBuildOptions = {},
 ): GameAnalysisResult | null {
   const byTurn = new Map(turns.map((turn) => [turn.turnNumber, turn]));
   let completedMoves = 0;
@@ -189,5 +228,6 @@ export function buildProgressiveGameAnalysis(
     turns.filter((turn) => turn.turnNumber <= completedMoves),
     engine,
     analyzedAt,
+    options,
   );
 }

@@ -70,14 +70,16 @@ export type MoveAnalysis = {
   moveNumber: number;
   color: Stone;
   playedMove: string;
-  classification: MoveClassification;
+  // A one-visit root evaluation has no searched move candidate yet.
+  classification: MoveClassification | null;
+  provisional?: boolean;
   winrateBefore: number;
   winrateAfter: number;
-  winrateLoss: number;
+  winrateLoss: number | null;
   scoreLeadBefore: number;
   scoreLeadAfter: number;
-  scoreLoss: number;
-  bestMove: string;
+  scoreLoss: number | null;
+  bestMove: string | null;
   alternatives: AnalysisAlternative[];
   explanation: LocalizedText;
 };
