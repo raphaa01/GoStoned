@@ -8,6 +8,12 @@ export type ProductionSchemaSnapshot = Readonly<{
   queueAdaptiveConstraint: string | null;
   initialRatingPolicyConstraint: string | null;
   puzzleCategoryConstraint: string | null;
+  boardPlacementDataType: string | null;
+  boardPlacementDefault: string | null;
+  boardPlacementNullable: string | null;
+  boardPlacementConstraint: string | null;
+  analysisProgressDataType: string | null;
+  analysisProgressConstraint: string | null;
   takebackRls: boolean;
 }>;
 
@@ -24,6 +30,38 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (snapshot.analysisProgressDataType !== "jsonb") {
+    throw new Error(
+      "Production database schema is stale: progressive analysis column.",
+    );
+  }
+  for (const fragment of ["status = 'running'", "progress IS NOT NULL"]) {
+    requireFragment(
+      snapshot.analysisProgressConstraint,
+      fragment,
+      "progressive analysis result constraint",
+    );
+  }
+  if (
+    snapshot.boardPlacementDataType !== "text"
+    || snapshot.boardPlacementNullable !== "NO"
+  ) {
+    throw new Error(
+      "Production database schema is stale: board-placement preference column.",
+    );
+  }
+  requireFragment(
+    snapshot.boardPlacementDefault,
+    "zoom",
+    "board-placement preference default",
+  );
+  for (const fragment of ["zoom", "direct"]) {
+    requireFragment(
+      snapshot.boardPlacementConstraint,
+      fragment,
+      "board-placement preference constraint",
+    );
+  }
   requireFragment(
     snapshot.initialRatingPolicyConstraint,
     "starting-strength-v2",

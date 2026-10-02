@@ -18,6 +18,8 @@ test-results/
 /native/gostone-katago/android/build/
 /native/gostone-katago/android/src/main/jniLibs/
 /native/gostone-katago/.build/
+/native/gostone-katago/ios/Frameworks/
+/artifacts/release/
 
 # environment files
 .env

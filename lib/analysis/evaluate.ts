@@ -10,15 +10,29 @@ import {
 } from "./types";
 import { normalizeWinrate } from "./presentation";
 
-export function classifyMove(winrateLoss: number, bestMove: boolean, uniqueness: number): MoveClassification {
-  if (bestMove && winrateLoss <= 0.01 && uniqueness >= 0.08) return "brilliant";
+export function classifyMove(
+  winrateLoss: number,
+  bestMove: boolean,
+  uniqueness: number,
+  scoreLoss = 0,
+  evidenceVisits = 0,
+): MoveClassification {
+  const reliable = evidenceVisits >= 40;
+  if (
+    reliable
+    && bestMove
+    && winrateLoss <= 0.005
+    && scoreLoss <= 0.5
+    && uniqueness >= 0.15
+  ) return "brilliant";
   if (bestMove && winrateLoss <= 0.012) return "best";
-  if (winrateLoss <= 0.015) return "great";
-  if (winrateLoss <= 0.03) return "excellent";
-  if (winrateLoss <= 0.06) return "good";
-  if (winrateLoss <= 0.12) return "inaccuracy";
-  if (winrateLoss <= 0.22) return "mistake";
-  return "blunder";
+  if (winrateLoss <= 0.02 && scoreLoss <= 1) return "great";
+  if (winrateLoss <= 0.045 && scoreLoss <= 2) return "excellent";
+  if (winrateLoss <= 0.09 && scoreLoss <= 3) return "good";
+  if (!reliable) return "inaccuracy";
+  if (winrateLoss >= 0.35 && scoreLoss >= 5) return "blunder";
+  if (winrateLoss >= 0.18 || scoreLoss >= 5) return "mistake";
+  return "inaccuracy";
 }
 
 function moverPerspective(value: number, resultPlayer: "B" | "W", mover: "black" | "white") {
@@ -111,7 +125,13 @@ export function buildGameAnalysis(
     const loss = Math.max(0, bestWinrate - actualWinrate);
     const scoreLoss = Math.max(0, best.scoreLead - actualScore);
     const uniqueness = second ? Math.max(0, bestWinrate - normalizeWinrate(second.winrate)) : 0;
-    const classification = classifyMove(loss, best.move.toLowerCase() === played.move.toLowerCase(), uniqueness);
+    const classification = classifyMove(
+      loss,
+      best.move.toLowerCase() === played.move.toLowerCase(),
+      uniqueness,
+      scoreLoss,
+      Math.min(before.rootInfo.visits, after.rootInfo.visits),
+    );
     return {
       moveNumber: index + 1,
       color: played.color,

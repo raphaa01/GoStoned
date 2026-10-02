@@ -1617,48 +1617,55 @@ for (const locale of ["en", "de"] as const) {
     const touchProject = testInfo.project.name.endsWith("-touch");
     if (touchProject) {
       await grid.evaluate((element) => element.scrollIntoView({ block: "start" }));
-      const overviewBoard = await page.locator(".go-board").boundingBox();
-      expect(overviewBoard).not.toBeNull();
-      if (!overviewBoard) return;
+      const board = page.locator(".go-board");
+      const boardBounds = await board.boundingBox();
+      const firstIntersection = grid.getByRole("gridcell").first();
+      const firstIntersectionBounds = await firstIntersection.boundingBox();
+      expect(boardBounds).not.toBeNull();
+      expect(firstIntersectionBounds).not.toBeNull();
+      if (!boardBounds || !firstIntersectionBounds) return;
 
-      await page.touchscreen.tap(
-        overviewBoard.x + overviewBoard.width / 2,
-        overviewBoard.y + overviewBoard.height / 2,
-      );
-      await expect(page.locator(".go-board-shell")).toHaveAttribute("data-precision", "true");
-      const firstPreview = page.getByRole("gridcell", { selected: true });
-      await expect(firstPreview).toHaveCount(1);
-      await expect(firstPreview).toBeFocused();
-      await expect(firstPreview).toHaveAttribute("tabindex", "0");
+      const touchSession = await page.context().newCDPSession(page);
+      await touchSession.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{
+          x: boardBounds.x + boardBounds.width / 2,
+          y: boardBounds.y + boardBounds.height / 2,
+        }],
+      });
+      await expect(page.locator(".go-board-shell")).toHaveAttribute("data-touch-lens", "true");
+      const magnifier = page.locator(".touch-magnifier");
+      await expect(magnifier).toBeVisible();
+      await expect(magnifier).toHaveAttribute("data-placement", /above|below/);
+      await expect(page.locator(".touch-magnifier-crosshair")).toHaveCount(1);
+      const magnifierBounds = await magnifier.boundingBox();
+      const touchY = boardBounds.y + boardBounds.height / 2;
+      expect(magnifierBounds).not.toBeNull();
+      expect(
+        magnifierBounds
+          ? magnifierBounds.y + magnifierBounds.height <= touchY - 48
+            || magnifierBounds.y >= touchY + 48
+          : false,
+        "the touch lens must stay clear of the finger",
+      ).toBe(true);
       expect(harness.moveBodies).toEqual([]);
 
-      const showWholeBoard = page.getByRole("button", { name: localeCopy.showWholeBoard });
-      await expectControlInsideViewport(page, page.locator(".precision-placement-toolbar"), false);
-      await expectControlInsideViewport(page, showWholeBoard, false);
-      await showWholeBoard.focus();
-      await showWholeBoard.press("Enter");
-      await expect(page.locator(".go-board-shell")).toHaveAttribute("data-precision", "false");
-      await expect(page.locator('[role="gridcell"]:focus')).toHaveCount(1);
+      await touchSession.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{
+          x: firstIntersectionBounds.x + firstIntersectionBounds.width / 2,
+          y: firstIntersectionBounds.y + firstIntersectionBounds.height / 2,
+        }],
+      });
+      await expect(firstIntersection).toHaveAttribute("aria-selected", "true");
+      expect(harness.moveBodies).toEqual([]);
 
-      const resetBoard = await page.locator(".go-board").boundingBox();
-      expect(resetBoard).not.toBeNull();
-      if (!resetBoard) return;
-      await page.touchscreen.tap(
-        resetBoard.x + resetBoard.width / 2,
-        resetBoard.y + resetBoard.height / 2,
-      );
-      const preview = page.getByRole("gridcell", { selected: true });
-      await expect(preview).toHaveCount(1);
-      await expect(preview).toBeFocused();
-      await expect(preview).toHaveAttribute("tabindex", "0");
-      expect(harness.moveBodies).toEqual([]);
-      const differentPreview = grid.getByRole("gridcell").first();
-      await differentPreview.tap();
-      await expect(differentPreview).toHaveAttribute("aria-selected", "true");
-      await expect(differentPreview).toBeFocused();
-      await expect(differentPreview).toHaveAttribute("tabindex", "0");
-      expect(harness.moveBodies).toEqual([]);
-      await differentPreview.tap();
+      await touchSession.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await touchSession.detach();
+      await expect(page.locator(".go-board-shell")).toHaveAttribute("data-touch-lens", "false");
     } else {
       const firstIntersection = grid.getByRole("gridcell").first();
       await firstIntersection.focus();

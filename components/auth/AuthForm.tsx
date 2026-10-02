@@ -10,6 +10,7 @@ import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
 import type { StartingStrength } from "@/lib/rating/preferences";
+import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
 
 type FormError = {
@@ -21,6 +22,7 @@ type AuthFormProps = {
   configuredOAuthProviders?: readonly OAuthProvider[];
   mode: "login" | "register";
   oauthError?: string | null;
+  onOAuthStart?: (provider: OAuthProvider, href: string) => void;
   reauthenticate?: boolean;
   returnTo?: string | null;
 };
@@ -29,6 +31,7 @@ export function AuthForm({
   configuredOAuthProviders = [],
   mode,
   oauthError = null,
+  onOAuthStart,
   reauthenticate = false,
   returnTo = null,
 }: AuthFormProps) {
@@ -51,7 +54,10 @@ export function AuthForm({
     return `/api/auth/oauth/${provider}?${parameters.toString()}`;
   }
 
-  async function authenticate(strength?: StartingStrength): Promise<boolean> {
+  async function authenticate(
+    strength?: StartingStrength,
+    boardPlacement: BoardPlacementPreference = "zoom",
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -64,6 +70,7 @@ export function AuthForm({
               password,
               startingStrength: strength?.estimate ?? "unspecified",
               knownRank: strength?.knownRank ?? null,
+              boardPlacement,
             }
           : { username, password }),
       });
@@ -147,13 +154,19 @@ export function AuthForm({
   const socialOptions = configuredOAuthProviders.length ? (
     <div className="auth-social" aria-label={dictionary.auth.socialOptions}>
       {configuredOAuthProviders.includes("google") ? (
-        <a className="auth-social-button" href={socialHref("google")}>
+        <a className="auth-social-button" href={socialHref("google")} onClick={onOAuthStart ? (event) => {
+          event.preventDefault();
+          onOAuthStart("google", socialHref("google"));
+        } : undefined}>
           <GoogleIcon />
           <span>{dictionary.auth.continueWithGoogle}</span>
         </a>
       ) : null}
       {configuredOAuthProviders.includes("apple") ? (
-        <a className="auth-social-button" href={socialHref("apple")}>
+        <a className="auth-social-button" href={socialHref("apple")} onClick={onOAuthStart ? (event) => {
+          event.preventDefault();
+          onOAuthStart("apple", socialHref("apple"));
+        } : undefined}>
           <AppleIcon />
           <span>{dictionary.auth.continueWithApple}</span>
         </a>

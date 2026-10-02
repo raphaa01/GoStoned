@@ -17,17 +17,34 @@ test("the native bundle uses its app shell instead of the website chrome", () =>
   }
   assert.match(shell, /showPlayAction/);
   assert.match(shell, /mobile-play-dock/);
+  assert.match(app, /case "\/profile":[\s\S]*?<MobileProfile/);
+  assert.match(app, /case "\/review":[\s\S]*?<ReviewGuide/);
+  assert.match(app, /case "\/puzzles":[\s\S]*?<PuzzleWorkspace/);
 });
 
-test("mobile chrome is fixed, inset-safe, responsive, and only glassy on iOS", () => {
+test("web and native review distinguish a service failure from an empty history", () => {
+  const review = source("components", "review", "ReviewGuide.tsx");
+
+  assert.match(review, /localizedApiError/);
+  assert.match(review, /role="alert"/);
+  assert.match(review, /setRetryRevision/);
+  assert.doesNotMatch(review, /\.catch\(\(\) => undefined\)/);
+});
+
+test("mobile chrome is inset-safe, responsive, and delegates iOS glass to UIKit", () => {
   const css = source("mobile", "src", "mobile.css");
+  const sceneDelegate = source("ios", "App", "App", "SceneDelegate.swift");
 
   assert.match(css, /\.mobile-tab-bar\s*\{[\s\S]*?position:\s*fixed/);
   assert.match(css, /env\(safe-area-inset-bottom/);
   assert.match(css, /@media\s*\(min-width:\s*760px\)/);
   assert.match(css, /@media\s*\(max-width:\s*370px\)/);
-  assert.match(css, /data-mobile-platform="ios"[\s\S]*?backdrop-filter/);
-  assert.doesNotMatch(css, /data-mobile-platform="android"[\s\S]*?backdrop-filter/);
+  assert.match(css, /data-native-tab-bar="true"[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(css, /backdrop-filter/);
+  assert.match(sceneDelegate, /UITabBar\(\)/);
+  assert.match(sceneDelegate, /nativeTabBar\.isTranslucent = true/);
+  assert.match(sceneDelegate, /GoStoneBridgeViewController\(\)/);
+  assert.doesNotMatch(sceneDelegate, /UIGlassEffect|UIBlurEffect/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });
 

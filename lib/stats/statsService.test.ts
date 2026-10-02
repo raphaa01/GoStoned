@@ -83,6 +83,7 @@ test("profile reads the global ledger, preferences, and bot disclosure", async (
       is_provisional: false, algorithm_version: "glicko2-v1-tau-0.5",
       last_rating_period_at: at, highest_rating: 1340, rating_change_30_days: 25,
       display_preference: "both", bot_match_preference: "never",
+      board_placement: "zoom",
       handicap_preference: "even-only", preference_revision: 1,
       starting_strength_estimate: "beginner", known_rank: null,
     }], rowCount: 1 };
@@ -98,6 +99,7 @@ test("profile reads the global ledger, preferences, and bot disclosure", async (
   const profile = await withPool(pool, () => getPlayerProfileStats("user:11111111-1111-4111-8111-111111111111"));
   assert.equal(profile.rating.rating, 1320);
   assert.equal(profile.preferences.botMatchPreference, "never");
+  assert.equal(profile.preferences.boardPlacement, "zoom");
   assert.deepEqual(profile.recentGames[0], {
     gameId: "game-1", boardSize: 19, timeControl: "rapid", opponentName: "KataGo",
     opponentIsBot: true, opponentBotProfileVersion: null, result: "no-result",

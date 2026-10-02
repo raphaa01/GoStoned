@@ -51,6 +51,22 @@ CREATE TABLE IF NOT EXISTS oauth_registration_intents (
 CREATE INDEX IF NOT EXISTS idx_oauth_registration_intents_expires
   ON oauth_registration_intents(expires_at);
 
+CREATE TABLE IF NOT EXISTS mobile_oauth_handoffs (
+  code_hash TEXT PRIMARY KEY CHECK (code_hash ~ '^[0-9a-f]{64}$'),
+  code_challenge TEXT NOT NULL CHECK (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple')),
+  provider_subject TEXT NOT NULL CHECK (CHAR_LENGTH(provider_subject) BETWEEN 1 AND 255),
+  email TEXT CHECK (email IS NULL OR CHAR_LENGTH(email) <= 320),
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  display_name TEXT CHECK (display_name IS NULL OR CHAR_LENGTH(display_name) <= 255),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  CHECK (expires_at > created_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mobile_oauth_handoffs_expires
+  ON mobile_oauth_handoffs(expires_at);
+
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_size INT NOT NULL CHECK (board_size IN (9, 13, 19)),
@@ -1537,6 +1553,7 @@ ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_identities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oauth_registration_intents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mobile_oauth_handoffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_share_links ENABLE ROW LEVEL SECURITY;
@@ -1564,13 +1581,14 @@ REVOKE ALL ON player_blocks FROM PUBLIC;
 REVOKE ALL ON player_reports FROM PUBLIC;
 REVOKE ALL ON auth_identities FROM PUBLIC;
 REVOKE ALL ON oauth_registration_intents FROM PUBLIC;
+REVOKE ALL ON mobile_oauth_handoffs FROM PUBLIC;
 REVOKE ALL ON friendships, friend_messages, friend_game_invites FROM PUBLIC;
 REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, game_share_links, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, mobile_oauth_handoffs, games, moves, game_share_links, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,
@@ -1580,7 +1598,7 @@ BEGIN
     REVOKE ALL ON SEQUENCE friend_messages_id_seq FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, games, moves, game_share_links, player_stats, player_rating_history,
+    REVOKE ALL ON schema_migrations, users, auth_identities, oauth_registration_intents, mobile_oauth_handoffs, games, moves, game_share_links, player_stats, player_rating_history,
       matchmaking_queue, user_sessions, guest_sessions, auth_rate_limits, game_messages,
       friendships, friend_messages, friend_game_invites,
       player_blocks, player_reports,
@@ -1597,6 +1615,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
     GRANT SELECT, INSERT, UPDATE ON auth_identities TO gostone_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_registration_intents TO gostone_app;
+    GRANT SELECT, INSERT, DELETE ON mobile_oauth_handoffs TO gostone_app;
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON friendships, friend_messages, friend_game_invites TO gostone_app;
     GRANT USAGE, SELECT ON SEQUENCE friend_messages_id_seq TO gostone_app;
@@ -1648,6 +1667,16 @@ BEGIN
          AND policyname = 'gostone_app_oauth_registration_access'
     ) THEN
       CREATE POLICY gostone_app_oauth_registration_access ON oauth_registration_intents
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public'
+         AND tablename = 'mobile_oauth_handoffs'
+         AND policyname = 'gostone_app_mobile_oauth_access'
+    ) THEN
+      CREATE POLICY gostone_app_mobile_oauth_access ON mobile_oauth_handoffs
         FOR ALL TO gostone_app USING (true) WITH CHECK (true);
     END IF;
   END IF;
@@ -3384,7 +3413,6 @@ ALTER TABLE puzzles
       AND variation ? 'refutations'
     )
   );
-
 -- Current rules activation. Historical Chinese rows retain their exact tuple;
 -- new application writes use Japanese territory scoring.
 ALTER TABLE games
@@ -3598,3 +3626,124 @@ CREATE TABLE IF NOT EXISTS learn_progress (
 );
 
 ALTER TABLE learn_progress ENABLE ROW LEVEL SECURITY;
+-- Persist one board-placement choice across web, Android, and iOS.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
+ALTER TABLE player_rating_preferences
+  ADD COLUMN IF NOT EXISTS board_placement TEXT NOT NULL DEFAULT 'zoom';
+
+ALTER TABLE player_rating_preferences
+  DROP CONSTRAINT IF EXISTS player_rating_preferences_board_placement_check;
+
+ALTER TABLE player_rating_preferences
+  ADD CONSTRAINT player_rating_preferences_board_placement_check
+  CHECK (board_placement IN ('zoom', 'direct'));
+-- Exchange a short-lived, one-use native OAuth code for a server-side session.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+
+CREATE TABLE mobile_oauth_handoffs (
+  code_hash TEXT PRIMARY KEY CHECK (code_hash ~ '^[0-9a-f]{64}$'),
+  code_challenge TEXT NOT NULL CHECK (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple')),
+  provider_subject TEXT NOT NULL CHECK (CHAR_LENGTH(provider_subject) BETWEEN 1 AND 255),
+  email TEXT CHECK (email IS NULL OR CHAR_LENGTH(email) <= 320),
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  display_name TEXT CHECK (display_name IS NULL OR CHAR_LENGTH(display_name) <= 255),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  CHECK (expires_at > created_at)
+);
+
+CREATE INDEX idx_mobile_oauth_handoffs_expires
+  ON mobile_oauth_handoffs(expires_at);
+
+ALTER TABLE mobile_oauth_handoffs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON mobile_oauth_handoffs FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON mobile_oauth_handoffs FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON mobile_oauth_handoffs FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, DELETE ON mobile_oauth_handoffs TO gostone_app;
+    CREATE POLICY gostone_app_mobile_oauth_access ON mobile_oauth_handoffs
+      FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+  END IF;
+END
+$$;
+-- Repair installations where the migration ledger advanced without the
+-- account-wide board placement preference being present.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
+ALTER TABLE player_rating_preferences
+  ADD COLUMN IF NOT EXISTS board_placement TEXT NOT NULL DEFAULT 'zoom';
+
+ALTER TABLE player_rating_preferences
+  DROP CONSTRAINT IF EXISTS player_rating_preferences_board_placement_check;
+
+ALTER TABLE player_rating_preferences
+  ADD CONSTRAINT player_rating_preferences_board_placement_check
+  CHECK (board_placement IN ('zoom', 'direct'));
+-- Publish small KataGo previews while the scale-to-zero worker continues the
+-- full-quality analysis in the background.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS analysis_unlimited BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE game_analysis_jobs
+  ADD COLUMN IF NOT EXISTS progress JSONB;
+
+ALTER TABLE game_analysis_jobs
+  DROP CONSTRAINT IF EXISTS game_analysis_jobs_result_shape_check;
+
+ALTER TABLE game_analysis_jobs
+  ADD CONSTRAINT game_analysis_jobs_result_shape_check CHECK (
+    (
+      status = 'completed'
+      AND result IS NOT NULL
+      AND completed_at IS NOT NULL
+      AND error_code IS NULL
+      AND progress IS NULL
+    )
+    OR (
+      status = 'running'
+      AND completed_at IS NULL
+      AND error_code IS NULL
+      AND (result IS NULL OR progress IS NOT NULL)
+    )
+    OR (
+      status IN ('queued', 'failed')
+      AND result IS NULL
+      AND progress IS NULL
+      AND completed_at IS NULL
+    )
+  );
+
+ALTER TABLE game_analysis_jobs
+  DROP CONSTRAINT IF EXISTS game_analysis_jobs_progress_shape_check;
+
+ALTER TABLE game_analysis_jobs
+  ADD CONSTRAINT game_analysis_jobs_progress_shape_check CHECK (
+    progress IS NULL
+    OR (
+      jsonb_typeof(progress) = 'object'
+      AND progress->>'phase' IN ('preview', 'quality')
+      AND jsonb_typeof(progress->'completedMoves') = 'number'
+      AND jsonb_typeof(progress->'refinedMoves') = 'number'
+      AND jsonb_typeof(progress->'totalMoves') = 'number'
+    )
+  );
+
+UPDATE users
+   SET analysis_unlimited = true,
+       updated_at = NOW()
+ WHERE LOWER(username) = 'rapha';

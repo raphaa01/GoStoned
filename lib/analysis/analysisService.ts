@@ -14,6 +14,7 @@ type AnalysisJobRow = {
   status: AnalysisJobStatus;
   attempts: number;
   result: GameAnalysisResult | null;
+  progress: AnalysisJobView["progress"] | null;
   error_code: string | null;
   created_at: Date;
   started_at: Date | null;
@@ -48,6 +49,7 @@ function jobView(row: AnalysisJobRow): AnalysisJobView {
     status: row.status,
     attempts: row.attempts,
     result: row.result,
+    progress: row.progress ?? undefined,
     errorCode: row.error_code,
     createdAt: row.created_at.toISOString(),
     startedAt: row.started_at?.toISOString() ?? null,
@@ -68,7 +70,7 @@ export async function readGameAnalysis(gameId: string, playerKey: string) {
   const game = await getGameState(gameId, playerKey);
   assertAnalyzable(game);
   const result = await query<AnalysisJobRow>(
-    `SELECT id, game_id, game_version, status, attempts, result, error_code,
+    `SELECT id, game_id, game_version, status, attempts, result, progress, error_code,
             created_at, started_at, completed_at
        FROM game_analysis_jobs
       WHERE game_id = $1 AND game_version = $2`,
@@ -98,7 +100,7 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
     }
 
     const existingResult = await client.query<AnalysisJobRow>(
-      `SELECT id, game_id, game_version, status, attempts, result, error_code,
+      `SELECT id, game_id, game_version, status, attempts, result, progress, error_code,
               created_at, started_at, completed_at
          FROM game_analysis_jobs
         WHERE game_id = $1 AND game_version = $2`,
@@ -148,6 +150,14 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
                WHEN game_analysis_jobs.status = 'failed' THEN NULL
                ELSE game_analysis_jobs.error_message
              END,
+             result = CASE
+               WHEN game_analysis_jobs.status = 'failed' THEN NULL
+               ELSE game_analysis_jobs.result
+             END,
+             progress = CASE
+               WHEN game_analysis_jobs.status = 'failed' THEN NULL
+               ELSE game_analysis_jobs.progress
+             END,
              lease_expires_at = CASE
                WHEN game_analysis_jobs.status = 'failed' THEN NULL
                ELSE game_analysis_jobs.lease_expires_at
@@ -165,7 +175,7 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
                ELSE game_analysis_jobs.completed_at
              END,
              updated_at = NOW()
-       RETURNING id, game_id, game_version, status, attempts, result, error_code,
+       RETURNING id, game_id, game_version, status, attempts, result, progress, error_code,
                  created_at, started_at, completed_at`,
       [game.id, game.version, playerKey, JSON.stringify(input)],
     );

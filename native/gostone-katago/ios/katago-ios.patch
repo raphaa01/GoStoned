@@ -1,0 +1,101 @@
+diff --git a/cpp/CMakeLists.txt b/cpp/CMakeLists.txt
+index 3285270..18ba572 100644
+--- a/cpp/CMakeLists.txt
++++ b/cpp/CMakeLists.txt
+@@ -807 +807,5 @@ elseif(USE_BACKEND STREQUAL "METAL")
+-  add_subdirectory(external/katagocoreml)
++  if(IOS)
++    add_compile_definitions(KATAGO_METAL_MPS_ONLY)
++  else()
++    add_subdirectory(external/katagocoreml)
++  endif()
+@@ -816 +820,3 @@ elseif(USE_BACKEND STREQUAL "METAL")
+-  set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
++  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
++    set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
++  endif()
+@@ -993 +999 @@ endif()
+-add_executable(katago
++add_library(katago STATIC
+@@ -1223,4 +1229,11 @@ elseif(USE_BACKEND STREQUAL "METAL")
+-  target_link_libraries(katago KataGoSwift katagocoreml
+-    ${KATAGOCOREML_DEP_LDFLAGS}
+-    "-framework MetalPerformanceShaders"
+-    "-framework MetalPerformanceShadersGraph")
++  if(IOS)
++    target_link_libraries(katago KataGoSwift
++      "-framework CoreML"
++      "-framework MetalPerformanceShaders"
++      "-framework MetalPerformanceShadersGraph")
++  else()
++    target_link_libraries(katago KataGoSwift katagocoreml
++      ${KATAGOCOREML_DEP_LDFLAGS}
++      "-framework MetalPerformanceShaders"
++      "-framework MetalPerformanceShadersGraph")
++  endif()
+@@ -1979 +1992 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "C
+-  if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "(arm|aarch32|aarch64)")
++  if(IOS OR "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "(arm|aarch32|aarch64)")
+diff --git a/cpp/external/macos/cmake/modules/AddSwift.cmake b/cpp/external/macos/cmake/modules/AddSwift.cmake
+index 099273f..a2356d8 100644
+--- a/cpp/external/macos/cmake/modules/AddSwift.cmake
++++ b/cpp/external/macos/cmake/modules/AddSwift.cmake
+@@ -44,0 +45,6 @@ function(_swift_generate_cxx_header target header)
++  if(IOS AND CMAKE_OSX_SYSROOT MATCHES "[iI]PhoneSimulator|iphonesimulator")
++    set(TARGET_FLAGS "-target" "arm64-apple-ios${CMAKE_OSX_DEPLOYMENT_TARGET}-simulator")
++  elseif(IOS)
++    set(TARGET_FLAGS "-target" "arm64-apple-ios${CMAKE_OSX_DEPLOYMENT_TARGET}")
++  endif()
++
+@@ -62,0 +69 @@ function(_swift_generate_cxx_header target header)
++      ${TARGET_FLAGS}
+diff --git a/cpp/main.cpp b/cpp/main.cpp
+index dd9cea4..15f9356 100644
+--- a/cpp/main.cpp
++++ b/cpp/main.cpp
+@@ -208 +208 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
+-int main(int argc, const char* const* argv) {
++int katago_cli_main(int argc, const char* const* argv) {
+diff --git a/cpp/neuralnet/metalbackend.cpp b/cpp/neuralnet/metalbackend.cpp
+index e8b774f..6801347 100644
+--- a/cpp/neuralnet/metalbackend.cpp
++++ b/cpp/neuralnet/metalbackend.cpp
+@@ -9,0 +10 @@
++#ifndef KATAGO_METAL_MPS_ONLY
+@@ -10,0 +12 @@
++#endif
+@@ -24,0 +27 @@ namespace gfs = ghc::filesystem;
++#ifndef KATAGO_METAL_MPS_ONLY
+@@ -93,0 +97 @@ static string convertModelToTemp(
++#endif
+@@ -543,0 +548 @@ static mutex computeHandleMutex;
++#ifndef KATAGO_METAL_MPS_ONLY
+@@ -623,0 +629,22 @@ static swift::Optional<KataGoSwift::CoreMLComputeHandle> createCoreMLOnlyHandleI
++#else
++static swift::Optional<KataGoSwift::CoreMLComputeHandle> createCoreMLOnlyHandleIfNeeded(
++  ComputeContext* context,
++  const LoadedModel* loadedModel,
++  bool requireExactNNLen,
++  int maxBatchSize,
++  int gpuIdx,
++  int serverThreadIdx
++) {
++  (void)context;
++  (void)loadedModel;
++  (void)requireExactNNLen;
++  (void)maxBatchSize;
++  if(gpuIdx == METAL_MUX_ANE) {
++    throw StringError(
++      "Metal backend: ANE/CoreML mode is unavailable in the iOS MPSGraph build; "
++      "set metalDeviceToUseThread to 0.");
++  }
++  (void)serverThreadIdx;
++  return swift::Optional<KataGoSwift::CoreMLComputeHandle>::none();
++}
++#endif
+@@ -697,0 +725,3 @@ coremlOnlyHandle(createCoreMLOnlyHandleIfNeeded(context, loadedModel, requireExa
++  #ifdef KATAGO_METAL_MPS_ONLY
++  bool aneWouldDemoteToFP32 = false;
++  #else
+@@ -699,0 +730 @@ coremlOnlyHandle(createCoreMLOnlyHandleIfNeeded(context, loadedModel, requireExa
++  #endif

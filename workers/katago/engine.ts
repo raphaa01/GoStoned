@@ -207,6 +207,15 @@ export class KataGoEngine {
     );
   }
 
+  analyzePositions(
+    id: string,
+    input: AnalysisInput,
+    maxVisits: number,
+    turnNumbers: readonly number[],
+  ): Promise<KataGoTurnResult[]> {
+    return this.analyzeTurns(id, input, maxVisits, turnNumbers);
+  }
+
   async analyzeCurrent(
     id: string,
     input: AnalysisInput,

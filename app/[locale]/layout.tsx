@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { WebAnalytics } from "@/components/analytics/WebAnalytics";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
 import { LOCALES } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionary";
@@ -35,7 +36,7 @@ export default async function LocalizedRootLayout({
     <html data-scroll-behavior="smooth" lang={locale}>
       <body>
         <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><BoardPlacementProvider>{children}</BoardPlacementProvider></AuthProvider>
         </I18nProvider>
         {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>

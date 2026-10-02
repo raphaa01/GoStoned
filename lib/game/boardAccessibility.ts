@@ -46,7 +46,7 @@ export function joinBoardLabels(...parts: Array<string | null | undefined | fals
 export function moveBoardFocus(
   index: number,
   key: string,
-  boardSize: BoardSize,
+  boardSize: number,
   wholeGrid = false,
 ): number {
   const lastIndex = boardSize * boardSize - 1;

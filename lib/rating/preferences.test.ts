@@ -39,13 +39,16 @@ test("rejects ambiguous strength and preference payloads", () => {
   assert.deepEqual(parseRatingPreferences({
     displayPreference: "rank-primary",
     botMatchPreference: "calibrated-rated-after-wait",
+    boardPlacement: "direct",
   }), {
     displayPreference: "rank-primary",
     botMatchPreference: "calibrated-rated-after-wait",
+    boardPlacement: "direct",
   });
   assert.throws(() => parseRatingPreferences({
     displayPreference: "both",
     botMatchPreference: "always",
+    boardPlacement: "zoom",
   }), /shape/);
   assert.throws(() => parseRatingPreferences({ displayPreference: "both" }), /shape/);
 });

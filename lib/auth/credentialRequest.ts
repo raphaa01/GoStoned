@@ -3,6 +3,7 @@ import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
 import { normalizeUsername } from "./password";
 import { parseStartingStrength } from "@/lib/rating/preferences";
+import { parseBoardPlacementPreference } from "@/lib/boardPlacement";
 
 export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 1_024;
 export const MAX_CREDENTIAL_REQUEST_BODY_CHUNKS = MAX_CREDENTIAL_REQUEST_BODY_BYTES;
@@ -57,8 +58,10 @@ export function assertAuthMutationRequest(
     .trim()
     .toLowerCase();
   const requestOrigin = request.headers.get("origin");
+  const nativeOrigin = requestOrigin === "capacitor://localhost"
+    || requestOrigin === "https://localhost";
   let originMatches = true;
-  if (requestOrigin) {
+  if (requestOrigin && !nativeOrigin) {
     try {
       const actualOrigin = exactRequestOrigin(requestOrigin);
       const expectedOrigin = expectedMutationOrigin(request);
@@ -72,7 +75,7 @@ export function assertAuthMutationRequest(
 
   if (
     (requireJson && contentType !== "application/json")
-    || request.headers.get("sec-fetch-site") === "cross-site"
+    || (request.headers.get("sec-fetch-site") === "cross-site" && !nativeOrigin)
     || !originMatches
   ) {
     throw new AuthError(
@@ -125,11 +128,12 @@ export async function readRegistrationRequest(request: NextRequest) {
   const body = await readCredentialBody(request);
   const fields = Object.keys(body);
   if (
-    fields.length !== 4
+    fields.length !== 5
     || !Object.prototype.hasOwnProperty.call(body, "username")
     || !Object.prototype.hasOwnProperty.call(body, "password")
     || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
     || !Object.prototype.hasOwnProperty.call(body, "knownRank")
+    || !Object.prototype.hasOwnProperty.call(body, "boardPlacement")
   ) {
     throw new AuthError(
       "The registration request has an invalid shape.",
@@ -142,6 +146,7 @@ export async function readRegistrationRequest(request: NextRequest) {
     return {
       ...credentials,
       startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
+      boardPlacement: parseBoardPlacementPreference(body.boardPlacement),
     };
   } catch {
     throw new AuthError(
@@ -156,10 +161,11 @@ export async function readOAuthRegistrationRequest(request: NextRequest) {
   const body = await readCredentialBody(request);
   const fields = Object.keys(body);
   if (
-    fields.length !== 3
+    fields.length !== 4
     || !Object.prototype.hasOwnProperty.call(body, "username")
     || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
     || !Object.prototype.hasOwnProperty.call(body, "knownRank")
+    || !Object.prototype.hasOwnProperty.call(body, "boardPlacement")
   ) {
     throw new AuthError(
       "The social registration request has an invalid shape.",
@@ -179,6 +185,7 @@ export async function readOAuthRegistrationRequest(request: NextRequest) {
     return {
       username,
       startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
+      boardPlacement: parseBoardPlacementPreference(body.boardPlacement),
     };
   } catch {
     throw new AuthError(

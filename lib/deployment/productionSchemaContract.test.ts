@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   validateProductionSchemaContract,
   type ProductionSchemaSnapshot,
 } from "./productionSchemaContract";
+
+const productionPreflight = readFileSync(
+  new URL("../../scripts/check-production-schema.ts", import.meta.url),
+  "utf8",
+);
 
 const currentSnapshot: ProductionSchemaSnapshot = {
   gameRulesDefault: "'japanese'::text",
@@ -19,6 +25,13 @@ const currentSnapshot: ProductionSchemaSnapshot = {
     "CHECK (policy_version IN ('starting-strength-v1', 'starting-strength-v2'))",
   puzzleCategoryConstraint:
     "CHECK (board_size = 19 AND category IN ('gokyo_life', 'gokyo_death', 'gokyo_ko'))",
+  boardPlacementDataType: "text",
+  boardPlacementDefault: "'zoom'::text",
+  boardPlacementNullable: "NO",
+  boardPlacementConstraint: "CHECK (board_placement IN ('zoom', 'direct'))",
+  analysisProgressDataType: "jsonb",
+  analysisProgressConstraint:
+    "CHECK (status = 'running' AND (result IS NULL OR progress IS NOT NULL))",
   takebackRls: true,
 };
 
@@ -67,5 +80,45 @@ test("rejects a puzzle schema that cannot store the historical catalog", () => {
         "CHECK (board_size = 13 AND category IN ('life_and_death', 'tesuji'))",
     }),
     /historical puzzle-category constraint/,
+  );
+});
+
+test("rejects a missing or incomplete board-placement preference", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      boardPlacementDataType: null,
+      boardPlacementDefault: null,
+      boardPlacementNullable: null,
+      boardPlacementConstraint: null,
+    }),
+    /board-placement preference column/,
+  );
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      boardPlacementConstraint: "CHECK (board_placement = 'zoom')",
+    }),
+    /board-placement preference constraint/,
+  );
+});
+
+test("production preflight respects the private migration ledger", () => {
+  assert.doesNotMatch(
+    productionPreflight,
+    /SELECT filename FROM public\.schema_migrations/,
+  );
+  assert.match(productionPreflight, /board_placement_constraint/);
+  assert.match(productionPreflight, /analysis_progress_constraint/);
+});
+
+test("rejects a schema that cannot expose running analysis previews", () => {
+  assert.throws(
+    () => validateProductionSchemaContract({
+      ...currentSnapshot,
+      analysisProgressDataType: null,
+      analysisProgressConstraint: null,
+    }),
+    /progressive analysis column/,
   );
 });

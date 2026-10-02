@@ -4,6 +4,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  CircleHelp,
+  RotateCcw,
+  Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,12 +14,12 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
 import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import type { LocalizedText } from "@/lib/i18n/config";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { accountRegistrationPath } from "@/lib/auth/returnPath";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
+import type { Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
   DAILY_PUZZLE_CYCLE_LENGTH,
@@ -24,9 +27,17 @@ import {
   type PuzzleAttemptResult,
   type PuzzleCategory,
   type PuzzleHub,
+  type PuzzleHint,
   type PuzzleKind,
   type PuzzlePly,
 } from "@/lib/puzzles/types";
+import { localPuzzleViewportSize } from "@/lib/puzzles/puzzleViewport";
+import {
+  PUZZLE_CATALOG_SOURCES,
+  puzzlesForCatalogCategory,
+  resumePuzzleIndex,
+  type PuzzleCatalogCategory,
+} from "@/lib/puzzles/categoryProgress";
 import styles from "./puzzles.module.css";
 
 type PuzzleApiResponse = PuzzleHub & { actor: string };
@@ -65,13 +76,15 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   );
   const [mode, setMode] = useState<PuzzleKind>(initialMode);
   const [hub, setHub] = useState<PuzzleHub | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<PuzzleCategory | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState(1);
+  const [selectedCategory, setSelectedCategory] = useState<PuzzleCatalogCategory | null>(null);
+  const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [branchLine, setBranchLine] = useState<PuzzlePly[] | null>(null);
-  const [branchExplanation, setBranchExplanation] = useState<LocalizedText | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
+  const [hintBusy, setHintBusy] = useState(false);
+  const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
   const puzzles = useMemo(() => hub?.puzzles ?? [], [hub?.puzzles]);
 
   const redirectAccountFailure = useCallback((requestError: unknown) => {
@@ -149,14 +162,12 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     return () => window.clearInterval(timer);
   }, [hub?.categoryCounts, hub?.expectedPerCategory, hub?.status, load, mode, puzzles]);
 
-  const categoryPuzzles = useMemo(() => (
-    selectedCategory
-      ? puzzles.filter((entry) => entry.category === selectedCategory)
-      : []
-  ), [puzzles, selectedCategory]);
+  const categoryPuzzles = selectedCategory
+    ? puzzlesForCatalogCategory(puzzles, selectedCategory)
+    : [];
   const puzzle = mode === "daily"
     ? puzzles[0] ?? null
-    : categoryPuzzles.find((entry) => entry.collectionOrder === selectedOrder) ?? null;
+    : categoryPuzzles[selectedProblemIndex] ?? null;
 
   const visibleLine = useMemo(() => {
     if (!puzzle) return [];
@@ -185,7 +196,9 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   async function submitMove(x: number, y: number) {
     if (!puzzle || !playerKey || busy || puzzle.solved || branchLine) return;
+    setPendingMove({ x, y, color: puzzle.toPlay });
     setBusy(true);
+    setHintMove(null);
     setError(null);
     try {
       const response = await fetch(`/api/puzzles/${puzzle.id}/attempt`, {
@@ -203,7 +216,6 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       if (data.attempt.outcome === "retry") {
         if (puzzle.category) {
           setBranchLine([...priorProgress, ...data.attempt.displayLine]);
-          setBranchExplanation(data.attempt.feedback);
         }
         setFeedback("incorrect");
       } else if (data.attempt.outcome === "continue") {
@@ -215,15 +227,51 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       if (redirectAccountFailure(attemptError)) return;
       setError(localizedApiError(dictionary, attemptError, copy.attemptFailed));
     } finally {
+      setPendingMove(null);
       setBusy(false);
+    }
+  }
+
+  async function showHint() {
+    if (!puzzle || !playerKey || hintBusy || puzzle.solved || branchLine) return;
+    setHintBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/puzzles/${puzzle.id}/hint`, {
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+      });
+      const data = await readApi<{ actor: string; hint: PuzzleHint }>(response);
+      assertResponseActor(data.actor, playerKey);
+      setHintMove(data.hint);
+    } catch (hintError) {
+      if (redirectAccountFailure(hintError)) return;
+      setError(localizedApiError(dictionary, hintError, copy.hintFailed));
+    } finally {
+      setHintBusy(false);
     }
   }
 
   function clearTransientState() {
     setFeedback(null);
     setBranchLine(null);
-    setBranchExplanation(null);
     setError(null);
+    setHintMove(null);
+    setPendingMove(null);
+  }
+
+  function undoPuzzleMove() {
+    if (!branchLine?.length) {
+      clearTransientState();
+      return;
+    }
+
+    const previousLine = branchLine.slice(0, -1);
+    setBranchLine(previousLine.length ? previousLine : null);
+    setFeedback(previousLine.length ? "incorrect" : null);
+    setError(null);
+    setHintMove(null);
+    setPendingMove(null);
   }
 
   function changeMode(nextMode: PuzzleKind) {
@@ -237,55 +285,50 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     setMode(nextMode);
     setHub(null);
     setSelectedCategory(null);
-    setSelectedOrder(1);
+    setSelectedProblemIndex(0);
     clearTransientState();
   }
 
-  function chooseCategory(category: PuzzleCategory) {
+  function chooseCategory(category: PuzzleCatalogCategory) {
     setSelectedCategory(category);
-    const first = puzzles.find((entry) => entry.category === category)?.collectionOrder ?? 1;
-    setSelectedOrder(first);
+    setSelectedProblemIndex(resumePuzzleIndex(puzzles, category));
     clearTransientState();
   }
 
-  function chooseProblem(order: number) {
-    setSelectedOrder(order);
+  function chooseProblem(index: number) {
+    setSelectedProblemIndex(index);
     clearTransientState();
   }
 
   function changeProblem(direction: -1 | 1) {
     if (categoryPuzzles.length === 0) return;
-    const current = categoryPuzzles.findIndex((entry) => entry.collectionOrder === selectedOrder);
-    const next = (Math.max(0, current) + direction + categoryPuzzles.length) % categoryPuzzles.length;
-    setSelectedOrder(categoryPuzzles[next]?.collectionOrder ?? 1);
+    const next = (selectedProblemIndex + direction + categoryPuzzles.length) % categoryPuzzles.length;
+    setSelectedProblemIndex(next);
     clearTransientState();
   }
 
-  const trainingCategories = [
-    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription },
-    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription },
-    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription },
-    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription },
+  const categories = [
+    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription, sources: PUZZLE_CATALOG_SOURCES.life_and_death },
+    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription, sources: PUZZLE_CATALOG_SOURCES.tesuji },
+    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription, sources: PUZZLE_CATALOG_SOURCES.capturing_race },
+    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription, sources: PUZZLE_CATALOG_SOURCES.endgame },
+    { id: "ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription, sources: PUZZLE_CATALOG_SOURCES.ko },
   ];
-  const historicalCategories = [
-    { id: "gokyo_life" as const, title: copy.gokyoLife, description: copy.gokyoLifeDescription },
-    { id: "gokyo_death" as const, title: copy.gokyoDeath, description: copy.gokyoDeathDescription },
-    { id: "gokyo_ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription },
-  ].filter((category) => (hub?.categoryCounts[category.id] ?? 0) > 0);
-  const categories = [...trainingCategories, ...historicalCategories];
   const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
-  const puzzleCategoryCopy = categories.find((entry) => entry.id === puzzle?.category);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
   const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
   const expected = selectedCategory
-    ? hub?.categoryCounts[selectedCategory] ?? hub?.expectedPerCategory ?? 10
+    ? categoryPuzzles.length
     : hub?.expectedPerCategory ?? 10;
   const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
   function categoryButton(category: typeof categories[number]) {
-    const ready = puzzles.filter((entry) => entry.category === category.id).length;
-    const total = hub?.categoryCounts[category.id] ?? hub?.expectedPerCategory ?? 10;
+    const sources: readonly PuzzleCategory[] = category.sources;
+    const ready = puzzles.filter((entry) => entry.category !== null && sources.includes(entry.category)).length;
+    const total = sources.reduce((sum, source) => sum + (hub?.categoryCounts[source] ?? 0), 0)
+      || hub?.expectedPerCategory
+      || 10;
     return (
       <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
         <span><strong>{category.title}</strong><span>{category.description}</span></span>
@@ -336,18 +379,18 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
               <div><strong>{categoryCopy?.title}</strong><span>{copy.approximateRank.replace("{rank}", String(puzzle.rankKyu ?? "–"))}</span></div>
               {expected > 20 ? (
                 <label className={styles.problemJump}>
-                  <span>{copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))}</span>
-                  <select aria-label={copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))} onChange={(event) => chooseProblem(Number(event.target.value))} value={selectedOrder}>
-                    {Array.from({ length: expected }, (_, index) => index + 1).map((order) => (
-                      <option disabled={!categoryPuzzles.some((candidate) => candidate.collectionOrder === order)} key={order} value={order}>{order}</option>
+                  <span>{copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}</span>
+                  <select aria-label={copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))} onChange={(event) => chooseProblem(Number(event.target.value))} value={selectedProblemIndex}>
+                    {Array.from({ length: expected }, (_, index) => index).map((index) => (
+                      <option key={index} value={index}>{index + 1}</option>
                     ))}
                   </select>
                 </label>
               ) : (
-                <nav aria-label={copy.problemProgress.replace("{current}", String(selectedOrder)).replace("{total}", String(expected))}>
-                  {Array.from({ length: expected }, (_, index) => index + 1).map((order) => {
-                    const entry = categoryPuzzles.find((candidate) => candidate.collectionOrder === order);
-                    return <button aria-current={order === selectedOrder ? "step" : undefined} disabled={!entry} key={order} onClick={() => chooseProblem(order)} type="button">{order}</button>;
+                <nav aria-label={copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}>
+                  {Array.from({ length: expected }, (_, index) => index).map((index) => {
+                    const entry = categoryPuzzles[index];
+                    return <button aria-current={index === selectedProblemIndex ? "step" : undefined} disabled={!entry} key={index} onClick={() => chooseProblem(index)} type="button">{index + 1}</button>;
                   })}
                 </nav>
               )}
@@ -361,35 +404,61 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <strong>{copy.toPlay.replace("{color}", colorLabel)}</strong>
                 <span>{puzzle.rankKyu ? copy.approximateRank.replace("{rank}", String(puzzle.rankKyu)) : difficultyLabel}</span>
               </div>
+              <div className={styles.taskPrompt}>
+                <div>
+                  <span className={styles.problemLabel}>{mode === "daily"
+                    ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
+                    : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
+                </div>
+                {!puzzle.solved && !branchLine ? (
+                  <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
+                    <CircleHelp size={20} />
+                  </button>
+                ) : null}
+              </div>
+              {feedback === "incorrect" ? (
+                <div className={styles.inlineIncorrect} role="status">
+                  <strong>{copy.incorrect}</strong>
+                </div>
+              ) : null}
               <GoBoard
                 boardSize={puzzle.boardSize}
                 boardState={displayBoard}
                 disabled={busy || puzzle.solved || branchLine !== null}
                 lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
+                hintMove={hintMove}
                 onIntersectionClick={submitMove}
+                pendingMove={pendingMove}
                 previewColor={puzzle.toPlay}
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
+                viewportSize={puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined}
               />
+              {feedback === "incorrect" ? (
+                <div className={styles.feedbackActions}>
+                  <button className="button button--primary" onClick={clearTransientState} type="button">
+                    <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+                  </button>
+                  <button className="button button--secondary" onClick={undoPuzzleMove} type="button">
+                    <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <aside className={styles.panel}>
-              <div>
-                <span className={styles.problemLabel}>{mode === "daily"
-                  ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
-                  : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(puzzle.collectionOrder ?? 1))}`}</span>
-                <h2>{mode === "daily" && puzzleCategoryCopy
-                  ? puzzleCategoryCopy.description
-                  : puzzle.category ? copy.chooseVariationMove : copy.chooseMove}</h2>
-              </div>
-
-              {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}
-              {feedback === "incorrect" ? (
-                <div className={styles.incorrect} role="status">
-                  <strong>{copy.incorrect}</strong>
-                  {branchExplanation ? <p>{branchExplanation[locale] ?? branchExplanation.en}</p> : null}
-                  {branchLine ? <button className="button button--secondary" onClick={clearTransientState} type="button">{copy.retryVariation}</button> : null}
+              <div className={styles.panelPrompt}>
+                <div>
+                  <span className={styles.problemLabel}>{mode === "daily"
+                    ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
+                    : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
                 </div>
-              ) : null}
+                {!puzzle.solved && !branchLine ? (
+                  <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
+                    <CircleHelp size={20} />
+                  </button>
+                ) : null}
+              </div>
+              {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}
               {puzzle.solved ? (
                 <div className={styles.solution} role="status">
                   <span><Check size={18} /> {feedback === "correct" ? copy.correct : copy.solved}</span>
@@ -402,7 +471,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
               {mode === "practice" && categoryPuzzles.length > 1 ? (
                 <div className={styles.pager}>
-                  <span>{copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? selectedOrder)).replace("{total}", String(expected))}</span>
+                  <span>{copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}</span>
                   <div>
                     <button aria-label={copy.previous} onClick={() => changeProblem(-1)} type="button"><ArrowLeft size={18} /></button>
                     <button aria-label={copy.next} onClick={() => changeProblem(1)} type="button"><ArrowRight size={18} /></button>

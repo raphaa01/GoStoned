@@ -18,6 +18,7 @@ import {
   RateLimitError,
 } from "@/lib/auth/rateLimit";
 import { safeAuthReturnPath } from "@/lib/auth/returnPath";
+import { createMobileOAuthHandoff } from "@/lib/auth/mobileOAuthHandoff";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 import { localizePathname } from "@/lib/i18n/routing";
@@ -53,6 +54,12 @@ function pageUrl(
   const url = new URL(path, appOrigin());
   if (error) url.searchParams.set("oauthError", error);
   if (returnTo) url.searchParams.set("returnTo", returnTo);
+  return url;
+}
+
+function mobileCallbackUrl(key: "code" | "error", value: string): URL {
+  const url = new URL("com.gostone.app://oauth");
+  url.searchParams.set(key, value);
   return url;
 }
 
@@ -212,10 +219,10 @@ async function callback(
   const mode = transaction?.mode ?? "login";
   const locale = transaction && isLocale(transaction.locale) ? transaction.locale : DEFAULT_LOCALE;
   const returnTo = safeAuthReturnPath(transaction?.returnTo ?? undefined);
-  const errorPage = (code: string) => callbackRedirect(
-    provider,
-    pageUrl(mode, locale, code, returnTo),
-  );
+  const errorPage = (code: string) => callbackRedirect(provider,
+    transaction?.mobileCodeChallenge
+      ? mobileCallbackUrl("error", code)
+      : pageUrl(mode, locale, code, returnTo));
 
   if (!transaction || !parameters.state || parameters.state !== transaction.state) {
     return errorPage("oauth_failed");
@@ -233,6 +240,10 @@ async function callback(
       transaction,
       provider === "apple" ? parameters.user : null,
     );
+    if (transaction.mobileCodeChallenge) {
+      const handoffCode = await createMobileOAuthHandoff(identity, transaction.mobileCodeChallenge);
+      return callbackRedirect(provider, mobileCallbackUrl("code", handoffCode));
+    }
     const login = await beginOAuthSignIn(identity);
     if (login.kind === "registration_required") {
       const destination = new URL(

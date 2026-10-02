@@ -82,6 +82,7 @@ async function run() {
       password,
       startingStrength: "unspecified",
       knownRank: null,
+      boardPlacement: "zoom",
     }),
     201,
   );
@@ -97,6 +98,7 @@ async function run() {
       password,
       startingStrength: "unspecified",
       knownRank: null,
+      boardPlacement: "zoom",
     }),
     409,
   );
@@ -138,6 +140,7 @@ async function run() {
       password,
       startingStrength: "unspecified",
       knownRank: null,
+      boardPlacement: "zoom",
     }),
     201,
   );

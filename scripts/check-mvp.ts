@@ -242,6 +242,7 @@ const requiredConstraintSignatures = [
   "game_glicko2_rating_events_outcome_check:game_glicko2_rating_events:c",
   "game_glicko2_rating_events_algorithm_check:game_glicko2_rating_events:c",
   "player_rating_preferences_pkey:player_rating_preferences:p",
+  "player_rating_preferences_board_placement_check:player_rating_preferences:c",
   "player_initial_rating_claims_pkey:player_initial_rating_claims:p",
   "matchmaking_queue_adaptive_state_check:matchmaking_queue:c",
   "calibrated_bot_profiles_pkey:calibrated_bot_profiles:p",
@@ -256,6 +257,10 @@ const requiredRolloutConstraintSignatures = [
 ] as const;
 
 const requiredConstraintDefinitions = {
+  player_rating_preferences_board_placement_check: {
+    includes: ["board_placement", "'zoom'", "'direct'"],
+    excludes: [],
+  },
   moves_board_hash_required_check: {
     includes: ["CHECK ((board_hash IS NOT NULL))"],
     excludes: [],

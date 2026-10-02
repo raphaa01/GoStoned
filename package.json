@@ -15,7 +15,10 @@
     "mobile:add:ios": "npm run mobile:build && cap add ios --packagemanager SPM",
     "mobile:add:android": "npm run mobile:build && cap add android",
     "mobile:katago:android": "tsx scripts/build-katago-android.ts",
+    "mobile:katago:ios": "tsx scripts/build-katago-ios.ts",
     "mobile:android:build": "tsx scripts/build-mobile-android.ts",
+    "mobile:android:release": "tsx scripts/build-mobile-android-release.ts",
+    "mobile:ios:release": "tsx scripts/build-mobile-ios-release.ts",
     "mobile:doctor": "tsx scripts/mobile-doctor.ts",
     "mobile:splash": "node scripts/generate-mobile-splash.mjs",
     "mobile:typecheck": "tsc --noEmit -p tsconfig.mobile.json",
@@ -57,6 +60,7 @@
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.2",
     "@gostone/katago": "file:native/gostone-katago",
     "@vercel/analytics": "^2.0.1",

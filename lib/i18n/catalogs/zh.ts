@@ -50,7 +50,7 @@ export const zh = {
     },
     "puzzles": {
       "title": "围棋题目",
-      "description": "完成每日KataGo挑战并练习更多围棋题。"
+      "description": "完成每日挑战并练习更多围棋题。"
     }
   },
   "language": {
@@ -689,15 +689,15 @@ export const zh = {
     "action": "返回 GoStone"
   },
   "puzzles": {
-    "kicker": "KataGo训练",
+    "kicker": "围棋训练",
     "title": "找出最强走法。",
     "description": "解决今日局面，然后继续更多引擎生成的围棋题。",
     "daily": "每日题目",
     "practice": "更多题目",
     "dailyDescription": "每日更新的共享挑战。",
-    "practiceDescription": "由KataGo生成并验证的不断增长的局面集合。",
+    "practiceDescription": "不断扩充的围棋局面集。",
     "chooseCategory": "选择训练路径",
-    "categoryDescription": "每条路径包含十个KataGo验证过的原始变化，从约30级到15级。",
+    "categoryDescription": "每条路径包含从约30级到15级的原创变化。",
     "lifeAndDeath": "死活",
     "lifeAndDeathDescription": "找出使棋块生死的关键点。",
     "tesuji": "手筋",
@@ -707,20 +707,20 @@ export const zh = {
     "endgame": "官子",
     "endgameDescription": "选择最大的官子同时保留先手。",
     "historicalCollection": "历史题集",
-    "historicalCollectionDescription": "《棋经众妙》（1812）的200道公版局面，由KataGo重新求解并估算难度。",
+    "historicalCollectionDescription": "《棋经众妙》（1812）的200道古典题。",
     "gokyoLife": "棋经众妙 · 活",
     "gokyoLifeDescription": "103道古典题：找出使局部棋块做活的要点。",
     "gokyoDeath": "棋经众妙 · 杀",
     "gokyoDeathDescription": "71道古典题：破坏防守方的眼位。",
-    "gokyoKo": "棋经众妙 · 劫",
+    "gokyoKo": "劫",
     "gokyoKoDescription": "前26道古典劫题：找出最佳局部结果。",
-    "historicalSource": "历史局面 · 1812 · KataGo解答",
+    "historicalSource": "历史局面 · 1812",
     "catalogProgress": "{ready} 的 {total} 已准备好",
     "backToCategories": "所有类别",
     "approximateRank": "关于 {rank} 级",
     "problemNumber": "谜题 {number}",
     "loading": "正在加载谜题…",
-    "generating": "KataGo 正在准备此谜题。",
+    "generating": "正在准备此谜题。",
     "generatingBody": "工作线程正在分析新的局面。此页面会自动更新。",
     "unavailable": "谜题暂时不可用。",
     "retry": "请再试一次",
@@ -729,9 +729,12 @@ export const zh = {
     "white": "白方",
     "chooseMove": "在最强的交叉点落子。",
     "chooseVariationMove": "阅读变化并选择你的下一步。",
-    "correct": "正确 —— 这是 KataGo 的首选。",
-    "continueLine": "很好。KataGo 已回应 —— 继续阅读局面。",
-    "incorrect": "此路线不可行。研究回应，然后重新开始变化。",
+    "correct": "正确。",
+    "continueLine": "很好。现在找出下一手。",
+    "incorrect": "还差一点。",
+    "undoMove": "撤销一步",
+    "hint": "显示提示",
+    "hintFailed": "无法加载提示。",
     "retryVariation": "重新开始变化",
     "solved": "已解决",
     "firstTry": "第一次尝试就解出",
@@ -744,7 +747,7 @@ export const zh = {
     "problemProgress": "第 {current} 个问题，共 {total} 个",
     "identityError": "无法准备您的玩家会话。",
     "attemptFailed": "无法检查您的走法。",
-    "engineNote": "未来的走法保存在服务器上。KataGo 只显示对手当前的回应。"
+    "engineNote": "后续走法会保持隐藏，直到你走到那里。"
   },
   "analysisReview": {
     "kicker": "对局复盘",

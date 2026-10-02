@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  activatePrecisionPlacement,
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
-  reconcilePrecisionPlacement,
-  type PrecisionPlacementContext,
-  WHOLE_BOARD,
+  isClientPointInsideBoard,
+  touchLensLayout,
+  touchLensCoordinates,
 } from "./precisionPlacement";
 
 test("the board grid is symmetrical inside its wooden surface", () => {
@@ -15,61 +14,14 @@ test("the board grid is symmetrical inside its wooden surface", () => {
   assert.equal(BOARD_GRID_INSET_RATIO * 2 + BOARD_GRID_SPAN_RATIO, 1);
 });
 
-const context: PrecisionPlacementContext = {
-  boardSize: 19,
-  disabled: false,
-  interactionMode: "play",
-  revision: "guest:one:game:4:black:live",
-};
-
-test("coarse mobile 19x19 touch requires a guarded second exact activation", () => {
-  const first = activatePrecisionPlacement(WHOLE_BOARD, context, {
-    x: 12,
-    y: 4,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  });
-  assert.equal(first.submit, false);
-  assert.deepEqual(first.state, {
-    kind: "precision",
-    position: { x: 12, y: 4 },
-    revision: context.revision,
-  });
-
-  const adjusted = activatePrecisionPlacement(first.state, context, {
-    x: 13,
-    y: 5,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  });
-  assert.equal(adjusted.submit, false);
-  assert.deepEqual(adjusted.state, {
-    kind: "precision",
-    position: { x: 13, y: 5 },
-    revision: context.revision,
-  });
-
-  const second = activatePrecisionPlacement(adjusted.state, context, {
-    x: 13,
-    y: 5,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  });
-  assert.equal(second.submit, true);
-  assert.deepEqual(second.state, { kind: "submitting", revision: context.revision });
-
-  const duplicate = activatePrecisionPlacement(second.state, context, {
-    x: 13,
-    y: 5,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  });
-  assert.equal(duplicate.submit, false);
-  assert.equal(duplicate.state, second.state);
+test("touch points leave the board instead of snapping back to its edge", () => {
+  const bounds = { left: 24, top: 100, width: 342, height: 342 };
+  assert.equal(isClientPointInsideBoard(24, 100, bounds), true);
+  assert.equal(isClientPointInsideBoard(366, 442, bounds), true);
+  assert.equal(isClientPointInsideBoard(23.9, 200, bounds), false);
+  assert.equal(isClientPointInsideBoard(366.1, 200, bounds), false);
+  assert.equal(isClientPointInsideBoard(100, 99.9, bounds), false);
+  assert.equal(isClientPointInsideBoard(100, 442.1, bounds), false);
 });
 
 test("board-surface touch coordinates map to the nearest Go intersection", () => {
@@ -84,95 +36,38 @@ test("board-surface touch coordinates map to the nearest Go intersection", () =>
   );
 });
 
-test("mouse, pen, keyboard, 9x9, and 13x13 remain direct", () => {
-  for (const pointerType of ["mouse", "pen", "keyboard"] as const) {
-    assert.equal(activatePrecisionPlacement(WHOLE_BOARD, context, {
-      x: 2,
-      y: 3,
-      actionable: true,
-      coarseMobile: true,
-      pointerType,
-    }).submit, true);
-  }
-  for (const boardSize of [9, 13] as const) {
-    assert.equal(activatePrecisionPlacement(WHOLE_BOARD, { ...context, boardSize }, {
-      x: 2,
-      y: 3,
-      actionable: true,
-      coarseMobile: true,
-      pointerType: "touch",
-    }).submit, true);
-  }
-  assert.equal(activatePrecisionPlacement(WHOLE_BOARD, context, {
-    x: 2,
-    y: 3,
-    actionable: true,
-    coarseMobile: false,
-    pointerType: "touch",
-  }).submit, true);
+test("the touch lens always describes a centered seven by seven neighborhood", () => {
+  const center = touchLensCoordinates({ x: 9, y: 9 }, 19);
+  assert.equal(center.length, 49);
+  assert.deepEqual(center[0], { x: 6, y: 6 });
+  assert.deepEqual(center[24], { x: 9, y: 9 });
+  assert.deepEqual(center[48], { x: 12, y: 12 });
+
+  const corner = touchLensCoordinates({ x: 0, y: 0 }, 19);
+  assert.equal(corner.length, 49);
+  assert.equal(corner[0], null);
+  assert.deepEqual(corner[24], { x: 0, y: 0 });
+  assert.deepEqual(corner[48], { x: 3, y: 3 });
 });
 
-test("unavailable intersections never arm or submit and keep an active precision choice", () => {
-  const precision = activatePrecisionPlacement(WHOLE_BOARD, context, {
-    x: 4,
-    y: 4,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  }).state;
-
-  const occupied = activatePrecisionPlacement(precision, context, {
-    x: 5,
-    y: 5,
-    actionable: false,
-    coarseMobile: true,
-    pointerType: "touch",
+test("the touch lens stays clear of the finger and flips at the top edge", () => {
+  const bounds = { left: 24, top: 200, width: 342 };
+  assert.deepEqual(touchLensLayout(195, 500, bounds, 844), {
+    left: 171,
+    placement: "above",
+    tetherOffsetX: 0,
+    top: 300,
   });
-  assert.equal(occupied.submit, false);
-  assert.equal(occupied.state, precision);
-
-  const disabled = activatePrecisionPlacement(precision, { ...context, disabled: true }, {
-    x: 5,
-    y: 5,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
+  assert.deepEqual(touchLensLayout(50, 220, bounds, 844), {
+    left: 92,
+    placement: "below",
+    tetherOffsetX: -66,
+    top: 20,
   });
-  assert.equal(disabled.submit, false);
-  assert.equal(disabled.state.kind, "whole");
-});
-
-test("revision, turn availability, phase, and board-size changes cancel stale precision", () => {
-  const precision = activatePrecisionPlacement(WHOLE_BOARD, context, {
-    x: 8,
-    y: 8,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  }).state;
-
-  for (const changed of [
-    { ...context, revision: "guest:one:game:5:white:live" },
-    { ...context, disabled: true },
-    { ...context, interactionMode: "mark-dead" as const },
-    { ...context, boardSize: 13 as const },
-  ]) {
-    assert.equal(reconcilePrecisionPlacement(precision, changed).kind, "whole");
-  }
-});
-
-test("clock-only heartbeats retain precision while a semantic revision clears it", () => {
-  const precision = activatePrecisionPlacement(WHOLE_BOARD, context, {
-    x: 10,
-    y: 11,
-    actionable: true,
-    coarseMobile: true,
-    pointerType: "touch",
-  }).state;
-
-  assert.equal(reconcilePrecisionPlacement(precision, { ...context }), precision);
-  assert.equal(reconcilePrecisionPlacement(precision, {
-    ...context,
-    revision: `${context.revision}:next-turn`,
-  }).kind, "whole");
+  assert.deepEqual(touchLensLayout(366, 700, bounds, 844), {
+    left: 250,
+    placement: "above",
+    tetherOffsetX: 72,
+    top: 500,
+  });
 });

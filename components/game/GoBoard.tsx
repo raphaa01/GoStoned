@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { useBoardPlacement } from "@/components/game/BoardPlacementProvider";
 import {
-  activatePrecisionPlacement,
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
   boardPositionFromClientPoint,
-  reconcilePrecisionPlacement,
-  type PrecisionPlacementActivation,
-  type PrecisionPlacementState,
-  WHOLE_BOARD,
+  isClientPointInsideBoard,
+  touchLensLayout,
+  TOUCH_LENS_RADIUS,
+  touchLensCoordinates,
 } from "@/lib/client/precisionPlacement";
 import {
   formatBoardLabel,
@@ -34,12 +34,64 @@ type GoBoardProps = {
   pendingMove?: (Position & { color: Stone }) | null;
   previewColor?: Stone;
   precisionRevision: string;
+  hintMove?: Position | null;
+  viewportSize?: number;
 };
 
-type PrecisionSession = {
-  resetKey: string;
-  state: PrecisionPlacementState;
+type TouchLens = {
+  pointerId: number;
+  position: Position;
+  left: number;
+  placement: "above" | "below";
+  tetherOffsetX: number;
+  top: number;
+  revision: string;
 };
+
+const TOUCH_LENS_DELAY_MS = 180;
+const TOUCH_MOVE_TOLERANCE_PX = 10;
+
+function TouchMagnifier({
+  board,
+  center,
+  previewColor,
+}: {
+  board: Board;
+  center: Position;
+  previewColor: Stone;
+}) {
+  const cells = touchLensCoordinates(center, board.length as 9 | 13 | 19);
+  const firstValidColumn = Math.max(0, TOUCH_LENS_RADIUS - center.x) + 0.5;
+  const lastValidColumn = Math.min(6, TOUCH_LENS_RADIUS + board.length - 1 - center.x) + 0.5;
+  const firstValidRow = Math.max(0, TOUCH_LENS_RADIUS - center.y) + 0.5;
+  const lastValidRow = Math.min(6, TOUCH_LENS_RADIUS + board.length - 1 - center.y) + 0.5;
+  return (
+    <svg aria-hidden="true" className="touch-magnifier-board" viewBox="0 0 7 7">
+      <rect className="touch-magnifier-surface" height="7" width="7" />
+      {Array.from({ length: 7 }, (_, index) => {
+        const x = center.x + index - TOUCH_LENS_RADIUS;
+        return x >= 0 && x < board.length ? (
+          <line className="touch-magnifier-grid" key={`v-${index}`} x1={index + 0.5} x2={index + 0.5} y1={firstValidRow} y2={lastValidRow} />
+        ) : null;
+      })}
+      {Array.from({ length: 7 }, (_, index) => {
+        const y = center.y + index - TOUCH_LENS_RADIUS;
+        return y >= 0 && y < board.length ? (
+          <line className="touch-magnifier-grid" key={`h-${index}`} x1={firstValidColumn} x2={lastValidColumn} y1={index + 0.5} y2={index + 0.5} />
+        ) : null;
+      })}
+      {cells.map((position, index) => {
+        if (!position) return null;
+        const stone = board[position.y]?.[position.x];
+        if (!stone) return null;
+        return <circle className={`touch-magnifier-stone touch-magnifier-stone--${stone}`} cx={(index % 7) + 0.5} cy={Math.floor(index / 7) + 0.5} key={`${position.x}:${position.y}`} r="0.4" />;
+      })}
+      {!board[center.y]?.[center.x] ? <circle className={`touch-magnifier-preview touch-magnifier-preview--${previewColor}`} cx="3.5" cy="3.5" r="0.38" /> : null}
+      <path className="touch-magnifier-crosshair" d="M3.5 2.98v1.04M2.98 3.5h1.04" />
+      <circle className="touch-magnifier-ring" cx="3.5" cy="3.5" r="0.55" />
+    </svg>
+  );
+}
 
 function isStarPoint(size: number, x: number, y: number) {
   const points =
@@ -63,205 +115,156 @@ export function GoBoard({
   pendingMove = null,
   previewColor = "black",
   precisionRevision,
+  hintMove = null,
+  viewportSize,
 }: GoBoardProps) {
-  const { dictionary, locale } = useI18n();
+  const { dictionary } = useI18n();
+  const { preference: boardPlacement } = useBoardPlacement();
   const copy = dictionary.game;
   const instructionsId = useId();
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const boardRef = useRef<HTMLDivElement>(null);
-  const precisionToolbarRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const pointerTypeRef = useRef<PrecisionPlacementActivation["pointerType"]>("keyboard");
+  const pointerTypeRef = useRef<"keyboard" | "mouse" | "pen" | "touch">("keyboard");
   const touchPointersRef = useRef(new Set<number>());
   const touchGestureRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
+    cancelled: boolean;
     moved: boolean;
     multiTouch: boolean;
+    timer: number;
   } | null>(null);
+  const touchLensRef = useRef<TouchLens | null>(null);
   const suppressTouchClickUntilRef = useRef(0);
-  const resetKey = JSON.stringify([
-    precisionRevision,
-    locale,
-    boardSize,
-    interactionMode,
-    disabled,
-  ]);
-  const [precisionSession, setPrecisionSession] = useState<PrecisionSession>(() => ({
-    resetKey,
-    state: WHOLE_BOARD,
-  }));
-  const precisionSessionRef = useRef(precisionSession);
-  if (precisionSession.resetKey !== resetKey) {
-    setPrecisionSession({ resetKey, state: WHOLE_BOARD });
-  }
+  const [touchLens, setTouchLens] = useState<TouchLens | null>(null);
+  const visibleTouchLens = touchLens?.revision === precisionRevision ? touchLens : null;
   const [focusIndex, setFocusIndex] = useState(() => {
     if (interactionMode !== "mark-dead") return 0;
     const firstStone = boardState.flat().findIndex(Boolean);
     return firstStone >= 0 ? firstStone : 0;
   });
-  const gridLines = Array.from({ length: boardSize });
-  const gridPosition = (value: number) => `${(value / (boardSize - 1)) * 100}%`;
+  const visibleBoardSize = Math.min(boardSize, Math.max(2, viewportSize ?? boardSize));
+  const gridLines = Array.from({ length: visibleBoardSize });
+  const gridPosition = (value: number) => `${(value / (visibleBoardSize - 1)) * 100}%`;
   const intersectionPosition = (value: number) =>
     `${(
       BOARD_GRID_INSET_RATIO
-      + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO
+      + (value / (visibleBoardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
   const selectedDeadStoneKeys = new Set(
     selectedDeadStones.map(({ x, y }) => `${x}:${y}`),
   );
-  const precisionContext = {
-    boardSize,
-    disabled,
-    interactionMode,
-    revision: resetKey,
-  } as const;
-  const reconciledPrecision = precisionSession.resetKey === resetKey
-    ? reconcilePrecisionPlacement(precisionSession.state, precisionContext)
-    : WHOLE_BOARD;
-  const precisionPosition = reconciledPrecision.kind === "precision"
-    ? reconciledPrecision.position
-    : null;
-  const precisionIndex = precisionPosition
-    ? precisionPosition.y * boardSize + precisionPosition.x
-    : null;
-
-  useLayoutEffect(() => {
-    precisionSessionRef.current = precisionSession;
-  }, [precisionSession]);
-
-  useLayoutEffect(() => {
-    if (!precisionPosition || !boardRef.current || !viewportRef.current) return;
+  const positionAt = (clientX: number, clientY: number) => {
     const board = boardRef.current;
-    const viewport = viewportRef.current;
-    const ratio = (value: number) => BOARD_GRID_INSET_RATIO
-      + (value / (boardSize - 1)) * BOARD_GRID_SPAN_RATIO;
-    viewport.scrollTo({
-      behavior: "auto",
-      left: board.clientWidth * ratio(precisionPosition.x) - viewport.clientWidth / 2,
-      top: board.clientHeight * ratio(precisionPosition.y) - viewport.clientHeight / 2,
-    });
-    const previewIndex = precisionPosition.y * boardSize + precisionPosition.x;
-    const focusPreview = window.setTimeout(() => {
-      precisionToolbarRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
-      buttonRefs.current[previewIndex]?.focus({ preventScroll: true });
-    }, 0);
-    return () => window.clearTimeout(focusPreview);
-  }, [boardSize, precisionPosition]);
-
-  const cancelPrecision = useCallback(() => {
-    const restoreIndex = precisionIndex ?? focusIndex;
-    pointerTypeRef.current = "keyboard";
-    const nextSession = { resetKey, state: WHOLE_BOARD };
-    precisionSessionRef.current = nextSession;
-    setPrecisionSession(nextSession);
-    window.requestAnimationFrame(() => buttonRefs.current[restoreIndex]?.focus());
-  }, [focusIndex, precisionIndex, resetKey]);
-
-  useEffect(() => {
-    if (!precisionPosition) return;
-    const cancelOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      cancelPrecision();
-    };
-    window.addEventListener("keydown", cancelOnEscape);
-    return () => window.removeEventListener("keydown", cancelOnEscape);
-  }, [cancelPrecision, precisionPosition]);
-
-  const activateIntersection = (
-    x: number,
-    y: number,
-    actionable: boolean,
-    pointerType: PrecisionPlacementActivation["pointerType"],
-  ) => {
-    const storedSession = precisionSessionRef.current;
-    const storedState = storedSession.resetKey === resetKey
-      ? storedSession.state
-      : WHOLE_BOARD;
-    const result = activatePrecisionPlacement(
-      reconcilePrecisionPlacement(storedState, precisionContext),
-      precisionContext,
-      {
-        x,
-        y,
-        actionable,
-        coarseMobile: pointerType === "touch"
-          && window.matchMedia("(pointer: coarse) and (max-width: 620px)").matches,
-        pointerType,
-      },
-    );
-    const nextSession = { resetKey, state: result.state };
-    precisionSessionRef.current = nextSession;
-    setPrecisionSession(nextSession);
-    if (result.state.kind === "precision") setFocusIndex(y * boardSize + x);
-    if (result.submit) onIntersectionClick(x, y);
+    if (!board) return null;
+    return boardPositionFromClientPoint(clientX, clientY, board.getBoundingClientRect(), visibleBoardSize);
   };
 
-  const activateBoardSurface = (
-    event: React.PointerEvent<HTMLDivElement>,
-    pointerType: "mouse" | "pen" | "touch",
-  ) => {
-    const board = boardRef.current;
-    if (!board || !coarseMobileTouchEnabled()) return;
-    const position = boardPositionFromClientPoint(
-      event.clientX,
-      event.clientY,
-      board.getBoundingClientRect(),
-      boardSize,
-    );
-    if (!position) return;
-    suppressTouchClickUntilRef.current = event.timeStamp + 750;
-    pointerTypeRef.current = pointerType;
-    event.preventDefault();
-    activateIntersection(
-      position.x,
-      position.y,
-      !boardState[position.y]?.[position.x],
-      pointerType,
-    );
-  };
-
-  const coarseMobileTouchEnabled = () => boardSize === 19
+  const preciseTouchEnabled = () => boardPlacement === "zoom"
     && interactionMode === "play"
     && !disabled
     && window.matchMedia("(pointer: coarse) and (max-width: 620px)").matches;
 
+  const clearTouchGesture = () => {
+    const gesture = touchGestureRef.current;
+    if (gesture) window.clearTimeout(gesture.timer);
+    touchGestureRef.current = null;
+  };
+
+  const clearTouchLens = () => {
+    touchLensRef.current = null;
+    setTouchLens(null);
+  };
+
+  useEffect(() => {
+    clearTouchGesture();
+    touchLensRef.current = null;
+  }, [precisionRevision, visibleBoardSize, disabled, interactionMode, boardPlacement]);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const preventScrollWhileAiming = (event: TouchEvent) => {
+      if (touchLensRef.current) event.preventDefault();
+    };
+    board.addEventListener("touchmove", preventScrollWhileAiming, { passive: false });
+    return () => board.removeEventListener("touchmove", preventScrollWhileAiming);
+  }, []);
+
+  function updateTouchLens(pointerId: number, clientX: number, clientY: number) {
+    const board = boardRef.current;
+    const position = positionAt(clientX, clientY);
+    if (!board || !position) return;
+    const bounds = board.getBoundingClientRect();
+    const layout = touchLensLayout(clientX, clientY, bounds, window.innerHeight);
+    const lens = {
+      pointerId,
+      position,
+      ...layout,
+      revision: precisionRevision,
+    };
+    touchLensRef.current = lens;
+    setTouchLens(lens);
+    setFocusIndex(position.y * visibleBoardSize + position.x);
+  }
+
   const handleBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "touch" || !coarseMobileTouchEnabled()) return;
+    if (event.pointerType !== "touch" || !preciseTouchEnabled()) return;
     pointerTypeRef.current = "touch";
     touchPointersRef.current.add(event.pointerId);
     if (touchPointersRef.current.size > 1) {
       if (touchGestureRef.current) touchGestureRef.current.multiTouch = true;
       return;
     }
-    touchGestureRef.current = {
+    const gesture = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      cancelled: false,
       moved: false,
       multiTouch: false,
+      timer: 0,
     };
+    gesture.timer = window.setTimeout(() => {
+      if (
+        touchGestureRef.current !== gesture
+        || gesture.cancelled
+        || gesture.moved
+        || gesture.multiTouch
+      ) return;
+      boardRef.current?.setPointerCapture(gesture.pointerId);
+      suppressTouchClickUntilRef.current = performance.now() + 1_000;
+      updateTouchLens(gesture.pointerId, gesture.startX, gesture.startY);
+    }, TOUCH_LENS_DELAY_MS);
+    touchGestureRef.current = gesture;
   };
 
   const handleBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const gesture = touchGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 10) {
+    if (touchLensRef.current?.pointerId === event.pointerId) {
+      const boardBounds = boardRef.current?.getBoundingClientRect();
+      if (!boardBounds || !isClientPointInsideBoard(event.clientX, event.clientY, boardBounds)) {
+        gesture.cancelled = true;
+        suppressTouchClickUntilRef.current = performance.now() + 1_000;
+        event.preventDefault();
+        clearTouchLens();
+        return;
+      }
+      event.preventDefault();
+      updateTouchLens(event.pointerId, event.clientX, event.clientY);
+      return;
+    }
+    if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > TOUCH_MOVE_TOLERANCE_PX) {
       gesture.moved = true;
+      window.clearTimeout(gesture.timer);
     }
   };
 
   const handleBoardPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") {
-      if (
-        (event.pointerType === "mouse" || event.pointerType === "pen")
-        && !precisionPosition
-      ) {
-        activateBoardSurface(event, event.pointerType);
-      }
       return;
     }
     touchPointersRef.current.delete(event.pointerId);
@@ -270,36 +273,46 @@ export function GoBoard({
       if (touchPointersRef.current.size === 0) touchGestureRef.current = null;
       return;
     }
+    window.clearTimeout(gesture.timer);
     touchGestureRef.current = null;
-    if (gesture.moved || gesture.multiTouch || touchPointersRef.current.size > 0) {
-      suppressTouchClickUntilRef.current = event.timeStamp + 750;
+    const activeLens = touchLensRef.current?.pointerId === event.pointerId
+      ? touchLensRef.current
+      : null;
+    if (activeLens) {
+      suppressTouchClickUntilRef.current = performance.now() + 1_000;
+      event.preventDefault();
+      clearTouchLens();
+      const { x, y } = activeLens.position;
+      if (!boardState[y]?.[x]) onIntersectionClick(x, y);
+      return;
+    }
+    if (gesture.cancelled || gesture.moved || gesture.multiTouch || touchPointersRef.current.size > 0) {
+      suppressTouchClickUntilRef.current = performance.now() + 750;
       event.preventDefault();
       return;
     }
-    suppressTouchClickUntilRef.current = event.timeStamp + 750;
     pointerTypeRef.current = "touch";
-    event.preventDefault();
-    activateBoardSurface(event, "touch");
   };
 
   const handleBoardPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") return;
     touchPointersRef.current.delete(event.pointerId);
     if (touchGestureRef.current?.pointerId === event.pointerId) {
-      touchGestureRef.current = null;
+      clearTouchGesture();
     }
+    clearTouchLens();
     pointerTypeRef.current = "keyboard";
   };
 
   return (
     <div
       className="go-board-shell"
-      data-precision={precisionPosition ? "true" : "false"}
+      data-touch-lens={visibleTouchLens ? "true" : "false"}
       onClickCapture={(event) => {
         if (
           event.detail > 0
           && pointerTypeRef.current !== "keyboard"
-          && event.timeStamp <= suppressTouchClickUntilRef.current
+          && performance.now() <= suppressTouchClickUntilRef.current
         ) {
           event.preventDefault();
           event.stopPropagation();
@@ -307,43 +320,34 @@ export function GoBoard({
           pointerTypeRef.current = "keyboard";
         }
       }}
-      onPointerDownCapture={(event) => {
+      onPointerDownCapture={() => {
         if (
           suppressTouchClickUntilRef.current > 0
-          && event.timeStamp <= suppressTouchClickUntilRef.current
+          && performance.now() <= suppressTouchClickUntilRef.current
         ) {
           suppressTouchClickUntilRef.current = 0;
         }
       }}
     >
-      {precisionPosition ? (
-        <div className="precision-placement-toolbar" ref={precisionToolbarRef}>
-          <p aria-atomic="true" aria-live="polite" role="status">
-            {formatBoardLabel(copy.precisionPlacementStatus, {
-              coordinate: goCoordinate(boardSize, precisionPosition.x, precisionPosition.y),
-            })}
-          </p>
-          <button onClick={cancelPrecision} type="button">{copy.showWholeBoard}</button>
-        </div>
-      ) : null}
-      <div className="go-board-viewport" ref={viewportRef}>
+      <div className="go-board-viewport">
         <div
-          aria-colcount={boardSize}
+          aria-colcount={visibleBoardSize}
           aria-describedby={instructionsId}
           aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
-          aria-rowcount={boardSize}
+          aria-rowcount={visibleBoardSize}
           className="go-board"
           ref={boardRef}
           style={
             {
-              "--board-size": boardSize,
+              "--board-size": visibleBoardSize,
               "--board-grid-inset": `${BOARD_GRID_INSET_RATIO * 100}%`,
               "--board-grid-span": `${BOARD_GRID_SPAN_RATIO * 100}%`,
-              "--grid-step": `${100 / (boardSize - 1)}%`,
-              "--intersection-size": `${(BOARD_GRID_SPAN_RATIO * 100) / (boardSize - 1)}%`,
+              "--grid-step": `${100 / (visibleBoardSize - 1)}%`,
+              "--intersection-size": `${(BOARD_GRID_SPAN_RATIO * 100) / (visibleBoardSize - 1)}%`,
             } as React.CSSProperties
           }
           data-size={boardSize}
+          data-visible-size={visibleBoardSize}
           data-interaction-mode={interactionMode}
           data-preview-color={previewColor}
           onPointerCancelCapture={handleBoardPointerCancel}
@@ -352,6 +356,19 @@ export function GoBoard({
           onPointerUpCapture={handleBoardPointerEnd}
           role="grid"
         >
+      {visibleTouchLens ? (
+        <div
+          className="touch-magnifier"
+          data-placement={visibleTouchLens.placement}
+          style={{
+            "--lens-x": `${visibleTouchLens.left}px`,
+            "--touch-y": `${visibleTouchLens.top}px`,
+            "--tether-offset-x": `${visibleTouchLens.tetherOffsetX}px`,
+          } as React.CSSProperties}
+        >
+          <TouchMagnifier board={boardState} center={visibleTouchLens.position} previewColor={previewColor} />
+        </div>
+      ) : null}
       <span className="sr-only" id={instructionsId}>
         {copy.boardInstructions}{" "}
         {interactionMode === "mark-dead" ? copy.markInstruction : copy.playInstruction}
@@ -399,7 +416,7 @@ export function GoBoard({
         {gridLines.map((_, y) => (
           <div aria-rowindex={y + 1} key={`row-${y}`} role="row">
             {gridLines.map((__, x) => {
-              const index = y * boardSize + x;
+              const index = y * visibleBoardSize + x;
               const serverStone = boardState[y]?.[x] ?? null;
               const pendingStone = !serverStone
                 && pendingMove?.x === x
@@ -414,7 +431,8 @@ export function GoBoard({
               const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
               const coordinate = goCoordinate(boardSize, x, y);
               const isLastMove = lastMove?.x === x && lastMove.y === y;
-              const isPrecisionPreview = precisionPosition?.x === x && precisionPosition.y === y;
+              const isPrecisionPreview = visibleTouchLens?.position.x === x && visibleTouchLens.position.y === y;
+              const isHint = hintMove?.x === x && hintMove.y === y;
               const actionable =
                 !disabled && (interactionMode === "play" ? !stone : Boolean(stone));
               const moveFocus = (nextIndex: number) => {
@@ -456,27 +474,26 @@ export function GoBoard({
                   aria-selected={interactionMode === "mark-dead"
                     ? stone ? markedDead : undefined
                     : isPrecisionPreview || undefined}
-                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${disputeSelected ? "is-dispute-selected" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""} ${isPendingMove ? "is-pending-move" : ""}`}
+                  className={`intersection ${isStarPoint(boardSize, x, y) ? "is-star" : ""} ${markedDead ? "is-dead" : ""} ${disputeSelected ? "is-dispute-selected" : ""} ${isPrecisionPreview ? "is-precision-preview" : ""} ${isHint ? "is-hint" : ""} ${isPendingMove ? "is-pending-move" : ""}`}
                   key={`${x}-${y}`}
                   onClick={(event) => {
                     if (
                       event.detail > 0
                       && pointerTypeRef.current === "touch"
-                      && event.timeStamp <= suppressTouchClickUntilRef.current
+                      && performance.now() <= suppressTouchClickUntilRef.current
                     ) {
                       pointerTypeRef.current = "keyboard";
                       return;
                     }
-                    const pointerType = event.detail === 0 ? "keyboard" : pointerTypeRef.current;
                     pointerTypeRef.current = "keyboard";
-                    activateIntersection(x, y, actionable, pointerType);
+                    if (actionable) onIntersectionClick(x, y);
                   }}
                   onFocus={() => setFocusIndex(index)}
                   onKeyDown={(event) => {
                     const nextIndex = moveBoardFocus(
                       index,
                       event.key,
-                      boardSize,
+                      visibleBoardSize,
                       event.ctrlKey || event.metaKey,
                     );
                     if (isBoardNavigationKey(event.key)) event.preventDefault();

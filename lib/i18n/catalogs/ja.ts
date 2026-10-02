@@ -50,7 +50,7 @@ export const ja = {
     },
     "puzzles": {
       "title": "囲碁パズル",
-      "description": "毎日のKataGoチャレンジを解いて、さらに囲碁の問題を練習しよう。"
+      "description": "毎日のチャレンジを解いて、さらに囲碁の問題を練習しよう。"
     }
   },
   "language": {
@@ -689,15 +689,15 @@ export const ja = {
     "action": "GoStoneに戻る"
   },
   "puzzles": {
-    "kicker": "KataGoトレーニング",
+    "kicker": "囲碁トレーニング",
     "title": "最強の手を見つける。",
     "description": "今日の局面を解き、その後さらにエンジン生成の囲碁問題を続ける。",
     "daily": "デイリーパズル",
     "practice": "さらに問題",
     "dailyDescription": "毎日更新される一つの共通チャレンジ。",
-    "practiceDescription": "KataGoによって生成および確認された増え続ける局面のセット。",
+    "practiceDescription": "増え続ける囲碁局面の問題集。",
     "chooseCategory": "トレーニングパスを選ぶ",
-    "categoryDescription": "各パスには、約30級から15級までの10のオリジナルKataGo検証済み変化が含まれています。",
+    "categoryDescription": "各パスには、約30級から15級までのオリジナル変化が含まれています。",
     "lifeAndDeath": "生き死に",
     "lifeAndDeathDescription": "グループを生かすか死なせるかの重要な点を見つける。",
     "tesuji": "手筋",
@@ -707,20 +707,20 @@ export const ja = {
     "endgame": "終局",
     "endgameDescription": "先手を保ちながら最も大きいヨセを選ぶ。",
     "historicalCollection": "古典問題集",
-    "historicalCollectionDescription": "『碁経衆妙』（1812）のパブリックドメイン局面200題を、KataGoで新たに解析・難易度推定しました。",
+    "historicalCollectionDescription": "『碁経衆妙』（1812）の古典局面200題。",
     "gokyoLife": "碁経衆妙 · 生之部",
     "gokyoLifeDescription": "古典103題：局所の石を生かす急所を見つけます。",
     "gokyoDeath": "碁経衆妙 · 死之部",
     "gokyoDeathDescription": "古典71題：守る側の眼形を奪います。",
-    "gokyoKo": "碁経衆妙 · 劫之部",
+    "gokyoKo": "コウ",
     "gokyoKoDescription": "古典コウ問題の最初の26題：最善の局所結果を探します。",
-    "historicalSource": "古典局面 · 1812 · KataGo解答",
+    "historicalSource": "古典局面 · 1812",
     "catalogProgress": "{total} の {ready} 準備完了",
     "backToCategories": "全てのカテゴリ",
     "approximateRank": "約 {rank} 級",
     "problemNumber": "パズル {number}",
     "loading": "パズルを読み込み中…",
-    "generating": "KataGo がこのパズルを準備しています。",
+    "generating": "このパズルを準備しています。",
     "generatingBody": "ワーカーが新しい局面を解析中です。このページは自動で更新されます。",
     "unavailable": "パズルは一時的に利用できません。",
     "retry": "再試行",
@@ -729,9 +729,12 @@ export const ja = {
     "white": "白",
     "chooseMove": "最も強い交点に石を置く。",
     "chooseVariationMove": "変化を読んで、次の手を選ぶ。",
-    "correct": "正解 — それが KataGo の第一選択手です。",
-    "continueLine": "良いです。KataGo が応手しました — 局面を読み続けてください。",
-    "incorrect": "この手順はうまくいきません。応手を研究した後、変化を再開してください。",
+    "correct": "正解です。",
+    "continueLine": "良いです。次の手を見つけてください。",
+    "incorrect": "もう少しです。",
+    "undoMove": "一手戻る",
+    "hint": "ヒントを表示",
+    "hintFailed": "ヒントを読み込めませんでした。",
     "retryVariation": "変化を再開",
     "solved": "解決済み",
     "firstTry": "一回目で解決",
@@ -744,7 +747,7 @@ export const ja = {
     "problemProgress": "{total} の問題 {current}",
     "identityError": "プレイヤーセッションを準備できませんでした。",
     "attemptFailed": "手を確認できませんでした。",
-    "engineNote": "将来の手はサーバーに保持されます。KataGo は相手の現在の応答のみを表示します。"
+    "engineNote": "先の手順は、そこに到達するまで非表示です。"
   },
   "analysisReview": {
     "kicker": "対局分析",

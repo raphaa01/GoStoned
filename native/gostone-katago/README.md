@@ -14,33 +14,49 @@ builds it, and `npm run mobile:android:build` includes that step. Generated
 sources, build trees and executables stay ignored so Git contains a reproducible
 recipe instead of opaque binaries.
 
-The Java plugin verifies the 38 MB model, permits one job at a time, caps each
-position at 80 visits, streams the actual turn result, supports cancellation,
-and stops at Android's severe thermal state. It runs a one-visit preview first,
-so the review can open after ten contiguous moves (or after 28 seconds), then
-replaces those positions with an adaptive quality pass. A 90-second safety
-boundary preserves and returns every usable preview instead of discarding the
-review. An instrumentation test runs real 9×9 inference through the local
-protocol. Real-phone performance and battery measurements are still required
-before a store release.
+The Java plugin verifies the 38 MB model, warms one engine session and keeps it
+alive between reviews, permits one job at a time, caps each selected position
+at 80 visits, streams the actual turn result, supports cancellation, and stops
+at Android's severe thermal state. It first requests positions 0–10 with one
+visit, a three-move PV and no policy payload, then continues the preview in
+16-position blocks. Every usable block is persisted by the mobile client. Only
+the largest fixed-player win-rate or score swings receive the adaptive
+900-visit quality budget. The review can therefore open after ten contiguous
+moves (or after 28 seconds). A 90-second safety boundary preserves and returns
+every usable preview instead of discarding the review. An instrumentation test
+runs real 9×9 inference through the local protocol. Real-phone performance and
+battery measurements are still required before a store release.
 
 ## iOS runtime
 
-The separate Swift plugin, model verification, Capacitor contract and project
-wiring are ready, but iOS deliberately remains fail-closed. Upstream KataGo does
-not ship an iPhone static library/XCFramework target, and that native link cannot
-be built or validated on Windows. Enabling `available: true` requires:
+On macOS with Xcode 26+, CMake and Ninja installed, run:
 
-1. Build an arm64 device library and simulator library with Xcode 26 or newer.
-2. Wrap the analysis API behind this plugin without spawning a process and emit
-   the checked-in `preview`/`quality` progress payload from `emitProgress`.
-3. Confirm cancellation, progressive turn replacement, one-job concurrency and
-   thermal shutdown.
-4. Compare every result field against the server worker on fixed fixtures.
-5. Run sustained 9×9, 13×13 and 19×19 analyses on representative iPhones.
-6. Package the outputs as `GoStoneKataGoCore.xcframework` and repeat the model
-   identity check before enabling the runtime.
+```bash
+npm run mobile:katago:ios
+npm run mobile:sync
+```
 
-Until then, the website keeps its server analysis provider, Android uses only
-its local runtime, and iOS reports the local engine as unavailable. Neither
-native app silently falls back to Modal or the KataGo server.
+The first command checks out the exact pinned KataGo commit, applies the
+reviewable iOS patch, builds Metal/MPSGraph arm64 slices for iPhone and the
+Apple-silicon Simulator, and creates
+`native/gostone-katago/ios/Frameworks/GoStoneKataGoCore.xcframework`. The generated framework is
+ignored. Swift Package Manager links it only when it exists; otherwise the
+plugin remains explicitly fail-closed, so normal web and source-only builds do
+not claim that local inference is available.
+
+The iOS plugin runs the analysis protocol in process, verifies the model hash,
+retains a warm engine between reviews, and uses the same 0–10-first,
+16-position preview chunks and selective quality pass as Android. It permits
+one job, streams preview and quality replacements, preserves partial results at
+the 90-second limit, and stops on cancellation, backgrounding, or serious
+thermal pressure. It requires iOS 16 because KataGo's current MPSGraph
+implementation uses APIs introduced there.
+
+The Simulator slice is a compile/link contract only. Xcode 26.6's simulator
+Metal driver aborts inside `MPSGraphDevice` when this graph executes, so the
+plugin reports the runtime unavailable there instead of risking an application
+crash. Inference is enabled only on a physical device.
+
+Before release, compare fixed-fixture output against the server worker and run
+sustained 9×9, 13×13 and 19×19 analysis on an older and current real iPhone.
+Neither native app silently falls back to Modal or the KataGo server.

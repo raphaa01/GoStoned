@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       credentials.username,
       credentials.password,
       credentials.startingStrength,
+      credentials.boardPlacement,
     );
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {

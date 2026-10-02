@@ -13,54 +13,53 @@ function section(value: string, start: string, end: string): string {
   return value.slice(startIndex, endIndex);
 }
 
-test("the 19x19 overview accepts only guarded actual-touch precision gestures", () => {
+test("mobile boards open a guarded press-and-drag touch lens", () => {
   const board = source("components/game/GoBoard.tsx");
   assert.match(board, /event\.pointerType !== "touch"/);
   assert.match(board, /\(pointer: coarse\) and \(max-width: 620px\)/);
+  assert.match(board, /boardPlacement === "zoom"/);
+  assert.match(board, /useBoardPlacement\(\)/);
   assert.match(board, /onPointerDownCapture=\{handleBoardPointerDown\}/);
   assert.match(board, /onPointerMoveCapture=\{handleBoardPointerMove\}/);
   assert.match(board, /onPointerUpCapture=\{handleBoardPointerEnd\}/);
   assert.match(board, /onPointerCancelCapture=\{handleBoardPointerCancel\}/);
-  assert.match(board, /Math\.hypot[\s\S]+> 10/);
+  assert.match(board, /TOUCH_LENS_DELAY_MS = 180/);
+  assert.match(board, /Math\.hypot[\s\S]+> TOUCH_MOVE_TOLERANCE_PX/);
   assert.match(board, /multiTouch/);
-  assert.match(board, /event\.timeStamp \+ 750/);
-  assert.match(board, /pointerTypeRef\.current === "touch"[\s\S]+event\.timeStamp <= suppressTouchClickUntilRef\.current/);
+  assert.match(board, /performance\.now\(\) \+ 1_000/);
+  assert.match(board, /pointerTypeRef\.current === "touch"[\s\S]+performance\.now\(\) <= suppressTouchClickUntilRef\.current/);
   assert.match(board, /onClickCapture=[\s\S]+event\.stopPropagation\(\)[\s\S]+suppressTouchClickUntilRef\.current = 0/);
   assert.match(board, /onPointerDownCapture=[\s\S]+suppressTouchClickUntilRef\.current > 0[\s\S]+suppressTouchClickUntilRef\.current = 0/);
-  assert.doesNotMatch(board, /Date\.now/);
-  assert.match(board, /storedSession\.resetKey === resetKey/);
-  assert.match(board, /reconcilePrecisionPlacement\(storedState, precisionContext\)/);
+  assert.match(board, /setPointerCapture\(gesture\.pointerId\)/);
+  assert.match(board, /touchLensRef\.current[\s\S]+event\.preventDefault\(\)/);
+  assert.match(board, /isClientPointInsideBoard\(event\.clientX, event\.clientY, boardBounds\)/);
+  assert.match(board, /gesture\.cancelled = true;[\s\S]+clearTouchLens\(\)/);
+  assert.match(board, /gesture\.cancelled \|\| gesture\.moved/);
+  assert.match(board, /viewportSize/);
+  assert.match(board, /data-visible-size=\{visibleBoardSize\}/);
 });
 
-test("precision mode remains perceivable, cancellable, and keyboard compatible", () => {
+test("the touch lens keeps keyboard activation and submits only on release", () => {
   const board = source("components/game/GoBoard.tsx");
-  assert.doesNotMatch(board, /GoBoardSession|key=\{resetKey\}/);
-  assert.match(board, /precisionSession\.resetKey !== resetKey/);
-  assert.match(board, /setPrecisionSession\(\{ resetKey, state: WHOLE_BOARD \}\)/);
-  assert.match(board, /aria-atomic="true" aria-live="polite" role="status"/);
-  assert.match(board, /copy\.precisionPlacementStatus/);
-  assert.match(board, /copy\.precisionPreviewState/);
-  assert.match(board, /copy\.showWholeBoard/);
-  assert.match(board, /event\.key !== "Escape"/);
-  assert.match(board, /const focusPreview = window\.setTimeout\([\s\S]+buttonRefs\.current\[previewIndex\]\?\.focus\(\{ preventScroll: true \}\)[\s\S]+window\.clearTimeout\(focusPreview\)/);
-  assert.doesNotMatch(board, /if \(pointerTypeRef\.current !== "touch"\) return;/);
-  assert.match(board, /buttonRefs\.current\[restoreIndex\]\?\.focus\(\)/);
+  assert.match(board, /TouchMagnifier/);
+  assert.match(board, /touchLensCoordinates/);
+  assert.match(board, /if \(!boardState\[y\]\?\.\[x\]\) onIntersectionClick\(x, y\)/);
+  assert.match(board, /if \(actionable\) onIntersectionClick\(x, y\)/);
   assert.match(board, /: isPrecisionPreview \|\| undefined\}/);
-  assert.match(board, /event\.detail === 0 \? "keyboard"/);
+  assert.match(board, /precisionRevision[\s\S]+clearTouchLens\(\)/);
 });
 
-test("responsive CSS keeps a fitted overview and confines magnified panning", () => {
+test("responsive CSS keeps the full board fitted and the magnifier local", () => {
   const styles = source("app/globals.css");
-  assert.ok((760 * 0.86) / 18 >= 24, "magnified intersections meet the WCAG target minimum");
+  assert.match(styles, /\.go-board\s*\{[\s\S]*?-webkit-touch-callout: none;[\s\S]*?user-select: none;/);
   assert.match(styles, /\.go-board\[data-size="19"\]\[data-interaction-mode="play"\]\s*\{[\s\S]*?max-width: 100%;[\s\S]*?width: 100%;/);
-  assert.match(styles, /\.go-board-shell\[data-precision="true"\][^{]+\.go-board\[data-size="19"\][^{]+\{[\s\S]*?width: 760px;/);
-  assert.match(styles, /max-height: min\(70dvh, 620px\);[\s\S]*?overflow: auto;[\s\S]*?overscroll-behavior: contain;/);
-  assert.match(styles, /@media \(max-width: 620px\) and \(pointer: coarse\)/);
-  assert.match(styles, /data-precision="false"[^{]+\.intersection\s*\{\s*pointer-events: none;/);
-  assert.match(styles, /data-precision="true"[^{]+\.intersection\s*\{\s*pointer-events: auto;/);
-  assert.match(styles, /\.precision-placement-toolbar button[\s\S]*?min-height: 44px;/);
+  assert.match(styles, /\.touch-magnifier\s*\{[\s\S]*?height: 168px;[\s\S]*?pointer-events: none;/);
+  assert.match(styles, /--touch-lens-gap: 56px/);
+  assert.match(styles, /\.touch-magnifier\[data-placement="below"\]/);
+  assert.match(styles, /\.touch-magnifier::after[\s\S]*?--tether-offset-x/);
+  assert.match(styles, /\.touch-magnifier-board[\s\S]*?border-radius: 50%/);
+  assert.doesNotMatch(styles, /data-precision/);
   assert.match(styles, /\.intersection\.is-precision-preview::after[\s\S]*?border: 3px solid[\s\S]*?box-shadow:/);
-  assert.match(styles, /@media \(max-width: 390px\)[\s\S]*?\.precision-placement-toolbar[\s\S]*?grid-template-columns: 1fr;/);
 });
 
 test("rendering and pointer snapping share one intersection geometry contract", () => {
@@ -126,12 +125,9 @@ test("dead-stone groups update optimistically while the server confirms them", (
   assert.match(scoring, /setPendingDeadStones\(null\)/);
 });
 
-test("precision placement and version conflicts have English and German copy", () => {
+test("version conflicts retain English and German copy", () => {
   for (const path of ["lib/i18n/catalogs/en.ts", "lib/i18n/catalogs/de.ts"]) {
     const catalogue = source(path);
     assert.match(catalogue, /game_version_conflict:/);
-    assert.match(catalogue, /precisionPlacementStatus:/);
-    assert.match(catalogue, /precisionPreviewState:/);
-    assert.match(catalogue, /showWholeBoard:/);
   }
 });

@@ -50,7 +50,7 @@ export const es = {
     },
     "puzzles": {
       "title": "Acertijos de Go",
-      "description": "Resuelve un desafío diario de KataGo y practica más problemas de Go."
+      "description": "Resuelve un desafío diario y practica más problemas de Go."
     }
   },
   "language": {
@@ -689,15 +689,15 @@ export const es = {
     "action": "Volver a GoStone"
   },
   "puzzles": {
-    "kicker": "Entrenamiento KataGo",
+    "kicker": "Entrenamiento de Go",
     "title": "Encuentra el movimiento más fuerte.",
     "description": "Resuelve la posición de hoy y luego continúa con más problemas de Go generados por el motor.",
     "daily": "Acertijo diario",
     "practice": "Más problemas",
     "dailyDescription": "Un desafío compartido, renovado todos los días.",
-    "practiceDescription": "Un conjunto creciente de posiciones generadas y verificadas por KataGo.",
+    "practiceDescription": "Una colección creciente de posiciones de Go.",
     "chooseCategory": "Elige un camino de entrenamiento",
-    "categoryDescription": "Cada camino contiene diez variaciones originales validadas por KataGo desde alrededor de 30 kyu hasta 15 kyu.",
+    "categoryDescription": "Cada camino contiene variaciones originales desde alrededor de 30 kyu hasta 15 kyu.",
     "lifeAndDeath": "Vida y muerte",
     "lifeAndDeathDescription": "Encuentra puntos vitales que hagan que un grupo viva o muera.",
     "tesuji": "Tesuji",
@@ -707,20 +707,20 @@ export const es = {
     "endgame": "Final de partida",
     "endgameDescription": "Elige el yose más grande mientras preservas el sente.",
     "historicalCollection": "Colección histórica",
-    "historicalCollectionDescription": "200 posiciones de dominio público de Gokyo Shumyo (1812), resueltas y clasificadas de nuevo con KataGo.",
+    "historicalCollectionDescription": "200 posiciones clásicas de Gokyo Shumyo (1812).",
     "gokyoLife": "Gokyo Shumyo · Vida",
     "gokyoLifeDescription": "103 problemas clásicos: encuentra la jugada que hace vivir al grupo local.",
     "gokyoDeath": "Gokyo Shumyo · Muerte",
     "gokyoDeathDescription": "71 problemas clásicos: elimina el espacio de ojos del defensor.",
-    "gokyoKo": "Gokyo Shumyo · Ko",
+    "gokyoKo": "Ko",
     "gokyoKoDescription": "Los primeros 26 problemas clásicos de ko: encuentra el mejor resultado local.",
-    "historicalSource": "Posición histórica · 1812 · solución KataGo",
+    "historicalSource": "Posición histórica · 1812",
     "catalogProgress": "{ready} de {total} listo",
     "backToCategories": "Todas las categorías",
     "approximateRank": "sobre {rank} kyu",
     "problemNumber": "Rompecabezas {number}",
     "loading": "Cargando rompecabezas…",
-    "generating": "KataGo está preparando este rompecabezas.",
+    "generating": "Este rompecabezas se está preparando.",
     "generatingBody": "El trabajador está analizando una posición nueva. Esta página se actualiza automáticamente.",
     "unavailable": "Los rompecabezas no están disponibles temporalmente.",
     "retry": "Intenta de nuevo",
@@ -729,9 +729,12 @@ export const es = {
     "white": "Blanco",
     "chooseMove": "Coloca una piedra en la intersección más fuerte.",
     "chooseVariationMove": "Lee la variación y elige tu próximo movimiento.",
-    "correct": "Correcto — esa es la primera opción de KataGo.",
-    "continueLine": "Bien. KataGo ha respondido — sigue leyendo la posición.",
-    "incorrect": "Esta ruta no funciona. Estudia la respuesta y luego reinicia la variación.",
+    "correct": "Correcto.",
+    "continueLine": "Bien. Ahora encuentra la siguiente jugada.",
+    "incorrect": "No del todo.",
+    "undoMove": "Deshacer jugada",
+    "hint": "Mostrar una pista",
+    "hintFailed": "No se pudo cargar la pista.",
     "retryVariation": "Reiniciar variación",
     "solved": "Resuelto",
     "firstTry": "Resuelto en el primer intento",
@@ -744,7 +747,7 @@ export const es = {
     "problemProgress": "Problema {current} de {total}",
     "identityError": "No se pudo preparar tu sesión de jugador.",
     "attemptFailed": "No se pudo comprobar tu movimiento.",
-    "engineNote": "Los movimientos futuros permanecen en el servidor. KataGo solo revela la respuesta actual del oponente."
+    "engineNote": "Las jugadas futuras permanecen ocultas hasta que llegues a ellas."
   },
   "analysisReview": {
     "kicker": "Análisis de partida",

@@ -1,4 +1,8 @@
 import type { RatingDisplayPreference } from "./rankPolicy";
+import {
+  parseBoardPlacementPreference,
+  type BoardPlacementPreference,
+} from "@/lib/boardPlacement";
 
 export const STARTING_STRENGTH_POLICY_VERSION = "starting-strength-v2" as const;
 
@@ -13,6 +17,7 @@ export type StartingStrengthEstimate =
 export type RatingPreferences = Readonly<{
   displayPreference: RatingDisplayPreference;
   botMatchPreference: BotMatchPreference;
+  boardPlacement: BoardPlacementPreference;
 }>;
 
 export type BotMatchPreference =
@@ -101,9 +106,10 @@ export function parseRatingPreferences(value: unknown): RatingPreferences {
   }
   const record = value as Record<string, unknown>;
   if (
-    Object.keys(record).length !== 2
+    Object.keys(record).length !== 3
     || !("displayPreference" in record)
     || !("botMatchPreference" in record)
+    || !("boardPlacement" in record)
     || typeof record.botMatchPreference !== "string"
     || !BOT_MATCH_PREFERENCES.has(record.botMatchPreference as BotMatchPreference)
   ) {
@@ -112,5 +118,6 @@ export function parseRatingPreferences(value: unknown): RatingPreferences {
   return Object.freeze({
     displayPreference: parseRatingDisplayPreference(record.displayPreference),
     botMatchPreference: record.botMatchPreference as BotMatchPreference,
+    boardPlacement: parseBoardPlacementPreference(record.boardPlacement),
   });
 }

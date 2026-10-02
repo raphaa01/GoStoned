@@ -10,6 +10,10 @@ import {
   type StartingStrength,
 } from "@/lib/rating/preferences";
 import {
+  DEFAULT_BOARD_PLACEMENT,
+  type BoardPlacementPreference,
+} from "@/lib/boardPlacement";
+import {
   GLICKO2_INITIAL_RATING_DEVIATION,
   GLICKO2_INITIAL_VOLATILITY,
 } from "@/lib/rating/ratingFinalizer";
@@ -154,6 +158,7 @@ export async function completeOAuthRegistration(
   registrationToken: string | undefined,
   usernameValue: unknown,
   startingStrength: StartingStrength,
+  boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
 ): Promise<OAuthRegistration> {
   if (!isOAuthRegistrationTokenFormat(registrationToken)) {
     throw new AuthError(
@@ -192,6 +197,7 @@ export async function completeOAuthRegistration(
     }
 
     let account: AuthUserRow;
+    const updatesPendingAccount = Boolean(intent.user_id);
     try {
       if (intent.user_id) {
         const updated = await client.query<AuthUserRow>(
@@ -239,8 +245,8 @@ export async function completeOAuthRegistration(
        ), preference AS (
          INSERT INTO player_rating_preferences
            (user_id, display_preference, bot_match_preference,
-            handicap_preference, preference_revision)
-         SELECT id, 'both', 'never', 'even-only', 1 FROM account
+            handicap_preference, board_placement, preference_revision)
+         SELECT id, 'both', 'never', 'even-only', $13, 1 FROM account
        ), rating_state AS (
          INSERT INTO player_glicko2_ratings
            (user_id, player_key, rating, rating_deviation, volatility,
@@ -270,6 +276,7 @@ export async function completeOAuthRegistration(
             GLICKO2_INITIAL_RATING_DEVIATION,
             GLICKO2_INITIAL_VOLATILITY,
             GLICKO2_ALGORITHM_VERSION,
+            boardPlacement,
           ],
         );
         account = created.rows[0];
@@ -278,6 +285,18 @@ export async function completeOAuthRegistration(
       const authError = registrationDatabaseError(error);
       if (authError) throw authError;
       throw error;
+    }
+
+    if (updatesPendingAccount) {
+      await client.query(
+        `UPDATE player_rating_preferences
+            SET board_placement = $2,
+                preference_revision = preference_revision + 1,
+                updated_at = statement_timestamp()
+          WHERE user_id = $1
+            AND board_placement IS DISTINCT FROM $2`,
+        [account.id, boardPlacement],
+      );
     }
 
     const user = serializeAuthUser(account);

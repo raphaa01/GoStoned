@@ -290,7 +290,9 @@ export function FriendsHub() {
       <section className="player-search" aria-labelledby="player-search-title">
         <label htmlFor="friend-search" id="player-search-title">{copy.searchLabel}</label>
         <div className="player-search__field"><Search aria-hidden="true" size={19} /><input autoComplete="off" id="friend-search" onChange={(event) => changeSearch(event.target.value)} placeholder={copy.searchPlaceholder} value={searchTerm} /></div>
-        <small>{searching ? copy.searching : copy.searchHint}</small>
+        {searching || (searchTerm.trim().length > 0 && searchTerm.trim().length < 2)
+          ? <small>{searching ? copy.searching : copy.searchHint}</small>
+          : null}
         {searchTerm.trim().length >= 2 ? (
           <div className="player-search__results">
             {!searching && searchResults.length === 0 ? <p>{copy.noSearchResults}</p> : searchResults.map((player) => (
@@ -330,10 +332,10 @@ export function FriendsHub() {
           )}
         </section>
 
-        <div className="friends-side-stack">
-          <section className="friends-card" aria-labelledby="requests-title">
+        {dashboard.requests.length || dashboard.invites.length ? <div className="friends-side-stack">
+          {dashboard.requests.length ? <section className="friends-card" aria-labelledby="requests-title">
             <header><h2 id="requests-title">{copy.requestsTitle}</h2></header>
-            {dashboard.requests.length === 0 ? <p className="friends-empty">{copy.noRequests}</p> : dashboard.requests.map((request) => (
+            {dashboard.requests.map((request) => (
               <article className="friend-request" key={request.friendshipId}>
                 <ProfileAvatar size="xs" style={request.avatarStyle} />
                 <div><strong>{request.displayName}</strong><span>{request.direction === "incoming" ? copy.incomingRequest : copy.requestSent}</span></div>
@@ -342,18 +344,18 @@ export function FriendsHub() {
                 </div>
               </article>
             ))}
-          </section>
+          </section> : null}
 
-          <section className="friends-card" aria-labelledby="invites-title">
+          {dashboard.invites.length ? <section className="friends-card" aria-labelledby="invites-title">
             <header><h2 id="invites-title">{copy.invitesTitle}</h2></header>
-            {dashboard.invites.length === 0 ? <p className="friends-empty">{copy.noInvites}</p> : dashboard.invites.map((invite) => (
+            {dashboard.invites.map((invite) => (
               <article className="game-invite" key={invite.id}>
                 <div><strong>{formatFriendsText(invite.direction === "incoming" ? copy.invitedYou : copy.youInvited, { name: invite.otherPlayerName })}</strong><span>{invite.boardSize}×{invite.boardSize} · {dictionary.timeControls[invite.timeControl].shortLabel}</span><small><Clock3 size={13} /> {copy.expiresSoon}</small></div>
                 <div>{invite.status === "accepted" ? <span>{copy.openingGame}</span> : invite.direction === "incoming" ? <><Button disabled={busy === `invite-response-${invite.id}`} onClick={() => void respondInvite(invite, "accept")} size="sm">{copy.acceptInvite}</Button><Button disabled={busy === `invite-response-${invite.id}`} onClick={() => void respondInvite(invite, "decline")} size="sm" variant="ghost">{copy.declineInvite}</Button></> : <Button disabled={busy === `invite-response-${invite.id}`} onClick={() => void respondInvite(invite, "cancel")} size="sm" variant="ghost">{copy.cancelInvite}</Button>}</div>
               </article>
             ))}
-          </section>
-        </div>
+          </section> : null}
+        </div> : null}
       </div>
 
       <ModalDialog className="friends-modal chat-modal" initialFocusRef={chatInput} onDismiss={() => setSelectedFriend(null)} open={Boolean(selectedFriend)} titleId={chatTitleId}>

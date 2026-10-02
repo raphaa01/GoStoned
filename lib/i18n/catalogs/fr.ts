@@ -50,7 +50,7 @@ export const fr = {
     },
     "puzzles": {
       "title": "Puzzles de Go",
-      "description": "Résolvez un défi quotidien de KataGo et entraînez-vous avec plus de problèmes de Go."
+      "description": "Résolvez un défi quotidien et entraînez-vous avec plus de problèmes de Go."
     }
   },
   "language": {
@@ -689,15 +689,15 @@ export const fr = {
     "action": "Retour à GoStone"
   },
   "puzzles": {
-    "kicker": "Entraînement KataGo",
+    "kicker": "Entraînement de Go",
     "title": "Trouvez le coup le plus fort.",
     "description": "Résolvez la position d'aujourd'hui, puis continuez avec plus de problèmes de Go générés par l'ordinateur.",
     "daily": "Puzzle quotidien",
     "practice": "Plus de problèmes",
     "dailyDescription": "Un défi partagé, renouvelé chaque jour.",
-    "practiceDescription": "Un ensemble croissant de positions générées et vérifiées par KataGo.",
+    "practiceDescription": "Une collection croissante de positions de Go.",
     "chooseCategory": "Choisissez un chemin d'entraînement",
-    "categoryDescription": "Chaque chemin contient dix variations originales validées par KataGo allant d'environ 30 kyu à 15 kyu.",
+    "categoryDescription": "Chaque chemin contient des variations originales allant d'environ 30 kyu à 15 kyu.",
     "lifeAndDeath": "Vie & mort",
     "lifeAndDeathDescription": "Trouvez les points vitaux qui font vivre ou mourir un groupe.",
     "tesuji": "Tesuji",
@@ -707,20 +707,20 @@ export const fr = {
     "endgame": "Fin de partie",
     "endgameDescription": "Choisissez le plus grand yose tout en conservant le sente.",
     "historicalCollection": "Collection historique",
-    "historicalCollectionDescription": "200 positions du domaine public tirées de Gokyo Shumyo (1812), nouvellement résolues et classées avec KataGo.",
+    "historicalCollectionDescription": "200 positions classiques tirées de Gokyo Shumyo (1812).",
     "gokyoLife": "Gokyo Shumyo · Vie",
     "gokyoLifeDescription": "103 problèmes classiques : trouvez le coup qui fait vivre le groupe local.",
     "gokyoDeath": "Gokyo Shumyo · Mort",
     "gokyoDeathDescription": "71 problèmes classiques : supprimez l'espace d'yeux du défenseur.",
-    "gokyoKo": "Gokyo Shumyo · Ko",
+    "gokyoKo": "Ko",
     "gokyoKoDescription": "Les 26 premiers problèmes classiques de ko : trouvez le meilleur résultat local.",
-    "historicalSource": "Position historique · 1812 · solution KataGo",
+    "historicalSource": "Position historique · 1812",
     "catalogProgress": "{ready} de {total} prêt",
     "backToCategories": "Toutes les catégories",
     "approximateRank": "à propos de {rank} kyu",
     "problemNumber": "Puzzle {number}",
     "loading": "Chargement des puzzles…",
-    "generating": "KataGo prépare ce puzzle.",
+    "generating": "Ce puzzle est en cours de préparation.",
     "generatingBody": "Le worker analyse une position fraîche. Cette page se met à jour automatiquement.",
     "unavailable": "Les puzzles sont temporairement indisponibles.",
     "retry": "Réessayez",
@@ -729,9 +729,12 @@ export const fr = {
     "white": "Blanc",
     "chooseMove": "Placez une pierre sur l'intersection la plus forte.",
     "chooseVariationMove": "Lisez la variante et choisissez votre prochain coup.",
-    "correct": "Correct — c'est le premier choix de KataGo.",
-    "continueLine": "Bien. KataGo a répondu — continuez à lire la position.",
-    "incorrect": "Cette route ne fonctionne pas. Étudiez la réponse, puis recommencez la variante.",
+    "correct": "Correct.",
+    "continueLine": "Bien. Trouvez maintenant le coup suivant.",
+    "incorrect": "Pas tout à fait.",
+    "undoMove": "Annuler le coup",
+    "hint": "Afficher un indice",
+    "hintFailed": "L'indice n'a pas pu être chargé.",
     "retryVariation": "Recommencer la variante",
     "solved": "Résolu",
     "firstTry": "Résolu du premier coup",
@@ -744,7 +747,7 @@ export const fr = {
     "problemProgress": "Problème {current} de {total}",
     "identityError": "Votre session de joueur n'a pas pu être préparée.",
     "attemptFailed": "Votre coup n'a pas pu être vérifié.",
-    "engineNote": "Les coups futurs restent sur le serveur. KataGo révèle uniquement la réponse actuelle de l'adversaire."
+    "engineNote": "Les coups futurs restent cachés jusqu'à ce que vous les atteigniez."
   },
   "analysisReview": {
     "kicker": "Analyse de partie",

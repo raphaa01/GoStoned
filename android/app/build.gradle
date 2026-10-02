@@ -3,6 +3,10 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.gostone.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    def releaseKeystore = System.getenv('GOSTONE_ANDROID_KEYSTORE_FILE')
+    def releaseAlias = System.getenv('GOSTONE_ANDROID_KEY_ALIAS')
+    def releaseStorePassword = System.getenv('GOSTONE_ANDROID_KEYSTORE_PASSWORD')
+    def releaseKeyPassword = System.getenv('GOSTONE_ANDROID_KEY_PASSWORD')
     defaultConfig {
         applicationId "com.gostone.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -18,10 +22,26 @@ android {
             noCompress 'katago', 'onnx', 'wasm'
         }
     }
+    signingConfigs {
+        if (releaseKeystore && releaseAlias && releaseStorePassword && releaseKeyPassword) {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword releaseStorePassword
+                keyAlias releaseAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+            if (releaseKeystore && releaseAlias && releaseStorePassword && releaseKeyPassword) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     packagingOptions {

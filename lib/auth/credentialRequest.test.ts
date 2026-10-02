@@ -61,17 +61,19 @@ test("social registration accepts only a username and optional starting strength
       username: " Personal_Name ",
       startingStrength: "known",
       knownRank: "5K",
+      boardPlacement: "direct",
     }))),
     {
       username: "Personal_Name",
       startingStrength: { estimate: "known", knownRank: "5k" },
+      boardPlacement: "direct",
     },
   );
 
   for (const body of [
-    { username: "player", startingStrength: "unspecified", knownRank: null, email: "forged@example.com" },
-    { username: "player", startingStrength: "unspecified" },
-    { username: "invalid name", startingStrength: "unspecified", knownRank: null },
+    { username: "player", startingStrength: "unspecified", knownRank: null, boardPlacement: "zoom", email: "forged@example.com" },
+    { username: "player", startingStrength: "unspecified", knownRank: null },
+    { username: "invalid name", startingStrength: "unspecified", knownRank: null, boardPlacement: "zoom" },
   ]) {
     await assert.rejects(
       readOAuthRegistrationRequest(credentialRequest(JSON.stringify(body))),
@@ -150,6 +152,21 @@ test("auth mutation guard rejects non-JSON and cross-origin credential requests"
     "https://gostone.test/api/auth/logout",
     { method: "POST", headers: { Origin: "https://gostone.test" } },
   )));
+});
+
+test("auth mutations accept only the two exact Capacitor origins", () => {
+  for (const origin of ["capacitor://localhost", "https://localhost"]) {
+    assert.doesNotThrow(() => assertAuthMutationRequest(new NextRequest(
+      "https://gostone.app/api/auth/login",
+      { method: "POST", headers: { Origin: origin, "Sec-Fetch-Site": "cross-site" } },
+    )));
+  }
+  for (const origin of ["capacitor://attacker", "http://localhost", "https://localhost.attacker.example"]) {
+    assert.throws(() => assertAuthMutationRequest(new NextRequest(
+      "https://gostone.app/api/auth/login",
+      { method: "POST", headers: { Origin: origin, "Sec-Fetch-Site": "cross-site" } },
+    )), (error) => error instanceof AuthError && error.code === "request_rejected");
+  }
 });
 
 test("auth mutation guard recovers only the exact addressed loopback origin", () => {

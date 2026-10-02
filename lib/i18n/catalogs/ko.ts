@@ -50,7 +50,7 @@ export const ko = {
     },
     "puzzles": {
       "title": "바둑 퍼즐",
-      "description": "오늘의 KataGo 도전을 풀고 더 많은 바둑 문제를 연습하세요."
+      "description": "오늘의 도전을 풀고 더 많은 바둑 문제를 연습하세요."
     }
   },
   "language": {
@@ -689,15 +689,15 @@ export const ko = {
     "action": "GoStone으로 돌아가기"
   },
   "puzzles": {
-    "kicker": "KataGo 훈련",
+    "kicker": "바둑 훈련",
     "title": "가장 강한 수를 찾으세요.",
     "description": "오늘의 상황을 풀고, 이어서 더 많은 엔진 생성 바둑 문제를 진행하세요.",
     "daily": "오늘의 퍼즐",
     "practice": "더 많은 문제",
     "dailyDescription": "매일 새롭게 갱신되는 하나의 공유 도전.",
-    "practiceDescription": "KataGo가 생성하고 검증한 지속적으로 증가하는 상황 모음.",
+    "practiceDescription": "계속 늘어나는 바둑 문제 모음.",
     "chooseCategory": "훈련 경로 선택",
-    "categoryDescription": "각 경로에는 약 30급에서 15급까지의 10가지 KataGo 검증 변형이 포함되어 있습니다.",
+    "categoryDescription": "각 경로에는 약 30급에서 15급까지의 독창적인 변형이 포함되어 있습니다.",
     "lifeAndDeath": "생사",
     "lifeAndDeathDescription": "그룹을 살리거나 죽이는 중요한 점을 찾으세요.",
     "tesuji": "테수지",
@@ -707,20 +707,20 @@ export const ko = {
     "endgame": "종반",
     "endgameDescription": "선수를 유지하면서 가장 큰 요세 선택하기.",
     "historicalCollection": "고전 문제집",
-    "historicalCollectionDescription": "Gokyo Shumyo(1812)의 퍼블릭 도메인 200개 국면을 KataGo로 새로 풀이하고 난이도를 추정했습니다.",
+    "historicalCollectionDescription": "Gokyo Shumyo(1812)의 고전 문제 200개.",
     "gokyoLife": "Gokyo Shumyo · 삶",
     "gokyoLifeDescription": "고전 103문제: 국지 돌을 살리는 급소를 찾으세요.",
     "gokyoDeath": "Gokyo Shumyo · 죽음",
     "gokyoDeathDescription": "고전 71문제: 수비 측의 눈 공간을 없애세요.",
-    "gokyoKo": "Gokyo Shumyo · 패",
+    "gokyoKo": "패",
     "gokyoKoDescription": "고전 패 문제 중 첫 26문제: 최선의 국지 결과를 찾으세요.",
-    "historicalSource": "고전 국면 · 1812 · KataGo 풀이",
+    "historicalSource": "고전 국면 · 1812",
     "catalogProgress": "{ready} 중 {total} 준비 완료",
     "backToCategories": "모든 카테고리",
     "approximateRank": "약 {rank} 급",
     "problemNumber": "퍼즐 {number}",
     "loading": "퍼즐 로딩 중…",
-    "generating": "KataGo가 이 퍼즐을 준비하고 있습니다.",
+    "generating": "이 퍼즐을 준비하고 있습니다.",
     "generatingBody": "워커가 새로운 위치를 분석하고 있습니다. 이 페이지는 자동으로 갱신됩니다.",
     "unavailable": "퍼즐을 일시적으로 사용할 수 없습니다.",
     "retry": "다시 시도",
@@ -729,9 +729,12 @@ export const ko = {
     "white": "백",
     "chooseMove": "가장 강한 교차점에 착수하세요.",
     "chooseVariationMove": "변화를 읽고 다음 착수를 선택하세요.",
-    "correct": "정답 — KataGo의 첫 번째 선택입니다.",
-    "continueLine": "좋습니다. KataGo가 응수했습니다 — 위치를 계속 읽으세요.",
-    "incorrect": "이 경로는 효과가 없습니다. 응수를 공부한 후 변화를 다시 시작하세요.",
+    "correct": "정답입니다.",
+    "continueLine": "좋습니다. 이제 다음 수를 찾으세요.",
+    "incorrect": "아직 아니에요.",
+    "undoMove": "한 수 되돌리기",
+    "hint": "힌트 보기",
+    "hintFailed": "힌트를 불러올 수 없습니다.",
     "retryVariation": "변화 다시 시작",
     "solved": "완료",
     "firstTry": "첫 시도에 해결됨",
@@ -744,7 +747,7 @@ export const ko = {
     "problemProgress": "{total}의 문제 {current}",
     "identityError": "플레이어 세션을 준비할 수 없습니다.",
     "attemptFailed": "수 확인을 할 수 없습니다.",
-    "engineNote": "미래의 수는 서버에 저장됩니다. KataGo는 상대방의 현재 응답만 보여줍니다."
+    "engineNote": "이후 수순은 도달할 때까지 숨겨집니다."
   },
   "analysisReview": {
     "kicker": "게임 분석",

@@ -2419,6 +2419,8 @@ a {
 }
 
 .go-board {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   aspect-ratio: 1;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 28%),
@@ -2432,6 +2434,7 @@ a {
   container-type: inline-size;
   overflow: hidden;
   position: relative;
+  user-select: none;
   width: 100%;
 }
 
@@ -2441,42 +2444,61 @@ a {
   min-width: 0;
 }
 
-.precision-placement-toolbar {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin-bottom: 10px;
+.go-board-shell[data-touch-lens="true"] .go-board {
+  overflow: visible;
 }
 
-.precision-placement-toolbar p {
-  color: var(--muted-2);
-  font-size: 11px;
-  line-height: 1.45;
-  margin: 0;
+.touch-magnifier {
+  --touch-lens-gap: 56px;
+  filter: drop-shadow(0 10px 16px rgb(32 20 8 / .28));
+  height: 168px;
+  left: var(--lens-x);
+  pointer-events: none;
+  position: absolute;
+  top: var(--touch-y);
+  transform: translate(-50%, calc(-100% - var(--touch-lens-gap)));
+  width: 168px;
+  z-index: 20;
 }
 
-.precision-placement-toolbar button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  min-height: 44px;
-  padding: 9px 12px;
+.touch-magnifier[data-placement="below"] {
+  transform: translate(-50%, var(--touch-lens-gap));
 }
 
-.precision-placement-toolbar button:hover {
-  background: rgba(255, 255, 255, 0.09);
+.touch-magnifier::after {
+  background: rgb(255 255 255 / .9);
+  box-shadow: 0 0 0 1px rgb(40 89 63 / .38);
+  content: "";
+  height: calc(var(--touch-lens-gap) - 8px);
+  left: calc(50% + var(--tether-offset-x));
+  position: absolute;
+  top: calc(100% + 4px);
+  width: 2px;
 }
 
-.precision-placement-toolbar button:focus-visible {
-  outline: 3px solid #b9df93;
-  outline-offset: 2px;
+.touch-magnifier[data-placement="below"]::after {
+  bottom: calc(100% + 4px);
+  top: auto;
 }
+
+.touch-magnifier-board {
+  border: 3px solid rgb(255 255 255 / .92);
+  border-radius: 50%;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
+.touch-magnifier-surface { fill: var(--board); }
+.touch-magnifier-grid { stroke: rgb(52 32 16 / .78); stroke-width: .045; }
+.touch-magnifier-stone { stroke-width: .035; }
+.touch-magnifier-stone--black { fill: #111; stroke: #000; }
+.touch-magnifier-stone--white { fill: #f7f5ee; stroke: #8b806f; }
+.touch-magnifier-preview--black { fill: rgb(17 17 17 / .52); }
+.touch-magnifier-preview--white { fill: rgb(255 255 255 / .68); stroke: rgb(52 32 16 / .42); stroke-width: .035; }
+.touch-magnifier-ring { fill: none; stroke: rgb(255 255 255 / .96); stroke-width: .08; }
+.touch-magnifier-crosshair { fill: none; stroke: #28593f; stroke-linecap: round; stroke-width: .1; }
 
 .go-board-grid {
   height: var(--board-grid-span, 86%);
@@ -2581,13 +2603,34 @@ a {
 }
 
 .intersection.is-precision-preview::after {
+  aspect-ratio: 1;
   border: 3px solid #17230e;
+  box-sizing: border-box;
   border-radius: 50%;
   box-shadow: 0 0 0 2px #fff;
   content: "";
-  inset: 10%;
+  height: 80%;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  z-index: 4;
+}
+
+.intersection.is-hint::after {
+  animation: hintPulse 1.35s ease-in-out infinite;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #28593f;
+  content: "";
+  inset: 16%;
   position: absolute;
   z-index: 4;
+}
+
+@keyframes hintPulse {
+  50% { transform: scale(.78); }
 }
 
 .intersection[aria-disabled="false"]:hover::before,
@@ -3768,22 +3811,8 @@ a {
     width: 100%;
   }
 
-  .go-board-shell[data-precision="false"] .go-board[data-size="19"][data-interaction-mode="play"] {
+  .go-board[data-size="19"][data-interaction-mode="play"] {
     touch-action: pan-y pinch-zoom;
-  }
-
-  .go-board-shell[data-precision="true"] .go-board-viewport {
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    max-height: min(70dvh, 620px);
-    overflow: auto;
-    overscroll-behavior: contain;
-    touch-action: pan-x pan-y pinch-zoom;
-  }
-
-  .go-board-shell[data-precision="true"] .go-board[data-size="19"][data-interaction-mode="play"] {
-    max-width: none;
-    width: 760px;
   }
 
   .focused-game-side {
@@ -3878,26 +3907,7 @@ a {
   }
 }
 
-@media (max-width: 620px) and (pointer: coarse) {
-  .go-board-shell[data-precision="false"] .go-board[data-size="19"][data-interaction-mode="play"] .intersection {
-    pointer-events: none;
-  }
-
-  .go-board-shell[data-precision="true"] .go-board[data-size="19"][data-interaction-mode="play"] .intersection {
-    pointer-events: auto;
-  }
-}
-
 @media (max-width: 390px) {
-  .precision-placement-toolbar {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .precision-placement-toolbar button {
-    width: 100%;
-  }
-
   .mobile-nav {
     padding-inline: 11px;
   }

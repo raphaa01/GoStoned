@@ -8,7 +8,6 @@ import { SUPPORTED_LOCALES, type LocalizedText } from "@/lib/i18n/config";
 import {
   CURATED_PUZZLE_CATEGORIES,
   DAILY_PUZZLE_CYCLE_LENGTH,
-  GOKYO_SHUMYO_CATEGORIES,
   PUZZLE_KYU_LADDER,
   PUZZLES_PER_CATEGORY,
   type CuratedPuzzleCategory,
@@ -16,6 +15,7 @@ import {
   type PuzzleCategory,
   type PuzzleDifficulty,
   type PuzzleHub,
+  type PuzzleHint,
   type PuzzleKind,
   type PuzzlePly,
   type PuzzleSolution,
@@ -108,7 +108,7 @@ function kyrgyzPuzzleFallback(
     if (category === "tesuji") return "Бул жүрүш туура мажбур тартипти баштап, тактикалык учурду сактайт.";
     if (category === "capturing_race") return "Бул жүрүш дем жарышындагы негизги демди алып, топту алдыга чыгарат.";
     if (category === "endgame") return "Бул жүрүш эндшпилдеги чоң маанини алып, демилгени сактайт.";
-    return "Бул — KataGo текшерген эң күчтүү жүрүш; ал форманы жана кийинки мүмкүнчүлүктөрдү сактайт.";
+    return "Бул эң күчтүү жүрүш; ал форманы жана кийинки мүмкүнчүлүктөрдү сактайт.";
   }
   if (category === "life_and_death") return "Бул вариант көз мейкиндигин чечкен маанилүү чекитти өткөрүп жиберет.";
   if (category === "tesuji") return "Бул вариант мажбур тартипти жоготуп, атаандашка натыйжалуу жооп берүүгө мүмкүндүк берет.";
@@ -337,18 +337,15 @@ export function supportsGokyoShumyoCatalogSchema(definition: string | null): boo
 }
 
 async function ensureGokyoShumyoCatalog(): Promise<boolean> {
-  const existing = await query<{ count: number; category_shape: string | null }>(
+  const existing = await query<{
+    category_shape: string | null;
+  }>(
     `SELECT
-       (SELECT COUNT(*)::int
-          FROM puzzles
-         WHERE kind = 'practice' AND category = ANY($1::text[])) AS count,
        (SELECT pg_get_constraintdef(constraint_row.oid)
           FROM pg_constraint constraint_row
          WHERE constraint_row.conname = 'puzzles_category_shape_check'
            AND constraint_row.conrelid = 'public.puzzles'::regclass) AS category_shape`,
-    [[...GOKYO_SHUMYO_CATEGORIES]],
   );
-  if (existing.rows[0]?.count === 200) return true;
   if (!supportsGokyoShumyoCatalogSchema(existing.rows[0]?.category_shape ?? null)) {
     return false;
   }
@@ -371,7 +368,37 @@ async function ensureGokyoShumyoCatalog(): Promise<boolean> {
     sourceMoveNumber: Number(puzzle.sourceId.slice(-3)),
   }));
   await query(
-    `INSERT INTO puzzles (
+    `WITH catalog AS MATERIALIZED (
+       SELECT *
+         FROM jsonb_to_recordset($1::jsonb) AS row(
+           category text, collection_order int, to_play text, board jsonb,
+           solution_move text, solution_x int, solution_y int, difficulty text,
+           rank_kyu int, explanation jsonb, variation jsonb,
+           engine_version text, model_name text, visits int,
+           source_move_number int
+         )
+     ), changed AS MATERIALIZED (
+       SELECT puzzle.id
+         FROM puzzles puzzle
+         JOIN catalog
+           ON catalog.category = puzzle.category
+          AND catalog.collection_order = puzzle.collection_order
+        WHERE puzzle.kind = 'practice'
+          AND ROW(
+            puzzle.to_play, puzzle.board, puzzle.solution_move,
+            puzzle.solution_x, puzzle.solution_y, puzzle.difficulty,
+            puzzle.rank_kyu, puzzle.explanation, puzzle.variation,
+            puzzle.engine_version, puzzle.model_name, puzzle.visits,
+            puzzle.source_move_number
+          ) IS DISTINCT FROM ROW(
+            catalog.to_play, catalog.board, catalog.solution_move,
+            catalog.solution_x, catalog.solution_y, catalog.difficulty,
+            catalog.rank_kyu, catalog.explanation, catalog.variation,
+            catalog.engine_version, catalog.model_name, catalog.visits,
+            catalog.source_move_number
+          )
+     ), upserted AS (
+     INSERT INTO puzzles (
        kind, daily_date, board_size, to_play, position_moves, board,
        solution_move, solution_x, solution_y, alternatives, difficulty,
        explanation, engine_version, model_name, visits,
@@ -384,16 +411,46 @@ async function ensureGokyoShumyoCatalog(): Promise<boolean> {
             catalog.engine_version, catalog.model_name, catalog.visits,
             NULL, catalog.source_move_number, catalog.category,
             catalog.rank_kyu, catalog.collection_order, catalog.variation
-       FROM jsonb_to_recordset($1::jsonb) AS catalog(
-         category text, collection_order int, to_play text, board jsonb,
-         solution_move text, solution_x int, solution_y int, difficulty text,
-         rank_kyu int, explanation jsonb, variation jsonb,
-         engine_version text, model_name text, visits int,
-         source_move_number int
-       )
+       FROM catalog
      ON CONFLICT (category, collection_order)
        WHERE kind = 'practice' AND category IS NOT NULL
-     DO NOTHING`,
+     DO UPDATE
+       SET to_play = EXCLUDED.to_play,
+           board = EXCLUDED.board,
+           solution_move = EXCLUDED.solution_move,
+           solution_x = EXCLUDED.solution_x,
+           solution_y = EXCLUDED.solution_y,
+           difficulty = EXCLUDED.difficulty,
+           rank_kyu = EXCLUDED.rank_kyu,
+           explanation = EXCLUDED.explanation,
+           variation = EXCLUDED.variation,
+           engine_version = EXCLUDED.engine_version,
+           model_name = EXCLUDED.model_name,
+           visits = EXCLUDED.visits,
+           source_move_number = EXCLUDED.source_move_number
+     WHERE ROW(
+       puzzles.to_play, puzzles.board, puzzles.solution_move,
+       puzzles.solution_x, puzzles.solution_y, puzzles.difficulty,
+       puzzles.rank_kyu, puzzles.explanation, puzzles.variation,
+       puzzles.engine_version, puzzles.model_name, puzzles.visits,
+       puzzles.source_move_number
+     ) IS DISTINCT FROM ROW(
+       EXCLUDED.to_play, EXCLUDED.board, EXCLUDED.solution_move,
+       EXCLUDED.solution_x, EXCLUDED.solution_y, EXCLUDED.difficulty,
+       EXCLUDED.rank_kyu, EXCLUDED.explanation, EXCLUDED.variation,
+       EXCLUDED.engine_version, EXCLUDED.model_name, EXCLUDED.visits,
+       EXCLUDED.source_move_number
+     )
+     RETURNING id
+     ), deleted_attempts AS (
+       DELETE FROM puzzle_attempts attempt
+        USING changed
+        WHERE attempt.puzzle_id = changed.id
+       RETURNING attempt.puzzle_id
+     )
+     SELECT
+       (SELECT COUNT(*) FROM upserted) AS upserted_count,
+       (SELECT COUNT(*) FROM deleted_attempts) AS deleted_attempt_count`,
     [JSON.stringify(records.map((record) => ({
       category: record.category,
       collection_order: record.collectionOrder,
@@ -850,4 +907,28 @@ export async function attemptPuzzle(
     }
     return attemptDailyPuzzle(client, puzzle, playerKey, selected);
   });
+}
+
+export async function readPuzzleHint(
+  puzzleId: string,
+  playerKey: string,
+  accountAccess: boolean,
+): Promise<PuzzleHint> {
+  const result = await query<PuzzleRow>(
+    `${SELECT_PUZZLE}
+      WHERE puzzle.id = $2
+        AND puzzle.published_at <= NOW()`,
+    [playerKey, puzzleId],
+  );
+  const puzzle = result.rows[0];
+  if (!puzzle) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
+  if (puzzle.kind === "practice" && !accountAccess) {
+    throw new GameServiceError("Please log in first.", 401, "authentication_required");
+  }
+  const variation = parseVariation(puzzle);
+  const progress = parseProgress(puzzle);
+  const next = variation?.mainLine[progress.length];
+  return next
+    ? { x: next.x, y: next.y }
+    : { x: puzzle.solution_x, y: puzzle.solution_y };
 }

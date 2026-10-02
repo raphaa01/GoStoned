@@ -11,7 +11,7 @@ const styles = readFileSync(
   "utf8",
 );
 
-test("mobile puzzles stack the task below a viewport-bound board", () => {
+test("mobile puzzles put the problem label and hint directly before a viewport-bound board", () => {
   assert.match(
     styles,
     /@media \(max-width: 900px\)[\s\S]*?\.workspace \{ grid-template-columns: minmax\(0, 1fr\); \}/,
@@ -20,9 +20,23 @@ test("mobile puzzles stack the task below a viewport-bound board", () => {
     styles,
     /\.boardColumn :global\(\.go-board\[data-size="13"\]\)[\s\S]*?width: 100%;/,
   );
+  assert.ok(
+    workspace.indexOf(`className={styles.taskPrompt}`) < workspace.indexOf("<GoBoard"),
+    "the compact task prompt must render before the board on mobile",
+  );
+  assert.match(workspace, /CircleHelp/);
+  assert.match(workspace, /\/api\/puzzles\/\$\{puzzle\.id\}\/hint/);
+  assert.match(workspace, /hintMove=\{hintMove\}/);
+  assert.match(workspace, /pendingMove=\{pendingMove\}/);
+  assert.doesNotMatch(workspace, /copy\.choose(?:Variation)?Move/);
+  assert.match(workspace, /<GoBoard[\s\S]*?viewportSize=\{puzzle\.category\?\.startsWith\("gokyo_"\)[\s\S]*?\/>/);
 });
 
 test("all puzzle categories share one catalog without provenance callouts", () => {
   assert.match(workspace, /\{categories\.map\(categoryButton\)\}/);
+  assert.match(workspace, /sources: PUZZLE_CATALOG_SOURCES\.life_and_death/);
+  assert.match(workspace, /setSelectedProblemIndex\(resumePuzzleIndex\(puzzles, category\)\)/);
+  assert.match(workspace, /id: "ko"/);
+  assert.doesNotMatch(workspace, /id: "gokyo_(?:life|death|ko)"/);
   assert.doesNotMatch(workspace, /historicalHeader|historicalSource|historicalCollectionDescription/);
 });
