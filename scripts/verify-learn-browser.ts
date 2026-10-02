@@ -127,6 +127,7 @@ async function run() {
       }
       if (path === "/api/learn/game/score") {
         const body = route.request().postDataJSON();
+        for (const point of body.moves) if (point !== null) assert.deepEqual(Object.keys(point).sort(),["x","y"],"Scoring moves must contain coordinates only, not worker metadata");
         return route.fulfill({json:{ok:true,result:scoreLearnGame(body.moves,body.deadStones,body.neutralRegionSeeds)}});
       }
       throw new Error(`Unexpected mobile API request ${path}`);

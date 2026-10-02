@@ -90,3 +90,11 @@ test("learning reviews use the player's actual pre-capture position", () => {
   assert.deepEqual(capture.emphasis,[{x:0,y:1}]);
   assert.equal(capture.count,1);
 });
+
+test("worker move metadata never leaks into the persisted scoring record", () => {
+  const workerMove = {kind:"play" as const,x:2,y:3};
+  const played = playLearnMove(createLearnGame(9),workerMove);
+  assert.ok(played.ok);
+  assert.deepEqual(played.position.moves[0].position,{x:2,y:3});
+  assert.deepEqual(Object.keys(played.position.moves[0].position!).sort(),["x","y"]);
+});

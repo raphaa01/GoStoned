@@ -84,7 +84,7 @@ export function playLearnMove(position: LearnGamePosition, point: Position): Lea
   }
   const move: LearnMove = {
     color: position.turn,
-    position: { ...point },
+    position: { x: point.x, y: point.y },
     captured: applied.captured,
     board: applied.board,
   };
