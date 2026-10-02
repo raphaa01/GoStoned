@@ -14,6 +14,8 @@ type InteractiveLearnBoardProps = Readonly<{
   selected?: readonly Position[];
   liberties?: readonly Position[];
   territory?: readonly Position[];
+  blackTerritory?: readonly Position[];
+  whiteTerritory?: readonly Position[];
   group?: readonly Position[];
   lastMove?: Position | null;
   previewColor?: Stone;
@@ -35,6 +37,8 @@ function InteractiveLearnBoardComponent({
   selected = [],
   liberties = [],
   territory = [],
+  blackTerritory = [],
+  whiteTerritory = [],
   group = [],
   lastMove = null,
   previewColor = "black",
@@ -46,6 +50,8 @@ function InteractiveLearnBoardComponent({
   const selectedKeys = useMemo(() => keys(selected), [selected]);
   const libertyKeys = useMemo(() => keys(liberties), [liberties]);
   const territoryKeys = useMemo(() => keys(territory), [territory]);
+  const blackTerritoryKeys = useMemo(() => keys(blackTerritory), [blackTerritory]);
+  const whiteTerritoryKeys = useMemo(() => keys(whiteTerritory), [whiteTerritory]);
   const groupKeys = useMemo(() => keys(group), [group]);
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -113,6 +119,8 @@ function InteractiveLearnBoardComponent({
                       selectedKeys.has(key) ? "is-selected" : "",
                       libertyKeys.has(key) ? "is-liberty" : "",
                       territoryKeys.has(key) ? "is-territory" : "",
+                      blackTerritoryKeys.has(key) ? "is-black-territory" : "",
+                      whiteTerritoryKeys.has(key) ? "is-white-territory" : "",
                       groupKeys.has(key) ? "is-group" : "",
                       lastMove?.x === x && lastMove.y === y ? "is-last" : "",
                     ].filter(Boolean).join(" ")}

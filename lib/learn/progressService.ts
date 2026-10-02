@@ -1,5 +1,5 @@
-import { query } from "@/lib/db";
-import { parseLearnProgress, type LearnProgress } from "./progress";
+import { query, withTransaction } from "@/lib/db";
+import { mergeLearnProgress, parseLearnProgress, type LearnProgress } from "./progress";
 
 type LearnProgressRow = {
   completed_lesson_ids: unknown;
@@ -33,30 +33,37 @@ export async function getLearnProgress(userId: string): Promise<LearnProgress | 
 }
 
 export async function saveLearnProgress(userId: string, input: LearnProgress): Promise<LearnProgress> {
-  const progress = parseLearnProgress(input);
-  const result = await query<LearnProgressRow>(
+  return withTransaction(async (client) => {
+    // Serialize a user's concurrent devices, including the first insert.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`learn-progress:${userId}`]);
+    const existing = await client.query<LearnProgressRow>(`SELECT ${COLUMNS} FROM learn_progress WHERE user_id = $1`, [userId]);
+    const parsed = parseLearnProgress(input);
+    const progress = existing.rows[0] ? mergeLearnProgress(parsed, serializeRow(existing.rows[0])) : parsed;
+    const result = await client.query<LearnProgressRow>(
     `INSERT INTO learn_progress (
        user_id,completed_lesson_ids,current_lesson_id,completed_stages,
        last_step_by_lesson,challenge_results,updated_at
-     ) VALUES ($1,$2::jsonb,$3,$4::jsonb,$5::jsonb,$6::jsonb,statement_timestamp())
+     ) VALUES ($1,$2::jsonb,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::timestamptz)
      ON CONFLICT (user_id) DO UPDATE SET
        completed_lesson_ids = EXCLUDED.completed_lesson_ids,
        current_lesson_id = EXCLUDED.current_lesson_id,
        completed_stages = EXCLUDED.completed_stages,
        last_step_by_lesson = EXCLUDED.last_step_by_lesson,
        challenge_results = EXCLUDED.challenge_results,
-       updated_at = statement_timestamp()
+       updated_at = EXCLUDED.updated_at
      RETURNING ${COLUMNS}`,
-    [
-      userId,
-      JSON.stringify(progress.completedLessonIds),
-      progress.currentLessonId,
-      JSON.stringify(progress.completedStages),
-      JSON.stringify(progress.lastStepByLesson),
-      JSON.stringify(progress.challengeResults),
-    ],
-  );
-  const row = result.rows[0];
-  if (!row) throw new Error("Learning progress could not be saved.");
-  return serializeRow(row);
+      [
+        userId,
+        JSON.stringify(progress.completedLessonIds),
+        progress.currentLessonId,
+        JSON.stringify(progress.completedStages),
+        JSON.stringify(progress.lastStepByLesson),
+        JSON.stringify(progress.challengeResults),
+        progress.updatedAt,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Learning progress could not be saved.");
+    return serializeRow(row);
+  });
 }

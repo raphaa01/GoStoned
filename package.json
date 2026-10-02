@@ -52,6 +52,7 @@
     "test:scoring-races": "tsx scripts/smoke-scoring-races.ts",
     "test:statement-timeout": "tsx scripts/smoke-statement-timeout.ts",
     "test:browser": "playwright test",
+    "test:learn-browser": "tsx scripts/verify-learn-browser.ts",
     "typecheck": "tsc --noEmit",
     "db:prepare-ci-smoke": "tsx scripts/prepare-ci-postgres.ts",
     "db:migrate": "tsx scripts/migrate.ts",

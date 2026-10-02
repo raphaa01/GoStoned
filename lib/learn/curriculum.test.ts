@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { boardHash } from "@/lib/game/goEngine";
+import { boardHash, getGroup } from "@/lib/game/goEngine";
 import { LEARN_LESSONS, LEARN_STAGES, line } from "./curriculum";
 import {
   boardFromStones,
@@ -8,6 +8,9 @@ import {
   playLearnMove,
   pointKey,
   withLearnTurn,
+  allGroups,
+  groupLiberties,
+  territoryPoints,
 } from "./lessonEngine";
 import { LEARN_LESSON_IDS } from "./progress";
 
@@ -38,6 +41,9 @@ test("every teaching board is bounded, unique, and every requested action is pla
         assert.ok(point.x >= 0 && point.y >= 0 && point.x < step.size && point.y < step.size, `${lesson.id}/${step.id} is out of bounds at ${pointKey(point)}`);
       }
       const board = boardFromStones(step.size, step.stones ?? []);
+      for (const group of allGroups(board)) {
+        assert.ok(groupLiberties(board, group[0]).length > 0, `${lesson.id}/${step.id} contains an already captured group`);
+      }
       if (step.kind === "select") {
         assert.ok((step.targets?.length ?? 0) > 0, `${lesson.id}/${step.id} has no selection target`);
         for (const target of step.targets ?? []) {
@@ -61,9 +67,68 @@ test("every teaching board is bounded, unique, and every requested action is pla
           if (!result.ok) assert.equal(result.error, step.expectedError, `${lesson.id}/${step.id} demonstrates the wrong error`);
         } else {
           assert.equal(result.ok, true, `${lesson.id}/${step.id} target ${pointKey(target)} is illegal`);
+          if (result.ok) {
+            let after = result.position;
+            for (const reply of step.replies ?? []) {
+              const next = playLearnMove(after, reply);
+              assert.ok(next.ok, `${lesson.id}/${step.id} has an illegal teaching reply ${pointKey(reply)}`);
+              if (next.ok) after = next.position;
+            }
+          }
         }
       }
     }
+  }
+});
+
+test("liberty, group, atari and territory answers match the actual teaching boards", () => {
+  const keys = (points: readonly {x: number; y: number}[]) => points.map(pointKey).sort();
+  for (const step of LEARN_LESSONS.find((lesson) => lesson.id === "s1-liberties")!.steps) {
+    const board = boardFromStones(step.size!, step.stones!);
+    assert.deepEqual(keys(step.targets!), keys(groupLiberties(board, step.stones![0])));
+  }
+  for (const step of LEARN_LESSONS.find((lesson) => lesson.id === "s1-atari")!.steps.filter((step) => step.kind === "play")) {
+    const position = withLearnTurn(createLearnGame(step.size!, step.stones), "white");
+    const actualSolutions = [];
+    for (let y = 0; y < step.size!; y++) for (let x = 0; x < step.size!; x++) {
+      const result = playLearnMove(position, {x, y});
+      if (result.ok && groupLiberties(result.position.board, {x: 2, y: 2}).length === 1) actualSolutions.push({x, y});
+    }
+    assert.deepEqual(keys(step.targets!), keys(actualSolutions), `${step.id} omits a valid answer`);
+  }
+  const groupStep = LEARN_LESSONS.find((lesson) => lesson.id === "s1-groups")!.steps.at(-1)!;
+  assert.deepEqual(keys(groupStep.targets!), keys(getGroup(boardFromStones(groupStep.size!, groupStep.stones!), groupStep.targets![0])));
+  for (const [stepIndex, color, count] of [[0, "black", 4], [1, "white", 2]] as const) {
+    const step = LEARN_LESSONS.find((lesson) => lesson.id === "s2-counting")!.steps[stepIndex];
+    const actual = territoryPoints(boardFromStones(step.size!, step.stones!), color);
+    assert.equal(actual.length, count);
+    assert.deepEqual(keys(step.targets!), keys(actual));
+  }
+});
+
+test("two eyes prevent capture, one eye is capturable, and seki punishes either first fill", () => {
+  const eyes = LEARN_LESSONS.find((lesson) => lesson.id === "s3-two-eyes")!.steps;
+  for (const step of eyes.filter((step) => step.kind === "illegal")) {
+    const position = withLearnTurn(createLearnGame(step.size!, step.stones), "white");
+    assert.equal(allGroups(position.board, "black").length, 1);
+    assert.equal(groupLiberties(position.board, allGroups(position.board, "black")[0][0]).length, 2);
+    for (const point of step.targets!) assert.deepEqual(playLearnMove(position, point), {ok: false, error: "suicide"});
+  }
+  const one = LEARN_LESSONS.find((lesson) => lesson.id === "s3-one-eye")!.steps.at(-1)!;
+  const capture = playLearnMove(withLearnTurn(createLearnGame(one.size!, one.stones), "white"), one.targets![0]);
+  assert.ok(capture.ok);
+  assert.equal(capture.captured.length, 3);
+  const seki = LEARN_LESSONS.find((lesson) => lesson.id === "s3-seki")!.steps[0];
+  for (const color of ["black", "white"] as const) for (const [first, second] of [[0, 1], [1, 0]]) {
+    const start = withLearnTurn(createLearnGame(seki.size!, seki.stones), color);
+    assert.equal(allGroups(start.board).length, 2);
+    const fill = playLearnMove(start, seki.targets![first]);
+    assert.ok(fill.ok);
+    assert.equal(fill.captured.length, 0);
+    const punishment = playLearnMove(fill.position, seki.targets![second]);
+    assert.ok(punishment.ok);
+    assert.ok(punishment.captured.length > 0);
+    assert.equal(allGroups(punishment.position.board, color).length, 0);
   }
 });
 

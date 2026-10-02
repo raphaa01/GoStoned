@@ -62,13 +62,28 @@ jobs:
       - name: Responsive browser tests
         run: npm run test:browser
 
+      - name: Verify bundled Android and iOS learning flow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node node_modules/vite/bin/vite.js preview --config vite.mobile.config.mts --host 127.0.0.1 --port 4174 >"$RUNNER_TEMP/learn-mobile.log" 2>&1 &
+          gostone_mobile_preview_pid=$!
+          trap 'kill "$gostone_mobile_preview_pid" 2>/dev/null || true; wait "$gostone_mobile_preview_pid" 2>/dev/null || true' EXIT
+          for _ in {1..30}; do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          LEARN_CLIENT=mobile BASE_URL=http://127.0.0.1:4174 npm run test:learn-browser
+
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           if-no-files-found: warn
           name: responsive-browser-failures
-          path: test-results/
+          path: |
+            test-results/
+            .cache/learn-*.png
           retention-days: 5
 
   postgres-integration:
@@ -144,6 +159,9 @@ jobs:
 
       - name: Build production application
         run: npm run build
+
+      - name: Install Chromium for authenticated learning-path verification
+        run: npx playwright install --with-deps chromium
 
       - name: Verify production-server cleanup fault paths
         shell: bash

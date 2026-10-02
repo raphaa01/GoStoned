@@ -18,7 +18,7 @@ test("learning progress rejects unknown lessons and invalid challenge data", () 
   });
   assert.deepEqual(parsed.completedLessonIds, ["s1-board"]);
   assert.equal(parsed.currentLessonId, "s1-turns");
-  assert.deepEqual(parsed.completedStages, [1]);
+  assert.deepEqual(parsed.completedStages, []);
   assert.deepEqual(parsed.lastStepByLesson, { "s1-board": 2 });
   assert.deepEqual(parsed.challengeResults, {});
 });
@@ -42,4 +42,15 @@ test("local and account progress merge without losing completed lessons", () => 
   });
   const merged = mergeLearnProgress(local, remote);
   assert.deepEqual(merged.completedLessonIds.slice(0, 3), ["s1-board", "s1-turns", "s1-liberties"]);
+});
+
+test("synchronization does not invent timestamps that overwrite a newer learning step", () => {
+  const before = parseLearnProgress({...emptyLearnProgress(), updatedAt: "2026-01-01T00:00:00.000Z", lastStepByLesson: {"s1-liberties": 1}});
+  const after = parseLearnProgress({...before, updatedAt: "2026-01-01T00:00:01.000Z", lastStepByLesson: {"s1-liberties": 2}});
+  const saved = mergeLearnProgress(before, before);
+  assert.equal(saved.updatedAt, before.updatedAt);
+  assert.equal(mergeLearnProgress(after, saved).lastStepByLesson["s1-liberties"], 2);
+  assert.equal(mergeLearnProgress(saved, after).updatedAt, after.updatedAt);
+  assert.equal(mergeLearnProgress(emptyLearnProgress(), after).lastStepByLesson["s1-liberties"], 2);
+  assert.equal(mergeLearnProgress(emptyLearnProgress(), after).updatedAt, after.updatedAt);
 });

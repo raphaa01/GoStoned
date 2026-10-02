@@ -90,7 +90,7 @@ function MobileRoute() {
     case "/play": content = <PushedScreen><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
     case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub /></MobileAccountGate></PushedScreen>; break;
-    case "/learn": content = <div className="mobile-tab-screen mobile-learn-screen"><LearningGuide /></div>; break;
+    case "/learn": content = <div className="mobile-tab-screen mobile-learn-screen"><MobileAccountGate returnTo="/learn" title={dictionary.nav.learn}><LearningGuide /></MobileAccountGate></div>; break;
     case "/learn/ai": content = <PushedScreen><TrainingGame /></PushedScreen>; break;
     case "/review": content = <div className="mobile-tab-screen mobile-review-screen"><MobileAccountGate returnTo="/review" title={dictionary.nav.review}><ReviewGuide /></MobileAccountGate></div>; break;
     case "/puzzles": content = <div className="mobile-tab-screen mobile-puzzle-screen"><PuzzleWorkspace initialMode={search.get("mode") === "practice" ? "practice" : "daily"} /></div>; break;

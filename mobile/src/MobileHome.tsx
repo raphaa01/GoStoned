@@ -16,8 +16,8 @@ import { readApi } from "@/lib/client/api";
 import type { MatchmakingQueueState } from "@/lib/client/matchmaking";
 import type { FriendsDashboard } from "@/lib/friends/types";
 import { getMobileCopy } from "@/lib/i18n/mobile";
-import { ADVANCED_CHAPTERS } from "@/lib/learn/advancedChapters";
-import { CHAPTER_ONE_LESSON_IDS } from "@/lib/learn/chapterOne";
+import { useLearnProgress } from "@/components/learn/useLearnProgress";
+import { LEARN_LESSON_IDS } from "@/lib/learn/progress";
 import type {
   GlobalRatingSummary,
   PublicRatingPreferences,
@@ -40,22 +40,6 @@ type HomeData = {
 
 const EMPTY_DATA: HomeData = { playerKey: null, profile: null, friends: null, matchmaking: null };
 
-function completedLessons() {
-  const keys = [
-    "gostone.learn.chapter-one.v3",
-    ADVANCED_CHAPTERS.life.storageKey,
-    ADVANCED_CHAPTERS.tactics.storageKey,
-  ];
-  return keys.reduce((total, key) => {
-    try {
-      const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "[]");
-      return total + (Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string").length : 0);
-    } catch {
-      return total;
-    }
-  }, 0);
-}
-
 function signed(value: number) {
   const rounded = Math.round(value);
   return rounded > 0 ? `+${rounded}` : String(rounded);
@@ -67,17 +51,8 @@ export function MobileHome() {
   const copy = getMobileCopy(locale);
   const playerKey = user?.playerKey ?? null;
   const [data, setData] = useState<HomeData>(EMPTY_DATA);
-  const [learned, setLearned] = useState(completedLessons);
-
-  useEffect(() => {
-    const onProgress = () => setLearned(completedLessons());
-    window.addEventListener("gostone:learn-progress", onProgress);
-    window.addEventListener("storage", onProgress);
-    return () => {
-      window.removeEventListener("gostone:learn-progress", onProgress);
-      window.removeEventListener("storage", onProgress);
-    };
-  }, []);
+  const { progress } = useLearnProgress();
+  const learned = progress.completedLessonIds.length;
 
   useEffect(() => {
     if (!playerKey) return;
@@ -108,11 +83,7 @@ export function MobileHome() {
   const recentGames = currentData.profile?.recentGames?.slice(0, 3) ?? [];
   const onlineFriends = currentData.friends?.friends.filter((friend) => friend.presence !== "offline") ?? [];
   const incomingRequests = currentData.friends?.requests.filter((request) => request.direction === "incoming") ?? [];
-  const totalLessons = (
-    CHAPTER_ONE_LESSON_IDS.length
-      + ADVANCED_CHAPTERS.life.lessons.length
-      + ADVANCED_CHAPTERS.tactics.lessons.length
-  );
+  const totalLessons = LEARN_LESSON_IDS.length;
   const learningPercent = Math.min(100, Math.round((learned / totalLessons) * 100));
   const learningTitle = learned === 0 ? copy.startLearning : copy.continueLearning;
   const activeGame = currentData.matchmaking?.status === "matched" && currentData.matchmaking.gameId

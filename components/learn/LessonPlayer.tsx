@@ -25,9 +25,12 @@ type LessonPlayerProps = Readonly<{
   onComplete: (outcome?: "won" | "lost" | "completed") => void;
 }>;
 
-function positionForStep(lesson: LearnLesson, stepIndex: number): LearnGamePosition | null {
+function positionForStep(lesson: LearnLesson, stepIndex: number, previous?: LearnGamePosition | null): LearnGamePosition | null {
   const step = lesson.steps[stepIndex];
   if (!step.size) return null;
+  if (step.continuePosition && previous?.board.length === step.size) {
+    return withLearnTurn(previous, step.toPlay ?? previous.turn);
+  }
   let position = withLearnTurn(createLearnGame(step.size, step.stones ?? []), step.toPlay ?? "black");
   if (step.koPreviousBoard) {
     const previous = boardFromStones(step.size, step.koPreviousBoard);
@@ -38,7 +41,10 @@ function positionForStep(lesson: LearnLesson, stepIndex: number): LearnGamePosit
 
 export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onComplete }: LessonPlayerProps) {
   const copy = learnUiCopy(locale);
-  const safeInitial = Math.min(Math.max(initialStep, 0), lesson.steps.length - 1);
+  let safeInitial = Math.min(Math.max(initialStep, 0), lesson.steps.length - 1);
+  // Free placements cannot be reconstructed from a step number alone.
+  // Resume their short sequence at its first placement, never on a blank "second stone" board.
+  while (safeInitial > 0 && lesson.steps[safeInitial].continuePosition) safeInitial -= 1;
   const [stepIndex, setStepIndex] = useState(safeInitial);
   const [position, setPosition] = useState<LearnGamePosition | null>(() => positionForStep(lesson, safeInitial));
   const [selected, setSelected] = useState<Position[]>([]);
@@ -49,8 +55,8 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const [gameOutcome, setGameOutcome] = useState<"won" | "lost" | "completed" | undefined>();
   const step = lesson.steps[stepIndex];
 
-  const resetStep = (nextIndex = stepIndex) => {
-    setPosition(positionForStep(lesson, nextIndex));
+  const resetStep = (nextIndex = stepIndex, previous?: LearnGamePosition | null) => {
+    setPosition(positionForStep(lesson, nextIndex, previous));
     setSelected([]);
     setSolved(false);
     setFeedback(null);
@@ -109,7 +115,13 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
       setFeedback(result.error === "suicide" ? copy.noLiberty : result.error === "ko" ? copy.koBlocked : copy.pointOccupied);
       return;
     }
-    setPosition(result.position);
+    let after = result.position;
+    for (const reply of step.replies ?? []) {
+      const played = playLearnMove(after, reply);
+      if (!played.ok) throw new Error(`Invalid teaching reply in ${lesson.id}/${step.id}`);
+      after = played.position;
+    }
+    setPosition(after);
     setSolved(true);
     setWrong(false);
     setFeedback(success);
@@ -119,7 +131,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     if (stepIndex < lesson.steps.length - 1) {
       const next = stepIndex + 1;
       setStepIndex(next);
-      resetStep(next);
+      resetStep(next, position);
       return;
     }
     onComplete(gameOutcome);

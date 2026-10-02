@@ -119,6 +119,7 @@ export type GoStoneJapaneseSettlementProposal = Readonly<{
 }>;
 
 export type GoStoneBotWorkerRequest =
+  | Readonly<{ id: string; kind: "capture-go"; position: import("@/lib/learn/lessonEngine").LearnGamePosition }>
   | Readonly<{ id: string; kind: "move"; position: GoStoneBotPosition }>
   | Readonly<{
       id: string;
@@ -127,6 +128,7 @@ export type GoStoneBotWorkerRequest =
     }>;
 
 export type GoStoneBotWorkerResponse =
+  | Readonly<{ id: string; ok: true; kind: "capture-go"; point: Position | null }>
   | Readonly<{
       id: string;
       ok: true;

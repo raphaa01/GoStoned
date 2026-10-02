@@ -2,94 +2,77 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import {
-  emptyLearnProgress,
-  mergeLearnProgress,
-  parseLearnProgress,
-  type LearnProgress,
-} from "@/lib/learn/progress";
+import { emptyLearnProgress, mergeLearnProgress, parseLearnProgress, type LearnProgress } from "@/lib/learn/progress";
 
-const STORAGE_KEY = "gostone.learn.path.v1";
-
-function readLocal(): LearnProgress {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? parseLearnProgress(JSON.parse(raw)) : emptyLearnProgress();
-  } catch {
-    return emptyLearnProgress();
-  }
+function storageKey(userId: string | null) { return `gostone.learn.path.v1:${userId ?? "guest"}`; }
+function readLocal(key: string): LearnProgress {
+  try { return parseLearnProgress(JSON.parse(window.localStorage.getItem(key) ?? "null")); }
+  catch { return emptyLearnProgress(); }
 }
-
-function writeLocal(progress: LearnProgress) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+function writeLocal(key: string, progress: LearnProgress) {
+  try { window.localStorage.setItem(key, JSON.stringify(progress)); }
+  catch { /* Account synchronization remains available if browser storage is disabled. */ }
   window.dispatchEvent(new Event("gostone:learn-progress"));
 }
 
 export function useLearnProgress() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const userId = user?.id ?? null;
   const [progress, setProgress] = useState<LearnProgress>(() => emptyLearnProgress());
-  const [loaded, setLoaded] = useState(false);
+  const [loadedUserId, setLoadedUserId] = useState<string | null | undefined>(undefined);
   const progressRef = useRef(progress);
-  const userIdRef = useRef<string | null>(null);
+  const identity = useRef<{ key: string; userId: string | null } | null>(null);
   const remoteQueue = useRef<Promise<void>>(Promise.resolve());
 
-  const saveRemote = useCallback(async (next: LearnProgress) => {
-    if (!userIdRef.current) return;
+  const saveRemote = useCallback((next: LearnProgress) => {
+    const owner = identity.current;
+    if (!owner?.userId) return;
     remoteQueue.current = remoteQueue.current.then(async () => {
-      if (!userIdRef.current) return;
+      if (identity.current !== owner) return;
       try {
-        await fetch("/api/learn/progress", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ progress: next }),
-        });
-      } catch {
-        // Local progress is authoritative until the account can sync again.
-      }
+        await fetch("/api/learn/progress", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress: next }) });
+      } catch { /* The local copy retries on the next visit. */ }
     });
-    await remoteQueue.current;
   }, []);
 
   const commit = useCallback((update: LearnProgress | ((current: LearnProgress) => LearnProgress)) => {
+    if (!identity.current || identity.current.userId !== userId) return progressRef.current;
     const next = typeof update === "function" ? update(progressRef.current) : update;
+    if (next === progressRef.current) return next;
     progressRef.current = next;
     setProgress(next);
-    writeLocal(next);
-    void saveRemote(next);
+    writeLocal(identity.current.key, next);
+    saveRemote(next);
     return next;
-  }, [saveRemote]);
+  }, [saveRemote, userId]);
 
   useEffect(() => {
-    const local = readLocal();
-    const frame = window.requestAnimationFrame(() => {
-      progressRef.current = local;
-      setProgress(local);
-      setLoaded(true);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    userIdRef.current = user?.id ?? null;
-    if (!user?.id || !loaded) return;
+    if (loading) return;
+    const owner = { key: storageKey(userId), userId };
+    identity.current = owner;
     let cancelled = false;
     void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      const local = readLocal(owner.key);
+      progressRef.current = local;
+      setProgress(local);
+      setLoadedUserId(userId);
+      if (!userId) return;
       try {
         const response = await fetch("/api/learn/progress", { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok || cancelled) return;
         const body = await response.json() as { progress?: unknown };
         if (cancelled) return;
-        const merged = mergeLearnProgress(progressRef.current, parseLearnProgress(body.progress));
+        const merged = body.progress ? mergeLearnProgress(progressRef.current, parseLearnProgress(body.progress)) : progressRef.current;
         progressRef.current = merged;
         setProgress(merged);
-        writeLocal(merged);
-        await saveRemote(merged);
-      } catch {
-        // The local copy remains usable offline and will merge on the next visit.
-      }
+        writeLocal(owner.key, merged);
+        saveRemote(merged);
+      } catch { /* Continue with the account-specific local progress offline. */ }
     })();
-    return () => { cancelled = true; };
-  }, [loaded, saveRemote, user?.id]);
+    return () => { cancelled = true; identity.current = null; };
+  }, [loading, saveRemote, userId]);
 
-  return { progress, loaded, commit };
+  return { progress, loaded: loadedUserId === userId && !loading, commit };
 }

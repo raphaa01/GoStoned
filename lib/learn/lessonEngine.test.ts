@@ -6,6 +6,7 @@ import {
   chooseLearnBotMove,
   createLearnGame,
   groupLiberties,
+  learnReviewMoments,
   passLearnMove,
   playLearnMove,
   withLearnTurn,
@@ -42,13 +43,19 @@ test("the learning engine captures, rejects suicide, and enforces simple ko", ()
     history: [boardHash(boardFromStones(5, before)), boardHash(koCapture.position.board)],
   };
   assert.deepEqual(playLearnMove(koPosition, { x: 2, y: 2 }), { ok: false, error: "ko" });
+  const elsewhere = playLearnMove(koPosition, {x:0,y:4});
+  assert.ok(elsewhere.ok);
+  const response = playLearnMove(elsewhere.position, {x:4,y:0});
+  assert.ok(response.ok);
+  const recapture = playLearnMove(response.position, {x:2,y:2});
+  assert.ok(recapture.ok);
+  assert.equal(recapture.captured.length,1);
 });
 
 test("the local teaching bots only choose legal moves and passes preserve the board", () => {
   for (const size of [5, 9]) {
     const position = createLearnGame(size);
-    const mode = size === 5 ? "capture" : "teacher";
-    const move = chooseLearnBotMove(position, mode);
+    const move = chooseLearnBotMove(position);
     assert.ok(move);
     assert.ok(playLearnMove(position, move!).ok);
     const passed = passLearnMove(position);
@@ -65,4 +72,21 @@ test("group liberty helpers count shared liberties once", () => {
   const group = getGroup(position.board, { x: 2, y: 2 });
   assert.equal(group.length, 2);
   assert.equal(groupLiberties(position.board, group[0]).length, 6);
+});
+
+test("learning reviews use the player's actual pre-capture position", () => {
+  let position = createLearnGame(9);
+  for (const point of [{x:1,y:0},{x:0,y:0},{x:0,y:1}]) {
+    const played = playLearnMove(position,point);
+    assert.ok(played.ok);
+    position = played.position;
+  }
+  const reviews = learnReviewMoments(position);
+  assert.ok(reviews.length <= 3);
+  const capture = reviews.find((moment)=>moment.kind === "reviewCapture");
+  assert.ok(capture);
+  assert.equal(capture.board[0][0],"white");
+  assert.deepEqual(capture.group,[{x:0,y:0}]);
+  assert.deepEqual(capture.emphasis,[{x:0,y:1}]);
+  assert.equal(capture.count,1);
 });

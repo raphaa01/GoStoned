@@ -68,7 +68,7 @@ export function emptyLearnProgress(): LearnProgress {
     completedStages: [],
     lastStepByLesson: {},
     challengeResults: {},
-    updatedAt: isoNow(),
+    updatedAt: "1970-01-01T00:00:00.000Z",
   };
 }
 
@@ -84,9 +84,7 @@ export function parseLearnProgress(value: unknown): LearnProgress {
   const currentLessonId = isLearnLessonId(value.currentLessonId)
     ? value.currentLessonId
     : LEARN_LESSON_IDS.find((id) => !completedLessonIds.includes(id)) ?? LEARN_LESSON_IDS.at(-1)!;
-  const completedStages = Array.isArray(value.completedStages)
-    ? [...new Set(value.completedStages.filter((stage): stage is number => Number.isInteger(stage) && stage >= 1 && stage <= 3))].sort()
-    : [];
+  const completedStages = [1, 2, 3].filter((stage) => LEARN_LESSON_IDS.filter((id) => id.startsWith(`s${stage}-`)).every((id) => completedLessonIds.includes(id)));
   const lastStepByLesson: Partial<Record<LearnLessonId, number>> = {};
   if (isRecord(value.lastStepByLesson)) {
     for (const [id, step] of Object.entries(value.lastStepByLesson)) {
@@ -131,13 +129,14 @@ export function mergeLearnProgress(local: LearnProgress, remote: LearnProgress):
     local.completedLessonIds.includes(id) || remote.completedLessonIds.includes(id)
   ));
   const newest = Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local : remote;
+  const older = newest === local ? remote : local;
   return parseLearnProgress({
     ...newest,
     completedLessonIds: completed,
     completedStages: [...new Set([...local.completedStages, ...remote.completedStages])],
-    lastStepByLesson: { ...remote.lastStepByLesson, ...local.lastStepByLesson },
-    challengeResults: { ...remote.challengeResults, ...local.challengeResults },
-    updatedAt: isoNow(),
+    lastStepByLesson: { ...older.lastStepByLesson, ...newest.lastStepByLesson },
+    challengeResults: { ...older.challengeResults, ...newest.challengeResults },
+    updatedAt: newest.updatedAt,
   });
 }
 

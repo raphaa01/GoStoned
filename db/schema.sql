@@ -3626,6 +3626,24 @@ CREATE TABLE IF NOT EXISTS learn_progress (
 );
 
 ALTER TABLE learn_progress ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON learn_progress FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON learn_progress FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON learn_progress FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE ON learn_progress TO gostone_app;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'learn_progress' AND policyname = 'gostone_app_learn_progress_access') THEN
+      CREATE POLICY gostone_app_learn_progress_access ON learn_progress
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END
+$$;
 -- Persist one board-placement choice across web, Android, and iOS.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';

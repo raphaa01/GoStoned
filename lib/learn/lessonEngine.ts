@@ -167,49 +167,79 @@ function neighborCount(board: Board, point: Position, color: Stone) {
   return getNeighbors(board, point).filter((neighbor) => board[neighbor.y][neighbor.x] === color).length;
 }
 
-const TEACHER_ANCHORS: readonly Position[] = [
-  { x: 6, y: 2 }, { x: 6, y: 6 }, { x: 2, y: 6 }, { x: 2, y: 2 },
-  { x: 4, y: 2 }, { x: 6, y: 4 }, { x: 4, y: 6 }, { x: 2, y: 4 },
-];
-
-export function chooseLearnBotMove(
-  position: LearnGamePosition,
-  mode: "capture" | "teacher" | "beginner",
-): Position | null {
+// Capture Go has a deliberately small, deterministic opponent. Normal 9×9
+// moves use GOSTONE_BOT_MODEL in the shared browser worker.
+export function chooseLearnBotMove(position: LearnGamePosition): Position | null {
   const legal = legalLearnMoves(position);
-  if (legal.length === 0) return null;
   const size = position.board.length;
-  const opponent = opposite(position.turn);
-  const occupied = position.board.flat().filter(Boolean).length;
-  if (mode !== "capture" && (position.moves.length >= 70 || occupied >= Math.floor(size * size * 0.72))) return null;
-
   let best: Position | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const move of legal) {
-    const center = (size - 1) / 2;
-    const distance = Math.abs(move.x - center) + Math.abs(move.y - center);
-    const ownNeighbors = neighborCount(position.board, move, position.turn);
-    const opponentNeighbors = neighborCount(position.board, move, opponent);
-    let score = move.captureCount * (mode === "capture" ? 10_000 : 500);
-    score += ownNeighbors * (mode === "capture" ? 18 : 9);
-    score += opponentNeighbors * (mode === "capture" ? 12 : mode === "beginner" ? 7 : 3);
-    score += Math.min(move.liberties, 4) * 4;
-    if (move.liberties === 1 && move.captureCount === 0) score -= 90;
-    score -= distance * (mode === "capture" ? 2 : 0.35);
-
-    if (mode !== "capture") {
-      const anchorIndex = TEACHER_ANCHORS.findIndex((anchor) => samePoint(anchor, move));
-      if (anchorIndex >= 0) score += Math.max(0, 28 - anchorIndex * 2);
-      if (mode === "teacher" && opponentNeighbors > 0 && move.captureCount === 0) score -= 5;
-    }
-    // Stable tie-breaking keeps the teacher predictable and testable.
-    score -= (move.y * size + move.x) / 10_000;
-    if (score > bestScore) {
-      bestScore = score;
-      best = { x: move.x, y: move.y };
-    }
+    const own = neighborCount(position.board, move, position.turn);
+    const enemy = neighborCount(position.board, move, opposite(position.turn));
+    const distance = Math.abs(move.x - (size - 1) / 2) + Math.abs(move.y - (size - 1) / 2);
+    const score = move.captureCount * 10_000 + own * 18 + enemy * 12
+      + Math.min(move.liberties, 4) * 4 - distance * 2
+      - (move.liberties === 1 && move.captureCount === 0 ? 90 : 0)
+      - (move.y * size + move.x) / 10_000;
+    if (score > bestScore) { bestScore = score; best = { x: move.x, y: move.y }; }
   }
   return best;
+}
+
+export function storedLearnMoves(position: LearnGamePosition) {
+  return position.moves.map((move, index) => ({
+    moveNumber: index + 1, color: move.color,
+    x: move.position?.x ?? null, y: move.position?.y ?? null,
+    isPass: move.position === null, createdAt: "2000-01-01T00:00:00.000Z",
+    boardHash: boardHash(move.board),
+  }));
+}
+
+export type LearnReviewMoment = {
+  kind: "reviewAtari" | "reviewConnection" | "reviewCapture";
+  board: Board;
+  group: Position[];
+  emphasis: Position[];
+  lastMove: Position | null;
+  coordinate: string;
+  count: number;
+};
+
+export function learnReviewMoments(position: LearnGamePosition): LearnReviewMoment[] {
+  const moments: LearnReviewMoment[] = [];
+  const kinds = new Set<string>();
+  for (const [index, move] of position.moves.entries()) {
+    const before = position.moves[index - 1]?.board ?? createLearnGame(position.board.length).board;
+    const previousPoint = position.moves[index - 1]?.position ?? null;
+    if (move.captured.length && !kinds.has(move.color === "white" ? "reviewAtari" : "reviewCapture")) {
+      const kind = move.color === "white" ? "reviewAtari" : "reviewCapture";
+      const group = getGroup(before, move.captured[0]);
+      moments.push({ kind, board: before, group, emphasis: groupLiberties(before, group[0]), lastMove: previousPoint, coordinate: "", count: group.length });
+      kinds.add(kind);
+    }
+    if (move.color === "black" && move.position && !kinds.has("reviewConnection")) {
+      const precedingMoves = position.moves.slice(0, index);
+      const candidates = legalLearnMoves({
+        ...createLearnGame(before.length),
+        board: before,
+        turn: "black",
+        moves: precedingMoves,
+        history: [boardHash(createLearnGame(before.length).board), ...precedingMoves.map((prior) => boardHash(prior.board))],
+      });
+      for (const point of candidates) {
+        if (samePoint(point, move.position)) continue;
+        const groups = getNeighbors(before, point).filter((p) => before[p.y][p.x] === "black").map((p) => getGroup(before, p));
+        const unique = new Map(groups.map((g) => [g.map(pointKey).sort().join(","), g]));
+        if (unique.size < 2 || ![...unique.values()].some((g) => groupLiberties(before, g[0]).length <= 2) || point.liberties < 2) continue;
+        moments.push({ kind: "reviewConnection", board: before, group: [...unique.values()].flat(), emphasis: [point], lastMove: previousPoint, coordinate: `${"ABCDEFGHJKLMNOPQRST"[point.x]}${before.length - point.y}`, count: unique.size });
+        kinds.add("reviewConnection");
+        break;
+      }
+    }
+    if (moments.length >= 3) break;
+  }
+  return moments;
 }
 
 export function territoryPoints(board: Board, owner: Stone): Position[] {

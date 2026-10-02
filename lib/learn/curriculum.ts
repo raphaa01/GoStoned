@@ -34,6 +34,8 @@ export type LessonStep = Readonly<{
   territory?: readonly Position[];
   group?: readonly Position[];
   lastMove?: Position;
+  continuePosition?: boolean;
+  replies?: readonly Position[];
 }>;
 
 export type LearnLesson = Readonly<{
@@ -56,11 +58,20 @@ const p = (x: number, y: number): Position => ({ x, y });
 const b = (x: number, y: number): LearnStone => ({ x, y, color: "black" });
 const w = (x: number, y: number): LearnStone => ({ x, y, color: "white" });
 
-const TWO_EYE_SHAPE = [
-  b(0, 1), b(1, 1), b(2, 1), b(3, 1), b(4, 1),
-  b(0, 2), b(2, 2), b(4, 2),
-  b(0, 3), b(1, 3), b(2, 3), b(3, 3), b(4, 3),
-] as const;
+const EYE_WALL = [
+  ...[1, 2, 3, 4, 5].map((x) => b(x, 2)),
+  b(1, 3), b(5, 3),
+  ...[1, 2, 3, 4, 5].map((x) => b(x, 4)),
+];
+const OUTSIDE_WHITE = [
+  ...[0, 1, 2, 3, 4, 5, 6].flatMap((x) => [w(x, 1), w(x, 5)]),
+  ...[2, 3, 4].flatMap((y) => [w(0, y), w(6, y)]),
+];
+const THREE_POINT_EYE = [...EYE_WALL, ...OUTSIDE_WHITE];
+const TWO_EYE_SHAPE = [...THREE_POINT_EYE, b(3, 3)];
+const SEKI = Array.from({ length: 5 }, (_, y) => Array.from({ length: 5 }, (_, x) =>
+  x === 2 && (y === 1 || y === 3) ? null : (x < 2 || (x === 2 && y < 4) ? b(x, y) : w(x, y)),
+)).flat().filter((stone): stone is LearnStone => stone !== null);
 
 const CLOSED_BLACK = [b(0, 1), b(1, 0), b(2, 1), b(1, 2)] as const;
 
@@ -69,8 +80,8 @@ const STAGE_ONE: readonly LearnLesson[] = [
     id: "s1-board", stage: 1, minutes: 2, title: t("Das Go-Brett", "The Go board"), steps: [
       { id: "intersections", kind: "info", size: 5, stones: [], emphasis: [p(2, 2)], body: t("Go wird auf den Schnittpunkten gespielt – dort, wo sich zwei Linien kreuzen.", "Go is played on intersections—where two lines cross.") },
       { id: "first-stone", kind: "play", size: 5, stones: [], toPlay: "black", body: t("Tippe auf einen freien Schnittpunkt.", "Tap any empty intersection."), task: t("Setze einen schwarzen Stein.", "Place a black stone."), success: t("Der Stein liegt auf den Linien, nicht in einem Feld.", "The stone sits on the lines, not inside a square."), wrong: t("Dieser Schnittpunkt ist nicht frei.", "That intersection is not empty.") },
-      { id: "stones-stay", kind: "play", size: 5, stones: [b(2, 2)], toPlay: "black", body: t("Steine bewegen sich nach dem Setzen nicht mehr.", "Stones do not move after they are placed."), task: t("Setze einen zweiten Stein.", "Place a second stone."), success: t("Beide Steine bleiben auf ihren Schnittpunkten.", "Both stones stay on their intersections.") },
-      { id: "third-stone", kind: "play", size: 5, stones: [b(2, 2), b(1, 3)], toPlay: "black", body: t("Ein Stein verlässt das Brett nur, wenn er geschlagen wird.", "A stone leaves the board only when it is captured."), task: t("Setze noch einen Stein.", "Place one more stone."), success: t("Genau. Setzen, liegen lassen – später lernst du das Schlagen.", "Right. Place it and leave it—capturing comes later.") },
+      { id: "stones-stay", kind: "play", size: 5, continuePosition: true, stones: [], toPlay: "black", body: t("Steine bewegen sich nach dem Setzen nicht mehr.", "Stones do not move after they are placed."), task: t("Setze einen zweiten Stein.", "Place a second stone."), success: t("Beide Steine bleiben auf ihren Schnittpunkten.", "Both stones stay on their intersections.") },
+      { id: "third-stone", kind: "play", size: 5, continuePosition: true, stones: [], toPlay: "black", body: t("Ein Stein verlässt das Brett nur, wenn er geschlagen wird.", "A stone leaves the board only when it is captured."), task: t("Setze noch einen Stein.", "Place one more stone."), success: t("Genau. Setzen, liegen lassen – später lernst du das Schlagen.", "Right. Place it and leave it—capturing comes later.") },
     ],
   },
   {
@@ -105,8 +116,8 @@ const STAGE_ONE: readonly LearnLesson[] = [
   {
     id: "s1-atari", stage: 1, minutes: 3, title: t("Atari", "Atari"), steps: [
       { id: "meaning", kind: "info", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2), w(3, 2)], emphasis: [p(2, 3)], body: t("Diese schwarze Gruppe hat nur noch eine Freiheit. Das nennt man Atari.", "This black group has only one liberty left. This is called atari.") },
-      { id: "make-atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2)], toPlay: "white", targets: [p(3, 2)], body: t("Schwarz hat noch zwei Freiheiten.", "Black has two liberties left."), task: t("Setze Weiß so, dass Schwarz nur eine behält.", "Play White so Black keeps only one."), success: t("Schwarz steht jetzt im Atari. Die letzte Freiheit liegt unten.", "Black is now in atari. Its last liberty is below."), wrong: t("Nimm die Freiheit rechts vom schwarzen Stein.", "Take the liberty to the right of the black stone.") },
-      { id: "group-atari", kind: "play", size: 5, stones: [b(2, 2), b(2, 3), w(1, 2), w(1, 3), w(2, 1), w(3, 3)], toPlay: "white", targets: [p(3, 2)], body: t("Auch eine Gruppe steht im Atari, wenn ihr gemeinsam nur eine Freiheit bleibt.", "A group is also in atari when it has only one shared liberty."), task: t("Setze die Zweiergruppe ins Atari.", "Put the two-stone group in atari."), success: t("Richtig. Der Gruppe bleibt nur der Punkt unten.", "Right. The group has only the lower point left."), wrong: t("Nimm die Freiheit rechts vom oberen schwarzen Stein.", "Take the liberty to the right of the upper black stone.") },
+      { id: "make-atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2)], toPlay: "white", targets: [p(3, 2), p(2, 3)], body: t("Schwarz hat noch zwei Freiheiten.", "Black has two liberties left."), task: t("Setze Weiß so, dass Schwarz nur eine behält.", "Play White so Black keeps only one."), success: t("Schwarz steht jetzt im Atari: Eine Freiheit bleibt.", "Black is now in atari: one liberty remains."), wrong: t("Nimm die Freiheit rechts vom schwarzen Stein.", "Take the liberty to the right of the black stone.") },
+      { id: "group-atari", kind: "play", size: 5, stones: [b(2, 2), b(2, 3), w(1, 2), w(1, 3), w(2, 1), w(3, 3)], toPlay: "white", targets: [p(3, 2), p(2, 4)], body: t("Auch eine Gruppe steht im Atari, wenn ihr gemeinsam nur eine Freiheit bleibt.", "A group is also in atari when it has only one shared liberty."), task: t("Setze die Zweiergruppe ins Atari.", "Put the two-stone group in atari."), success: t("Richtig. Der ganzen Gruppe bleibt eine Freiheit.", "Right. The whole group has one liberty left."), wrong: t("Nimm die Freiheit rechts vom oberen schwarzen Stein.", "Take the liberty to the right of the upper black stone.") },
     ],
   },
   {
@@ -119,9 +130,9 @@ const STAGE_ONE: readonly LearnLesson[] = [
   {
     id: "s1-review", stage: 1, minutes: 3, title: t("Gemischter Check", "Mixed check"), steps: [
       { id: "liberties", kind: "select", size: 5, stones: [b(0, 0)], targets: [p(1, 0), p(0, 1)], selectFrom: "empty", body: t("Ein Eckstein hat weniger Nachbarn.", "A corner stone has fewer neighbors."), task: t("Markiere seine Freiheiten.", "Mark its liberties."), success: t("Zwei Freiheiten.", "Two liberties."), wrong: t("Nur direkte Nachbarn zählen.", "Only direct neighbors count.") },
-      { id: "atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2)], toPlay: "white", targets: [p(3, 2)], body: t("Schwarz hat zwei Freiheiten.", "Black has two liberties."), task: t("Setze Schwarz ins Atari.", "Put Black in atari."), success: t("Nur die untere Freiheit bleibt.", "Only the lower liberty remains."), wrong: t("Nimm die rechte Freiheit.", "Take the right liberty.") },
+      { id: "atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2)], toPlay: "white", targets: [p(3, 2), p(2, 3)], body: t("Schwarz hat zwei Freiheiten.", "Black has two liberties."), task: t("Setze Schwarz ins Atari.", "Put Black in atari."), success: t("Nur eine Freiheit bleibt.", "Only one liberty remains."), wrong: t("Besetze eine der zwei Freiheiten neben Schwarz.", "Take either of Black's two liberties.") },
       { id: "capture", kind: "play", size: 5, stones: [w(0, 2), b(0, 1), b(1, 2)], toPlay: "black", targets: [p(0, 3)], body: t("Weiß hat eine Freiheit.", "White has one liberty."), task: t("Schlage Weiß.", "Capture White."), success: t("Der Randstein wird entfernt.", "The edge stone is removed."), wrong: t("Fülle die letzte Freiheit.", "Fill the last liberty.") },
-      { id: "group", kind: "select", size: 5, stones: [b(1, 2), b(2, 2), b(3, 3)], targets: [p(1, 2), p(2, 2)], selectFrom: "stone", body: t("Diagonal verbindet nicht.", "Diagonals do not connect."), task: t("Markiere die verbundene Gruppe.", "Mark the connected group."), success: t("Die Grundlagen sitzen.", "You have the basics."), wrong: t("Wähle nur Steine, die sich direkt berühren.", "Choose only stones that touch directly.") },
+      { id: "group", kind: "select", size: 5, stones: [b(1, 2), b(2, 2), b(3, 3)], targets: [p(1, 2), p(2, 2)], selectFrom: "stone", body: t("Diagonal verbindet nicht.", "Diagonals do not connect."), task: t("Markiere die verbundene Gruppe.", "Mark the connected group."), success: t("Diese zwei Steine teilen ihre Freiheiten; der dritte ist eine eigene Gruppe.", "These two stones share their liberties; the third is a separate group."), wrong: t("Wähle nur Steine, die sich direkt berühren.", "Choose only stones that touch directly.") },
     ],
   },
   {
@@ -135,14 +146,14 @@ const STAGE_TWO: readonly LearnLesson[] = [
   {
     id: "s2-goal", stage: 2, minutes: 3, title: t("Worum geht es?", "What is the goal?"), steps: [
       { id: "black-area", kind: "select", size: 9, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(6, 8), w(6, 7), w(6, 6), w(7, 6), w(8, 6)], targets: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], selectFrom: "empty", body: t("Schwarz umschließt links oben vier freie Schnittpunkte.", "Black encloses four empty intersections in the upper left."), task: t("Tippe auf das schwarze Gebiet.", "Tap Black's territory."), success: t("Diese vier Punkte zählen am Ende für Schwarz.", "These four points count for Black at the end."), wrong: t("Gebiet muss durch Steine und den Brettrand vollständig begrenzt sein.", "Territory must be completely bounded by stones and the board edge.") },
-      { id: "goal", kind: "info", size: 9, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(6, 8), w(6, 7), w(6, 6), w(7, 6), w(8, 6)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1), p(7, 7), p(8, 7), p(7, 8), p(8, 8)], body: t("Am Ende gewinnt, wer mehr Gebiet und Gefangene hat. Weiß erhält zusätzlich Komi.", "At the end, the player with more territory and prisoners wins. White also receives komi.") },
+      { id: "white-area", kind: "select", size: 9, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(6, 8), w(6, 7), w(6, 6), w(7, 6), w(8, 6)], targets: [p(7, 7), p(8, 7), p(7, 8), p(8, 8)], selectFrom: "empty", body: t("Weiß kontrolliert den geschlossenen Bereich unten rechts. Im normalen Go sammelst du Gebiet, nicht nur geschlagene Steine.", "White controls the enclosed lower-right region. In normal Go you collect territory, not just captured stones."), task: t("Markiere die vier weißen Gebietspunkte.", "Mark White's four territory points."), success: t("Wer am Ende mehr Punkte hat, gewinnt. Gleich lernst du, wie gezählt wird.", "Whoever has more points at the end wins. Next you will learn how to count."), wrong: t("Suche den geschlossenen Bereich zwischen Weiß und Brettrand.", "Find the enclosed area between White and the board edge.") },
     ],
   },
   {
     id: "s2-territory", stage: 2, minutes: 4, title: t("Was ist Gebiet?", "What is territory?"), steps: [
       { id: "closed", kind: "select", size: 5, stones: CLOSED_BLACK, targets: [p(1, 1)], territory: [p(1, 1)], selectFrom: "empty", body: t("Dieser freie Punkt ist auf allen Seiten von Schwarz begrenzt.", "This empty point is bounded by Black on every side."), task: t("Markiere das schwarze Gebiet.", "Mark Black's territory."), success: t("Vollständig umschlossen: schwarzes Gebiet.", "Completely enclosed: Black territory."), wrong: t("Suche den vollständig umschlossenen Punkt.", "Find the completely enclosed point.") },
       { id: "open", kind: "select", size: 5, stones: [b(0, 1), b(1, 0), b(2, 1)], targets: [p(1, 2)], emphasis: [p(1, 1), p(1, 2)], selectFrom: "empty", body: t("Oben wirkt die Form geschlossen, aber unten ist sie offen.", "The shape looks closed above, but it is open below."), task: t("Tippe auf die Öffnung – dadurch ist der Innenpunkt noch kein Gebiet.", "Tap the opening—the inner point is not territory yet."), success: t("Richtig. Solange die Grenze offen ist, gehört der Bereich niemandem.", "Right. While the boundary is open, the area belongs to neither player."), wrong: t("Der Innenpunkt ist noch nicht Gebiet. Suche die Lücke in der Grenze.", "The inner point is not territory yet. Find the gap in the boundary.") },
-      { id: "enemy-inside", kind: "select", size: 5, stones: [...CLOSED_BLACK, w(1, 1)], targets: [p(1, 1)], selectFrom: "stone", body: t("Ein weißer Stein steht im umschlossenen Bereich.", "A white stone stands inside the enclosed area."), task: t("Tippe auf den Stein, der zuerst als tot vereinbart oder geschlagen werden muss.", "Tap the stone that must first be agreed dead or captured."), success: t("Solange Weiß dort lebt, ist der Punkt kein schwarzes Gebiet.", "While White lives there, the point is not Black territory."), wrong: t("Der weiße Stein verhindert die Wertung als leeren Gebietspunkt.", "The white stone prevents the point from being scored as empty territory.") },
+      { id: "enemy-inside", kind: "select", size: 5, stones: [b(0, 1), b(1, 0), b(2, 1), b(0, 2), b(2, 2), b(1, 3), w(1, 1)], targets: [p(1, 1)], selectFrom: "stone", body: t("Ein weißer Stein steht im umschlossenen Bereich.", "A white stone stands inside the enclosed area."), task: t("Tippe auf den Stein, der zuerst als tot vereinbart oder geschlagen werden muss.", "Tap the stone that must first be agreed dead or captured."), success: t("Solange Weiß dort lebt, ist der Punkt kein schwarzes Gebiet.", "While White lives there, the point is not Black territory."), wrong: t("Der weiße Stein verhindert die Wertung als leeren Gebietspunkt.", "The white stone prevents the point from being scored as empty territory.") },
       { id: "edge-wall", kind: "select", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0)], targets: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], selectFrom: "empty", body: t("Der Brettrand kann Teil der Grenze sein.", "The board edge can be part of the boundary."), task: t("Markiere das Gebiet in der Ecke.", "Mark the corner territory."), success: t("Vier Punkte. Außerhalb des Brettes braucht Schwarz keine Steine.", "Four points. Black needs no stones beyond the board."), wrong: t("Wähle nur die vier Punkte zwischen schwarzen Steinen und Brettrand.", "Choose only the four points between Black's stones and the board edge.") },
     ],
   },
@@ -156,6 +167,7 @@ const STAGE_TWO: readonly LearnLesson[] = [
     id: "s2-ko", stage: 2, minutes: 4, title: t("Ko", "Ko"), steps: [
       { id: "capture", kind: "play", size: 5, stones: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "black", targets: [p(2, 3)], body: t("Der einzelne weiße Stein hat eine Freiheit.", "The single white stone has one liberty."), task: t("Schlage ihn.", "Capture it."), success: t("Schwarz hat geschlagen. Der neue schwarze Stein hat selbst nur eine Freiheit.", "Black captured. The new black stone now has only one liberty."), wrong: t("Fülle die Freiheit direkt unter dem weißen Stein.", "Fill the liberty directly below the white stone.") },
       { id: "blocked-recapture", kind: "illegal", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], koPreviousBoard: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(2, 2)], expectedError: "ko", body: t("Ein sofortiger Rückschlag würde genau die vorige Stellung wiederholen.", "An immediate recapture would repeat the previous position exactly."), task: t("Versuche, sofort zurückzuschlagen.", "Try to recapture immediately."), success: t("Die Ko-Regel blockiert den Zug. Weiß muss zuerst woanders spielen.", "The ko rule blocks the move. White must play elsewhere first."), wrong: t("Versuche den Rückschlag auf dem gerade frei gewordenen Punkt.", "Try the recapture on the point that just became empty.") },
+      { id: "elsewhere", kind: "play", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(0, 4)], emphasis: [p(0, 4)], replies: [p(4, 0)], body: t("Weiß spielt zuerst an einer anderen Stelle. Schwarz antwortet woanders.", "White first plays somewhere else. Black replies elsewhere."), task: t("Setze Weiß auf den markierten Punkt.", "Play White on the marked point."), success: t("Die letzte Stellung ist jetzt eine andere. Der Rückschlag ist wieder erlaubt.", "The preceding position is now different. Recapturing is allowed again.") },
       { id: "later-recapture", kind: "play", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2), w(0, 4), b(4, 0)], toPlay: "white", targets: [p(2, 2)], body: t("Weiß und Schwarz haben inzwischen je einen Zug woanders gespielt.", "White and Black have each played elsewhere in the meantime."), task: t("Jetzt darf Weiß zurückschlagen.", "Now White may recapture."), success: t("Nach einem Zwischenzug ist der Rückschlag erlaubt.", "After an intervening move, the recapture is allowed."), wrong: t("Schlage den schwarzen Ko-Stein zurück.", "Recapture the black ko stone.") },
     ],
   },
@@ -167,19 +179,20 @@ const STAGE_TWO: readonly LearnLesson[] = [
   },
   {
     id: "s2-dead", stage: 2, minutes: 3, title: t("Tote Steine", "Dead stones"), steps: [
-      { id: "mark-dead", kind: "select", size: 5, stones: [b(0, 2), b(1, 1), b(1, 2), b(1, 3), b(2, 0), b(2, 4), b(3, 1), b(3, 2), b(3, 3), b(4, 2), w(2, 2)], targets: [p(2, 2)], selectFrom: "stone", body: t("Der weiße Stein ist vollständig umgeben. Er kann nicht entkommen und keinen sicheren Innenraum bilden.", "The white stone is completely surrounded. It cannot escape or make secure inner space."), task: t("Markiere den toten Stein.", "Mark the dead stone."), success: t("Am Spielende wird ein vereinbarter toter Stein entfernt und als Gefangener gezählt.", "At the end, an agreed dead stone is removed and counted as a prisoner."), wrong: t("Die schwarze Umrandung lebt; suche den eingeschlossenen weißen Stein.", "The black boundary lives; find the enclosed white stone.") },
+      { id: "mark-dead", kind: "select", size: 5, stones: [b(1, 0), b(1, 1), b(1, 2), b(0, 2), w(0, 0)], targets: [p(0, 0)], selectFrom: "stone", body: t("Der weiße Eckstein hat eine Freiheit. Selbst dort bekäme er keine neue Freiheit: Er kann nicht entkommen.", "The white corner stone has one liberty. Extending there would give it no new liberty: it cannot escape."), task: t("Markiere den toten Stein.", "Mark the dead stone."), success: t("Am Spielende wird ein vereinbarter toter Stein entfernt und als Gefangener gezählt.", "At the end, an agreed dead stone is removed and counted as a prisoner."), wrong: t("Suche den weißen Stein in der Ecke.", "Find the white stone in the corner.") },
     ],
   },
   {
     id: "s2-ending", stage: 2, minutes: 2, title: t("Spielende", "Ending the game"), steps: [
-      { id: "last-gap", kind: "play", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3)], toPlay: "black", targets: [p(2, 0)], body: t("Oben links ist die schwarze Grenze noch offen.", "Black's upper-left boundary is still open."), task: t("Schließe zuerst die letzte sinnvolle Lücke.", "Close the last useful gap first."), success: t("Jetzt sind die Grenzen klar. Weitere Züge im eigenen Gebiet würden nur Punkte kosten.", "Now the boundaries are clear. Further moves inside your own territory would only cost points."), wrong: t("Schließe die schwarze Grenze oben.", "Close Black's boundary at the top.") },
-      { id: "end-pass", kind: "pass", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3)], body: t("Alle Grenzen sind geschlossen.", "All boundaries are closed."), task: t("Passe. Nach dem Pass des Gegners endet die Partie.", "Pass. The game ends after the opponent also passes."), success: t("Zwei Pässe beenden die Partie; danach werden tote Steine und Punkte geprüft.", "Two passes end the game; dead stones and points are checked next.") },
+      { id: "last-gap", kind: "play", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3), w(2, 4)], toPlay: "black", targets: [p(2, 0)], body: t("Oben links ist die schwarze Grenze noch offen.", "Black's upper-left boundary is still open."), task: t("Schließe zuerst die letzte sinnvolle Lücke.", "Close the last useful gap first."), success: t("Jetzt sind die Grenzen klar. Weitere Züge im eigenen Gebiet würden nur Punkte kosten.", "Now the boundaries are clear. Further moves inside your own territory would only cost points."), wrong: t("Schließe die schwarze Grenze oben.", "Close Black's boundary at the top.") },
+      { id: "end-pass", kind: "pass", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3), w(2, 4)], body: t("Alle Grenzen sind geschlossen.", "All boundaries are closed."), task: t("Passe. Nach dem Pass des Gegners endet die Partie.", "Pass. The game ends after the opponent also passes."), success: t("Zwei Pässe beenden die Partie; danach werden tote Steine und Punkte geprüft.", "Two passes end the game; dead stones and points are checked next.") },
     ],
   },
   {
     id: "s2-counting", stage: 2, minutes: 4, title: t("Punkte zählen", "Counting points"), steps: [
-      { id: "black", kind: "select", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3)], targets: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], selectFrom: "empty", body: t("Zähle zuerst jeden freien Punkt im schwarzen Gebiet.", "First count every empty point in Black's territory."), task: t("Markiere Schwarz: vier Punkte.", "Mark Black's four points."), success: t("Schwarz hat vier Gebietspunkte.", "Black has four territory points."), wrong: t("Wähle nur den geschlossenen Bereich oben links.", "Choose only the enclosed upper-left area.") },
-      { id: "white", kind: "select", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3)], targets: [p(3, 4), p(4, 4)], territory: [p(3, 4), p(4, 4)], selectFrom: "empty", body: t("Das weiße Gebiet liegt unten rechts.", "White's territory is in the lower right."), task: t("Markiere die zwei weißen Punkte.", "Mark White's two points."), success: t("Weiß hat zwei Gebietspunkte. Gefangene und Komi werden danach addiert.", "White has two territory points. Prisoners and komi are added afterward."), wrong: t("Suche den freien Bereich zwischen Weiß und Brettrand.", "Find the empty area between White and the board edge.") },
+      { id: "black", kind: "select", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3), w(2, 4)], targets: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1)], selectFrom: "empty", body: t("Zähle zuerst jeden freien Punkt im schwarzen Gebiet.", "First count every empty point in Black's territory."), task: t("Markiere Schwarz: vier Punkte.", "Mark Black's four points."), success: t("Schwarz hat vier Gebietspunkte.", "Black has four territory points."), wrong: t("Wähle nur den geschlossenen Bereich oben links.", "Choose only the enclosed upper-left area.") },
+      { id: "white", kind: "select", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3), w(2, 4)], targets: [p(3, 4), p(4, 4)], territory: [p(3, 4), p(4, 4)], selectFrom: "empty", body: t("Das weiße Gebiet liegt unten rechts.", "White's territory is in the lower right."), task: t("Markiere die zwei weißen Punkte.", "Mark White's two points."), success: t("Weiß hat zwei Gebietspunkte. Gefangene und Komi werden danach addiert.", "White has two territory points. Prisoners and komi are added afterward."), wrong: t("Suche den freien Bereich zwischen Weiß und Brettrand.", "Find the empty area between White and the board edge.") },
+      { id: "total", kind: "info", size: 5, stones: [b(0, 2), b(1, 2), b(2, 2), b(2, 1), b(2, 0), w(4, 2), w(3, 2), w(2, 3), w(3, 3), w(4, 3), w(2, 4)], territory: [p(0, 0), p(1, 0), p(0, 1), p(1, 1), p(3, 4), p(4, 4)], body: t("Schwarz: 4 Gebietspunkte. Weiß: 2. Jeder geschlagene oder als tot vereinbarte gegnerische Stein zählt zusätzlich 1 Punkt; Steine auf dem Brett zählen nicht.", "Black: 4 territory points. White: 2. Each captured or agreed-dead opposing stone adds 1 point; stones on the board do not count.") },
     ],
   },
   {
@@ -189,6 +202,8 @@ const STAGE_TWO: readonly LearnLesson[] = [
   },
   {
     id: "s2-first-game", stage: 2, minutes: 8, challenge: true, title: t("Deine erste 9×9-Partie", "Your first 9×9 game"), steps: [
+      { id: "review-atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2), w(3, 2)], toPlay: "black", targets: [p(2, 3)], body: t("Vor der Partie: Dieser schwarze Stein hat nur eine Freiheit.", "Before the game: this black stone has only one liberty."), task: t("Entkomme aus Atari.", "Escape atari."), success: t("Die Zweiergruppe hat jetzt drei Freiheiten.", "The two-stone group now has three liberties."), wrong: t("Verbinde einen neuen Stein auf der letzten Freiheit.", "Connect a new stone on the last liberty.") },
+      { id: "review-ko", kind: "illegal", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], koPreviousBoard: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(2, 2)], expectedError: "ko", body: t("Schwarz hat gerade den weißen Stein geschlagen.", "Black has just captured the white stone."), task: t("Versuche den sofortigen Rückschlag.", "Try recapturing immediately."), success: t("Ko: Weiß muss erst woanders spielen. Diese Regel gilt auch in deiner Partie.", "Ko: White must play elsewhere first. This rule also applies in your game.") },
       { id: "game", kind: "guided-game", body: t("Du spielst Schwarz. Die App weist nur auf Atari und zu frühes Passen hin.", "You are Black. The app only points out atari and passing too early."), task: t("Spiele bis zu zwei Pässen, markiere tote Gruppen und zähle.", "Play until two passes, mark dead groups, and count." ) },
     ],
   },
@@ -197,20 +212,20 @@ const STAGE_TWO: readonly LearnLesson[] = [
 const STAGE_THREE: readonly LearnLesson[] = [
   {
     id: "s3-alive", stage: 3, minutes: 3, title: t("Was bedeutet lebendig?", "What does alive mean?"), steps: [
-      { id: "safe", kind: "info", size: 5, stones: TWO_EYE_SHAPE, territory: [p(1, 2), p(3, 2)], body: t("Eine Gruppe ist lebendig, wenn der Gegner sie nicht mehr schlagen kann. Diese Gruppe besitzt zwei getrennte Innenräume.", "A group is alive when the opponent can no longer capture it. This group has two separate inner spaces." ) },
-      { id: "try", kind: "illegal", size: 5, stones: TWO_EYE_SHAPE, toPlay: "white", targets: [p(1, 2)], expectedError: "suicide", body: t("Alle äußeren Freiheiten sind hier bereits als geschlossen gedacht. Weiß müsste einen Innenraum zuerst betreten.", "Imagine all outside liberties are already closed. White would have to enter one inner space first."), task: t("Versuche, in einen Innenraum zu spielen.", "Try to play inside one inner space."), success: t("Der Zug ist Selbstmord, weil der andere Innenraum der schwarzen Gruppe noch frei bleibt.", "The move is suicide because the black group's other inner space remains free."), wrong: t("Versuche einen der beiden markierten Innenpunkte.", "Try one of the two marked inner points.") },
+      { id: "safe", kind: "info", size: 7, stones: TWO_EYE_SHAPE, territory: [p(2, 3), p(4, 3)], body: t("Eine Gruppe ist lebendig, wenn der Gegner sie nicht mehr schlagen kann. Diese Gruppe besitzt zwei getrennte Innenräume.", "A group is alive when the opponent can no longer capture it. This group has two separate inner spaces." ) },
+      { id: "try", kind: "illegal", size: 7, stones: TWO_EYE_SHAPE, toPlay: "white", targets: [p(2, 3), p(4, 3)], expectedError: "suicide", body: t("Weiß hat die Gruppe außen umschlossen. Nur die beiden Innenräume sind noch frei.", "White has surrounded the group outside. Only the two inner spaces remain empty."), task: t("Versuche, in einen Innenraum zu spielen.", "Try to play inside one inner space."), success: t("Der Zug ist Selbstmord, weil der andere Innenraum der schwarzen Gruppe noch frei bleibt.", "The move is suicide because the black group's other inner space remains free."), wrong: t("Versuche einen der beiden Innenpunkte.", "Try one of the two inner points.") },
     ],
   },
   {
     id: "s3-one-eye", stage: 3, minutes: 3, title: t("Ein Auge", "One eye"), steps: [
       { id: "find", kind: "select", size: 5, stones: [b(0, 1), b(1, 1), b(1, 0)], targets: [p(0, 0)], territory: [p(0, 0)], selectFrom: "empty", body: t("Ein vollständig umschlossener Innenpunkt heißt Auge.", "A completely enclosed inner point is called an eye."), task: t("Tippe auf das Auge.", "Tap the eye."), success: t("Das ist ein echtes Auge.", "That is a real eye."), wrong: t("Suche den leeren Punkt, dessen direkte Nachbarn schwarz sind.", "Find the empty point whose direct neighbors are black.") },
-      { id: "not-enough", kind: "info", size: 5, stones: [b(0, 1), b(1, 1), b(1, 0), w(0, 2), w(1, 2), w(2, 1), w(2, 0)], territory: [p(0, 0)], body: t("Ein Auge allein reicht normalerweise nicht. Wenn alle äußeren Freiheiten verschwinden, darf Weiß zuletzt im Auge schlagen.", "One eye is usually not enough. When every outside liberty is gone, White may finally capture by playing in the eye." ) },
+      { id: "not-enough", kind: "play", toPlay: "white", targets: [p(0, 0)], success: t("Weiß nimmt die letzte Freiheit und schlägt alle drei schwarzen Steine.", "White takes the last liberty and captures all three black stones."), size: 5, stones: [b(0, 1), b(1, 1), b(1, 0), w(0, 2), w(1, 2), w(2, 1), w(2, 0)], territory: [p(0, 0)], body: t("Ein Auge allein reicht normalerweise nicht. Wenn alle äußeren Freiheiten verschwinden, darf Weiß zuletzt im Auge schlagen.", "One eye is usually not enough. When every outside liberty is gone, White may finally capture by playing in the eye." ) },
     ],
   },
   {
     id: "s3-two-eyes", stage: 3, minutes: 3, title: t("Zwei Augen", "Two eyes"), steps: [
-      { id: "mark", kind: "select", size: 5, stones: TWO_EYE_SHAPE, targets: [p(1, 2), p(3, 2)], territory: [p(1, 2), p(3, 2)], selectFrom: "empty", body: t("Der schwarze Trennstein macht aus einem Innenraum zwei getrennte Augen.", "The black divider turns one inner space into two separate eyes."), task: t("Markiere beide Augen.", "Mark both eyes."), success: t("Zwei getrennte Augen.", "Two separate eyes."), wrong: t("Wähle die beiden einzelnen Innenpunkte links und rechts.", "Choose the two single inner points on the left and right.") },
-      { id: "cannot-fill", kind: "illegal", size: 5, stones: TWO_EYE_SHAPE, toPlay: "white", targets: [p(3, 2)], expectedError: "suicide", body: t("Weiß kann keines der Augen als ersten Zug legal besetzen.", "White cannot legally occupy either eye first."), task: t("Probiere es aus.", "Try it."), success: t("Deshalb kann die schwarze Gruppe nicht geschlagen werden.", "That is why the black group cannot be captured."), wrong: t("Versuche, in das rechte Auge zu spielen.", "Try to play in the right eye.") },
+      { id: "mark", kind: "select", size: 7, stones: TWO_EYE_SHAPE, targets: [p(2, 3), p(4, 3)], territory: [p(2, 3), p(4, 3)], selectFrom: "empty", body: t("Der schwarze Trennstein macht aus einem Innenraum zwei getrennte Augen.", "The black divider turns one inner space into two separate eyes."), task: t("Markiere beide Augen.", "Mark both eyes."), success: t("Zwei getrennte Augen.", "Two separate eyes."), wrong: t("Wähle die beiden einzelnen Innenpunkte links und rechts.", "Choose the two single inner points on the left and right.") },
+      { id: "cannot-fill", kind: "illegal", size: 7, stones: TWO_EYE_SHAPE, toPlay: "white", targets: [p(4, 3)], expectedError: "suicide", body: t("Weiß kann keines der Augen als ersten Zug legal besetzen.", "White cannot legally occupy either eye first."), task: t("Probiere es aus.", "Try it."), success: t("Deshalb kann die schwarze Gruppe nicht geschlagen werden.", "That is why the black group cannot be captured."), wrong: t("Versuche, in das rechte Auge zu spielen.", "Try to play in the right eye.") },
     ],
   },
   {
@@ -221,13 +236,14 @@ const STAGE_THREE: readonly LearnLesson[] = [
   },
   {
     id: "s3-life-death", stage: 3, minutes: 4, title: t("Leben oder Tod?", "Life or death?"), steps: [
-      { id: "make-life", kind: "play", size: 5, stones: [b(0, 1), b(1, 1), b(2, 1), b(3, 1), b(4, 1), b(0, 2), b(4, 2), b(0, 3), b(1, 3), b(2, 3), b(3, 3), b(4, 3)], toPlay: "black", targets: [p(2, 2)], body: t("Schwarz hat einen geraden Innenraum aus drei Punkten.", "Black has a straight three-point inner space."), task: t("Teile ihn mit einem Zug in zwei Augen.", "Split it into two eyes with one move."), success: t("Der Mittelpunkt erzeugt links und rechts je ein Auge.", "The center point creates one eye on each side."), wrong: t("Nur der mittlere Innenpunkt trennt den Raum in zwei Augen.", "Only the middle inner point splits the space into two eyes.") },
-      { id: "kill", kind: "play", size: 5, stones: [b(0, 1), b(1, 1), b(2, 1), b(3, 1), b(4, 1), b(0, 2), b(4, 2), b(0, 3), b(1, 3), b(2, 3), b(3, 3), b(4, 3)], toPlay: "white", targets: [p(2, 2)], body: t("Jetzt ist Weiß zuerst am Zug.", "Now White moves first."), task: t("Besetze den vitalen Punkt, bevor Schwarz zwei Augen bildet.", "Take the vital point before Black makes two eyes."), success: t("Weiß kontrolliert die Mitte; Schwarz kann den Raum nicht mehr teilen.", "White controls the center; Black can no longer split the space."), wrong: t("Der vitale Punkt liegt genau in der Mitte.", "The vital point is exactly in the middle.") },
+      { id: "make-life", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "black", targets: [p(3, 3)], body: t("Schwarz hat einen geraden Innenraum aus drei Punkten.", "Black has a straight three-point inner space."), task: t("Teile ihn mit einem Zug in zwei Augen.", "Split it into two eyes with one move."), success: t("Der Mittelpunkt erzeugt links und rechts je ein Auge.", "The center point creates one eye on each side."), wrong: t("Nur der mittlere Innenpunkt trennt den Raum in zwei Augen.", "Only the middle inner point splits the space into two eyes.") },
+      { id: "kill", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "white", targets: [p(3, 3)], replies: [p(2, 3), p(4, 3)], body: t("Jetzt ist Weiß zuerst am Zug.", "Now White moves first."), task: t("Besetze den vitalen Punkt, bevor Schwarz zwei Augen bildet.", "Take the vital point before Black makes two eyes."), success: t("Schwarz versucht links zu schließen. Weiß nimmt die letzte Freiheit rechts und schlägt die Gruppe.", "Black tries to close the left side. White takes the last liberty on the right and captures the group."), wrong: t("Der vitale Punkt liegt genau in der Mitte.", "The vital point is exactly in the middle.") },
     ],
   },
   {
     id: "s3-seki", stage: 3, minutes: 3, title: t("Seki", "Seki"), steps: [
-      { id: "shared", kind: "select", size: 5, stones: [b(0, 0), b(0, 1), w(2, 0), w(2, 1), w(0, 2), b(3, 0), b(3, 1), b(2, 2)], targets: [p(1, 0), p(1, 1)], selectFrom: "empty", body: t("Beide Gruppen teilen zwei Freiheiten. Wer zuerst eine füllt, verliert seine eigene letzte Freiheit.", "Both groups share two liberties. Whoever fills one first loses their own last liberty."), task: t("Markiere die beiden gemeinsamen Freiheiten.", "Mark the two shared liberties."), success: t("Beide Gruppen leben, obwohl sie keine zwei Augen haben. Das heißt Seki.", "Both groups live even without two eyes. This is called seki."), wrong: t("Suche die zwei freien Punkte direkt zwischen Schwarz und Weiß.", "Find the two empty points directly between Black and White.") },
+      { id: "shared", kind: "select", size: 5, stones: SEKI, targets: [p(2, 1), p(2, 3)], selectFrom: "empty", body: t("Beide Gruppen teilen genau diese zwei Freiheiten. Wer zuerst eine besetzt, setzt auch seine eigene Gruppe ins Atari.", "Both groups share exactly these two liberties. Filling either one also puts your own group in atari."), task: t("Markiere die beiden gemeinsamen Freiheiten.", "Mark the two shared liberties."), success: t("Keine Seite kann sicher anfangen. Das heißt Seki.", "Neither side can safely start. This is called seki."), wrong: t("Suche die zwei freien Punkte direkt zwischen Schwarz und Weiß.", "Find the two empty points directly between Black and White.") },
+      { id: "try-seki", kind: "play", size: 5, stones: SEKI, toPlay: "black", targets: [p(2, 1)], replies: [p(2, 3)], body: t("Probiere aus, warum Schwarz nicht anfangen kann.", "Try why Black cannot start safely."), task: t("Setze Schwarz auf den oberen gemeinsamen Punkt.", "Play Black on the upper shared point."), success: t("Weiß besetzt die andere Freiheit und schlägt Schwarz. Beide Gruppen leben, wenn keine Seite anfängt.", "White takes the other liberty and captures Black. Both groups live if neither side starts.") },
     ],
   },
   {
@@ -248,13 +264,13 @@ const STAGE_THREE: readonly LearnLesson[] = [
   },
   {
     id: "s3-sacrifice", stage: 3, minutes: 3, title: t("Nicht jeden Stein retten", "Do not save every stone"), steps: [
-      { id: "bigger", kind: "play", size: 7, stones: [b(1, 1), w(0, 1), w(1, 0), w(2, 1), b(4, 4), b(5, 4), b(4, 5), w(3, 4), w(3, 5)], toPlay: "black", targets: [p(5, 5)], emphasis: [p(1, 2), p(5, 5)], body: t("Der einzelne Stein links ist im Atari. Ihn zu retten kostet Züge; rechts kann Schwarz mit einem Zug einen großen sicheren Raum schließen.", "The lone stone on the left is in atari. Saving it costs moves; on the right, Black can close a large safe space with one move."), task: t("Spiele den wichtigeren Zug rechts.", "Play the more important move on the right."), success: t("Ein Stein ist nur ein Stein. Die größere Gruppe und ihr Raum sind wichtiger.", "One stone is only one stone. The larger group and its space matter more."), wrong: t("Der markierte Fluchtpunkt links rettet nur einen Stein. Suche den Abschluss rechts.", "The marked escape on the left saves only one stone. Find the closing move on the right.") },
+      { id: "bigger", kind: "play", size: 9, stones: [b(1, 1), w(0, 1), w(1, 0), w(2, 1), ...[4, 5, 6, 7, 8].flatMap((x) => [b(x, 4), b(x, 6)]), b(4, 5), b(8, 5), ...[3, 4, 5, 6, 7, 8].flatMap((x) => [w(x, 3), w(x, 7)]), w(3, 4), w(3, 5), w(3, 6)], toPlay: "black", targets: [p(6, 5)], emphasis: [p(1, 2), p(6, 5)], body: t("Der einzelne Stein links ist im Atari. Ihn zu retten kostet Züge; rechts braucht die große Gruppe zwei Augen.", "The lone stone on the left is in atari. Saving it costs moves; on the right, the large group needs two eyes."), task: t("Spiele den wichtigeren Zug rechts.", "Play the more important move on the right."), success: t("Ein Stein ist nur ein Stein. Die größere Gruppe und ihr Raum sind wichtiger.", "One stone is only one stone. The larger group and its space matter more."), wrong: t("Der markierte Fluchtpunkt links rettet nur einen Stein. Teile den Augenraum rechts.", "The marked escape on the left saves only one stone. Split the eye space on the right.") },
     ],
   },
   {
     id: "s3-challenge", stage: 3, minutes: 6, challenge: true, title: t("Life-&-Death-Challenge", "Life-and-death challenge"), steps: [
-      { id: "live", kind: "play", size: 5, stones: [b(0, 1), b(1, 1), b(2, 1), b(3, 1), b(4, 1), b(0, 2), b(4, 2), b(0, 3), b(1, 3), b(2, 3), b(3, 3), b(4, 3)], toPlay: "black", targets: [p(2, 2)], body: t("Bringe Schwarz zum Leben.", "Make Black live."), task: t("Finde den Zug für zwei Augen.", "Find the move for two eyes."), success: t("Zwei Augen.", "Two eyes."), wrong: t("Teile den Innenraum in der Mitte.", "Split the inner space in the middle.") },
-      { id: "kill", kind: "play", size: 5, stones: [b(0, 1), b(1, 1), b(2, 1), b(3, 1), b(4, 1), b(0, 2), b(4, 2), b(0, 3), b(1, 3), b(2, 3), b(3, 3), b(4, 3)], toPlay: "white", targets: [p(2, 2)], body: t("Töte die schwarze Form.", "Kill the black shape."), task: t("Besetze den vitalen Punkt.", "Take the vital point."), success: t("Schwarz kann keine zwei Augen mehr bilden.", "Black can no longer make two eyes."), wrong: t("Der vitale Punkt liegt in der Mitte.", "The vital point is in the middle.") },
+      { id: "live", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "black", targets: [p(3, 3)], body: t("Bringe Schwarz zum Leben.", "Make Black live."), task: t("Finde den Zug für zwei Augen.", "Find the move for two eyes."), success: t("Zwei Augen.", "Two eyes."), wrong: t("Teile den Innenraum in der Mitte.", "Split the inner space in the middle.") },
+      { id: "kill", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "white", targets: [p(3, 3)], body: t("Töte die schwarze Form.", "Kill the black shape."), task: t("Besetze den vitalen Punkt.", "Take the vital point."), success: t("Schwarz kann keine zwei Augen mehr bilden.", "Black can no longer make two eyes."), wrong: t("Der vitale Punkt liegt in der Mitte.", "The vital point is in the middle.") },
       { id: "false-eye", kind: "play", size: 5, stones: [b(2, 1), b(1, 2), b(3, 2), b(2, 3), w(2, 0), w(1, 1), w(3, 1)], toPlay: "white", targets: [p(2, 2)], body: t("Zerstöre das falsche Auge.", "Destroy the false eye."), task: t("Spiele Weiß.", "Play White."), success: t("Der diagonale Defekt lässt Weiß schlagen.", "The diagonal defect lets White capture."), wrong: t("Spiele auf den scheinbaren Augenpunkt.", "Play on the apparent eye point.") },
       { id: "connect", kind: "play", size: 5, stones: [b(1, 2), b(3, 2)], toPlay: "black", targets: [p(2, 2)], body: t("Verbinde die schwarzen Gruppen.", "Connect the black groups."), task: t("Spiele den Verbindungszug.", "Play the connecting move."), success: t("Eine Gruppe teilt alle Freiheiten.", "One group shares all liberties."), wrong: t("Spiele zwischen beide Steine.", "Play between the two stones.") },
       { id: "cut", kind: "play", size: 5, stones: [w(1, 2), w(3, 2)], toPlay: "black", targets: [p(2, 2)], body: t("Halte Weiß getrennt.", "Keep White separated."), task: t("Finde den Schnitt.", "Find the cut."), success: t("Weiß bleibt zwei Gruppen.", "White remains two groups."), wrong: t("Besetze die Lücke.", "Occupy the gap.") },
@@ -294,6 +310,9 @@ const LEARN_UI_COPY = {
     lessonsComplete: "{done} von {total} Lektionen abgeschlossen",
     continue: "Weiter",
     nextLesson: "Nächste Lektion",
+    continueLearning: "Weiterlernen",
+    nextStage: "Nächste Etappe",
+    stages: "Etappen",
     stage: "Etappe {stage}",
     complete: "Abgeschlossen",
     minutes: "{minutes} Min.",
@@ -321,16 +340,23 @@ const LEARN_UI_COPY = {
     suicideMove: "Dieser Zug wäre Selbstmord.",
     koImmediate: "Im Ko darfst du nicht sofort zurückschlagen.",
     captureLearned: "Du weißt jetzt, wie Steine geschlagen werden.",
-    openAreas: "Auf dem Brett gibt es noch offene Gebiete. Setze zuerst weitere Grenzen.",
+    openAreas: "Auf dem Brett gibt es noch offene Bereiche. Du kannst weiterspielen oder mit einem zweiten Tippen trotzdem passen.",
     bothPassed: "Beide haben gepasst. Markiere tote Gruppen; wenn keine tot ist, bestätige direkt.",
     invalidDead: "Diese Markierung liegt nicht vollständig im gegnerischen Gebiet. Markiere immer die ganze tote Gruppe – oder entferne die Markierung.",
     yourTurn: "Du bist am Zug",
     botTurn: "Bot zieht",
+    modelFailed: "Der Bot konnte keinen Zug berechnen. Versuche es erneut; deine Stellung bleibt erhalten.",
+    retryBot: "Botzug erneut berechnen",
+    neutralPoints: "Neutrale Bereiche",
+    resumeGame: "Weiterspielen",
+    reviewAtari: "Diese schwarze Gruppe hatte hier nur eine Freiheit. Weiß schlug im nächsten Zug {count} Steine.",
+    reviewConnection: "Auf {coordinate} konntest du diese {count} Gruppen verbinden. Eine davon hatte höchstens zwei Freiheiten.",
+    reviewCapture: "Hier hast du die letzte Freiheit genommen und {count} weiße Steine geschlagen.",
     markDead: "Tote Gruppen markieren",
     won: "Gewonnen",
     gameFinished: "Partie beendet",
     moves: "Züge",
-    settlementHelp: "Tippe eine besetzte Gruppe an, wenn sie tot ist. Tippe erneut, um die Markierung zu entfernen.",
+    settlementHelp: "Tippe auf tote Gruppen. Gehört ein freier Bereich keiner Seite, markiere darin einen Punkt unter ‚Neutrale Bereiche‘. Der Lernbot akzeptiert deine bestätigte Markierung.",
     confirmScore: "Markierung bestätigen und zählen",
     black: "Schwarz",
     white: "Weiß",
@@ -351,6 +377,9 @@ const LEARN_UI_COPY = {
     lessonsComplete: "{done} of {total} lessons complete",
     continue: "Continue",
     nextLesson: "Next lesson",
+    continueLearning: "Continue learning",
+    nextStage: "Next stage",
+    stages: "Stages",
     stage: "Stage {stage}",
     complete: "Complete",
     minutes: "{minutes} min",
@@ -378,16 +407,23 @@ const LEARN_UI_COPY = {
     suicideMove: "That move would be suicide.",
     koImmediate: "You may not recapture a ko immediately.",
     captureLearned: "You now know how stones are captured.",
-    openAreas: "There are still open areas on the board. Build more boundaries first.",
+    openAreas: "There are still open regions. You can keep playing or tap Pass again to pass anyway.",
     bothPassed: "Both players passed. Mark dead groups; if none are dead, confirm directly.",
     invalidDead: "That marking is not fully inside opposing territory. Mark the entire dead group—or remove the marking.",
     yourTurn: "Your turn",
     botTurn: "Bot to move",
+    modelFailed: "The bot could not calculate a move. Retry; your position is preserved.",
+    retryBot: "Retry bot move",
+    neutralPoints: "Neutral regions",
+    resumeGame: "Resume play",
+    reviewAtari: "This black group had only one liberty here. White captured {count} stones on the next move.",
+    reviewConnection: "At {coordinate} you could connect these {count} groups. One had at most two liberties.",
+    reviewCapture: "Here you took the last liberty and captured {count} white stones.",
     markDead: "Mark dead groups",
     won: "Won",
     gameFinished: "Game finished",
     moves: "moves",
-    settlementHelp: "Tap an occupied group if it is dead. Tap it again to remove the marking.",
+    settlementHelp: "Tap dead groups. If an empty region belongs to neither side, mark a point inside it under ‘Neutral regions’. The learning bot accepts your confirmed marking.",
     confirmScore: "Confirm and count",
     black: "Black",
     white: "White",
