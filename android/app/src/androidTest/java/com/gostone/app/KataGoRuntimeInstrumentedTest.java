@@ -78,7 +78,7 @@ public class KataGoRuntimeInstrumentedTest {
                 .put("komi", 6.5)
                 .put("boardXSize", 9)
                 .put("boardYSize", 9)
-                .put("maxVisits", 1)
+                .put("maxVisits", 2)
                 .put("analysisPVLen", 3)
                 .put("analyzeTurns", analyzeTurns);
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
@@ -98,20 +98,37 @@ public class KataGoRuntimeInstrumentedTest {
                     String line;
                     JSONObject result = null;
                     int results = 0;
+                    boolean initialPositionReady = false;
+                    boolean firstMoveReady = false;
+                    long firstReviewAt = 0;
                     StringBuilder diagnostics = new StringBuilder();
                     while (System.nanoTime() < deadline && (line = reader.readLine()) != null) {
                         diagnostics.append(line).append('\n');
                         if (!line.startsWith("{")) continue;
                         JSONObject candidate = new JSONObject(line);
                         if ("android-instrumentation".equals(candidate.optString("id"))) {
+                            if (candidate.getInt("turnNumber") < moves.length()) {
+                                assertTrue("Preview must contain a searched recommendation",
+                                    candidate.getJSONArray("moveInfos").length() > 0);
+                                assertTrue(candidate.getJSONArray("moveInfos").getJSONObject(0).has("move"));
+                            }
                             result = candidate;
                             results += 1;
+                            initialPositionReady |= candidate.getInt("turnNumber") == 0;
+                            firstMoveReady |= candidate.getInt("turnNumber") == 1;
+                            if (firstReviewAt == 0 && initialPositionReady && firstMoveReady) {
+                                firstReviewAt = System.nanoTime() - startedAt;
+                                android.util.Log.i("GoStonePreviewTest", "First usable recommendation: "
+                                    + TimeUnit.NANOSECONDS.toMillis(firstReviewAt) + "ms");
+                            }
                             if (results == analyzeTurns.length()) break;
                         }
                     }
                     assertTrue("No analysis result. KataGo output:\n" + diagnostics, result != null);
                     assertFalse(result.optString("error"), result.has("error"));
                     assertEquals(analyzeTurns.length(), results);
+                    assertTrue("First usable recommendation exceeded 15 seconds",
+                        firstReviewAt > 0 && firstReviewAt <= TimeUnit.SECONDS.toNanos(15));
                     assertTrue("Preview exceeded 35 seconds", System.nanoTime() - startedAt <= TimeUnit.SECONDS.toNanos(35));
                     assertTrue(result.getJSONObject("rootInfo").has("winrate"));
                     assertTrue(result.getJSONObject("rootInfo").has("scoreLead"));

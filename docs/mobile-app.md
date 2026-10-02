@@ -114,11 +114,18 @@ KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
 - **Android:** enabled locally with the Eigen CPU backend. It exposes start,
   progress and cancel and runs one analysis at a time. The verified engine is
   warmed once and retained between reviews instead of reloading the model for
-  every request. A one-visit, three-move-PV preview analyzes positions 0–10
+  every request. A two-visit, three-move-PV preview analyzes positions 0–10
   first, publishes them immediately, and continues in 16-position blocks with
   policy output disabled. Each usable block is persisted locally. Only the
   largest win-rate or score swings receive the adaptive 900-visit quality
-  budget. After 28 seconds the UI opens whatever contiguous preview is ready.
+  budget. After 10 seconds the UI opens whatever contiguous preview is ready
+  (or immediately when the first ten moves are ready). Two visits are the
+  minimal search that also visits a candidate move: the first review includes
+  an explicit best-move recommendation and a provisional move classification.
+  Low-evidence estimates cannot claim a verified blunder or brilliant move.
+  Root-only results are preserved as a fallback without fabricated candidates.
+  The cache key includes the preview budget to avoid reopening old root-only
+  reviews after this upgrade. Important moves receive the selective quality pass.
   The 90-second safety boundary returns usable work instead of replacing it
   with a generic failure. It stops at severe thermal pressure and never calls
   the server analysis route. The device test verifies actual multi-position

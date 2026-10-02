@@ -110,3 +110,53 @@ test("builds a usable contiguous review while later turns are still loading", ()
   assert.equal(partial?.moves[0].playedMove, "D4");
   assert.equal(buildProgressiveGameAnalysis(input, [turn(1)], { version: "test", model: "test", visitsPerTurn: 1 }), null);
 });
+
+test("accepts actual one-visit root-only mobile results without inventing recommendations", () => {
+  const input: AnalysisInput = {
+    contractVersion: 1,
+    gameId: "root-only-preview",
+    gameVersion: 50,
+    boardSize: 9,
+    komi: 6.5,
+    rules: "japanese",
+    moves: [{ color: "black", move: "G3" }],
+  };
+  // Captured from the API-36 engine that triggered the regression: maxVisits=1
+  // legitimately returns a root evaluation with no visited child moves.
+  const turns: KataGoTurnResult[] = [
+    {
+      turnNumber: 1,
+      rootInfo: { currentPlayer: "W", visits: 1, winrate: 0.905167356, scoreLead: 1.50781643 },
+      moveInfos: [],
+    },
+    {
+      turnNumber: 0,
+      rootInfo: { currentPlayer: "B", visits: 1, winrate: 0.260774001, scoreLead: -0.610248089 },
+      moveInfos: [],
+    },
+  ];
+  const engine = { version: "v1.18.2", model: "b10c384h6nbttflrs", visitsPerTurn: 1 };
+  const result = buildProgressiveGameAnalysis(input, turns, engine, undefined, { allowRootOnly: true });
+  assert.equal(result?.moves.length, 1);
+  const move = result!.moves[0];
+  assert.equal(move.winrateAfter, 1 - turns[0].rootInfo.winrate);
+  assert.equal(move.scoreLeadAfter, -turns[0].rootInfo.scoreLead);
+  assert.equal(move.bestMove, null);
+  assert.equal(move.classification, null);
+  assert.equal(move.winrateLoss, null);
+  assert.equal(move.scoreLoss, null);
+  assert.deepEqual(move.alternatives, []);
+  assert.equal(Object.values(result!.summary).reduce((sum, count) => sum + count, 0), 0);
+  assert.match(move.explanation.de, /noch keine geprüfte/);
+  // Server analyses keep their existing searched-candidate requirement.
+  assert.throws(() => buildGameAnalysis(input, turns, engine), /complete result for move 1/);
+
+  turns[1] = {
+    ...turns[1],
+    rootInfo: { ...turns[1].rootInfo, visits: 20 },
+    moveInfos: [{ move: "C3", order: 0, visits: 19, winrate: 0.5, scoreLead: 0, pv: ["C3", "G7"] }],
+  };
+  const refined = buildProgressiveGameAnalysis(input, turns, engine, undefined, { allowRootOnly: true });
+  assert.equal(refined?.moves[0].bestMove, "C3");
+  assert.notEqual(refined?.moves[0].classification, null);
+});

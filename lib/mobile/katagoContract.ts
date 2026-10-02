@@ -10,6 +10,7 @@ export const MOBILE_KATAGO = Object.freeze({
   modelBytes: 38_245_488,
   modelSha256: "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229" as const,
   defaultVisitsPerTurn: 20,
+  previewVisits: 2,
   maximumVisitsPerTurn: 80,
 });
 

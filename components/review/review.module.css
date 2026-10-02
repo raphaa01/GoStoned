@@ -90,6 +90,9 @@
 .moveStrip small { color: var(--color-text-subtle); }
 .moveStrip span { grid-column: 1 / -1; overflow: hidden; font-size: .68rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .coachCard { display: none; }
+.nativeRecommendation { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-top: 5px; color: var(--color-ink-soft); font-size: .8rem; }
+.nativeRecommendation strong { margin-left: 5px; }
+.nativeRecommendation small { color: var(--color-text-muted); font-size: .7rem; }
 .reviewStatus { display: grid; min-height: min(620px, calc(100vh - 80px)); place-content: center; justify-items: center; gap: 12px; padding: 30px; color: var(--color-ink-soft); text-align: center; }
 .reviewStatus h1 { margin: 4px 0; font-size: clamp(1.7rem, 4vw, 3rem); }
 .reviewStatus p { color: var(--color-text-muted); }
