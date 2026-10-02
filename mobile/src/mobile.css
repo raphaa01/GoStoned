@@ -121,6 +121,9 @@ html[data-mobile-app="true"] textarea { touch-action: manipulation; }
 html[data-mobile-app="true"] button,
 html[data-mobile-app="true"] a { min-height: 44px; }
 
+/* Grid intersections use square, non-overlapping targets, not toolbar sizing. */
+html[data-mobile-app="true"] .interactive-learn-board__point { min-height: 0; min-width: 0; }
+
 .mobile-app-shell { min-height: calc(100dvh - var(--mobile-safe-top)); }
 
 .mobile-app-content {

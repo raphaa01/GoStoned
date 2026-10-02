@@ -55,7 +55,8 @@ function InteractiveLearnBoardComponent({
   const groupKeys = useMemo(() => keys(group), [group]);
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(0);
-  const inset = size >= 9 ? 5.2 : 9;
+  // Half a grid interval at each edge leaves room for full-size corner stones.
+  const inset = 50 / size;
   const span = 100 - inset * 2;
   const position = (value: number) => `${inset + (value / (size - 1)) * span}%`;
   const coordinate = (x: number, y: number) => `${GO_COLUMNS[x] ?? "?"}${size - y}`;
@@ -73,7 +74,7 @@ function InteractiveLearnBoardComponent({
         style={{
           "--learn-board-inset": `${inset}%`,
           "--learn-board-span": `${span}%`,
-          "--learn-board-point": `${Math.min(13.5, (span / (size - 1)) * 0.92)}%`,
+          "--learn-board-point": `${span / (size - 1)}%`,
         } as CSSProperties}
       >
         <div aria-hidden="true" className="interactive-learn-board__grid">

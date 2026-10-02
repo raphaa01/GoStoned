@@ -35,6 +35,28 @@ async function readAccountProgress(page: Page): Promise<{progress:LearnProgress 
   });
 }
 
+async function verifyBoardGeometry(page: Page) {
+  const metrics = await page.locator(".interactive-learn-board").evaluate((board) => {
+    const gridLines = board.querySelectorAll(".is-vertical");
+    const spacing = gridLines[1].getBoundingClientRect().x - gridLines[0].getBoundingClientRect().x;
+    const bounds = board.getBoundingClientRect();
+    return {
+      spacing,
+      hitWidth: board.querySelector(".interactive-learn-board__point")!.getBoundingClientRect().width,
+      stones: Array.from(board.querySelectorAll(".interactive-learn-board__stone"), (stone) => {
+        const box = stone.getBoundingClientRect();
+        return { width: box.width, height: box.height, inside: box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom };
+      }),
+    };
+  });
+  assert.ok(Math.abs(metrics.hitWidth / metrics.spacing - 1) < 0.02, "Touch targets must fill one grid interval without overlapping");
+  for (const stone of metrics.stones) {
+    assert.ok(stone.width / metrics.spacing > 0.9 && stone.width / metrics.spacing < 0.94, "Stone diameter must be 92% of grid spacing, including small teaching boards");
+    assert.ok(Math.abs(stone.width - stone.height) < 1, "Stones must stay round");
+    assert.ok(stone.inside, "Corner and edge stones must not be clipped");
+  }
+}
+
 function captureCandidate(board: Board): Position | null {
   const position = createLearnGame(board.length);
   const black = {...position, board};
@@ -99,6 +121,11 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
   for (const [index, step] of lesson.steps.entries()) {
     await expect(page.getByRole("heading", {name:line(lesson.title,"de"),exact:true})).toBeVisible();
     const advance = page.getByRole("button", {name:index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact:true});
+    const gameStep = step.kind.endsWith("game");
+    const notice = page.locator(".learn-player__step-mode");
+    await expect(notice).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
+    await expect(notice.locator("strong")).toHaveText(step.kind === "info" ? "Erklärung" : gameStep ? "Partie" : "Du bist dran");
+    if (step.size || gameStep) await verifyBoardGeometry(page);
     if (step.kind === "capture-game" || step.kind === "guided-game" || step.kind === "beginner-game") {
       await playGame(page, step.kind === "capture-game");
     } else if (step.kind === "pass") {
@@ -122,6 +149,12 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
         await page.getByRole("gridcell").nth(targets[0].y * step.size! + targets[0].x).click();
         await expect(advance).toBeEnabled();
       }
+    }
+    if (step.kind === "info") {
+      await expect(page.locator('.interactive-learn-board__point[aria-disabled="false"]')).toHaveCount(0);
+    } else {
+      await expect(notice).toHaveAttribute("data-mode", "solved");
+      await expect(notice.locator("strong")).toHaveText("Erledigt");
     }
     await expect(advance).toBeEnabled();
     await advance.click();
@@ -217,6 +250,26 @@ async function run() {
         const box = await page.locator(".learn-next-dock").boundingBox();
         assert.ok(box && box.y+box.height <= 844-(mobile ? width===390 ? 49:64:0), "Lesson button overlaps navigation");
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-${width}-${colorScheme}.png`});
+        await page.getByRole("button",{name:"Schlagen 4 Min.",exact:true}).click();
+        await expect(page.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+        await verifyBoardGeometry(page);
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth), "Lesson or task notice overflows horizontally");
+        await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-capture-${width}-${colorScheme}.png`,fullPage:true});
+        await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
+        if (width === 390) {
+          await page.getByRole("button",{name:"Gruppen 3 Min.",exact:true}).click();
+          await expect(page.locator('.learn-player__step-mode[data-mode="info"]')).toBeVisible();
+          await expect(page.getByRole("button",{name:"Weiter",exact:true})).toBeEnabled();
+          await verifyBoardGeometry(page);
+          await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-explanation-${colorScheme}.png`,fullPage:true});
+          await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
+        }
+        await page.getByRole("button",{name:"Etappen",exact:true}).click();
+        await page.getByRole("button").filter({hasText:"Deine erste Go-Partie"}).click();
+        await page.getByRole("button",{name:"Worum geht es? 3 Min.",exact:true}).click();
+        await verifyBoardGeometry(page);
+        await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-9x9-${width}-${colorScheme}.png`,fullPage:true});
+        await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         await page.getByRole("button",{name:"Etappen",exact:true}).click();
       }
     }
