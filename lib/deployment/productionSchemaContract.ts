@@ -15,6 +15,8 @@ export type ProductionSchemaSnapshot = Readonly<{
   analysisProgressDataType: string | null;
   analysisProgressConstraint: string | null;
   takebackRls: boolean;
+  learnProgressRls: boolean;
+  learnProgressWritable: boolean;
 }>;
 
 function requireFragment(
@@ -30,6 +32,9 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (!snapshot.learnProgressRls || !snapshot.learnProgressWritable) {
+    throw new Error("Production database schema is stale: learning progress storage or server permissions.");
+  }
   if (snapshot.analysisProgressDataType !== "jsonb") {
     throw new Error(
       "Production database schema is stale: progressive analysis column.",

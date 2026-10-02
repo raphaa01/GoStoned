@@ -61,6 +61,13 @@ function requestId(kind: string): string {
   return `${kind}:${crypto.randomUUID()}`;
 }
 
+export async function generateCaptureGoMove(position: import("@/lib/learn/lessonEngine").LearnGamePosition) {
+  const response = await requestWorker({ id: requestId("capture-go"), kind: "capture-go", position });
+  if (!response.ok) throw new Error(response.error);
+  if (response.kind !== "capture-go") throw new Error("The bot worker returned the wrong response type.");
+  return response.point;
+}
+
 export async function generateBrowserBotMove(
   position: GoStoneBotPosition,
 ): Promise<GoStoneBotMove> {

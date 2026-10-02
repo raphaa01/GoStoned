@@ -135,6 +135,18 @@ html[data-mobile-app="true"] a { min-height: 44px; }
   padding-bottom: calc(var(--mobile-tab-height) + var(--mobile-play-height) + var(--mobile-safe-bottom) + 22px);
 }
 
+/* The lesson action stays above Android's web tabs and iOS's native tabs. */
+.mobile-learn-screen .learn-next-dock {
+  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom));
+  max-width: var(--mobile-content-max);
+  padding: 10px 0;
+  width: calc(100% - var(--mobile-page-inline) - var(--mobile-page-inline));
+  z-index: 70;
+}
+.mobile-learn-screen .learn-experience { padding-top: 0; }
+.mobile-learn-screen .learn-overview__header h1 { font-size: clamp(28px, 7.8vw, 38px); }
+.mobile-learn-screen .learn-player__heading { padding-block: 18px 14px; }
+
 .mobile-tab-bar {
   align-items: stretch;
   background: var(--mobile-nav);

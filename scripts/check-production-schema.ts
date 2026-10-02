@@ -20,6 +20,8 @@ type SchemaRow = {
   analysis_progress_data_type: string | null;
   analysis_progress_constraint: string | null;
   takeback_rls: boolean;
+  learn_progress_rls: boolean;
+  learn_progress_writable: boolean;
 };
 
 async function checkProductionSchema(): Promise<void> {
@@ -104,7 +106,14 @@ async function checkProductionSchema(): Promise<void> {
           WHERE namespace.nspname = 'public'
             AND relation.relname = 'game_takeback_requests'
             AND relation.relrowsecurity
-       ) AS takeback_rls`,
+       ) AS takeback_rls,
+       EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass('public.learn_progress') AND relrowsecurity) AS learn_progress_rls,
+       COALESCE(
+         has_table_privilege(current_user, to_regclass('public.learn_progress'), 'SELECT')
+         AND has_table_privilege(current_user, to_regclass('public.learn_progress'), 'INSERT')
+         AND has_table_privilege(current_user, to_regclass('public.learn_progress'), 'UPDATE'),
+         false
+       ) AS learn_progress_writable`,
   );
 
   const row = result.rows[0];
@@ -127,6 +136,8 @@ async function checkProductionSchema(): Promise<void> {
     analysisProgressDataType: row.analysis_progress_data_type,
     analysisProgressConstraint: row.analysis_progress_constraint,
     takebackRls: row.takeback_rls,
+    learnProgressRls: row.learn_progress_rls,
+    learnProgressWritable: row.learn_progress_writable,
   });
 
   // The migration ledger is intentionally hidden by RLS from the runtime role.

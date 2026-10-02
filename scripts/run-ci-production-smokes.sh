@@ -295,3 +295,4 @@ npm run test:auth
 npm run test:live
 npm run test:clock
 npm run test:scoring-races
+npm run test:learn-browser

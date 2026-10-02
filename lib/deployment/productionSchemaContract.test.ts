@@ -33,10 +33,18 @@ const currentSnapshot: ProductionSchemaSnapshot = {
   analysisProgressConstraint:
     "CHECK (status = 'running' AND (result IS NULL OR progress IS NOT NULL))",
   takebackRls: true,
+  learnProgressRls: true,
+  learnProgressWritable: true,
 };
 
 test("accepts the current Japanese matchmaking schema", () => {
   assert.doesNotThrow(() => validateProductionSchemaContract(currentSnapshot));
+});
+
+test("rejects missing or inaccessible learning progress storage before deployment", () => {
+  assert.throws(() => validateProductionSchemaContract({...currentSnapshot, learnProgressRls:false}), /learning progress/);
+  assert.throws(() => validateProductionSchemaContract({...currentSnapshot, learnProgressWritable:false}), /learning progress/);
+  assert.match(productionPreflight, /learn_progress/);
 });
 
 test("rejects the old Chinese-only queue profile constraint", () => {
