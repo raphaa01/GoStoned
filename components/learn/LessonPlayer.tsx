@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, Check, Lightbulb, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { boardHash } from "@/lib/game/goEngine";
 import type { Board, Position } from "@/lib/game/types";
 import { formatLearn, learnUiCopy, line, type LearnLesson } from "@/lib/learn/curriculum";
@@ -47,6 +47,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   while (safeInitial > 0 && lesson.steps[safeInitial].continuePosition) safeInitial -= 1;
   const [stepIndex, setStepIndex] = useState(safeInitial);
   const [position, setPosition] = useState<LearnGamePosition | null>(() => positionForStep(lesson, safeInitial));
+  const stepStart = useRef(position);
   const [selected, setSelected] = useState<Position[]>([]);
   const [solved, setSolved] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -56,7 +57,10 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const step = lesson.steps[stepIndex];
 
   const resetStep = (nextIndex = stepIndex, previous?: LearnGamePosition | null) => {
-    setPosition(positionForStep(lesson, nextIndex, previous));
+    const nextPosition = nextIndex === stepIndex && previous === undefined
+      ? stepStart.current : positionForStep(lesson, nextIndex, previous);
+    stepStart.current = nextPosition;
+    setPosition(nextPosition);
     setSelected([]);
     setSolved(false);
     setFeedback(null);

@@ -96,6 +96,14 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
         : [{x: index === 1 ? 2 : index === 2 ? 3 : 1, y:2}];
       for (const target of targets) await page.getByRole("gridcell").nth(target.y * step.size! + target.x).click();
       await expect(advance).toBeEnabled();
+      if (lesson.id === "s1-board" && index === 2) {
+        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(2);
+        await page.getByRole("button", {name:"Neu starten",exact:true}).click();
+        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(1);
+        await expect(advance).toBeDisabled();
+        await page.getByRole("gridcell").nth(targets[0].y * step.size! + targets[0].x).click();
+        await expect(advance).toBeEnabled();
+      }
     }
     await expect(advance).toBeEnabled();
     await advance.click();
