@@ -3,6 +3,7 @@ import { chromium, expect, type Page } from "@playwright/test";
 import { LEARN_LESSONS, line, type LearnLesson } from "../lib/learn/curriculum";
 import { allGroups, chooseLearnBotMove, createLearnGame, groupLiberties, legalLearnMoves, playLearnMove, withLearnTurn } from "../lib/learn/lessonEngine";
 import type { Board, Position } from "../lib/game/types";
+import { boardHash } from "../lib/game/goEngine";
 import { scoreLearnGame } from "../lib/learn/gameScoring";
 import "dotenv/config";
 import { closePool, getPool } from "../lib/db";
@@ -54,6 +55,7 @@ function captureCandidate(board: Board): Position | null {
 }
 
 async function playGame(page: Page, capture: boolean) {
+  let previousBlackBoard: Board | null = null;
   for (let turn = 0; turn < 220; turn++) {
     const finish = page.getByRole("button", {name: "Lektion abschließen", exact: true});
     if (await finish.isEnabled()) return;
@@ -66,13 +68,19 @@ async function playGame(page: Page, capture: boolean) {
     await expect(page.locator(".learn-game__status strong")).toHaveText("Du bist am Zug", {timeout: 30_000});
     const board = await readBoard(page);
     const occupied = board.flat().filter(Boolean).length;
-    const black = withLearnTurn({...createLearnGame(board.length), board}, "black");
+    const black = withLearnTurn({...createLearnGame(board.length), board,
+      history:previousBlackBoard ? [boardHash(previousBlackBoard),boardHash(board)] : [boardHash(board)],
+    }, "black");
     const point = capture ? captureCandidate(board) : chooseLearnBotMove(black);
     if ((!point || turn > 90 || occupied > 62) && !capture) {
+      previousBlackBoard = board;
       await page.getByRole("button", {name: "Passen", exact: true}).click();
       if (await page.getByText(/Auf dem Brett gibt es noch offene Bereiche/).count()) await page.getByRole("button", {name: "Passen", exact: true}).click();
     } else {
       assert.ok(point, "Capture challenge has no safe continuation");
+      const played = playLearnMove(black,point);
+      assert.ok(played.ok,"The verification player must also respect ko");
+      previousBlackBoard = played.position.board;
       await page.getByRole("gridcell").nth(point.y * board.length + point.x).click();
     }
     await expect.poll(async () => (await page.locator(".learn-game__status strong").innerText()) !== "Bot zieht" || await page.getByRole("button", {name:"Botzug erneut berechnen"}).count() > 0, {timeout:30_000}).toBeTruthy();
