@@ -24,6 +24,16 @@ async function readBoard(page: Page): Promise<Board> {
   return board;
 }
 
+async function readAccountProgress(page: Page): Promise<{progress:LearnProgress | null}> {
+  // Use the real browser's cookie rules: Chromium trusts HTTP loopback, while
+  // Playwright's Node request cookie jar only exempts the "localhost" hostname.
+  return page.evaluate(async () => {
+    const response = await fetch("/api/learn/progress",{cache:"no-store"});
+    if (!response.ok) throw new Error(`Account progress returned ${response.status}`);
+    return response.json();
+  });
+}
+
 function captureCandidate(board: Board): Position | null {
   const position = createLearnGame(board.length);
   const black = {...position, board};
@@ -168,14 +178,21 @@ async function run() {
       await expect(page.getByText("12 von 12 Lektionen abgeschlossen",{exact:true})).toBeVisible();
       await expect.poll(async () => {
         if (mobile) return mobileProgress?.completedLessonIds.length;
-        const response = await context.request.get(`${baseUrl}/api/learn/progress`);
-        return (await response.json()).progress?.completedLessonIds.length;
+        return (await readAccountProgress(page)).progress?.completedLessonIds.length;
       }).toBe(31);
       await page.reload();
       await expect(page.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
-      const body = mobile ? {progress:mobileProgress!} : await (await context.request.get(`${baseUrl}/api/learn/progress`)).json();
-      assert.equal(body.progress.completedLessonIds.length,31);
-      assert.deepEqual(body.progress.completedStages,[1,2,3]);
+      const body = mobile ? {progress:mobileProgress!} : await readAccountProgress(page);
+      assert.equal(body.progress?.completedLessonIds.length,31);
+      assert.deepEqual(body.progress?.completedStages,[1,2,3]);
+      if (!mobile) {
+        const freshDevice = await browser.newContext({viewport:{width:390,height:844},storageState:{cookies:await context.cookies(),origins:[]}});
+        const freshPage = await freshDevice.newPage();
+        await freshPage.goto(`${baseUrl}/de/learn`);
+        await expect(freshPage.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
+        assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,31);
+        await freshDevice.close();
+      }
       await page.getByRole("button").filter({hasText:"Deine ersten Steine"}).click();
       await page.getByRole("button", {name:"Das Go-Brett 2 Min.", exact:true}).click();
       await expect(page.getByRole("heading", {name:"Das Go-Brett", exact:true})).toBeVisible();
