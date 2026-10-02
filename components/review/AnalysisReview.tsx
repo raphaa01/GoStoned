@@ -44,7 +44,10 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
 
   const load = useCallback(async (method: "GET" | "POST" = "GET") => {
     if (!user) return;
-    if (method === "POST") setRequesting(true);
+    if (method === "POST") {
+      setRequesting(true);
+      setError(null);
+    }
     try {
       if (nativeAnalysis) {
         const response = await fetch(`/api/games/${gameId}`, {
@@ -142,7 +145,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
           <button
             className="button button--primary"
             disabled={requesting}
-            onClick={() => void load(analysis ? "GET" : "POST")}
+            onClick={() => void load(nativeAnalysis ? "POST" : analysis ? "GET" : "POST")}
             type="button"
           >
             {requesting ? <LoaderCircle className={styles.spin} size={17} /> : <RotateCcw size={17} />}
@@ -181,7 +184,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         <section className={styles.reviewStatus}>
           <h1>{copy.readyTitle}</h1>
           <p>{copy.readyDetails.replaceAll("{moves}", String(game.moveCount))}</p>
-          <p className={styles.analysisNote}>{copy.startNote}</p>
+          <p className={styles.analysisNote}>{nativeAnalysis ? progressiveCopy.startNote : copy.startNote}</p>
           <button className="button button--primary button--lg" disabled={requesting} onClick={() => void load("POST")} type="button">
             {requesting ? <LoaderCircle className={styles.spin} size={18} /> : null}{copy.start}
           </button>
@@ -204,17 +207,23 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
               <i aria-hidden="true"><b style={{ width: `${Math.min(100, ((progress.phase === "quality" ? progress.refinedMoves : progress.completedMoves) / Math.max(1, progress.totalMoves)) * 100)}%` }} /></i>
             </section>
           ) : null}
-          <section className={`${styles.coachCard} ${styles[current.classification]}`}>
+          <section className={`${styles.coachCard} ${current.classification ? styles[current.classification] : ""}`}>
             <div className={styles.coachCardHeading}>
-              <span>{copy.classifications[current.classification]}</span>
+              <span>{current.classification ? copy.classifications[current.classification] : progressiveCopy.preview}</span>
               <strong>{current.playedMove}</strong>
             </div>
+            {nativeAnalysis && current.bestMove ? (
+              <div className={styles.nativeRecommendation}>
+                <span>{progressiveCopy.bestMove} <strong>{current.bestMove}</strong></span>
+                {current.provisional ? <small>{progressiveCopy.provisional}</small> : null}
+              </div>
+            ) : null}
             <span className={styles.coachCardLabel}>{copy.explanation}</span>
             <p>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
           </section>
 
           <section className={styles.boardPanel}>
-            <AnalysisBoard board={board} bestMove={current.bestMove} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
+            <AnalysisBoard board={board} bestMove={current.bestMove ?? undefined} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
             <div className={styles.moveControls}>
               <button aria-label={`${copy.previous} · 1`} disabled={selectedMove <= 1} onClick={() => setSelectedMove(1)} type="button"><ChevronsLeft /></button>
               <button aria-label={copy.previous} disabled={selectedMove <= 1} onClick={() => setSelectedMove((move) => Math.max(1, move - 1))} type="button"><ArrowLeft /></button>
@@ -225,13 +234,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             <input aria-label={copy.move} className={styles.moveSlider} max={result.moves.length} min="1" onChange={(event) => setSelectedMove(Number(event.target.value))} type="range" value={selectedMove} />
             <nav aria-label={copy.movesLabel} className={styles.moveStrip}>
               {result.moves.map((move) => (
-                <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} className={styles[move.classification]} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button"><small>{move.moveNumber}</small><strong>{move.playedMove}</strong><span>{copy.classifications[move.classification]}</span></button>
+                <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} className={move.classification ? styles[move.classification] : undefined} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button"><small>{move.moveNumber}</small><strong>{move.playedMove}</strong><span>{move.classification ? copy.classifications[move.classification] : progressiveCopy.preview}</span></button>
               ))}
             </nav>
           </section>
 
           <aside className={styles.insightPanel}>
-            <div className={`${styles.classification} ${styles[current.classification]}`}><span>{copy.classifications[current.classification]}</span><strong>{current.playedMove}</strong></div>
+            <div className={`${styles.classification} ${current.classification ? styles[current.classification] : ""}`}><span>{current.classification ? copy.classifications[current.classification] : progressiveCopy.preview}</span><strong>{current.playedMove}</strong></div>
             <div className={styles.explanationBlock}>
               <span>{copy.explanation}</span>
               <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
@@ -252,6 +261,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             </div>
             <section className={styles.alternatives}>
               <h2>{copy.alternatives}</h2>
+              {current.alternatives.length === 0 ? <p>{progressiveCopy.noAlternatives}</p> : null}
               {current.alternatives.map((alternative, index) => (
                 <article key={`${current.moveNumber}:${alternative.move}`}>
                   <span>{index + 1}</span><strong>{alternative.move}</strong>

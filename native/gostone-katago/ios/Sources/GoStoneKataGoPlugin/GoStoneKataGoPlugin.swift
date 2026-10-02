@@ -8,7 +8,8 @@ import GoStoneKataGoCore
 
 private let engineVersion = "v1.18.2"
 private let modelSha256 = "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229"
-private let previewVisits = 1
+// One visit evaluates only the root. Two also search a candidate move.
+private let previewVisits = 2
 private let previewPVLength = 3
 private let qualityPVLength = 12
 private let initialPreviewPositions = 11

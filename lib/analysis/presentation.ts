@@ -97,6 +97,7 @@ function kyrgyzShape(move: string, shape: MoveShape): string {
 }
 
 export function moveExplanation(move: MoveAnalysis, boardBefore: Board, size: BoardSize, locale: Locale): string {
+  if (move.bestMove === null) return move.explanation[locale] ?? move.explanation.en;
   if (locale !== "de" && locale !== "en" && locale !== "ky") return move.explanation[locale] ?? move.explanation.en;
   const played = moveShape(boardBefore, size, move.color, move.playedMove);
   const best = moveShape(boardBefore, size, move.color, move.bestMove);

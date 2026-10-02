@@ -57,3 +57,9 @@ test("builds a Kyrgyz board explanation for newly localized reviews", () => {
   assert.match(explanation, /KataGo C3 жүрүшүн сунуштайт/);
   assert.doesNotMatch(explanation, /20\.0|3\.5/);
 });
+
+test("root-only previews never claim that an unsearched move is KataGo's recommendation", () => {
+  const preview = move({ bestMove: null, classification: null, alternatives: [], winrateLoss: null, scoreLoss: null });
+  assert.equal(moveExplanation(preview, createEmptyBoard(9), 9, "de"), preview.explanation.de);
+  assert.equal(moveExplanation(preview, createEmptyBoard(9), 9, "en"), preview.explanation.en);
+});

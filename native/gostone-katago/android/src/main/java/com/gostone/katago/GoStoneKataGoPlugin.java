@@ -43,7 +43,8 @@ public class GoStoneKataGoPlugin extends Plugin {
     private static final int MAX_VISITS = 80;
     private static final int MAX_MOVES = 1_000;
     private static final int TOTAL_VISIT_BUDGET = 900;
-    private static final int PREVIEW_VISITS = 1;
+    // One visit evaluates only the root. Two also search a candidate move.
+    private static final int PREVIEW_VISITS = 2;
     private static final int PREVIEW_PV_LENGTH = 3;
     private static final int QUALITY_PV_LENGTH = 12;
     private static final int INITIAL_PREVIEW_POSITIONS = 11;
