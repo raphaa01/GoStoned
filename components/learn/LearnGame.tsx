@@ -10,6 +10,7 @@ import { formatLearn, learnUiCopy } from "@/lib/learn/curriculum";
 import { allGroups, createLearnGame, groupLiberties, passLearnMove, playLearnMove, pointKey, storedLearnMoves, learnReviewMoments, type LearnGamePosition } from "@/lib/learn/lessonEngine";
 import type { scoreLearnGame } from "@/lib/learn/gameScoring";
 import { InteractiveLearnBoard } from "./InteractiveLearnBoard";
+import { LearnTeacher } from "./LearnTeacher";
 
 type LearnGameProps = Readonly<{
   mode: "capture" | "guided" | "beginner";
@@ -207,12 +208,12 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
         blackTerritory={review ? [] : result?.blackTerritory}
         whiteTerritory={review ? [] : result?.whiteTerritory}
       />
-      {message ? <p className="learn-game__message" role="status">{message}</p> : null}
+      {message ? <LearnTeacher announce><p className="learn-game__message">{message}</p></LearnTeacher> : null}
       {botFailed ? <button className="button button--secondary" onClick={() => setRetry((current) => current + 1)} type="button">{copy.retryBot}</button> : null}
       {phase === "playing" && mode !== "capture" ? <div className="learn-game__actions"><button className="button button--secondary" onClick={pass} disabled={position.turn !== "black"} type="button">{copy.pass}</button></div> : null}
       {phase === "scoring" ? (
         <div className="learn-game__settlement">
-          <p>{copy.settlementHelp}</p>
+          <LearnTeacher><p>{copy.settlementHelp}</p></LearnTeacher>
           <div className="learn-game__actions">
             <button aria-pressed={marking === "dead"} className="button button--secondary" onClick={() => setMarking("dead")} type="button">{copy.markDead}</button>
             <button aria-pressed={marking === "neutral"} className="button button--secondary" onClick={() => setMarking("neutral")} type="button">{copy.neutralPoints}</button>
@@ -224,7 +225,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
       {score ? <div className="learn-game__score"><span><small>{copy.black}</small><strong>{score.blackTotal}</strong></span><span><small>{copy.whiteWithKomi}</small><strong>{score.whiteTotal}</strong></span><p>{resultText}</p></div> : null}
       {review ? <div className="learn-game__review">
         <strong>{formatLearn(copy.learningMoment, { current: reviewIndex + 1, total: reviews.length })}</strong>
-        <p>{formatLearn(copy[review.kind], { count: review.count, coordinate: review.coordinate })}</p>
+        <LearnTeacher><p>{formatLearn(copy[review.kind], { count: review.count, coordinate: review.coordinate })}</p></LearnTeacher>
         {reviews.length > 1 ? <button className="button button--secondary" onClick={() => setReviewIndex((current) => (current + 1) % reviews.length)} type="button">{copy.nextMoment}</button> : null}
       </div> : null}
       {mode === "capture" && winner !== "black" ? <button className="learn-text-button" onClick={reset} type="button"><RotateCcw aria-hidden="true" size={16} /> {copy.tryAgain}</button> : null}

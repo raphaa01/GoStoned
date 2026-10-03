@@ -10453,6 +10453,41 @@ body {
 .learn-player__step-mode[data-mode="action"] > span:first-child,
 .learn-player__step-mode[data-mode="solved"] > span:first-child,
 .learn-player__step-mode[data-mode="game"] > span:first-child { color: var(--color-moss-strong); }
+.learn-teacher { align-items: flex-start; display: flex; gap: 12px; min-width: 0; }
+.learn-teacher__avatar { flex: 0 0 48px; height: 54px; margin-top: 10px; width: 48px; }
+.learn-teacher__speech {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line-strong);
+  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 13px 15px;
+  position: relative;
+}
+.learn-teacher__speech::before {
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-line-strong);
+  border-left: 1px solid var(--color-line-strong);
+  content: "";
+  height: 9px;
+  left: -6px;
+  position: absolute;
+  top: 26px;
+  transform: rotate(45deg);
+  width: 9px;
+}
+.learn-teacher__speech p { color: var(--color-ink-soft); font-size: 14px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.learn-teacher__task { display: block; font-size: 14px; font-weight: 680; line-height: 1.5; margin-top: 7px; }
+.learn-teacher__speech .learn-player__feedback { border: 0; padding: 0; }
+.learn-teacher__speech .learn-player__feedback:not(:first-child) { border-top: 1px solid var(--color-line); margin-top: 10px; padding-top: 9px; }
+.learn-teacher__speech .learn-player__hint { border-top: 1px solid var(--color-line); font-size: 12px; margin-top: 10px; padding-top: 9px; }
+.learn-teacher[data-tone="correction"] .learn-player__feedback p { color: var(--color-oxide); }
+.learn-teacher[data-tone="success"] .learn-player__feedback p { color: var(--color-moss-strong); }
+@media (max-width: 370px) {
+  .learn-teacher { gap: 9px; }
+  .learn-teacher__avatar { flex-basis: 40px; height: 46px; width: 40px; }
+  .learn-teacher__speech { padding: 11px 12px; }
+}
 
 .learn-player__workspace {
   align-items: start;

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { boardHash } from "@/lib/game/goEngine";
 import type { Board, Position } from "@/lib/game/types";
 import { formatLearn, learnUiCopy, line, type LearnLesson } from "@/lib/learn/curriculum";
+import { lessonBoardPresentation } from "@/lib/learn/presentation";
 import {
   boardFromStones,
   createLearnGame,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/learn/lessonEngine";
 import { LearnGame } from "./LearnGame";
 import { InteractiveLearnBoard } from "./InteractiveLearnBoard";
+import { LearnTeacher } from "./LearnTeacher";
 
 type LessonPlayerProps = Readonly<{
   lesson: LearnLesson;
@@ -143,8 +145,9 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
 
   const canAdvance = step.kind === "info" || solved;
   const stepProgress = ((stepIndex + Number(solved || step.kind === "info")) / lesson.steps.length) * 100;
-  const revealTargets = wrong || hint;
-  const shownEmphasis = revealTargets ? [...(step.emphasis ?? []), ...targets] : (step.emphasis ?? []);
+  const presentation = lessonBoardPresentation(step, {
+    solved, wrong, hint, lastMove: position?.moves.at(-1)?.position ?? null,
+  });
   const boardInteraction = step.kind === "select" ? step.selectFrom ?? "any" : "empty";
 
   const gameMode = step.kind === "capture-game" ? "capture"
@@ -174,8 +177,18 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
           </span>
           <span>{modeHelp}</span>
         </div>
-        <p>{line(step.body, locale)}</p>
-        {step.task ? <strong>{line(step.task, locale)}</strong> : null}
+        <LearnTeacher tone={wrong ? "correction" : solved ? "success" : "neutral"}>
+          {!solved ? <>
+            <p>{line(step.body, locale)}</p>
+            {step.task ? <strong className="learn-teacher__task">{line(step.task, locale)}</strong> : null}
+          </> : null}
+          {feedback ? (
+            <div aria-live="polite" className={`learn-player__feedback${wrong ? " is-wrong" : solved ? " is-success" : ""}`} role="status">
+              {solved ? <Check aria-hidden="true" size={17} /> : null}<p>{feedback}</p>
+            </div>
+          ) : null}
+          {hint && step.hint && !solved ? <p className="learn-player__hint"><Lightbulb aria-hidden="true" size={16} /> {line(step.hint, locale)}</p> : null}
+        </LearnTeacher>
       </div>
 
       <div className={`learn-player__workspace${gameMode ? " is-game" : ""}`}>
@@ -194,16 +207,16 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
           <InteractiveLearnBoard
             board={board}
             disabled={!interactive || solved}
-            emphasis={shownEmphasis}
-            group={step.group}
+            emphasis={presentation.emphasis}
+            group={presentation.group}
             interaction={boardInteraction}
-            lastMove={step.lastMove ?? position?.moves.at(-1)?.position ?? null}
+            lastMove={presentation.lastMove}
             liberties={step.kind === "select" && solved ? targets : []}
             locale={locale}
             onPoint={handlePoint}
             previewColor={step.toPlay ?? "black"}
             selected={selected}
-            territory={step.territory}
+            territory={presentation.territory}
           />
         ) : null}
 
@@ -217,14 +230,6 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
               {copy.pass}
             </button>
           ) : null}
-
-          {feedback ? (
-            <div aria-live="polite" className={`learn-player__feedback${wrong ? " is-wrong" : solved ? " is-success" : ""}`} role="status">
-              {solved ? <Check aria-hidden="true" size={17} /> : null}<p>{feedback}</p>
-            </div>
-          ) : null}
-
-          {hint && step.hint && !solved ? <p className="learn-player__hint"><Lightbulb aria-hidden="true" size={16} /> {line(step.hint, locale)}</p> : null}
 
           <div className="learn-player__tools">
             {step.hint && !solved ? (

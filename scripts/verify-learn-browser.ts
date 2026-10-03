@@ -57,6 +57,10 @@ async function verifyBoardGeometry(page: Page) {
   }
 }
 
+async function expectUnmarkedSelection(page: Page) {
+  await expect(page.locator(".interactive-learn-board__point.is-emphasis, .interactive-learn-board__point.is-territory, .interactive-learn-board__point.is-black-territory, .interactive-learn-board__point.is-white-territory, .interactive-learn-board__point.is-group, .interactive-learn-board__point.is-liberty, .interactive-learn-board__point.is-last")).toHaveCount(0);
+}
+
 function captureCandidate(board: Board): Position | null {
   const position = createLearnGame(board.length);
   const black = {...position, board};
@@ -125,6 +129,17 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     const notice = page.locator(".learn-player__step-mode");
     await expect(notice).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
     await expect(notice.locator("strong")).toHaveText(step.kind === "info" ? "Erklärung" : gameStep ? "Partie" : "Du bist dran");
+    const instruction = page.locator(".learn-player__heading .learn-teacher__speech");
+    await expect(page.locator(".learn-player__heading .learn-teacher__avatar")).toHaveCount(1);
+    await expect(instruction).toContainText(line(step.body,"de"));
+    if (step.task) await expect(instruction.locator(".learn-teacher__task")).toHaveText(line(step.task,"de"));
+    if (step.kind === "select") {
+      await expectUnmarkedSelection(page);
+      await expect(page.locator(".interactive-learn-board__point.is-selected")).toHaveCount(0);
+      if (index === 0 && ["s1-liberties","s2-goal","s2-counting","s2-dead","s3-weak-groups"].includes(lesson.id)) {
+        await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-${lesson.id}-unmarked.png`,fullPage:true});
+      }
+    }
     if (step.size || gameStep) await verifyBoardGeometry(page);
     if (step.kind === "capture-game" || step.kind === "guided-game" || step.kind === "beginner-game") {
       await playGame(page, step.kind === "capture-game");
@@ -136,10 +151,25 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
         await page.getByRole("gridcell").nth(6).click();
         await expect(page.getByText(line(step.wrong!, "de"), {exact:true})).toBeVisible();
         await expect(advance).toBeDisabled();
+        await expectUnmarkedSelection(page);
+        await page.getByRole("button", {name:"Hinweis",exact:true}).click();
+        await expect(instruction).toContainText(line(step.hint!,"de"));
+        await expectUnmarkedSelection(page);
+        await page.getByRole("button", {name:"Neu starten",exact:true}).click();
+        await expectUnmarkedSelection(page);
       }
       const targets = step.targets?.length ? step.kind === "select" ? step.targets : [step.targets[0]]
         : [{x: index === 1 ? 2 : index === 2 ? 3 : 1, y:2}];
-      for (const target of targets) await page.getByRole("gridcell").nth(target.y * step.size! + target.x).click();
+      for (const [answerIndex, target] of targets.entries()) {
+        await page.getByRole("gridcell").nth(target.y * step.size! + target.x).click();
+        if (step.kind === "select") {
+          await expect(page.locator(".interactive-learn-board__point.is-selected")).toHaveCount(answerIndex + 1);
+          if (answerIndex < targets.length - 1) {
+            await expect(advance).toBeDisabled();
+            await expectUnmarkedSelection(page);
+          }
+        }
+      }
       await expect(advance).toBeEnabled();
       if (lesson.id === "s1-board" && index === 2) {
         await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(2);
