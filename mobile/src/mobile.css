@@ -379,7 +379,9 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-app-content .profile-header { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--mobile-border) !important; border-radius: 0 !important; box-shadow: none !important; padding: 10px 0 20px !important; }
 .mobile-app-content .profile-header::before { display: none !important; }
 .mobile-app-content .profile-header__identity h1 { font-size: 28px !important; font-weight: 690 !important; }
-.mobile-app-content .profile-header__actions { display: none; }
+.mobile-app-content .profile-header__actions { display: flex; }
+.mobile-app-content .profile-header__actions .button--primary { display: none; }
+.mobile-app-content .profile-settings-link { min-height: 44px; }
 .mobile-app-content .profile-performance { border-radius: var(--mobile-radius-md) !important; box-shadow: none !important; }
 .mobile-app-content .profile-performance__main { grid-template-columns: 1fr !important; }
 .mobile-app-content .profile-rating-plot { border-left: 0 !important; border-top: 1px solid var(--mobile-border); }
@@ -745,6 +747,9 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-pushed-screen .friends-page .player-search { border-bottom: 1px solid var(--mobile-border) !important; }
 .mobile-pushed-screen .friends-page .friends-card { border-radius: 14px !important; }
 .mobile-pushed-screen .profile-history { margin-top: var(--space-2) !important; }
+.mobile-pushed-screen .settings-page { gap: 18px; }
+.mobile-pushed-screen .settings-page .profile-board-placement { margin: 0; }
+.mobile-pushed-screen .settings-page .settings-back { display: none; }
 .mobile-pushed-screen .profile-performance { background: color-mix(in srgb, var(--mobile-surface) 78%, transparent); border: 1px solid var(--mobile-border) !important; border-radius: 14px; padding: var(--space-3); }
 .mobile-pushed-screen .profile-rating-band { margin-inline: 0; }
 

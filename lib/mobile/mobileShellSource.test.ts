@@ -52,8 +52,10 @@ test("mobile theme and splash expose the required native states", () => {
   const theme = source("mobile", "src", "theme.tsx");
   const splash = source("mobile", "src", "MobileSplash.tsx");
   const main = source("mobile", "src", "main.tsx");
+  const themeContract = source("lib", "theme.ts");
 
-  assert.match(theme, /"system" \| "light" \| "dark"/);
+  assert.match(themeContract, /"system" \| "light" \| "dark"/);
+  assert.match(theme, /<ThemeProvider attribute="data-mobile-theme" storageKey="gostone.mobile.theme.v1"/);
   assert.match(theme, /prefers-color-scheme:\s*dark/);
   assert.match(theme, /SystemBars\.setStyle/);
   assert.match(splash, /mobile-splash__mark/);
