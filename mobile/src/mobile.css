@@ -639,13 +639,15 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 
 .mobile-profile-screen { gap: var(--space-4); }
 .mobile-app-content .profile-header {
-  align-items: center !important;
+  align-items: flex-start !important;
   display: flex !important;
+  flex-direction: column;
+  gap: var(--space-3);
   margin-bottom: var(--space-3) !important;
   min-height: 0 !important;
   padding: var(--space-2) 0 var(--space-4) !important;
 }
-.mobile-app-content .profile-header__primary { align-items: center; display: flex; gap: var(--space-3); }
+.mobile-app-content .profile-header__primary { align-items: center; display: flex; gap: var(--space-3); max-width: 100%; }
 .mobile-app-content .profile-header__primary > .profile-avatar-trigger { flex: 0 0 auto; }
 .mobile-app-content .profile-header__identity { text-align: left; }
 .mobile-app-content .profile-header__identity .section-kicker { display: none; }
