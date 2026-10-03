@@ -5,6 +5,7 @@ import { OAuthUsernameForm } from "@/components/auth/OAuthUsernameForm";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { GameRoom } from "@/components/game/GameRoom";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
+import { BoardDesignProvider } from "@/components/game/BoardDesignProvider";
 import { SharedGameView } from "@/components/game/SharedGameView";
 import { PlayWorkspace } from "@/components/game/PlayWorkspace";
 import { I18nProvider, useI18n } from "@/components/i18n/I18nProvider";
@@ -115,7 +116,7 @@ export function MobileApp() {
   return (
     <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>
-        <BoardPlacementProvider><MobileThemeProvider><MobileRoot /></MobileThemeProvider></BoardPlacementProvider>
+        <BoardDesignProvider><BoardPlacementProvider><MobileThemeProvider><MobileRoot /></MobileThemeProvider></BoardPlacementProvider></BoardDesignProvider>
       </AuthProvider>
     </I18nProvider>
   );

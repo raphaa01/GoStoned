@@ -6,6 +6,7 @@ import "@/app/globals.css";
 import "@/app/redesign.css";
 import "@/app/settings.css";
 import "./mobile.css";
+import "@/app/board-designs.css";
 import { MobileApp } from "./MobileApp";
 import { installNativeChromeBridge } from "./nativeChrome";
 import { installMobileFetchBridge } from "./runtime";

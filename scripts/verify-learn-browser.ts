@@ -207,6 +207,7 @@ async function run() {
       if (path === "/api/auth/session") return route.fulfill({json:{ok:true,user:{id:"00000000-0000-4000-8000-000000000001",username:"learner",displayName:"Learner",playerKey:"user:00000000-0000-4000-8000-000000000001",avatarStyle:"slate"}}});
       if (path === "/api/profile/rating") return route.fulfill({json:{ok:true,rating:null}});
       if (path === "/api/profile/preferences") return route.fulfill({json:{ok:true,preferences:{boardPlacement:"direct"}}});
+      if (path === "/api/profile/board-design" && route.request().method() === "GET") return route.fulfill({json:{ok:true,preference:{design:"default",wins:0}}});
       if (path === "/api/learn/progress") {
         if (route.request().method() === "PUT") {
           const input = parseLearnProgress(route.request().postDataJSON().progress);

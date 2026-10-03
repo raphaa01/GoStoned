@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useBoardPlacement } from "@/components/game/BoardPlacementProvider";
+import { useBoardDesign } from "@/components/game/BoardDesignProvider";
 import {
   BOARD_GRID_INSET_RATIO,
   BOARD_GRID_SPAN_RATIO,
@@ -120,6 +121,7 @@ export function GoBoard({
 }: GoBoardProps) {
   const { dictionary } = useI18n();
   const { preference: boardPlacement } = useBoardPlacement();
+  const { design } = useBoardDesign();
   const copy = dictionary.game;
   const instructionsId = useId();
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -336,6 +338,7 @@ export function GoBoard({
           aria-label={`${boardSize} × ${boardSize} ${copy.goBoard}`}
           aria-rowcount={visibleBoardSize}
           className="go-board"
+          data-board-design={design}
           ref={boardRef}
           style={
             {

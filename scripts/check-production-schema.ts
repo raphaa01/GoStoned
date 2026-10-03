@@ -17,6 +17,10 @@ type SchemaRow = {
   board_placement_default: string | null;
   board_placement_nullable: string | null;
   board_placement_constraint: string | null;
+  board_design_data_type: string | null;
+  board_design_default: string | null;
+  board_design_nullable: string | null;
+  board_design_constraint: string | null;
   analysis_progress_data_type: string | null;
   analysis_progress_constraint: string | null;
   takeback_rls: boolean;
@@ -69,6 +73,14 @@ async function checkProductionSchema(): Promise<void> {
          WHERE conname = 'puzzles_category_shape_check'
            AND conrelid = 'public.puzzles'::regclass)
          AS puzzle_category_constraint,
+       (SELECT data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'board_design') AS board_design_data_type,
+       (SELECT column_default FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'board_design') AS board_design_default,
+       (SELECT is_nullable FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'board_design') AS board_design_nullable,
+       (SELECT pg_get_constraintdef(oid) FROM pg_constraint
+         WHERE conname = 'users_board_design_check' AND conrelid = 'public.users'::regclass) AS board_design_constraint,
        (SELECT data_type FROM information_schema.columns
          WHERE table_schema = 'public'
            AND table_name = 'player_rating_preferences'
@@ -133,6 +145,10 @@ async function checkProductionSchema(): Promise<void> {
     boardPlacementDefault: row.board_placement_default,
     boardPlacementNullable: row.board_placement_nullable,
     boardPlacementConstraint: row.board_placement_constraint,
+    boardDesignDataType: row.board_design_data_type,
+    boardDesignDefault: row.board_design_default,
+    boardDesignNullable: row.board_design_nullable,
+    boardDesignConstraint: row.board_design_constraint,
     analysisProgressDataType: row.analysis_progress_data_type,
     analysisProgressConstraint: row.analysis_progress_constraint,
     takebackRls: row.takeback_rls,
