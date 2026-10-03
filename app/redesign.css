@@ -10438,6 +10438,21 @@ body {
 }
 .learn-player__heading p { color: var(--color-ink-soft); font-size: 16px; line-height: 1.5; margin: 0; }
 .learn-player__heading > strong { display: block; font-size: 16px; font-weight: 680; margin-top: 9px; }
+.learn-player__step-mode {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 4px 12px;
+  line-height: 1.5;
+  margin: 14px 0 12px;
+}
+.learn-player__step-mode > span:first-child { align-items: center; display: inline-flex; gap: 6px; }
+.learn-player__step-mode strong { font-weight: 680; }
+.learn-player__step-mode[data-mode="action"] > span:first-child,
+.learn-player__step-mode[data-mode="solved"] > span:first-child,
+.learn-player__step-mode[data-mode="game"] > span:first-child { color: var(--color-moss-strong); }
 
 .learn-player__workspace {
   align-items: start;
@@ -10497,6 +10512,8 @@ body {
   height: var(--learn-board-point);
   justify-content: center;
   margin: 0;
+  min-height: 0;
+  min-width: 0;
   padding: 0;
   position: absolute;
   touch-action: manipulation;
@@ -10519,10 +10536,10 @@ body {
 .interactive-learn-board__stone {
   border-radius: 50%;
   box-shadow: 0 2px 3px rgb(30 20 10 / .26);
-  height: 78%;
+  height: 92%;
   pointer-events: none;
   position: absolute;
-  width: 78%;
+  width: 92%;
 }
 .interactive-learn-board__stone.is-black { background: #171916; border: 1px solid #050605; }
 .interactive-learn-board__stone.is-white { background: #fbfaf4; border: 1px solid rgb(64 55 44 / .42); }

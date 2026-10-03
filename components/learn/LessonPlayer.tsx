@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, Lightbulb, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, Lightbulb, MousePointer2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { boardHash } from "@/lib/game/goEngine";
 import type { Board, Position } from "@/lib/game/types";
@@ -150,6 +150,10 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const gameMode = step.kind === "capture-game" ? "capture"
     : step.kind === "guided-game" ? "guided"
       : step.kind === "beginner-game" ? "beginner" : null;
+  const stepMode = solved ? "solved" : step.kind === "info" ? "info" : gameMode ? "game" : "action";
+  const modeLabel = solved ? copy.taskSolved : step.kind === "info" ? copy.explanation : gameMode ? copy.practiceGame : copy.taskTurn;
+  const modeHelp = solved ? copy.readyToContinue : step.kind === "info" ? copy.explanationHelp
+    : gameMode ? copy.practiceGameHelp : step.kind === "pass" ? copy.passTaskHelp : copy.boardTaskHelp;
 
   return (
     <article className="learn-player">
@@ -163,6 +167,13 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
       <div className="learn-player__heading">
         <small>{formatLearn(copy.stage, { stage: lesson.stage })}</small>
         <h1>{line(lesson.title, locale)}</h1>
+        <div className="learn-player__step-mode" data-mode={stepMode}>
+          <span>
+            {solved ? <Check aria-hidden="true" size={15} /> : step.kind === "info" ? <BookOpen aria-hidden="true" size={15} /> : <MousePointer2 aria-hidden="true" size={15} />}
+            <strong>{modeLabel}</strong>
+          </span>
+          <span>{modeHelp}</span>
+        </div>
         <p>{line(step.body, locale)}</p>
         {step.task ? <strong>{line(step.task, locale)}</strong> : null}
       </div>
