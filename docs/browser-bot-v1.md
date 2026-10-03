@@ -51,6 +51,21 @@ müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
 
 ## Training und Rating
 
+Die Elo-Anpassung wählt weiterhin temperaturgewichtet aus den besten legalen
+Policy-Kandidaten. `lib/bot/browserMoveSelection.ts` begrenzt diesen Pool zusätzlich
+auf Kandidaten, deren Policy-Gewicht weniger als Faktor 8 unter dem besten liegt
+(Logit-Abstand kleiner als `ln(8)`, vor Anwendung der Elo-Temperatur). Liegt bereits
+der zweitbeste Zug mindestens Faktor 8 zurück, wird immer der beste Zug gespielt,
+unabhängig von Elo und Zufallswert. Auch bei mehreren ähnlich guten Zügen werden
+deutlich schwächere Alternativen ausgeschlossen. Die bisherigen Legalitäts-, Ko-,
+Wiederholungs- und frühen Passfilter sowie der Passbonus nach gegnerischem Passen
+bleiben im Browser-Worker und werden vor der Auswahl angewendet.
+
+Dieser Abstand beschreibt die Präferenz des Modells, keinen Unterschied in
+Go-Punkten und keine garantierte taktische Notwendigkeit. Das Modell muss den
+wichtigen Zug selbst erkennen; der Schutz verhindert, dass die Zufallsauswahl
+eine bereits deutlich erkannte Präferenz verwirft.
+
 Der Strength-Kanal bildet die sechs trainierten Profile 600, 900, 1200, 1500,
 1800 und 2100 exakt auf 0,0 bis 1,0 ab. Das Artefakt ist versioniert; ein späteres
 Modell wird mit einer neuen Version neben v8 veröffentlicht und
