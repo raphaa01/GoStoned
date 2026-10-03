@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { WebAnalytics } from "@/components/analytics/WebAnalytics";
+import { ThemeProvider } from "@/components/settings/ThemeProvider";
+import { THEME_BOOTSTRAP } from "@/lib/theme";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
@@ -9,6 +11,7 @@ import { rootMetadata } from "@/lib/i18n/metadata";
 import { prefixedLocaleOrNotFound } from "@/lib/i18n/serverLocale";
 import "../globals.css";
 import "../redesign.css";
+import "../settings.css";
 
 export function generateStaticParams() {
   return LOCALES.filter(({ code }) => code !== "en").map(({ code }) => ({ locale: code }));
@@ -33,10 +36,11 @@ export default async function LocalizedRootLayout({
   const { locale: value } = await params;
   const locale = prefixedLocaleOrNotFound(value);
   return (
-    <html data-scroll-behavior="smooth" lang={locale}>
+    <html suppressHydrationWarning data-scroll-behavior="smooth" lang={locale}>
+      <head><script id="gostone-theme">{THEME_BOOTSTRAP}</script></head>
       <body>
         <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
-          <AuthProvider><BoardPlacementProvider>{children}</BoardPlacementProvider></AuthProvider>
+          <ThemeProvider><AuthProvider><BoardPlacementProvider>{children}</BoardPlacementProvider></AuthProvider></ThemeProvider>
         </I18nProvider>
         {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>

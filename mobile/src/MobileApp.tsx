@@ -22,6 +22,8 @@ import { getMobileCopy } from "@/lib/i18n/mobile";
 import { MobileAccountGate } from "./MobileAccountGate";
 import { MobileAuthScreen } from "./MobileAuthScreen";
 import { MobileHome } from "./MobileHome";
+import { MobileSettings } from "./MobileSettings";
+import { getSettingsCopy } from "@/lib/i18n/settings";
 import { MobileProfile } from "./MobileProfile";
 import { MobileShell } from "./MobileShell";
 import { MobileSplash } from "./MobileSplash";
@@ -89,6 +91,7 @@ function MobileRoute() {
       break;
     case "/play": content = <PushedScreen><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
+    case "/profile/settings": content = <PushedScreen><MobileAccountGate returnTo="/profile/settings" title={getSettingsCopy(locale).title}><MobileSettings /></MobileAccountGate></PushedScreen>; break;
     case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub /></MobileAccountGate></PushedScreen>; break;
     case "/learn": content = <div className="mobile-tab-screen mobile-learn-screen"><MobileAccountGate returnTo="/learn" title={dictionary.nav.learn}><LearningGuide /></MobileAccountGate></div>; break;
     case "/learn/ai": content = <PushedScreen><TrainingGame /></PushedScreen>; break;

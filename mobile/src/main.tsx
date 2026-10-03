@@ -4,6 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import "@/app/globals.css";
 import "@/app/redesign.css";
+import "@/app/settings.css";
 import "./mobile.css";
 import { MobileApp } from "./MobileApp";
 import { installNativeChromeBridge } from "./nativeChrome";

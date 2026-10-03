@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { FriendsHub } from "@/components/friends/FriendsHub";
 import { LearningGuide } from "@/components/learn/LearningGuide";
 import { TrainingGame } from "@/components/learn/TrainingGame";
+import { SettingsView } from "@/components/settings/SettingsView";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { AnalysisReview } from "@/components/review/AnalysisReview";
 import { ReviewGuide } from "@/components/review/ReviewGuide";
@@ -12,6 +13,11 @@ import type { Locale } from "@/lib/i18n/config";
 export async function AccountProfilePage({ locale }: { locale: Locale }) {
   await requireAccountPage("/profile", locale);
   return <AppShell><ProfileView /></AppShell>;
+}
+
+export async function AccountSettingsPage({ locale }: { locale: Locale }) {
+  await requireAccountPage("/profile/settings", locale);
+  return <AppShell><SettingsView /></AppShell>;
 }
 
 export async function AccountFriendsPage({ locale }: { locale: Locale }) {
