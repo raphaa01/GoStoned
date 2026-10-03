@@ -10,6 +10,7 @@ import {
   replayMovesWithPrisoners,
 } from "@/lib/game/goEngine";
 import { buildLegacyV4Features, buildV8Features } from "@/lib/bot/v8Features";
+import { selectBrowserBotMove } from "@/lib/bot/browserMoveSelection";
 import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import type { Board, Position, Stone } from "@/lib/game/types";
 import {
@@ -117,26 +118,9 @@ function chooseMove(
     if (!applied.ok || priorHashes.has(boardHash(applied.board))) continue;
     candidates.push({ move: { kind: "play", ...point }, logit: policy[index] });
   }
-  if (candidates.length === 0) return { kind: "pass" };
-  candidates.sort((left, right) => right.logit - left.logit);
-
-  const rating = Math.max(600, Math.min(2_100, position.targetRating));
-  const candidateLimit = rating >= 2_000 ? 1 : rating >= 1_700 ? 2
-    : rating >= 1_400 ? 3 : rating >= 1_100 ? 5 : rating >= 800 ? 7 : 10;
-  const temperature = rating >= 2_000 ? 0.08 : Math.max(0.2, 1.65 - (rating - 600) / 1_050);
-  const pool = candidates.slice(0, candidateLimit);
-  if (pool.length === 1) return pool[0].move;
-  const maximum = pool[0].logit;
-  const weights = pool.map(({ logit }) => Math.exp((logit - maximum) / temperature));
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  let cursor = deterministicUnit(
+  return selectBrowserBotMove(candidates, position.targetRating, deterministicUnit(
     `${position.gameId}:${position.gameVersion}:${modelVersion}`,
-  ) * total;
-  for (let index = 0; index < pool.length; index += 1) {
-    cursor -= weights[index];
-    if (cursor <= 0) return pool[index].move;
-  }
-  return pool.at(-1)!.move;
+  ));
 }
 
 function numericOutput(
