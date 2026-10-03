@@ -16,6 +16,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingHistoryChart } from "@/components/profile/RatingHistoryChart";
+import { BoardDesignPicker } from "@/components/profile/BoardDesignPicker";
 import { getSettingsCopy } from "@/lib/i18n/settings";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { readApi } from "@/lib/client/api";
@@ -275,6 +276,7 @@ export function ProfileView() {
       </section>
     </> : null}
 
+    <BoardDesignPicker />
     <section className="profile-history" id="game-history">
       <div className="profile-history__heading"><h2>{copy.recentGames}</h2><span>{recentGames.length} {copy.shown}</span></div>
       {recentGames.length ? <div className="profile-history__list">{recentGames.slice(0, 12).map((game) => {

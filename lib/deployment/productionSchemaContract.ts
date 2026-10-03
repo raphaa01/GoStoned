@@ -12,6 +12,10 @@ export type ProductionSchemaSnapshot = Readonly<{
   boardPlacementDefault: string | null;
   boardPlacementNullable: string | null;
   boardPlacementConstraint: string | null;
+  boardDesignDataType: string | null;
+  boardDesignDefault: string | null;
+  boardDesignNullable: string | null;
+  boardDesignConstraint: string | null;
   analysisProgressDataType: string | null;
   analysisProgressConstraint: string | null;
   takebackRls: boolean;
@@ -32,6 +36,13 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (snapshot.boardDesignDataType !== "text" || snapshot.boardDesignNullable !== "NO") {
+    throw new Error("Production database schema is stale: board-design preference column.");
+  }
+  requireFragment(snapshot.boardDesignDefault, "default", "board-design preference default");
+  for (const design of ["default", "light-oak", "dark-slate", "white-porcelain", "sage", "bordeaux"]) {
+    requireFragment(snapshot.boardDesignConstraint, design, "board-design preference constraint");
+  }
   if (!snapshot.learnProgressRls || !snapshot.learnProgressWritable) {
     throw new Error("Production database schema is stale: learning progress storage or server permissions.");
   }

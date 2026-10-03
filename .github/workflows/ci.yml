@@ -75,6 +75,9 @@ jobs:
           done
           LEARN_CLIENT=mobile BASE_URL=http://127.0.0.1:4174 npm run test:learn-browser
 
+      - name: Verify bundled Android and iOS board designs
+        run: npx playwright test --config playwright.mobile-board-designs.config.ts
+
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -142,6 +145,9 @@ jobs:
 
       - name: Verify database statement timeout and backend recovery
         run: npm run test:statement-timeout
+
+      - name: Verify board-design persistence and earned unlocks
+        run: npx tsx scripts/smoke-board-designs.ts
 
       - name: Verify migration serialization and recovery
         run: npm run test:migration-recovery

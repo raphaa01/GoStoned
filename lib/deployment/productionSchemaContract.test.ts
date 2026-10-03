@@ -29,6 +29,10 @@ const currentSnapshot: ProductionSchemaSnapshot = {
   boardPlacementDefault: "'zoom'::text",
   boardPlacementNullable: "NO",
   boardPlacementConstraint: "CHECK (board_placement IN ('zoom', 'direct'))",
+  boardDesignDataType: "text",
+  boardDesignDefault: "'default'::text",
+  boardDesignNullable: "NO",
+  boardDesignConstraint: "CHECK (board_design IN ('default', 'light-oak', 'dark-slate', 'white-porcelain', 'sage', 'bordeaux'))",
   analysisProgressDataType: "jsonb",
   analysisProgressConstraint:
     "CHECK (status = 'running' AND (result IS NULL OR progress IS NOT NULL))",
@@ -39,6 +43,11 @@ const currentSnapshot: ProductionSchemaSnapshot = {
 
 test("accepts the current Japanese matchmaking schema", () => {
   assert.doesNotThrow(() => validateProductionSchemaContract(currentSnapshot));
+});
+
+test("rejects missing board-design storage before deployment", () => {
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, boardDesignDataType: null }), /board-design preference column/);
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, boardDesignConstraint: "CHECK (board_design = 'default')" }), /board-design preference constraint/);
 });
 
 test("rejects missing or inaccessible learning progress storage before deployment", () => {
