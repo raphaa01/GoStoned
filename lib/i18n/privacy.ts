@@ -240,6 +240,15 @@ const sections: LocalizedSection[] = [
         "問題、ボット、解析：問題の選択、試行、進行状況、正解状態、時刻を保存します。ボット着手と終局スコア案は端末上で計算され、提案された操作だけがルール確認と保存のため GoStone に送信されます。KataGo 解析を依頼した場合は、別のワーカーが対局 ID、ルール、着手、生成された解析を処理します。法的根拠：GDPR 第6条1項(b)。",
         "문제, 봇 및 분석: 문제 선택, 시도, 진행 상황, 해결 여부 및 시각을 저장합니다. 봇 착점과 최종 점수 제안은 기기에서 로컬로 계산되며 제안된 동작만 규칙 검증과 저장을 위해 GoStone으로 전송됩니다. KataGo 분석을 요청하면 별도 워커가 대국 식별자, 규칙, 수순 및 생성된 분석을 처리합니다. 법적 근거: GDPR 제6조 제1항 (b).",
       ),
+      text(
+        "Optional price survey: if you choose a monthly price for a possible unlimited-analysis plan, we store that amount with your account and timestamps to assess demand and plan the offering. Your answer is kept until you replace it or delete your account. Participation is voluntary. Legal basis: Article 6(1)(f) GDPR; our legitimate interest is product and capacity planning.",
+        "Optionale Preisumfrage: Wenn du einen Monatspreis für ein mögliches Angebot mit unbegrenzten Analysen auswählst, speichern wir den Betrag zusammen mit deinem Konto und Zeitpunkten, um die Nachfrage auszuwerten und das Angebot zu planen. Deine Antwort bleibt gespeichert, bis du sie ersetzt oder dein Konto löschst. Die Teilnahme ist freiwillig. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist die Produkt- und Kapazitätsplanung.",
+        "Enquête tarifaire facultative : si vous choisissez un prix mensuel pour une éventuelle offre d’analyses illimitées, nous enregistrons ce montant avec votre compte et les horodatages afin d’évaluer la demande et de planifier l’offre. Votre réponse est conservée jusqu’à son remplacement ou la suppression de votre compte. La participation est facultative. Base juridique : article 6, paragraphe 1, point f) du RGPD ; notre intérêt légitime est la planification du produit et des capacités.",
+        "Encuesta de precio opcional: si eliges un precio mensual para una posible oferta de análisis ilimitados, guardamos ese importe con tu cuenta y las marcas de tiempo para evaluar la demanda y planificar la oferta. La respuesta se conserva hasta que la sustituyas o elimines tu cuenta. La participación es voluntaria. Base jurídica: artículo 6.1.f del RGPD; nuestro interés legítimo es la planificación del producto y de la capacidad.",
+        "可选价格调查：如果您为可能推出的无限分析方案选择月费，我们会将该金额、您的账户和时间戳一并保存，用于评估需求和规划服务。该回答会保留到您更改选择或删除账户为止。参与完全自愿。法律依据：GDPR 第6条第1款(f)项；我们的合法利益是产品与容量规划。",
+        "任意の価格アンケート：解析無制限プランの候補月額を選択した場合、需要の把握と提供計画のため、その金額をアカウントおよび時刻とともに保存します。回答は、変更するかアカウントを削除するまで保存されます。参加は任意です。法的根拠：GDPR 第6条1項(f)。正当な利益は製品および処理能力の計画です。",
+        "선택적 가격 설문: 무제한 분석 요금제의 월 가격을 선택하면 수요 평가와 서비스 계획을 위해 해당 금액을 계정 및 시각 정보와 함께 저장합니다. 응답은 변경하거나 계정을 삭제할 때까지 보관됩니다. 참여는 자발적입니다. 법적 근거: GDPR 제6조 제1항 (f). 정당한 이익은 제품 및 처리 용량 계획입니다.",
+      ),
     ],
   },
   {

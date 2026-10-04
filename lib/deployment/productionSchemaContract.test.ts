@@ -39,6 +39,11 @@ const currentSnapshot: ProductionSchemaSnapshot = {
   takebackRls: true,
   learnProgressRls: true,
   learnProgressWritable: true,
+  analysisPriceVoteConstraint:
+    "CHECK ((monthly_price_eur = ANY (ARRAY[3, 5, 8, 12])))",
+  analysisPriceVotePrimary: "PRIMARY KEY (user_id)",
+  analysisPriceVoteRls: true,
+  analysisPriceVoteWritable: true,
 };
 
 test("accepts the current Japanese matchmaking schema", () => {
@@ -54,6 +59,18 @@ test("rejects missing or inaccessible learning progress storage before deploymen
   assert.throws(() => validateProductionSchemaContract({...currentSnapshot, learnProgressRls:false}), /learning progress/);
   assert.throws(() => validateProductionSchemaContract({...currentSnapshot, learnProgressWritable:false}), /learning progress/);
   assert.match(productionPreflight, /learn_progress/);
+});
+
+test("rejects missing or invalid analysis price-vote storage before deployment", () => {
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, analysisPriceVoteRls: false }), /analysis price-vote storage/);
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, analysisPriceVoteWritable: false }), /analysis price-vote storage/);
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, analysisPriceVotePrimary: null }), /account uniqueness/);
+  assert.throws(() => validateProductionSchemaContract({
+    ...currentSnapshot,
+    analysisPriceVoteConstraint: "CHECK (monthly_price_eur IN (3, 5))",
+  }), /allowed values/);
+  assert.match(productionPreflight, /analysis_price_vote_constraint/);
+  assert.match(productionPreflight, /analysis_price_vote_writable/);
 });
 
 test("rejects the old Chinese-only queue profile constraint", () => {

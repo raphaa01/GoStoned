@@ -21,6 +21,10 @@ export type ProductionSchemaSnapshot = Readonly<{
   takebackRls: boolean;
   learnProgressRls: boolean;
   learnProgressWritable: boolean;
+  analysisPriceVoteConstraint: string | null;
+  analysisPriceVotePrimary: string | null;
+  analysisPriceVoteRls: boolean;
+  analysisPriceVoteWritable: boolean;
 }>;
 
 function requireFragment(
@@ -45,6 +49,21 @@ export function validateProductionSchemaContract(
   }
   if (!snapshot.learnProgressRls || !snapshot.learnProgressWritable) {
     throw new Error("Production database schema is stale: learning progress storage or server permissions.");
+  }
+  if (!snapshot.analysisPriceVoteRls || !snapshot.analysisPriceVoteWritable) {
+    throw new Error("Production database schema is stale: analysis price-vote storage or server permissions.");
+  }
+  requireFragment(
+    snapshot.analysisPriceVotePrimary,
+    "PRIMARY KEY (user_id)",
+    "analysis price-vote account uniqueness",
+  );
+  for (const fragment of ["monthly_price_eur", "3", "5", "8", "12"]) {
+    requireFragment(
+      snapshot.analysisPriceVoteConstraint,
+      fragment,
+      "analysis price-vote allowed values",
+    );
   }
   if (snapshot.analysisProgressDataType !== "jsonb") {
     throw new Error(
