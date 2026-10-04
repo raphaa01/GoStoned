@@ -8,7 +8,7 @@ android {
     def releaseStorePassword = System.getenv('GOSTONE_ANDROID_KEYSTORE_PASSWORD')
     def releaseKeyPassword = System.getenv('GOSTONE_ANDROID_KEY_PASSWORD')
     defaultConfig {
-        applicationId "com.gostone.app"
+        applicationId "app.gostone"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
