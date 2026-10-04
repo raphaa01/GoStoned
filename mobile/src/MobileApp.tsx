@@ -12,8 +12,7 @@ import { I18nProvider, useI18n } from "@/components/i18n/I18nProvider";
 import { LeaderboardView } from "@/components/leaderboard/LeaderboardView";
 import { LearningGuide } from "@/components/learn/LearningGuide";
 import { TrainingGame } from "@/components/learn/TrainingGame";
-import { LegalNotice } from "@/components/legal/LegalNotice";
-import { PrivacyPolicy } from "@/components/legal/PrivacyPolicy";
+import { MobileLegalPage } from "./MobileLegalPage";
 import { PuzzleWorkspace } from "@/components/puzzles/PuzzleWorkspace";
 import { AnalysisReview } from "@/components/review/AnalysisReview";
 import { ReviewGuide } from "@/components/review/ReviewGuide";
@@ -99,8 +98,9 @@ function MobileRoute() {
     case "/review": content = <div className="mobile-tab-screen mobile-review-screen"><MobileAccountGate returnTo="/review" title={dictionary.nav.review}><ReviewGuide /></MobileAccountGate></div>; break;
     case "/puzzles": content = <div className="mobile-tab-screen mobile-puzzle-screen"><PuzzleWorkspace initialMode={search.get("mode") === "practice" ? "practice" : "daily"} /></div>; break;
     case "/leaderboard": content = <div className="mobile-tab-screen mobile-leaderboard-screen"><LeaderboardView /></div>; break;
-    case "/privacy": content = <PushedScreen><PrivacyPolicy locale={locale} /></PushedScreen>; break;
-    case "/impressum": content = <PushedScreen><LegalNotice locale={locale} /></PushedScreen>; break;
+    case "/privacy": content = <PushedScreen><MobileLegalPage pathname="/privacy" /></PushedScreen>; break;
+    case "/impressum": content = <PushedScreen><MobileLegalPage pathname="/impressum" /></PushedScreen>; break;
+    case "/delete-account": content = <PushedScreen><MobileLegalPage pathname="/delete-account" /></PushedScreen>; break;
     default: content = <section className="mobile-not-found"><h1>GoStone</h1><p>404</p></section>;
   }
   return <MobileShell showPlayAction={showPlayAction}>{content}</MobileShell>;
