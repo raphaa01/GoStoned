@@ -6,10 +6,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ApiRequestError, readApi } from "@/lib/client/api";
+import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { getMobileAnalysisCopy } from "@/lib/i18n/mobileAnalysis";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
+import {
+  ANALYSIS_PRICE_OPTIONS,
+  type AnalysisPriceOption,
+} from "@/lib/analysis/priceVote";
 import {
   fixedColorScoreLead,
   fixedColorWinrates,
@@ -27,6 +32,7 @@ import { AnalysisBoard } from "./AnalysisBoard";
 import styles from "./review.module.css";
 
 type ResponseBody = { actor: string; game: GameState; analysis: AnalysisJobView | null };
+type PriceVoteResponse = { actor: string; monthlyPriceEur: AnalysisPriceOption | null };
 
 export function AnalysisReview({ gameId }: { gameId: string }) {
   const { user, loading } = useAuth();
@@ -39,8 +45,67 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [quotaRetryAt, setQuotaRetryAt] = useState<Date | null>(null);
-  const [supportPrice, setSupportPrice] = useState<number | null>(null);
+  const [supportPrice, setSupportPrice] = useState<AnalysisPriceOption | null>(null);
+  const [supportPriceSaving, setSupportPriceSaving] = useState(false);
+  const [supportPriceSaved, setSupportPriceSaved] = useState(false);
+  const [supportPriceError, setSupportPriceError] = useState<string | null>(null);
   const nativeAnalysis = usesNativeKataGoAnalysis();
+
+  const loadSupportPrice = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await fetch("/api/analysis-price-vote", {
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
+      });
+      const body = await readApi<PriceVoteResponse>(response);
+      assertResponseActor(body.actor, user.playerKey);
+      setSupportPrice(body.monthlyPriceEur);
+      setSupportPriceSaved(body.monthlyPriceEur !== null);
+      setSupportPriceError(null);
+    } catch (requestError) {
+      setSupportPriceError(localizedApiError(
+        dictionary,
+        requestError,
+        dictionary.apiErrors.internal_error,
+      ));
+    }
+  }, [dictionary, user]);
+
+  const saveSupportPrice = useCallback(async (monthlyPriceEur: AnalysisPriceOption) => {
+    if (!user || supportPriceSaving) return;
+    const previousPrice = supportPrice;
+    const previousSaved = supportPriceSaved;
+    setSupportPrice(monthlyPriceEur);
+    setSupportPriceSaving(true);
+    setSupportPriceSaved(false);
+    setSupportPriceError(null);
+    try {
+      const response = await fetch("/api/analysis-price-vote", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          [EXPECTED_PLAYER_HEADER]: user.playerKey,
+        },
+        body: JSON.stringify({ monthlyPriceEur }),
+      });
+      const body = await readApi<PriceVoteResponse>(response);
+      assertResponseActor(body.actor, user.playerKey);
+      setSupportPrice(body.monthlyPriceEur);
+      setSupportPriceSaved(true);
+    } catch (requestError) {
+      setSupportPrice(previousPrice);
+      setSupportPriceSaved(previousSaved);
+      setSupportPriceError(localizedApiError(
+        dictionary,
+        requestError,
+        dictionary.apiErrors.internal_error,
+      ));
+    } finally {
+      setSupportPriceSaving(false);
+    }
+  }, [dictionary, supportPrice, supportPriceSaved, supportPriceSaving, user]);
 
   const load = useCallback(async (method: "GET" | "POST" = "GET") => {
     if (!user) return;
@@ -95,13 +160,14 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         const retryAfter = requestError.retryAfterSeconds ?? 7 * 24 * 60 * 60;
         setQuotaRetryAt(new Date(Date.now() + retryAfter * 1_000));
         setError(null);
+        void loadSupportPrice();
         return;
       }
       setError(localizedApiError(dictionary, requestError, copy.failed));
     } finally {
       if (method === "POST") setRequesting(false);
     }
-  }, [copy.failed, dictionary, gameId, nativeAnalysis, user]);
+  }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -165,18 +231,20 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             <p>{copy.supportBody}</p>
             <span>{copy.supportQuestion}</span>
             <div>
-              {[3, 5, 8, 12].map((price) => (
+              {ANALYSIS_PRICE_OPTIONS.map((price) => (
                 <button
                   aria-pressed={supportPrice === price}
+                  disabled={supportPriceSaving}
                   key={price}
-                  onClick={() => setSupportPrice(price)}
+                  onClick={() => void saveSupportPrice(price)}
                   type="button"
                 >
                   {price} €
                 </button>
               ))}
             </div>
-            {supportPrice !== null ? <small>{copy.supportThanks}</small> : null}
+            {supportPriceSaved ? <small>{copy.supportThanks}</small> : null}
+            {supportPriceError ? <small role="alert">{supportPriceError}</small> : null}
           </fieldset>
           <Link className={styles.quotaBack} href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
         </section>

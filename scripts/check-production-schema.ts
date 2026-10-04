@@ -26,6 +26,10 @@ type SchemaRow = {
   takeback_rls: boolean;
   learn_progress_rls: boolean;
   learn_progress_writable: boolean;
+  analysis_price_vote_constraint: string | null;
+  analysis_price_vote_primary: string | null;
+  analysis_price_vote_rls: boolean;
+  analysis_price_vote_writable: boolean;
 };
 
 async function checkProductionSchema(): Promise<void> {
@@ -125,7 +129,29 @@ async function checkProductionSchema(): Promise<void> {
          AND has_table_privilege(current_user, to_regclass('public.learn_progress'), 'INSERT')
          AND has_table_privilege(current_user, to_regclass('public.learn_progress'), 'UPDATE'),
          false
-       ) AS learn_progress_writable`,
+       ) AS learn_progress_writable,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'analysis_price_votes_price_check'
+           AND conrelid = to_regclass('public.analysis_price_votes'))
+         AS analysis_price_vote_constraint,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'analysis_price_votes_pkey'
+           AND conrelid = to_regclass('public.analysis_price_votes'))
+         AS analysis_price_vote_primary,
+       EXISTS (
+         SELECT 1
+           FROM pg_class
+          WHERE oid = to_regclass('public.analysis_price_votes')
+            AND relrowsecurity
+       ) AS analysis_price_vote_rls,
+       COALESCE(
+         has_table_privilege(current_user, to_regclass('public.analysis_price_votes'), 'SELECT')
+         AND has_table_privilege(current_user, to_regclass('public.analysis_price_votes'), 'INSERT')
+         AND has_table_privilege(current_user, to_regclass('public.analysis_price_votes'), 'UPDATE'),
+         false
+       ) AS analysis_price_vote_writable`,
   );
 
   const row = result.rows[0];
@@ -154,6 +180,10 @@ async function checkProductionSchema(): Promise<void> {
     takebackRls: row.takeback_rls,
     learnProgressRls: row.learn_progress_rls,
     learnProgressWritable: row.learn_progress_writable,
+    analysisPriceVoteConstraint: row.analysis_price_vote_constraint,
+    analysisPriceVotePrimary: row.analysis_price_vote_primary,
+    analysisPriceVoteRls: row.analysis_price_vote_rls,
+    analysisPriceVoteWritable: row.analysis_price_vote_writable,
   });
 
   // The migration ledger is intentionally hidden by RLS from the runtime role.
