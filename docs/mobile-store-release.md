@@ -9,8 +9,13 @@ were reviewed from draft PR #156, commit
 main commit. The current website, mobile UI, puzzles, learning, sharing, and
 design changes remain based on main.
 
-`com.gostone.app` is the existing application identifier on both platforms.
-Android and iOS remain separate native projects. The release API is
+Google Play has registered the Android application identifier `app.gostone`.
+The iOS bundle identifier remains `com.gostone.app`. Android's Java namespace
+and the shared native OAuth callback remain `com.gostone.app`; they do not
+need to match the Android application identifier. The existing native
+projects configure these identifiers independently. Capacitor's top-level
+`appId` remains the iOS identifier; do not regenerate the Android project
+with that default. The release API is
 `https://gostone.app`. Capacitor's `localhost` is an internal asset hostname,
 not a development API origin. Mobile native analysis has no server KataGo
 fallback. The v1.18.2 KataGo commit is
@@ -46,8 +51,8 @@ abort during graph execution; device inference stays linked in Release.
 
 ## Store signing
 
-Confirm that `com.gostone.app` belongs to the Apple team and Play account and
-that the chosen build numbers have not already been used. Do not create a new
+Confirm that `com.gostone.app` belongs to the Apple team, `app.gostone` matches
+the Play app, and the chosen build numbers have not already been used. Do not create a new
 Android key if an existing Play upload key is already registered. Supply the
 existing Android key through local environment variables, never committed
 Gradle properties:
