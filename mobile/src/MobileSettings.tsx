@@ -6,7 +6,6 @@ import { getMobileCopy } from "@/lib/i18n/mobile";
 import { getPrivacyCopy } from "@/lib/i18n/privacy";
 import { useRouter } from "./next-navigation";
 import { SettingsView } from "@/components/settings/SettingsView";
-import { getAccountDeletionCopy } from "@/lib/i18n/accountDeletion";
 import { MobileLegalLink } from "./MobileLegalLink";
 
 export function MobileSettings() {
@@ -15,14 +14,13 @@ export function MobileSettings() {
   const router = useRouter();
   const copy = getMobileCopy(locale);
   const privacy = getPrivacyCopy(locale);
-  const deletion = getAccountDeletionCopy(locale);
   const signOut = async () => {
     await logout();
     router.replace(href("/"));
   };
 
   return (
-    <SettingsView deletionAction={<MobileLegalLink className="button button--secondary" pathname="/delete-account">{deletion.action}</MobileLegalLink>}>
+    <SettingsView>
       <section className="mobile-settings" aria-label={copy.settings}>
         <LanguageSwitcher />
         <nav aria-label={copy.legal} className="mobile-legal-links">

@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark } from "./BrandMark";
+
 import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -41,7 +43,7 @@ export function DesktopHeader() {
   return (
     <header className="sidebar">
       <Link className="brand" href={localizedHref("/")} aria-label={dictionary.nav.homeLabel}>
-        <span className="brand-mark"><span /><span /></span>
+        <BrandMark />
         <span>GoStone</span>
       </Link>
 

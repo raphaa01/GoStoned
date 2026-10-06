@@ -56,6 +56,7 @@
     "typecheck": "tsc --noEmit",
     "db:prepare-ci-smoke": "tsx scripts/prepare-ci-postgres.ts",
     "db:migrate": "tsx scripts/migrate.ts",
+    "deletion:requests": "tsx scripts/account-deletion-requests.ts",
     "worker:katago": "tsx workers/katago/index.ts",
     "worker:katago:once": "tsx workers/katago/once.ts"
   },

@@ -2,10 +2,11 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { iosReleaseSigning } from "../lib/mobile/iosReleaseSigning";
 
 const root = process.cwd();
 const team = process.env.GOSTONE_APPLE_TEAM_ID?.trim();
-if (!team || !/^[A-Z0-9]{10}$/.test(team)) throw new Error("A valid GOSTONE_APPLE_TEAM_ID is required for App Store signing.");
+const signing = iosReleaseSigning(team ?? "", process.env.GOSTONE_IOS_PROFILE_UUID?.trim() ?? "");
 if (process.env.VITE_GOSTONE_API_URL && process.env.VITE_GOSTONE_API_URL !== "https://gostone.app") {
   throw new Error("Store releases must use https://gostone.app.");
 }
@@ -33,8 +34,7 @@ mkdirSync(directory, { recursive: true });
 run("xcodebuild", [
   "-project", project, "-scheme", "App", "-configuration", "Release",
   "-destination", "generic/platform=iOS", "-archivePath", archive,
-  "-allowProvisioningUpdates", `DEVELOPMENT_TEAM=${team}`,
-  "CODE_SIGN_IDENTITY=Apple Distribution", "archive",
+  ...signing.archiveSettings, "archive",
 ]);
 
 const app = join(archive, "Products/Applications/App.app");
@@ -61,13 +61,14 @@ const profilePlist = join(directory, "provisioning-verification.plist");
 run("security", ["cms", "-D", "-i", profile, "-o", profilePlist]);
 const profileTeam = run("plutil", ["-extract", "TeamIdentifier.0", "raw", "-o", "-", profilePlist], true).trim();
 const getTaskAllow = run("plutil", ["-extract", "Entitlements.get-task-allow", "raw", "-o", "-", profilePlist], true).trim();
-if (profileTeam !== team || getTaskAllow !== "false") {
+const applicationId = run("plutil", ["-extract", "Entitlements.application-identifier", "raw", "-o", "-", profilePlist], true).trim();
+if (profileTeam !== team || getTaskAllow !== "false" || applicationId !== `${team}.app.gostone`) {
   throw new Error("The embedded provisioning profile is not a production profile for this team.");
 }
 const exportOptions = join(directory, "ExportOptions.plist");
-writeFileSync(exportOptions, `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>destination</key><string>export</string><key>signingStyle</key><string>automatic</string><key>teamID</key><string>${team}</string></dict></plist>\n`);
+writeFileSync(exportOptions, signing.exportOptions);
 run("xcodebuild", ["-exportArchive", "-archivePath", archive, "-exportPath", exportDirectory,
-  "-exportOptionsPlist", exportOptions, "-allowProvisioningUpdates"]);
+  "-exportOptionsPlist", exportOptions]);
 const exportedIpa = readdirSync(exportDirectory).find((name) => name.endsWith(".ipa"));
 if (!exportedIpa) throw new Error("Xcode did not export an App Store IPA.");
 const ipa = join(exportDirectory, "GoStone.ipa");

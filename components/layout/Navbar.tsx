@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark } from "./BrandMark";
+
 import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -75,7 +77,7 @@ export function Navbar() {
       }}
     >
       <Link className="brand" href={href("/")} aria-label={dictionary.nav.homeLabel} onClick={() => setOpen(false)}>
-        <span className="brand-mark"><span /><span /></span>
+        <BrandMark />
         <span>GoStone</span>
       </Link>
       <button
