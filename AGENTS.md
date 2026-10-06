@@ -11,6 +11,12 @@
 - Add no unnecessary libraries.
 - Do not perform large refactors without an explicit request.
 
+## Brand artwork
+
+- Approved Sculpted app icons and transparent logos are in `app/icons/`.
+- Read `app/icons/README.md` before producing or updating icon artwork; use
+  its SVG masters and always include a dark version in variants and previews.
+
 ## Browser bot and Japanese scoring
 
 - Use `GOSTONE_BOT_MODEL` in `lib/bot/modelV1.ts` as the single source of truth

@@ -50,6 +50,15 @@ generates the ignored `GoStoneKataGoCore.xcframework`. Simulator inference is
 deliberately unavailable because the Xcode 26.6 MPSGraph simulator driver can
 abort during graph execution; device inference stays linked in Release.
 
+## App icon artwork
+
+Approved light and dark Sculpted app icons and transparent logo masters are
+tracked in [`app/icons/`](../app/icons/README.md). The app icon PNGs are
+1024 × 1024, opaque, and square; the transparent logo PNGs are 2048 × 2048.
+Use the SVG masters to generate other required sizes and include a dark
+version in artwork previews. Generated store uploads and screenshots remain
+under `artifacts/release/<version>-<build>/store-assets/`.
+
 ## Store signing
 
 Confirm that `app.gostone` belongs to the Apple team and matches the Play app,
