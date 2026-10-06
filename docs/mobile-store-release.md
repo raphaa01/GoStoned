@@ -1,5 +1,19 @@
 # Mobile store release
 
+## Approved branding
+
+The iOS AppIcon catalog contains the approved Sculpted light and dark 1024px
+app icons. The light icon is the default, and the dark icon uses iOS's dark
+luminosity appearance. Header logos use the matching transparent masters at
+`public/branding/`. These assets were copied unchanged from the approved
+`app/icons/` artwork in the separate icon-assets branch; that branch's source
+masters remain authoritative. The App Store listing icon comes from the
+uploaded binary, not a separate listing upload.
+
+The iOS launch images use the same approved logo. Regenerate just those images
+with `npm run mobile:splash -- --ios`; without `--ios` the existing generator
+also refreshes Android launch images.
+
 ## Source and native build
 
 This release branch starts from `origin/main` commit
@@ -73,11 +87,16 @@ bundle, builds `bundleRelease`, verifies its signature, arm64 payload and
 model hash, and places the `.aab` plus unstripped native symbol ZIP under
 `artifacts/release/<version>-<build>/android/`.
 
-For iOS, install or allow Xcode to create the Apple Distribution signing
-identity and App Store provisioning profile for the real team, then:
+For iOS, install an Apple Distribution identity with its private key and an
+App Store provisioning profile for `app.gostone` from the real team. Use the
+profile's UUID, not its display name. Release builds use manual signing for
+both archive and export; Xcode's automatic development signing conflicts with
+an explicit Apple Distribution identity. These commands do not create or
+revoke certificates or upload a build:
 
 ```sh
 export GOSTONE_APPLE_TEAM_ID=<actual-10-character-team-id>
+export GOSTONE_IOS_PROFILE_UUID=<installed-app-store-profile-uuid>
 npm run mobile:ios:release
 ```
 

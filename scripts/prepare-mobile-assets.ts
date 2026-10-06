@@ -53,6 +53,7 @@ async function main() {
     { recursive: true },
   );
   await cp(join(repository, "public", "images"), join(output, "images"), { recursive: true });
+  await cp(join(repository, "public", "branding"), join(output, "branding"), { recursive: true });
   await cp(join(repository, "app", "icon.svg"), join(output, "icon.svg"));
 
   if (withKataGo) {

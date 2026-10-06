@@ -62,3 +62,26 @@ test("mobile theme and splash expose the required native states", () => {
   assert.match(splash, /2_400/);
   assert.match(main, /Capacitor\.getPlatform\(\)/);
 });
+
+test("approved light and dark branding is included in both native and web surfaces", () => {
+  const assets = source("scripts", "prepare-mobile-assets.ts");
+  const mark = source("components", "layout", "BrandMark.tsx");
+  const splash = source("mobile", "src", "MobileSplash.tsx");
+  const launch = source("scripts", "generate-mobile-splash.mjs");
+  const icons = JSON.parse(source("ios", "App", "App", "Assets.xcassets", "AppIcon.appiconset", "Contents.json"));
+
+  assert.match(assets, /cp\(join\(repository, "public", "branding"\), join\(output, "branding"\), \{ recursive: true \}\)/);
+  assert.match(splash, /<BrandMark/);
+  assert.match(launch, /join\(root, "public", "branding"/);
+  assert.match(launch, /\.composite\(/);
+  for (const appearance of ["light", "dark"]) {
+    assert.ok(mark.includes(`/branding/gostone-${appearance}.svg`));
+    assert.match(source("public", "branding", `gostone-${appearance}.svg`), /<svg/);
+  }
+  assert.equal(icons.images.length, 2);
+  const dark = icons.images.find((icon: { appearances?: { value: string }[] }) =>
+    icon.appearances?.some((appearance) => appearance.value === "dark"));
+  assert.equal(dark?.filename, "AppIcon-dark.png");
+  assert.ok(icons.images.some((icon: { filename: string; appearances?: unknown[] }) =>
+    icon.filename === "AppIcon-512@2x.png" && !icon.appearances));
+});

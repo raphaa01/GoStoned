@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Refined GoStone Sculpted dark logo"><defs>
+    <radialGradient id="sculpted-dark-black" cx="29%" cy="21%" r="87%"><stop offset="0" stop-color="#707773"/><stop offset="0.34" stop-color="#444b47"/><stop offset="0.74" stop-color="#252b27"/><stop offset="1" stop-color="#141916"/></radialGradient>
+    <radialGradient id="sculpted-dark-white" cx="28%" cy="21%" r="86%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.34" stop-color="#f3f4ef"/><stop offset="0.74" stop-color="#dadfd5"/><stop offset="1" stop-color="#aeb8a8"/></radialGradient>
+    <linearGradient id="sculpted-dark-rim" x1="18%" y1="5%" x2="76%" y2="97%"><stop stop-color="#959d95"/><stop offset=".48" stop-color="#474f46"/><stop offset="1" stop-color="#283025"/></linearGradient>
+    <linearGradient id="sculpted-dark-white-rim" x1="10%" y1="0%" x2="80%" y2="100%"><stop stop-color="#ffffff" stop-opacity=".9"/><stop offset=".62" stop-color="#c4cbbd" stop-opacity=".5"/><stop offset="1" stop-color="#7c8773" stop-opacity=".65"/></linearGradient>
+    <radialGradient id="sculpted-dark-soft-light"><stop stop-color="#ffffff" stop-opacity=".65"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+    <filter id="sculpted-dark-ambient" x="-60%" y="-60%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="25"/></filter>
+    <filter id="sculpted-dark-contact" x="-50%" y="-50%" width="220%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="9"/></filter>
+    <filter id="sculpted-dark-shine" x="-60%" y="-100%" width="240%" height="300%"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs><g class="stone-black">
+    <g class="cast-shadow">
+      <circle cx="424" cy="412" r="216" fill="#0b100a" opacity="0.46" filter="url(#sculpted-dark-ambient)"/>
+      <circle cx="403" cy="383" r="228" fill="#030702" opacity="0.58" filter="url(#sculpted-dark-contact)"/>
+    </g>
+    <circle class="stone-face" cx="400" cy="372" r="230" fill="url(#sculpted-dark-black)" stroke="url(#sculpted-dark-rim)" stroke-width="3"/>
+    <ellipse class="stone-sheen" cx="342" cy="276" rx="128" ry="62" transform="rotate(-30 342 276)" fill="url(#sculpted-dark-soft-light)" opacity="0.065" filter="url(#sculpted-dark-shine)"/>
+  </g><g class="stone-white">
+    <g class="cast-shadow">
+      <circle cx="648" cy="656" r="216" fill="#0b100a" opacity="0.46" filter="url(#sculpted-dark-ambient)"/>
+      <circle cx="627" cy="627" r="228" fill="#030702" opacity="0.58" filter="url(#sculpted-dark-contact)"/>
+    </g>
+    <circle class="stone-face" cx="624" cy="616" r="230" fill="url(#sculpted-dark-white)" stroke="url(#sculpted-dark-white-rim)" stroke-width="2"/>
+    <ellipse class="stone-sheen" cx="566" cy="520" rx="128" ry="62" transform="rotate(-30 566 520)" fill="url(#sculpted-dark-soft-light)" opacity="0.085" filter="url(#sculpted-dark-shine)"/>
+  </g></svg>

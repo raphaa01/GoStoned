@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { getMobileCopy } from "@/lib/i18n/mobile";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 export function MobileSplash() {
   const { loading } = useAuth();
@@ -33,8 +34,7 @@ export function MobileSplash() {
       role="status"
     >
       <div className="mobile-splash__mark" aria-hidden="true">
-        <i /><i /><i />
-        <span />
+        <BrandMark />
       </div>
       <strong>GoStone</strong>
     </div>

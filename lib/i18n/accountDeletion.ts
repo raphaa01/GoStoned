@@ -12,6 +12,21 @@ const EN = {
   confirmation: "This is a request handled by GoStone support. Sending the request does not immediately delete your account. Support will explain any verification steps and confirm the outcome. Once completed, deletion cannot be undone.",
   unavailable: "The deletion contact is temporarily unavailable. Please use the contact details in our privacy policy.",
   privacy: "Privacy policy",
+  inAppTitle: "Request deletion in GoStone",
+  inAppIntro: "Request deletion of this account or guest profile and associated personal data. GoStone support will process the request within 7 days. You can check the result here, including after your sign-in access is removed.",
+  emailLabel: "Confirmation email (optional)",
+  emailHint: "Leave this blank to check the result here. Never enter a password or sign-in code.",
+  consent: "I understand that completed deletion is permanent and cannot be undone.",
+  sending: "Sending request...",
+  loading: "Checking deletion requests...",
+  failed: "The request could not be completed. Please try again.",
+  retry: "Try again",
+  signIn: "Sign in to request account deletion. If you played as a guest, open this page on the device where you played.",
+  pending: "Your deletion request has been received.",
+  processing: "Your deletion request is being processed.",
+  completed: "Your account deletion has been completed.",
+  due: "Completion due by",
+  reference: "Request reference",
 };
 
 const DE: typeof EN = {
@@ -26,6 +41,21 @@ const DE: typeof EN = {
   confirmation: "Die Anfrage wird vom GoStone-Support bearbeitet. Durch das Absenden wird dein Konto nicht sofort gelöscht. Der Support erklärt mögliche Nachweisschritte und bestätigt das Ergebnis. Eine abgeschlossene Löschung kann nicht rückgängig gemacht werden.",
   unavailable: "Der Kontakt für Löschanfragen ist vorübergehend nicht verfügbar. Bitte nutze die Kontaktdaten in unserer Datenschutzerklärung.",
   privacy: "Datenschutzerklärung",
+  inAppTitle: "Löschung in GoStone anfordern",
+  inAppIntro: "Fordere die Löschung dieses Kontos oder Gastprofils und der zugehörigen personenbezogenen Daten an. Der GoStone-Support bearbeitet die Anfrage innerhalb von 7 Tagen. Du kannst das Ergebnis hier prüfen, auch nachdem dein Anmeldezugang entfernt wurde.",
+  emailLabel: "E-Mail für die Bestätigung (optional)",
+  emailHint: "Lasse dieses Feld leer, um das Ergebnis hier zu prüfen. Gib niemals ein Passwort oder einen Anmeldecode ein.",
+  consent: "Ich verstehe, dass eine abgeschlossene Löschung endgültig ist und nicht rückgängig gemacht werden kann.",
+  sending: "Anfrage wird gesendet...",
+  loading: "Löschanfragen werden geprüft...",
+  failed: "Die Anfrage konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+  retry: "Erneut versuchen",
+  signIn: "Melde dich an, um die Kontolöschung anzufordern. Wenn du als Gast gespielt hast, öffne diese Seite auf dem Gerät, auf dem du gespielt hast.",
+  pending: "Deine Löschanfrage ist eingegangen.",
+  processing: "Deine Löschanfrage wird bearbeitet.",
+  completed: "Deine Kontolöschung wurde abgeschlossen.",
+  due: "Abschluss spätestens am",
+  reference: "Anfragenummer",
 };
 
 // The store release supports English and German deletion instructions. Other
