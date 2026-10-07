@@ -69,6 +69,8 @@ html[data-mobile-app="true"][data-mobile-theme="dark"] { color-scheme: dark; }
 html[data-mobile-platform="ios"][data-native-tab-bar="true"] { --mobile-tab-height: 49px; }
 
 html[data-mobile-app="true"] body {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-serif: var(--font-sans);
   --color-canvas: var(--mobile-bg);
   --color-canvas-deep: var(--mobile-surface);
   --color-surface: var(--mobile-surface);
@@ -711,7 +713,7 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
   .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(56vw, calc(100dvh - 230px), 680px); }
 }
 
-/* Give mobile subpages the same quiet, grouped surfaces as the home screen. */
+/* Sections use spacing and one divider instead of nested card frames. */
 .mobile-puzzle-screen [class*="workspace"],
 .mobile-learn-screen .learn-practice-entry,
 .mobile-learn-screen .learning-chapters,
@@ -724,13 +726,13 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-pushed-screen .profile-board-placement,
 .mobile-pushed-screen .profile-history,
 .mobile-pushed-screen .training-game {
-  background: color-mix(in srgb, var(--mobile-surface) 78%, transparent);
-  border: 1px solid var(--mobile-border);
-  border-radius: 14px;
-  box-shadow: 0 3px 14px rgb(30 26 18 / 4%);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.mobile-puzzle-screen [class*="workspace"] { padding: var(--space-3) !important; }
+.mobile-puzzle-screen [class*="workspace"] { padding: 0 !important; }
 .mobile-puzzle-screen [class*="boardColumn"] { margin-inline: 0 !important; }
 .mobile-puzzle-screen [class*="inlineIncorrect"] { margin-bottom: var(--space-2); padding: 7px 10px; }
 .mobile-puzzle-screen [class*="feedbackActions"] { gap: var(--space-2); margin-top: var(--space-2); }
@@ -746,16 +748,16 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-pushed-screen .friends-page .friends-card,
 .mobile-pushed-screen .profile-board-placement,
 .mobile-pushed-screen .profile-history,
-.mobile-pushed-screen .training-game { padding: var(--space-3) !important; }
+.mobile-pushed-screen .training-game { padding: var(--space-3) 0 !important; }
 
-.mobile-review-screen [class*="gamePicker"] { border-radius: var(--mobile-radius-md) !important; }
+.mobile-review-screen [class*="gamePicker"] { background: transparent !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; }
 .mobile-pushed-screen .friends-page .player-search { border-bottom: 1px solid var(--mobile-border) !important; }
-.mobile-pushed-screen .friends-page .friends-card { border-radius: 14px !important; }
+.mobile-pushed-screen .friends-page .friends-card { border: 0 !important; border-radius: 0 !important; }
 .mobile-pushed-screen .profile-history { margin-top: var(--space-2) !important; }
 .mobile-pushed-screen .settings-page { gap: 18px; }
 .mobile-pushed-screen .settings-page .profile-board-placement { margin: 0; }
 .mobile-pushed-screen .settings-page .settings-back { display: none; }
-.mobile-pushed-screen .profile-performance { background: color-mix(in srgb, var(--mobile-surface) 78%, transparent); border: 1px solid var(--mobile-border) !important; border-radius: 14px; padding: var(--space-3); }
+.mobile-pushed-screen .profile-performance { background: transparent; border: 0 !important; padding: 0; }
 .mobile-pushed-screen .profile-rating-band { margin-inline: 0; }
 
 @media (max-width: 370px) {
@@ -810,3 +812,92 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
 .mobile-app-content .leaderboard-table tr > td:last-child strong { font-size: 12px; white-space: nowrap; }
 .mobile-app-content .leaderboard-player-name { display: block; overflow: hidden; text-overflow: ellipsis; }
 .mobile-app-content .leaderboard-player-stats { color: var(--mobile-muted); display: block; font-size: 10px; font-weight: 400; margin-top: 4px; white-space: normal; }
+
+/* Home: two destinations, a small statistics strip and recent games. */
+.mobile-home { gap: 20px; }
+.mobile-home-header { min-height: 48px; }
+.mobile-profile-button { max-width: 100%; }
+.mobile-home-actions { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mobile-home-action {
+  background: var(--mobile-surface-secondary);
+  border: 0;
+  border-radius: 16px;
+  color: var(--mobile-text);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  position: relative;
+  text-decoration: none;
+}
+.mobile-home-action:active { background: var(--mobile-selected); }
+.mobile-home-action:focus-visible { outline: 2px solid var(--mobile-accent); outline-offset: 3px; }
+.mobile-home-action > span { align-items: center; display: flex; gap: 8px; justify-content: space-between; width: 100%; }
+.mobile-home-action strong { font-size: 16px; font-weight: 680; line-height: 1.25; }
+.mobile-home-action svg { color: var(--mobile-accent-strong); flex-shrink: 0; }
+.mobile-home-action .mobile-mini-board { border-radius: 9px; height: 56px; width: 56px; }
+.mobile-home-action .mobile-learning-icon { height: 56px; width: 40px; }
+.mobile-home-action .mobile-progress-track { background: var(--mobile-border); margin: 0; width: 100%; }
+.mobile-home-action small { color: var(--mobile-muted); font-size: 11px; margin-top: -6px; }
+.mobile-home-section { padding-top: 16px; }
+.mobile-section-heading { min-height: 32px; }
+.mobile-stat-row { margin-top: 10px; }
+.mobile-stat-row dd { font-size: clamp(15px, 4.1vw, 21px); }
+.mobile-stat-row dd .rating-label { font-size: inherit; gap: 2px; }
+.mobile-game-list { margin-top: 4px; }
+.mobile-game-list > a { min-height: 58px; }
+.mobile-game-list strong { font-size: 14px; }
+.mobile-game-list small { font-size: 11px; }
+.mobile-empty-state { border: 0; padding: 12px 0; }
+
+/* Let every column shrink to its container; viewport widths must not overrun a tablet grid. */
+.mobile-app-content :where(.mobile-tab-screen, .mobile-pushed-screen, .content-page, .play-experience, .play-board-column, .play-pace-column, .profile-performance__main, .friends-grid) { min-width: 0; max-width: 100%; }
+.mobile-app-content .play-experience { width: 100%; }
+.mobile-app-content .play-board-preview,
+.mobile-app-content .play-board-column .size-selector { max-width: 100% !important; }
+.mobile-app-content .profile-performance__main { gap: 0; min-height: 0; }
+.mobile-app-content .profile-rating-band { align-content: center; border: 0 !important; grid-template-columns: minmax(0, 1fr); justify-content: start; justify-items: start; min-height: 0; padding: 20px !important; text-align: left; }
+.mobile-app-content .profile-rating-band .rating-label--hero strong { font-size: clamp(28px, 8vw, 38px); line-height: 1.1; }
+.mobile-app-content .profile-rating-band__eyebrow { margin-bottom: 0; }
+.mobile-app-content .profile-rating-plot { border: 0 !important; padding: 22px 0 12px !important; }
+.mobile-app-content .profile-rating-plot > header { align-items: center; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+.mobile-app-content .profile-period { background: transparent; border: 0; margin: 0; padding: 0; }
+.mobile-app-content .profile-performance .profile-metrics { border: 0; border-top: 1px solid var(--mobile-border); }
+.mobile-app-content .profile-performance .profile-metrics article { column-gap: 12px; padding: 14px 0 !important; }
+.mobile-app-content .profile-metrics article > .rating-label,
+.mobile-app-content .profile-metrics article > strong { font-size: 16px; margin: 0; }
+.mobile-app-content .profile-metrics article > span:not(.rating-label) { font-size: 13px; }
+.mobile-app-content .recent-form { flex-wrap: wrap; gap: 4px; justify-content: flex-end; max-width: 180px; }
+.mobile-app-content .recent-form .result-dot { height: 22px; width: 22px; }
+.mobile-app-content .leaderboard-viewer { background: var(--mobile-surface-secondary); border: 0; padding: 16px; }
+.mobile-review-screen [class*="hero"] { border: 0; }
+.mobile-review-screen [class*="sectionHeading"] { align-items: center; min-height: 44px; }
+
+@media (min-width: 760px) {
+  .mobile-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px 32px; }
+  .mobile-home-actions { grid-column: 1 / -1; }
+  .mobile-home-action { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .mobile-home-action > span { flex: 1; width: auto; }
+  .mobile-home-action .mobile-progress-track { flex-basis: 100%; }
+  .mobile-app-content .play-experience { align-items: center !important; gap: clamp(24px, 4vw, 48px) !important; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) !important; max-width: 1040px !important; padding: 24px 0 !important; }
+  .mobile-app-content .play-board-column { position: static; }
+  .mobile-app-content .play-board-preview,
+  .mobile-app-content .play-board-column .size-selector { width: min(100%, 54dvh, 500px) !important; }
+  .mobile-app-content .play-pace-column { border: 0; margin: 0; padding: 0 !important; }
+  .mobile-app-content .time-selector button { min-height: 62px; }
+  .mobile-app-content .time-selector strong { font-size: 17px !important; }
+  .mobile-app-content .time-selector-copy span { font-size: 12px; }
+  .mobile-app-content .profile-performance__main { align-items: center; gap: 28px; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr) !important; }
+  .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(100%, calc(100dvh - 240px), 680px); }
+  .mobile-puzzle-screen [class*="categoryGrid"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; column-gap: 28px; }
+  .mobile-review-screen [class*="reviewMain"] { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+@media (max-width: 359px) {
+  .mobile-home-actions { gap: 8px; }
+  .mobile-home-action { padding: 12px; }
+  .mobile-home-action strong { font-size: 14px; }
+  .mobile-app-content .profile-performance .profile-metrics article { grid-template-columns: 20px minmax(0, 1fr); }
+  .mobile-app-content .profile-metrics article > :last-child { grid-column: 2; justify-self: start; }
+  .mobile-app-content .recent-form { justify-content: flex-start; max-width: 100%; }
+}

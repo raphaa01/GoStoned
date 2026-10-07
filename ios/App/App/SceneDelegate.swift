@@ -33,7 +33,7 @@ final class GoStoneSharePlugin: CAPPlugin, CAPBridgedPlugin {
 final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelegate, WKScriptMessageHandler, UIGestureRecognizerDelegate {
     private let nativeTabBar = UITabBar()
     private var destinations: [Int: String] = [:]
-    private let symbols = ["house", "puzzlepiece", "graduationcap", "chart.bar.xaxis", "trophy"]
+    private let symbols = ["house", "puzzlepiece", "graduationcap", "chart.bar", "trophy"]
     private var tabDefinitions: [[String: String]] = []
     private var canGoBack = true
 
@@ -116,7 +116,9 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
                 guard index < symbols.count,
                       let label = tab["label"],
                       let href = tab["href"] else { return nil }
-                let item = UITabBarItem(title: label, image: UIImage(systemName: symbols[index]), tag: index)
+                let image = UIImage(systemName: symbols[index])
+                let item = UITabBarItem(title: label, image: image, selectedImage: image)
+                item.tag = index
                 destinations[index] = href
                 return item
             }

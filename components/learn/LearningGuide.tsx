@@ -158,7 +158,6 @@ export function LearningGuide() {
       {!selectedStage ? <footer className="learn-future">
         <strong>{copy.later}</strong>
         <p>{copy.futureTopics}</p>
-        <span>{copy.futureNote}</span>
       </footer> : null}
 
       <div className="learn-next-dock">

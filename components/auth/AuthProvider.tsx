@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { invalidateRouteData } from "@/lib/client/routeCache";
 import { readApi } from "@/lib/client/api";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [rating, setRating] = useState<CurrentRatingIdentity | null>(null);
   const [ratingLoading, setRatingLoading] = useState(false);
   const ratingRequestGeneration = useRef(0);
+  const cacheOwner = useRef<string | null>(null);
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -49,6 +51,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok || !body.ok) {
         throw new Error(localizedAuthError(dictionary, body.code, "session_failed"));
       }
+      const nextOwner = body.user?.playerKey ?? null;
+      if (cacheOwner.current !== nextOwner) invalidateRouteData();
+      cacheOwner.current = nextOwner;
       setUser(body.user ?? null);
       setError(null);
     } catch (requestError) {
@@ -63,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [dictionary]);
 
-  const refreshRating = useCallback(async () => {
+  const refreshRating = useCallback(async (options?: { invalidate?: boolean }) => {
     const playerKey = user?.playerKey;
     const generation = ratingRequestGeneration.current + 1;
     ratingRequestGeneration.current = generation;
@@ -72,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRatingLoading(false);
       return;
     }
+    if (options?.invalidate !== false) invalidateRouteData();
     setRatingLoading(true);
     try {
       const response = await fetch("/api/profile/rating", { cache: "no-store" });
@@ -94,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(logoutError.message);
       throw logoutError;
     }
+    invalidateRouteData();
+    cacheOwner.current = null;
     ratingRequestGeneration.current += 1;
     setUser(null);
     setRating(null);
@@ -117,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     const timeout = window.setTimeout(() => {
-      refreshRating().catch(() => undefined);
+      refreshRating({ invalidate: false }).catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [loading, refreshRating]);

@@ -4,7 +4,7 @@ import { registerThemeLessonTests } from "../shared/themeLessonHarness";
 
 registerThemeLessonTests(true);
 
-test("review has one complete frame in light and dark mode", async ({ page }, info) => {
+test("review uses a continuous list without a nested frame in light and dark mode", async ({ page }, info) => {
   await installHarness(page);
   await page.route("**/api/profile", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, recentGames: [
     { gameId: GAME_ID, moveCount: 42, opponentName: "BambooShade", boardSize: 13, timeControl: "classic", result: "loss", gameResult: "W+19.5", finishedAt: new Date().toISOString(), rated: false },
@@ -20,7 +20,7 @@ test("review has one complete frame in light and dark mode", async ({ page }, in
       const style = getComputedStyle(element);
       return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth];
     });
-    expect(borders).toEqual(["1px", "1px", "1px", "1px"]);
+    expect(borders).toEqual(["0px", "0px", "0px", "0px"]);
     await assertNoOverflow(page);
     await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
     await page.screenshot({ path: `.cache/review-frame-${theme}-${info.project.name}.png` });

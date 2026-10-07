@@ -2,11 +2,10 @@ import {
   ArrowRight,
   BookOpen,
   CircleUserRound,
-  Puzzle,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
@@ -18,27 +17,19 @@ import type { FriendsDashboard } from "@/lib/friends/types";
 import { getMobileCopy } from "@/lib/i18n/mobile";
 import { useLearnProgress } from "@/components/learn/useLearnProgress";
 import { LEARN_LESSON_IDS } from "@/lib/learn/progress";
-import type {
-  GlobalRatingSummary,
-  PublicRatingPreferences,
-  RecentGame,
-} from "@/lib/stats/statsService";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
 
-type ProfileResponse = {
-  rating?: GlobalRatingSummary;
-  preferences?: PublicRatingPreferences;
-  recentGames?: RecentGame[];
-};
+import type { ProfileResponse } from "@/components/profile/ProfileView";
+import { useRouteResource } from "@/components/useRouteResource";
+import { routeCacheKey } from "@/lib/client/routeCache";
 
 type HomeData = {
   playerKey: string | null;
-  profile: ProfileResponse | null;
   friends: FriendsDashboard | null;
   matchmaking: MatchmakingQueueState | null;
 };
 
-const EMPTY_DATA: HomeData = { playerKey: null, profile: null, friends: null, matchmaking: null };
+const EMPTY_DATA: HomeData = { playerKey: null, friends: null, matchmaking: null };
 
 function signed(value: number) {
   const rounded = Math.round(value);
@@ -51,6 +42,8 @@ export function MobileHome() {
   const copy = getMobileCopy(locale);
   const playerKey = user?.playerKey ?? null;
   const [data, setData] = useState<HomeData>(EMPTY_DATA);
+  const loadProfile = useCallback(() => fetch("/api/profile", { cache: "no-store" }).then(readApi<ProfileResponse>), []);
+  const profile = useRouteResource(playerKey ? routeCacheKey("profile", playerKey) : null, loadProfile);
   const { progress } = useLearnProgress();
   const learned = progress.completedLessonIds.length;
 
@@ -59,19 +52,16 @@ export function MobileHome() {
     const controller = new AbortController();
     const headers = { [EXPECTED_PLAYER_HEADER]: playerKey };
     void Promise.allSettled([
-      fetch("/api/profile", { cache: "no-store", signal: controller.signal })
-        .then((response) => readApi<ProfileResponse>(response)),
       fetch("/api/friends", { cache: "no-store", headers, signal: controller.signal })
         .then((response) => readApi<{ dashboard: FriendsDashboard }>(response))
         .then((body) => body.dashboard),
       fetch("/api/matchmaking", { cache: "no-store", headers, signal: controller.signal })
         .then((response) => readApi<{ matchmaking: MatchmakingQueueState }>(response))
         .then((body) => body.matchmaking),
-    ]).then(([profile, friends, matchmaking]) => {
+    ]).then(([friends, matchmaking]) => {
       if (controller.signal.aborted) return;
       setData({
         playerKey,
-        profile: profile.status === "fulfilled" ? profile.value : null,
         friends: friends.status === "fulfilled" ? friends.value : null,
         matchmaking: matchmaking.status === "fulfilled" ? matchmaking.value : null,
       });
@@ -80,7 +70,7 @@ export function MobileHome() {
   }, [playerKey]);
 
   const currentData = user && data.playerKey === user.playerKey ? data : EMPTY_DATA;
-  const recentGames = currentData.profile?.recentGames?.slice(0, 3) ?? [];
+  const recentGames = profile.data?.recentGames?.slice(0, 3) ?? [];
   const onlineFriends = currentData.friends?.friends.filter((friend) => friend.presence !== "offline") ?? [];
   const incomingRequests = currentData.friends?.requests.filter((request) => request.direction === "incoming") ?? [];
   const totalLessons = LEARN_LESSON_IDS.length;
@@ -107,7 +97,6 @@ export function MobileHome() {
       {!user ? (
         <section className="mobile-home-intro">
           <div aria-hidden="true" className="mobile-home-stone"><i /><i /><span /></div>
-          <p>{copy.signedOutHome}</p>
           <div>
             <Link className="button button--primary" href={href("/login")}>{copy.signIn}</Link>
             <Link className="button button--secondary" href={href("/register")}>{copy.createAccount}</Link>
@@ -125,35 +114,29 @@ export function MobileHome() {
         </section>
       ) : null}
 
-      <section className="mobile-home-section mobile-puzzle-entry">
-        <div aria-hidden="true" className="mobile-mini-board"><i /><i /><i /><span /><b /></div>
-        <div>
-          <small>{dictionary.nav.puzzles}</small>
-          <h2>{copy.dailyPuzzle}</h2>
-          <p>{copy.dailyPuzzleBody}</p>
-        </div>
-        <Link aria-label={copy.solvePuzzle} href={href("/puzzles")}><Puzzle aria-hidden="true" size={19} /><ArrowRight aria-hidden="true" size={17} /></Link>
-      </section>
+      <div className="mobile-home-actions">
+        <Link className="mobile-home-action mobile-puzzle-entry" href={href("/puzzles")}>
+          <div aria-hidden="true" className="mobile-mini-board"><i /><i /><i /><span /><b /></div>
+          <span><strong>{copy.dailyPuzzle}</strong><ArrowRight aria-hidden="true" size={18} /></span>
+        </Link>
+        <Link className="mobile-home-action mobile-learning-entry" href={href("/learn")}>
+          <BookOpen aria-hidden="true" className="mobile-learning-icon" size={32} strokeWidth={1.6} />
+          <span><strong>{learningTitle}</strong><ArrowRight aria-hidden="true" size={18} /></span>
+          <div className="mobile-progress-track" aria-label={copy.lessonsComplete.replace("{done}", String(learned)).replace("{total}", String(totalLessons))}><i style={{ width: `${learningPercent}%` }} /></div>
+          <small>{learned} / {totalLessons}</small>
+        </Link>
+      </div>
 
-      {currentData.profile?.rating && currentData.profile.preferences ? (
+      {profile.data?.rating && profile.data.preferences ? (
         <section className="mobile-home-section">
           <header className="mobile-section-heading"><h2>{copy.statistics}</h2></header>
           <dl className="mobile-stat-row">
-            <div><dt>{copy.rating}</dt><dd><RatingLabel locale={locale} preference={currentData.profile.preferences.displayPreference} rating={currentData.profile.rating.rating} /></dd></div>
-            <div><dt>{copy.ratedGames}</dt><dd>{currentData.profile.rating.ratedGameCount}</dd></div>
-            <div><dt>{copy.lastThirtyDays}</dt><dd className={currentData.profile.rating.ratingChange30Days > 0 ? "is-positive" : currentData.profile.rating.ratingChange30Days < 0 ? "is-negative" : ""}>{signed(currentData.profile.rating.ratingChange30Days)}</dd></div>
+            <div><dt>{copy.rating}</dt><dd><RatingLabel locale={locale} preference={profile.data.preferences.displayPreference} rating={profile.data.rating.rating} /></dd></div>
+            <div><dt>{copy.ratedGames}</dt><dd>{profile.data.rating.ratedGameCount}</dd></div>
+            <div><dt>{copy.lastThirtyDays}</dt><dd className={profile.data.rating.ratingChange30Days > 0 ? "is-positive" : profile.data.rating.ratingChange30Days < 0 ? "is-negative" : ""}>{signed(profile.data.rating.ratingChange30Days)}</dd></div>
           </dl>
         </section>
       ) : null}
-
-      <section className="mobile-home-section mobile-learning-entry">
-        <div className="mobile-section-heading">
-          <div><small>{copy.learningBasics}</small><h2>{learningTitle}</h2></div>
-          <Link href={href("/learn")}><BookOpen aria-hidden="true" size={19} /><ArrowRight aria-hidden="true" size={17} /></Link>
-        </div>
-        <div className="mobile-progress-track" aria-label={copy.lessonsComplete.replace("{done}", String(learned)).replace("{total}", String(totalLessons))}><i style={{ width: `${learningPercent}%` }} /></div>
-        <p>{copy.lessonsComplete.replace("{done}", String(learned)).replace("{total}", String(totalLessons))}</p>
-      </section>
 
       {user ? (
         <section className="mobile-home-section">

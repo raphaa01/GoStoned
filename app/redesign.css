@@ -5477,7 +5477,7 @@ body {
 .play-experience {
   align-items: start;
   gap: clamp(34px, 5vw, 72px);
-  grid-template-columns: minmax(360px, 1.08fr) minmax(360px, .92fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
   min-height: 0;
   padding: 48px 0 80px;
 }
