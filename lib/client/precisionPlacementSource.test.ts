@@ -109,7 +109,7 @@ test("a played stone is rendered optimistically while the server confirms it", (
   );
   assert.match(move, /setPendingMove\(null\)[\s\S]+setBusy\(false\)/);
   assert.match(room, /pendingMove=\{pendingMove\}/);
-  assert.match(room, /boardState=\{pendingMovePreview\?\.board \?\? game\.board\}/);
+  assert.match(room, /: pendingMovePreview\?\.board \?\? game\.board\}/);
   assert.match(room, /game\.moveCount \+ \(pendingMovePreview\?\.applied \? 1 : 0\)/);
   assert.match(board, /const stone = serverStone \?\? pendingStone/);
   assert.match(optimisticGame, /applyMove\([\s\S]+result\.board/);

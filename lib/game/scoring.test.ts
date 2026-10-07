@@ -25,13 +25,14 @@ import {
 const gameServiceSource = readFileSync(new URL("./gameService.ts", import.meta.url), "utf8");
 
 test("dead-group persistence changes only the selected connected group", () => {
-  assert.match(gameServiceSource, /ON CONFLICT \(game_id, x, y\) DO NOTHING/);
+  const groupMutation = gameServiceSource.split("export async function setDeadGroup(")[1].split("export async function confirmScore(")[0];
+  assert.match(groupMutation, /ON CONFLICT \(game_id, x, y\) DO NOTHING/);
   assert.match(
-    gameServiceSource,
+    groupMutation,
     /DELETE FROM game_dead_stones[\s\S]+UNNEST\(\$2::int\[\], \$3::int\[\]\)/,
   );
   assert.doesNotMatch(
-    gameServiceSource,
+    groupMutation,
     /client\.query\("DELETE FROM game_dead_stones WHERE game_id = \$1"/,
   );
 });

@@ -34,7 +34,8 @@ import {
   type ChineseAreaComputation,
   type ScoredOutcome,
 } from "./scoreContract";
-import { scoreJapaneseTerritory } from "./japaneseScoring";
+import { countedTerritoryPoints, JapaneseScoringError, remainingNeutralRegionSeeds, scoreJapaneseTerritory } from "./japaneseScoring";
+import { settlementPositions } from "./settlementAgreement";
 import {
   JapaneseNormalPlayReplayError,
   replayJapaneseNormalPlayBoardLegality,
@@ -188,6 +189,9 @@ type ScoringRow = {
   handicap: number;
   fallback_to_move: Stone;
   expires_at: Date | null;
+  neutral_region_seeds: Position[];
+  uncertain_stones: Position[];
+  browser_bot_proposal_ready: boolean;
   black_confirmed_revision: number | null;
   white_confirmed_revision: number | null;
   black_confirmed_at: Date | null;
@@ -1121,7 +1125,7 @@ function calculateAgreementScore(
     board,
     prisoners: replay.prisoners,
     deadStones,
-    agreedNeutralRegionSeeds: [],
+    agreedNeutralRegionSeeds: loaded.scoring?.neutral_region_seeds ?? [],
     komi: loaded.rules.komi,
   });
   const outcome = score.outcome;
@@ -1404,6 +1408,11 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
       boardHash: scoring.board_hash,
       stoppedMoveNumber: scoring.stopped_move_number,
       deadStones,
+      neutralRegionSeeds: scoring.neutral_region_seeds ?? [],
+      uncertainStones: scoring.uncertain_stones ?? [],
+      browserBotProposalReady: scoring.browser_bot_proposal_ready ?? false,
+      territory: scoring.finalized_at
+        ? countedTerritoryPoints(board, deadStones, scoring.neutral_region_seeds ?? []) : undefined,
       blackConfirmed: scoring.black_confirmed_revision === scoring.revision,
       whiteConfirmed: scoring.white_confirmed_revision === scoring.revision,
       preview: preview!,
@@ -1924,6 +1933,9 @@ export async function submitMove(
         handicap: rules.handicap,
         fallback_to_move: opposite(color),
         expires_at: expiresAt,
+        neutral_region_seeds: [],
+        uncertain_stones: [],
+        browser_bot_proposal_ready: false,
         black_confirmed_revision: null,
         white_confirmed_revision: null,
         black_confirmed_at: null,
@@ -1970,6 +1982,62 @@ export async function submitMove(
   });
 }
 
+/** Installs the whole local-model proposal under one locked agreement revision. */
+export async function setBrowserBotScoringProposal(
+  gameId: string,
+  botPlayerKey: string,
+  proposal: { expectedRevision: number; deadStones: unknown; neutralRegionSeeds: unknown; uncertainStones: unknown },
+): Promise<GameState> {
+  return withTransaction(async (client) => {
+    const loaded = await loadGame(client, gameId, botPlayerKey, true);
+    const scoring = assertScoringPhase(loaded, proposal.expectedRevision);
+    if (!loaded.game.browser_bot_model_version || scoring.browser_bot_proposal_ready) {
+      throw new GameServiceError("The scoring proposal has already been prepared.", 409, "scoring_revision_conflict");
+    }
+    const board = stoppedBoard(loaded, scoring);
+    const deadStones = settlementPositions(proposal.deadStones, board, true);
+    const uncertainStones = settlementPositions(proposal.uncertainStones, board, true);
+    const neutralRegionSeeds = settlementPositions(proposal.neutralRegionSeeds, board);
+    const deadKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
+    if (uncertainStones.some(({ x, y }) => deadKeys.has(`${x}:${y}`))
+      || (loaded.rules.ruleset !== "japanese" && neutralRegionSeeds.length > 0)) {
+      throw new GameServiceError("The settlement proposal is invalid.", 400, "invalid_browser_bot_action");
+    }
+    const candidateScoring = { ...scoring, neutral_region_seeds: neutralRegionSeeds };
+    try {
+      calculateAgreementScore({ ...loaded, scoring: candidateScoring }, board, deadStones);
+    } catch (error) {
+      if (error instanceof JapaneseScoringError) {
+        throw new GameServiceError(error.message, 400, "invalid_browser_bot_action");
+      }
+      throw error;
+    }
+    const now = new Date();
+    const revision = scoring.revision + 1;
+    await client.query("DELETE FROM game_dead_stones WHERE game_id = $1", [gameId]);
+    await client.query(
+      `INSERT INTO game_dead_stones (game_id,x,y,color)
+       SELECT $1,points.x,points.y,points.color
+         FROM UNNEST($2::int[],$3::int[],$4::text[]) AS points(x,y,color)`,
+      [gameId, deadStones.map(({ x }) => x), deadStones.map(({ y }) => y), deadStones.map(({ x, y }) => board[y][x])],
+    );
+    const updatedScoring = await client.query<ScoringRow>(
+      `UPDATE game_scoring_state SET revision = $2, neutral_region_seeds = $3::jsonb,
+         uncertain_stones = $4::jsonb, browser_bot_proposal_ready = TRUE,
+         black_confirmed_revision = NULL, white_confirmed_revision = NULL,
+         black_confirmed_at = NULL, white_confirmed_at = NULL, updated_at = $5
+       WHERE game_id = $1 RETURNING *`,
+      [gameId, revision, JSON.stringify(neutralRegionSeeds), JSON.stringify(uncertainStones), now],
+    );
+    const updatedGame = await client.query<GameRow>(
+      `UPDATE games SET scoring_revision = $2, updated_at = $3, version = version + 1
+       WHERE id = $1 RETURNING *`, [gameId, revision, now],
+    );
+    return serializeGame({ ...withUpdatedGame(loaded, updatedGame.rows[0]), scoring: updatedScoring.rows[0],
+      deadRows: deadStones.map(({ x, y }) => ({ x, y, color: board[y][x]! })) }, now);
+  });
+}
+
 export async function setDeadGroup(
   gameId: string,
   playerKey: string,
@@ -1982,6 +2050,9 @@ export async function setDeadGroup(
     const scoring = assertScoringPhase(loaded, proposal.expectedRevision);
     if (typeof proposal.dead !== "boolean") {
       throw new GameServiceError("The dead-stone state is required.", 400, "invalid_dead_state");
+    }
+    if (loaded.game.browser_bot_model_version && !scoring.browser_bot_proposal_ready) {
+      throw new GameServiceError("Wait for the complete scoring proposal.", 409, "scoring_proposal_pending");
     }
     const board = stoppedBoard(loaded, scoring);
     let toggled: ReturnType<typeof toggleDeadGroup>;
@@ -1999,11 +2070,14 @@ export async function setDeadGroup(
         "invalid_dead_stone",
       );
     }
-    if (!toggled.changed) return serializeGame(loaded);
+    const changedGroup = getGroup(board, { x: proposal.x, y: proposal.y });
+    const groupKeys = new Set(changedGroup.map(({ x, y }) => `${x}:${y}`));
+    const uncertainStones = (scoring.uncertain_stones ?? []).filter(({ x, y }) => !groupKeys.has(`${x}:${y}`));
+    const resolvedUncertainty = uncertainStones.length !== (scoring.uncertain_stones ?? []).length;
+    if (!toggled.changed && !resolvedUncertainty) return serializeGame(loaded);
 
     const revision = scoring.revision + 1;
     const now = new Date();
-    const changedGroup = getGroup(board, { x: proposal.x, y: proposal.y });
     const xs = changedGroup.map(({ x }) => x);
     const ys = changedGroup.map(({ y }) => y);
     if (proposal.dead) {
@@ -2030,12 +2104,15 @@ export async function setDeadGroup(
     const scoringResult = await client.query<ScoringRow>(
       `UPDATE game_scoring_state
           SET revision = $2,
+              uncertain_stones = $4::jsonb,
+              neutral_region_seeds = $5::jsonb,
               black_confirmed_revision = NULL, white_confirmed_revision = NULL,
               black_confirmed_at = NULL, white_confirmed_at = NULL,
               updated_at = $3
         WHERE game_id = $1
         RETURNING *`,
-      [loaded.game.id, revision, now],
+      [loaded.game.id, revision, now, JSON.stringify(uncertainStones),
+        JSON.stringify(remainingNeutralRegionSeeds(board, toggled.deadStones, scoring.neutral_region_seeds ?? []))],
     );
     const gameResult = await client.query<GameRow>(
       `UPDATE games
@@ -2078,6 +2155,12 @@ export async function confirmScore(
       throw new GameServiceError("This game is already finished.", 409, "game_finished");
     }
     const scoring = assertScoringPhase(loaded, expectedRevision);
+    if (loaded.game.browser_bot_model_version && !scoring.browser_bot_proposal_ready) {
+      throw new GameServiceError("Wait for the complete scoring proposal.", 409, "scoring_proposal_pending");
+    }
+    if ((scoring.uncertain_stones ?? []).length > 0) {
+      throw new GameServiceError("Review the uncertain groups before confirming.", 409, "scoring_groups_uncertain");
+    }
     const confirmationKey = `${color}_confirmed_revision` as const;
     if (scoring[confirmationKey] === expectedRevision) return serializeGame(loaded);
 

@@ -2677,6 +2677,37 @@ a {
   opacity: 0.48;
 }
 
+.territory-mark {
+  width: 28%;
+  height: 28%;
+  border-radius: 1px;
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.territory-mark--black {
+  background: #202321;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.territory-mark--white {
+  background: #faf9f4;
+  border: 1px solid rgba(25, 30, 27, 0.42);
+}
+
+.scoring-uncertain-groups { display: grid; gap: 10px; padding-block: 12px; }
+.scoring-uncertain-group { display: flex; align-items: center; gap: 8px; }
+.scoring-uncertain-group > span { flex: 1; min-width: 0; }
+.scoring-uncertain-group > button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 12px;
+  min-height: 44px;
+}
+
 .dead-stone-mark {
   align-items: center;
   color: #9f2d2d;

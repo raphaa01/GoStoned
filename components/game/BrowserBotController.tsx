@@ -78,7 +78,6 @@ async function postBotAction(
 
 export function BrowserBotController({ game, playerKey, onGame, onError }: Props) {
   const activeAction = useRef<string | null>(null);
-  const settlementBoard = useRef<string | null>(null);
   const gameRef = useRef(game);
   const currentBotColor = botColor(game);
   const moveActionKey = currentBotColor
@@ -92,9 +91,12 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
     && game.status === "active"
     && game.phase === "scoring"
     && game.scoring
-    ? humanConfirmed(game, currentBotColor) && !botConfirmed(game, currentBotColor)
-      ? `confirm:${game.id}:${game.scoring.revision}`
-      : `settlement:${game.id}:${game.scoring.boardHash}:${game.scoring.revision}`
+    ? !game.scoring.browserBotProposalReady
+      ? `settlement:${game.id}:${game.scoring.boardHash}:${game.scoring.revision}`
+      : humanConfirmed(game, currentBotColor) && !botConfirmed(game, currentBotColor)
+        && !game.scoring.uncertainStones?.length
+        ? `confirm:${game.id}:${game.scoring.revision}`
+        : null
     : null;
 
   useEffect(() => {
@@ -182,10 +184,6 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
       snapshot.browserBotModelVersion ?? undefined,
       snapshot.browserBotModelSha256 ?? undefined,
     );
-    if (
-      scoringActionKey.startsWith("settlement:")
-      && settlementBoard.current === snapshot.scoring.boardHash
-    ) return;
     let cancelled = false;
     activeAction.current = scoringActionKey;
 
@@ -200,7 +198,7 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
           gameVersion: snapshot.version,
           modelVersion: model.modelVersion,
           modelSha256: model.artifactSha256,
-        }).then((proposal) => postBotAction(
+        }).then((proposal) => cancelled ? null : postBotAction(
           snapshot.id,
           playerKey,
           model.modelVersion,
@@ -209,10 +207,11 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
             kind: "settlement",
             expectedRevision: snapshot.scoring!.revision,
             deadStones: proposal.deadStones,
+            neutralRegionSeeds: proposal.neutralRegionSeeds,
+            uncertainStones: proposal.uncertainStones,
           },
         )).then((updated) => {
-          if (cancelled) return;
-          settlementBoard.current = snapshot.scoring!.boardHash;
+          if (cancelled || !updated) return;
           onGame(updated);
         }).catch((error) => {
           if (!cancelled) {

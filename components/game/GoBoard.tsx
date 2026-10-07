@@ -37,6 +37,7 @@ type GoBoardProps = {
   precisionRevision: string;
   hintMove?: Position | null;
   viewportSize?: number;
+  territory?: { black: Position[]; white: Position[] };
 };
 
 type TouchLens = {
@@ -118,6 +119,7 @@ export function GoBoard({
   precisionRevision,
   hintMove = null,
   viewportSize,
+  territory,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
   const { preference: boardPlacement } = useBoardPlacement();
@@ -155,6 +157,8 @@ export function GoBoard({
       + (value / (visibleBoardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
+  const blackTerritory = new Set(territory?.black.map(({ x, y }) => `${x}:${y}`));
+  const whiteTerritory = new Set(territory?.white.map(({ x, y }) => `${x}:${y}`));
   const selectedDeadStoneKeys = new Set(
     selectedDeadStones.map(({ x, y }) => `${x}:${y}`),
   );
@@ -427,6 +431,8 @@ export function GoBoard({
                   ? pendingMove.color
                   : null;
               const stone = serverStone ?? pendingStone;
+              const territoryOwner = stone ? null : blackTerritory.has(`${x}:${y}`) ? "black"
+                : whiteTerritory.has(`${x}:${y}`) ? "white" : null;
               const isPendingMove = pendingStone !== null;
               const markedDead = deadStoneKeys.has(`${x}:${y}`);
               const disputeSelected = selectedDeadStoneKeys.has(`${x}:${y}`);
@@ -447,7 +453,10 @@ export function GoBoard({
                   aria-colindex={x + 1}
                   aria-disabled={!actionable}
                   aria-label={
-                    interactionMode === "mark-dead" && stone
+                    territoryOwner
+                      ? joinBoardLabels(formatBoardLabel(copy.emptyIntersectionLabel, { coordinate }),
+                          `${territoryOwner === "black" ? copy.black : copy.white} · ${copy.territory}`)
+                      : interactionMode === "mark-dead" && stone
                       ? joinBoardLabels(
                           formatBoardLabel(markedDead ? copy.restoreGroupLabel : copy.markGroupLabel, {
                             group: groupLabel,
@@ -526,6 +535,7 @@ export function GoBoard({
                   type="button"
                 >
                   {stone && <span className={`stone stone--${stone}`} />}
+                  {territoryOwner ? <span aria-hidden="true" className={`territory-mark territory-mark--${territoryOwner}`} data-territory={territoryOwner} /> : null}
                   {markedDead ? (
                     <span aria-hidden="true" className="dead-stone-mark">
                       ×

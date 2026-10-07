@@ -35,6 +35,7 @@ export const GOSTONE_BOT_MODEL = Object.freeze({
     Object.freeze({ nominalElo: 2_100, value: 1 }),
   ]),
   settlement: Object.freeze({
+    evaluationRating: 2_100,
     deadThreshold: 0.38,
     aliveThreshold: 0.72,
     modelSurvivalWeight: 0.35,
@@ -81,6 +82,13 @@ export function goStoneBotModelForIdentity(
 export type GoStoneBotMove =
   | Readonly<{ kind: "play"; x: number; y: number }>
   | Readonly<{ kind: "pass" }>;
+
+/** Evaluation uses full strength independently of the opponent's playing level. */
+export function goStoneSettlementPosition(
+  position: Omit<GoStoneBotPosition, "toMove" | "excludedMoves">,
+): Omit<GoStoneBotPosition, "toMove" | "excludedMoves"> {
+  return { ...position, targetRating: GOSTONE_BOT_MODEL.settlement.evaluationRating };
+}
 
 export type GoStoneBotPosition = Readonly<{
   gameId: string;
