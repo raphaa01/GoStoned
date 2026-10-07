@@ -154,6 +154,9 @@ jobs:
       - name: Verify board-design persistence and earned unlocks
         run: npx tsx scripts/smoke-board-designs.ts
 
+      - name: Verify imported puzzle branches and progress persistence
+        run: npx tsx scripts/smoke-imported-puzzles.ts
+
       - name: Verify migration serialization and recovery
         run: npm run test:migration-recovery
 

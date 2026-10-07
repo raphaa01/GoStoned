@@ -28,7 +28,6 @@ export function registerThemeLessonTests(mobile: boolean) {
     await page.route("**/api/learn/progress", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, progress }) }));
     await page.goto("/de/learn");
     await page.locator(".learn-next-dock__button").click();
-    await page.locator(".learn-next-dock__button").click();
     await expect(page.getByRole("heading", { name: "Leben oder Tod?", exact: true })).toBeVisible();
     const board = page.locator(".interactive-learn-board");
     await expect(board.locator(".is-black.has-stone")).toHaveCount(12);

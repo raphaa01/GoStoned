@@ -353,6 +353,7 @@
 
 .feedbackActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 9px;
   margin-top: 12px;
 }
@@ -360,7 +361,7 @@
 .feedbackActions button {
   align-items: center;
   display: inline-flex;
-  flex: 1 1 0;
+  flex: 1 1 96px;
   gap: 7px;
   justify-content: center;
   min-height: 44px;
@@ -813,3 +814,4 @@
   }
   .panel { margin-inline: 0; }
 }
+.goal { color: var(--color-text-muted); font-size: 14px; margin: 0 0 12px; }

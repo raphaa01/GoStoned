@@ -10331,6 +10331,16 @@ body {
 }
 
 .learn-route { margin: 36px auto 0; max-width: 360px; }
+.puzzle-target-mark { border: 1.5px solid; border-radius: 50%; height: 24%; left: 38%; pointer-events: none; position: absolute; top: 38%; width: 24%; z-index: 2; }
+.puzzle-target-mark--black { border-color: rgba(255,255,255,.75); }
+.puzzle-target-mark--white { border-color: rgba(0,0,0,.65); }
+.learn-path-stage { padding-bottom: 24px; }
+.learn-path-stage__header { border-top: 1px solid var(--color-line); display: grid; gap: 8px; padding: 24px 12px 32px; }
+.learn-path-stage__header small { align-items: center; color: var(--color-moss-strong); display: flex; font-size: 11px; gap: 8px; letter-spacing: .1em; text-transform: uppercase; }
+.learn-path-stage__header h2 { font-size: 22px; line-height: 1.2; margin: 0; }
+.learn-path-stage__header > span { color: var(--color-text-muted); font-size: 12px; }
+.learn-path-stage.is-locked .learn-path-stage__header { color: var(--color-text-muted); border-top-style: dashed; }
+.learn-path-stage.is-locked .learn-path-stage__header small { color: var(--color-text-muted); }
 .learn-stage { position: relative; }
 .learn-route-track { height: 100%; inset: 0; pointer-events: none; position: absolute; width: 100%; }
 .learn-route-track path { fill: none; stroke: var(--color-line-strong); stroke-width: 3; }

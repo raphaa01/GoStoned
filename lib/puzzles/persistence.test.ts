@@ -65,7 +65,7 @@ test("KataGo puzzles are persistent, private, queued, and answer-safe", () => {
   assert.match(worker, /AND kind = 'practice'/);
   assert.match(worker, /Daily puzzles are static and must not be sent to KataGo/);
   assert.doesNotMatch(worker, /dailyPosition/);
-  assert.match(route, /mode === "practice" && hub\.status === "generating"/);
+  assert.match(route, /readImportedPuzzleHub\(playerKey, mode\)/);
   assert.match(dailyCycleMigration, /collection_order BETWEEN 1 AND 20/);
   assert.match(staticDailyMigration, /DELETE FROM puzzle_generation_jobs\s+WHERE kind = 'daily'/);
   assert.match(staticDailyMigration, /visits BETWEEN 0 AND 10000/);
@@ -84,15 +84,14 @@ test("hints reveal only the current move on demand and retain player binding", (
   assert.match(service, /variation\?\.mainLine\[progress\.length\]/);
   assert.match(hintRoute, /assertExpectedPlayer\(request, playerKey\)/);
   assert.match(hintRoute, /RATE_LIMIT_POLICIES\.puzzleAttempt/);
-  assert.match(hintRoute, /hint: await readPuzzleHint/);
+  assert.match(hintRoute, /hint: await readImportedPuzzleHint/);
   assert.doesNotMatch(hintRoute, /solution|variation/);
 });
 
-test("puzzle polling reserves one concrete on-demand job instead of waking KataGo repeatedly", () => {
+test("archived puzzle generation retains its lease while public routes use the offline import", () => {
   assert.match(service, /reservePuzzleGenerationDispatch/);
   assert.match(service, /lease_expires_at = NOW\(\) \+ INTERVAL '15 minutes'/);
   assert.match(service, /FOR UPDATE SKIP LOCKED/);
   assert.match(service, /releasePuzzleGenerationDispatch/);
-  assert.match(route, /dispatchKataGoJob\("puzzle", targetId\)/);
-  assert.doesNotMatch(route, /dispatchKataGoJob\("puzzle"\)\)/);
+  assert.doesNotMatch(route, /dispatchKataGoJob|reservePuzzleGenerationDispatch|after\(/);
 });

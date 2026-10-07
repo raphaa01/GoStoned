@@ -8,7 +8,7 @@ import {
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { getRequestUser, resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { gameMutationRouteError } from "@/lib/game/gameMutationRequest";
-import { attemptPuzzle } from "@/lib/puzzles/puzzleService";
+import { attemptImportedPuzzle } from "@/lib/puzzles/importedService";
 import {
   assertPuzzleAttemptMetadata,
   assertPuzzleId,
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, context: Context) {
     return noStoreJson({
       ok: true,
       actor: playerKey,
-      attempt: await attemptPuzzle(puzzleId, playerKey, selected, Boolean(account)),
+      attempt: await attemptImportedPuzzle(puzzleId, playerKey, selected, Boolean(account)),
     });
   } catch (error) {
     return gameMutationRouteError(error);

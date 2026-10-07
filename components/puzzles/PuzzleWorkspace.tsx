@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
   CircleHelp,
@@ -24,21 +23,15 @@ import type { Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
   DAILY_PUZZLE_CYCLE_LENGTH,
-  PUZZLE_CATEGORIES,
   type PuzzleAttemptResult,
-  type PuzzleCategory,
+  type PuzzleAttemptAction,
   type PuzzleHub,
   type PuzzleHint,
   type PuzzleKind,
   type PuzzlePly,
 } from "@/lib/puzzles/types";
 import { localPuzzleViewportSize } from "@/lib/puzzles/puzzleViewport";
-import {
-  PUZZLE_CATALOG_SOURCES,
-  puzzlesForCatalogCategory,
-  resumePuzzleIndex,
-  type PuzzleCatalogCategory,
-} from "@/lib/puzzles/categoryProgress";
+import { nextUnsolvedPuzzle } from "@/lib/puzzles/queue";
 import styles from "./puzzles.module.css";
 
 type PuzzleApiResponse = PuzzleHub & { actor: string };
@@ -59,6 +52,7 @@ function PuzzleLoading({ label }: { label: string }) {
 function lineBoard(base: PuzzleHub["puzzles"][number]["board"], line: readonly PuzzlePly[]) {
   let board = base;
   for (const ply of line) {
+    if (ply.move === "pass") continue;
     const applied = applyMove(board, ply.color, ply.x, ply.y);
     if (!applied.ok) return base;
     board = applied.board;
@@ -78,8 +72,9 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [mode, setMode] = useState<PuzzleKind>(initialMode);
   const [hub, setHub] = useState<PuzzleHub | null>(() => playerKey ? cachedRouteData<PuzzleHub>(puzzleRouteKey(initialMode, playerKey)) ?? null : null);
   const [hubOwner, setHubOwner] = useState(playerKey);
-  const [selectedCategory, setSelectedCategory] = useState<PuzzleCatalogCategory | null>(null);
-  const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
+  const [selectedPuzzleId, setSelectedPuzzleId] = useState<string | null>(null);
+  const [selectedPuzzleOwner, setSelectedPuzzleOwner] = useState(playerKey);
+  const [branchFeedback, setBranchFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [branchLine, setBranchLine] = useState<PuzzlePly[] | null>(null);
@@ -160,22 +155,15 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }, [acceptHub, copy.unavailable, dictionary, redirectAccountFailure, requestHub]);
 
   useEffect(() => {
-    const incompleteCatalog = mode === "practice"
-      && PUZZLE_CATEGORIES.some((category) => (
-        puzzles.filter((entry) => entry.category === category).length
-          < (hub?.categoryCounts[category] ?? hub?.expectedPerCategory ?? 10)
-      ));
-    if (hub?.status !== "generating" && !incompleteCatalog) return;
+    if (hub?.status !== "generating") return;
     const timer = window.setInterval(() => void load(), 5_000);
     return () => window.clearInterval(timer);
   }, [hub?.categoryCounts, hub?.expectedPerCategory, hub?.status, load, mode, puzzles]);
 
-  const categoryPuzzles = selectedCategory
-    ? puzzlesForCatalogCategory(puzzles, selectedCategory)
-    : [];
   const puzzle = mode === "daily"
     ? puzzles[0] ?? null
-    : categoryPuzzles[selectedProblemIndex] ?? null;
+    : puzzles.find((entry) => selectedPuzzleOwner === playerKey && entry.id === selectedPuzzleId) ?? nextUnsolvedPuzzle(puzzles);
+  const selectedProblemIndex = puzzle ? puzzles.findIndex((entry) => entry.id === puzzle.id) : 0;
 
   const visibleLine = useMemo(() => {
     if (!puzzle) return [];
@@ -188,7 +176,10 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   ), [puzzle, visibleLine]);
 
   const updatePuzzle = useCallback((attempt: PuzzleAttemptResult) => {
-    if (playerKey) invalidateRouteData(puzzleRouteKey(mode, playerKey));
+    if (playerKey) {
+      invalidateRouteData(puzzleRouteKey("daily", playerKey));
+      invalidateRouteData(puzzleRouteKey("practice", playerKey));
+    }
     setHub((current) => current ? {
       ...current,
       puzzles: current.puzzles.map((entry) => entry.id === attempt.puzzleId ? {
@@ -201,11 +192,13 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
         solution: attempt.solution,
       } : entry),
     } : current);
-  }, [mode, playerKey]);
+  }, [playerKey]);
 
-  async function submitMove(x: number, y: number) {
-    if (!puzzle || !playerKey || busy || puzzle.solved || branchLine) return;
-    setPendingMove({ x, y, color: puzzle.toPlay });
+  async function submitMove(x: number, y: number, action: PuzzleAttemptAction = "play") {
+    if (!puzzle || !playerKey || busy || puzzle.solved || (branchLine && action === "play")) return;
+    setSelectedPuzzleId(puzzle.id);
+    setSelectedPuzzleOwner(playerKey);
+    if (action === "play") setPendingMove({ x, y, color: puzzle.toPlay });
     setBusy(true);
     setHintMove(null);
     setError(null);
@@ -216,24 +209,30 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
           "Content-Type": "application/json",
           [EXPECTED_PLAYER_HEADER]: playerKey,
         },
-        body: JSON.stringify({ x, y, revision: puzzle.variationRevision }),
+        body: JSON.stringify({ x, y, revision: puzzle.variationRevision, ...(action === "play" ? {} : { action }) }),
       });
       const data = await readApi<{ actor: string; attempt: PuzzleAttemptResult }>(response);
       assertResponseActor(data.actor, playerKey);
       const priorProgress = puzzle.variationProgress;
       updatePuzzle(data.attempt);
       if (data.attempt.outcome === "retry") {
-        if (puzzle.category) {
-          setBranchLine([...priorProgress, ...data.attempt.displayLine]);
-        }
+        setBranchLine(data.attempt.displayLineIsComplete ? data.attempt.displayLine : [...priorProgress, ...data.attempt.displayLine]);
         setFeedback("incorrect");
+      } else if (data.attempt.outcome === "unknown") {
+        setBranchFeedback(data.attempt.feedback?.[locale] ?? data.attempt.feedback?.en ?? null);
       } else if (data.attempt.outcome === "continue") {
+        setBranchLine(null);
         setFeedback("continue");
       } else {
         setFeedback("correct");
       }
+      if (data.attempt.outcome !== "unknown") setBranchFeedback(data.attempt.feedback?.[locale] ?? data.attempt.feedback?.en ?? null);
     } catch (attemptError) {
       if (redirectAccountFailure(attemptError)) return;
+      if (attemptError instanceof ApiRequestError && attemptError.code === "puzzle_revision_conflict") {
+        clearTransientState();
+        await load();
+      }
       setError(localizedApiError(dictionary, attemptError, copy.attemptFailed));
     } finally {
       setPendingMove(null);
@@ -267,11 +266,12 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     setError(null);
     setHintMove(null);
     setPendingMove(null);
+    setBranchFeedback(null);
   }
 
   function undoPuzzleMove() {
     if (!branchLine?.length) {
-      clearTransientState();
+      void submitMove(0, 0, "undo");
       return;
     }
 
@@ -279,12 +279,14 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     // together with its refutation so the next move can use that revision.
     setBranchLine(null);
     setFeedback(puzzle?.variationProgress.length ? "continue" : null);
+    setBranchFeedback(null);
     setError(null);
     setHintMove(null);
     setPendingMove(null);
   }
 
   function changeMode(nextMode: PuzzleKind) {
+    if (busy) return;
     if (nextMode === mode) return;
     if (nextMode === "practice" && !user) {
       if (!authLoading) {
@@ -294,58 +296,22 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     }
     setMode(nextMode);
     setHub(null);
-    setSelectedCategory(null);
-    setSelectedProblemIndex(0);
+    setSelectedPuzzleId(null);
     clearTransientState();
   }
 
-  function chooseCategory(category: PuzzleCatalogCategory) {
-    setSelectedCategory(category);
-    setSelectedProblemIndex(resumePuzzleIndex(puzzles, category));
+  function changeProblem() {
+    setSelectedPuzzleOwner(playerKey);
+    setSelectedPuzzleId(nextUnsolvedPuzzle(puzzles, puzzle?.id)?.id ?? null);
     clearTransientState();
   }
 
-  function chooseProblem(index: number) {
-    setSelectedProblemIndex(index);
-    clearTransientState();
-  }
-
-  function changeProblem(direction: -1 | 1) {
-    if (categoryPuzzles.length === 0) return;
-    const next = (selectedProblemIndex + direction + categoryPuzzles.length) % categoryPuzzles.length;
-    setSelectedProblemIndex(next);
-    clearTransientState();
-  }
-
-  const categories = [
-    { id: "life_and_death" as const, title: copy.lifeAndDeath, description: copy.lifeAndDeathDescription, sources: PUZZLE_CATALOG_SOURCES.life_and_death },
-    { id: "tesuji" as const, title: copy.tesuji, description: copy.tesujiDescription, sources: PUZZLE_CATALOG_SOURCES.tesuji },
-    { id: "capturing_race" as const, title: copy.capturingRace, description: copy.capturingRaceDescription, sources: PUZZLE_CATALOG_SOURCES.capturing_race },
-    { id: "endgame" as const, title: copy.endgame, description: copy.endgameDescription, sources: PUZZLE_CATALOG_SOURCES.endgame },
-    { id: "ko" as const, title: copy.gokyoKo, description: copy.gokyoKoDescription, sources: PUZZLE_CATALOG_SOURCES.ko },
-  ];
-  const categoryCopy = categories.find((entry) => entry.id === selectedCategory);
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
   const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
-  const expected = selectedCategory
-    ? categoryPuzzles.length
-    : hub?.expectedPerCategory ?? 10;
+  const expected = puzzles.length;
   const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
-  function categoryButton(category: typeof categories[number]) {
-    const sources: readonly PuzzleCategory[] = category.sources;
-    const ready = puzzles.filter((entry) => entry.category !== null && sources.includes(entry.category)).length;
-    const total = sources.reduce((sum, source) => sum + (hub?.categoryCounts[source] ?? 0), 0)
-      || hub?.expectedPerCategory
-      || 10;
-    return (
-      <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
-        <span><strong>{category.title}</strong></span>
-        <small>{copy.catalogProgress.replace("{ready}", String(ready)).replace("{total}", String(total))}</small>
-      </button>
-    );
-  }
 
   return (
     <div className={styles.page}>
@@ -354,10 +320,10 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       </header>
 
       <div aria-label={copy.title} className={styles.tabs} role="tablist">
-        <button aria-selected={mode === "daily"} className={mode === "daily" ? styles.activeTab : ""} onClick={() => changeMode("daily")} role="tab" type="button">
+        <button aria-selected={mode === "daily"} className={mode === "daily" ? styles.activeTab : ""} disabled={busy} onClick={() => changeMode("daily")} role="tab" type="button">
           <strong>{copy.daily}</strong>
         </button>
-        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading} onClick={() => changeMode("practice")} role="tab" type="button">
+        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading || busy} onClick={() => changeMode("practice")} role="tab" type="button">
           <strong>{copy.practice}</strong>
         </button>
       </div>
@@ -370,44 +336,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
         <div className={styles.state} role="alert"><p>{error}</p><button className="button button--secondary" onClick={() => void load()} type="button">{copy.retry}</button></div>
       ) : mode === "practice" && !hub ? (
         <PuzzleLoading label={copy.loading} />
-      ) : mode === "practice" && selectedCategory === null ? (
-        <section className={styles.catalog} aria-labelledby="puzzle-category-title">
-          <div className={styles.catalogHeader}>
-            <h2 id="puzzle-category-title">{copy.chooseCategory}</h2>
-          </div>
-          <div className={styles.categoryGrid}>
-            {categories.map(categoryButton)}
-          </div>
-        </section>
       ) : !puzzle || !displayBoard ? (
         <PuzzleLoading label={copy.generating} />
       ) : (
         <>
-          {mode === "practice" ? (
-            <div className={styles.collectionBar}>
-              <button className={styles.backButton} onClick={() => { setSelectedCategory(null); clearTransientState(); }} type="button"><ArrowLeft size={16} /> {copy.backToCategories}</button>
-              <div><strong>{categoryCopy?.title}</strong><span>{copy.approximateRank.replace("{rank}", String(puzzle.rankKyu ?? "–"))}</span></div>
-              {expected > 20 ? (
-                <label className={styles.problemJump}>
-                  <span>{copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}</span>
-                  <select aria-label={copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))} onChange={(event) => chooseProblem(Number(event.target.value))} value={selectedProblemIndex}>
-                    {Array.from({ length: expected }, (_, index) => index).map((index) => (
-                      <option key={index} value={index}>{index + 1}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <nav aria-label={copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}>
-                  {Array.from({ length: expected }, (_, index) => index).map((index) => {
-                    const entry = categoryPuzzles[index];
-                    return <button aria-current={index === selectedProblemIndex ? "step" : undefined} disabled={!entry} key={index} onClick={() => chooseProblem(index)} type="button">{index + 1}</button>;
-                  })}
-                </nav>
-              )}
-            </div>
-          ) : null}
-
-          <section className={styles.workspace} aria-label={copy.title}>
+          <section className={styles.workspace} aria-label={copy.title} aria-busy={busy}>
             <div className={styles.boardColumn}>
               <div className={styles.positionMeta}>
                 <span className={styles.colorStone} data-color={puzzle.toPlay} />
@@ -418,7 +351,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <div>
                   <span className={styles.problemLabel}>{mode === "daily"
                     ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
-                    : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
+                    : `${copy.practice} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
                 </div>
                 {!puzzle.solved && !branchLine ? (
                   <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
@@ -431,6 +364,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                   <strong>{copy.incorrect}</strong>
                 </div>
               ) : null}
+              {puzzle.goal ? <p className={styles.goal}>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
               <GoBoard
                 boardSize={puzzle.boardSize}
                 boardState={displayBoard}
@@ -441,14 +375,16 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 pendingMove={pendingMove}
                 previewColor={puzzle.toPlay}
                 precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
-                viewportSize={puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined}
+                viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
+                targetStones={puzzle.targetStones}
               />
-              {feedback === "incorrect" ? (
+              {!puzzle.solved ? (
                 <div className={styles.feedbackActions}>
-                  <button className="button button--primary" onClick={clearTransientState} type="button">
+                  <button className="button button--secondary" disabled={busy || branchLine !== null} onClick={() => void submitMove(0, 0, "pass")} type="button">{dictionary.game.pass}</button>
+                  <button className="button button--primary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
                     <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
                   </button>
-                  <button className="button button--secondary" onClick={undoPuzzleMove} type="button">
+                  <button className="button button--secondary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={undoPuzzleMove} type="button">
                     <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
                   </button>
                 </div>
@@ -460,7 +396,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <div>
                   <span className={styles.problemLabel}>{mode === "daily"
                     ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
-                    : `${categoryCopy?.title} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
+                    : `${copy.practice} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
                 </div>
                 {!puzzle.solved && !branchLine ? (
                   <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
@@ -468,7 +404,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                   </button>
                 ) : null}
               </div>
-              {feedback === "continue" ? <p className={styles.continue} role="status">{copy.continueLine}</p> : null}
+              {branchFeedback ? <p className={styles.continue} role="status">{branchFeedback}</p> : null}
               {puzzle.solved ? (
                 <div className={styles.solution} role="status">
                   <span><Check size={18} /> {feedback === "correct" ? copy.correct : copy.solved}</span>
@@ -479,12 +415,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
               ) : null}
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
 
-              {mode === "practice" && categoryPuzzles.length > 1 ? (
+              {mode === "practice" && puzzles.length > 1 ? (
                 <div className={styles.pager}>
                   <span>{copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}</span>
                   <div>
-                    <button aria-label={copy.previous} onClick={() => changeProblem(-1)} type="button"><ArrowLeft size={18} /></button>
-                    <button aria-label={copy.next} onClick={() => changeProblem(1)} type="button"><ArrowRight size={18} /></button>
+                    <button aria-label={copy.next} disabled={busy} onClick={changeProblem} type="button"><ArrowRight size={18} /></button>
                   </div>
                 </div>
               ) : null}

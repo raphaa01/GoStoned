@@ -31,7 +31,6 @@ test("lesson Continue remains visible above tabs without scrolling", async ({ pa
   await installLearningFixture(page);
   await page.goto("/de/learn");
   await page.locator(".learn-next-dock__button").click();
-  await page.locator(".learn-next-dock__button").click();
   await expect(page.getByRole("heading", { name: "Ein Auge", exact: true })).toBeVisible();
   await page.locator(".interactive-learn-board__point").first().click();
   const next = page.getByRole("button", { name: "Weiter", exact: true });

@@ -82,7 +82,6 @@ export function registerBetaGameTests(mobile: boolean) {
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/de/puzzles?mode=practice");
-    await page.getByRole("button", { name: /Tesuji/ }).click();
     const board = page.locator(".go-board");
     await board.locator(".intersection").nth(20).click();
     await page.getByRole("button", { name: "Zug zurück", exact: true }).click();
