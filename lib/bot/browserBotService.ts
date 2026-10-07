@@ -1,13 +1,11 @@
 import { query } from "@/lib/db";
-import { getGroup } from "@/lib/game/goEngine";
 import {
   confirmScore,
-  getGameState,
-  setDeadGroup,
+  setBrowserBotScoringProposal,
   submitMove,
 } from "@/lib/game/gameService";
 import { GameServiceError } from "@/lib/game/gameServiceError";
-import type { GameState, Position } from "@/lib/game/types";
+import type { GameState } from "@/lib/game/types";
 import {
   GOSTONE_BOT_MODEL,
   goStoneBotModelForIdentity,
@@ -109,36 +107,6 @@ export async function submitBrowserBotMove(input: {
   return updated;
 }
 
-function exactPosition(value: unknown, boardSize: number): Position | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const keys = Object.keys(value);
-  if (keys.length !== 2 || !keys.includes("x") || !keys.includes("y")) return null;
-  const { x, y } = value as Record<string, unknown>;
-  return Number.isInteger(x) && Number.isInteger(y)
-    && Number(x) >= 0 && Number(y) >= 0
-    && Number(x) < boardSize && Number(y) < boardSize
-    ? { x: Number(x), y: Number(y) }
-    : null;
-}
-
-function validateDeadStoneProposal(game: GameState, value: unknown): Position[] {
-  if (!Array.isArray(value) || value.length > game.boardSize * game.boardSize) {
-    conflict("The settlement proposal is invalid.");
-  }
-  const positions = value.map((candidate) => exactPosition(candidate, game.boardSize));
-  if (positions.some((position) => position === null)) conflict("The settlement proposal is invalid.");
-  const dead = positions as Position[];
-  const keys = new Set(dead.map(({ x, y }) => `${x}:${y}`));
-  if (keys.size !== dead.length) conflict("The settlement proposal contains duplicates.");
-  for (const position of dead) {
-    if (!game.board[position.y][position.x]) conflict("A proposed dead point is empty.");
-    if (getGroup(game.board, position).some(({ x, y }) => !keys.has(`${x}:${y}`))) {
-      conflict("The settlement proposal must contain complete connected groups.");
-    }
-  }
-  return dead;
-}
-
 export async function applyBrowserBotSettlement(input: {
   gameId: string;
   humanPlayerKey: string;
@@ -146,36 +114,17 @@ export async function applyBrowserBotSettlement(input: {
   modelSha256: unknown;
   expectedRevision: number;
   deadStones: unknown;
+  neutralRegionSeeds?: unknown;
+  uncertainStones?: unknown;
 }): Promise<GameState> {
   const binding = await bindingForHuman(input.gameId, input.humanPlayerKey);
   assertModelIdentity(binding, input.modelVersion, input.modelSha256);
-  let game = await getGameState(input.gameId, binding.bot_player_key);
-  if (!game.scoring || game.scoring.revision !== input.expectedRevision) {
-    conflict("The scoring proposal changed.", "scoring_revision_conflict");
-  }
-  const desired = validateDeadStoneProposal(game, input.deadStones);
-  const desiredKeys = new Set(desired.map(({ x, y }) => `${x}:${y}`));
-  const currentKeys = new Set(game.scoring.deadStones.map(({ x, y }) => `${x}:${y}`));
-
-  for (const stone of game.scoring.deadStones) {
-    if (desiredKeys.has(`${stone.x}:${stone.y}`)) continue;
-    game = await setDeadGroup(input.gameId, binding.bot_player_key, {
-      ...stone,
-      dead: false,
-      expectedRevision: game.scoring!.revision,
-    });
-    getGroup(game.board, stone).forEach(({ x, y }) => currentKeys.delete(`${x}:${y}`));
-  }
-  for (const stone of desired) {
-    if (currentKeys.has(`${stone.x}:${stone.y}`)) continue;
-    game = await setDeadGroup(input.gameId, binding.bot_player_key, {
-      ...stone,
-      dead: true,
-      expectedRevision: game.scoring!.revision,
-    });
-    getGroup(game.board, stone).forEach(({ x, y }) => currentKeys.add(`${x}:${y}`));
-  }
-  return game;
+  return setBrowserBotScoringProposal(input.gameId, binding.bot_player_key, {
+    expectedRevision: input.expectedRevision,
+    deadStones: input.deadStones,
+    neutralRegionSeeds: input.neutralRegionSeeds ?? [],
+    uncertainStones: input.uncertainStones ?? [],
+  });
 }
 
 export async function confirmBrowserBotScore(input: {

@@ -1,7 +1,18 @@
-import type { Stone } from "@/lib/game/types";
+import type { Position, Stone } from "@/lib/game/types";
 import { GOSTONE_BOT_MODEL } from "./modelV1";
 
 export type SettlementGroupStatus = "alive" | "dead" | "uncertain";
+
+export function neutralRegionCanBeProposed(
+  owner: Stone | null,
+  points: readonly Position[],
+  deadKeys: ReadonlySet<string>,
+  meanAbsoluteOwnership: number,
+): boolean {
+  return owner !== null
+    && !points.some(({ x, y }) => deadKeys.has(`${x}:${y}`))
+    && meanAbsoluteOwnership < GOSTONE_BOT_MODEL.settlement.neutralOwnershipThreshold;
+}
 
 function boundedProbability(value: number): number {
   if (!Number.isFinite(value)) return 0.5;

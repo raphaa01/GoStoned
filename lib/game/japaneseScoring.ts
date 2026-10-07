@@ -222,6 +222,40 @@ function mapTerritory(board: Board, neutralSeeds: ReadonlySet<string>): Territor
   };
 }
 
+/** Empty intersections counted by the rulebook, after agreed dead-stone removal. */
+export function countedTerritoryPoints(
+  board: Board,
+  deadStones: Position[],
+  agreedNeutralRegionSeeds: Position[] = [],
+): { black: Position[]; white: Position[] } {
+  assertBoard(board);
+  const scoredBoard = removeAgreedDeadStones(board, new Set(deadStones.map(positionKey)));
+  const territory = mapTerritory(scoredBoard, validateNeutralSeeds(scoredBoard, agreedNeutralRegionSeeds));
+  const points: { black: Position[]; white: Position[] } = { black: [], white: [] };
+  for (const [key, owner] of territory.owners) {
+    if (!owner) continue;
+    const [x, y] = key.split(":").map(Number);
+    points[owner].push({ x, y });
+  }
+  return points;
+}
+
+/** Preserve unaffected agreements when a group's life/death status changes. */
+export function remainingNeutralRegionSeeds(board: Board, deadStones: Position[], seeds: Position[]): Position[] {
+  const scoredBoard = removeAgreedDeadStones(board, new Set(deadStones.map(positionKey)));
+  const retained: Position[] = [];
+  for (const seed of seeds) {
+    try {
+      const territory = mapTerritory(scoredBoard, validateNeutralSeeds(scoredBoard, [...retained, seed]));
+      if (deadStones.some((point) => territory.owners.get(positionKey(point)) !== opposite(board[point.y][point.x]!))) continue;
+      retained.push(seed);
+    } catch (error) {
+      if (!(error instanceof JapaneseScoringError) || error.code !== "invalid_neutral_region") throw error;
+    }
+  }
+  return retained;
+}
+
 /**
  * Settles an already stopped position under Articles 8–10 of the 1989
  * Japanese Rules of Go. Captures must come from the authoritative move log.

@@ -5,6 +5,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
 import type { SharedFinishedGame } from "@/lib/game/sharedGameService";
 import { getSharedGameCopy } from "@/lib/i18n/sharedGame";
+import { removeDeadStones } from "@/lib/game/scoring";
 import { GoBoard } from "./GoBoard";
 import styles from "./SharedGameView.module.css";
 
@@ -43,8 +44,9 @@ export function SharedGameView({ token }: { token: string }) {
         <div className={styles.board}>
           <GoBoard
             boardSize={game.boardSize}
-            boardState={game.board}
-            deadStones={game.deadStones}
+            boardState={game.territory ? removeDeadStones(game.board, game.deadStones) : game.board}
+            deadStones={game.territory ? undefined : game.deadStones}
+            territory={game.territory}
             disabled
             lastMove={game.lastMove}
             onIntersectionClick={() => undefined}

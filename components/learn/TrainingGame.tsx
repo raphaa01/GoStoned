@@ -19,7 +19,8 @@ import {
 } from "@/lib/bot/modelV1";
 import { readApi } from "@/lib/client/api";
 import { advanceClock, type ClockAdvance } from "@/lib/game/goClock";
-import type { JapaneseTerritoryScore } from "@/lib/game/japaneseScoring";
+import { countedTerritoryPoints, type JapaneseTerritoryScore } from "@/lib/game/japaneseScoring";
+import { removeDeadStones } from "@/lib/game/scoring";
 import { getTimeControl, TIME_CONTROLS } from "@/lib/game/timeControls";
 import type { BoardSize, Position, Stone, TimeControlId } from "@/lib/game/types";
 import {
@@ -449,8 +450,11 @@ export function TrainingGame() {
           </div>
           <GoBoard
             boardSize={position.boardSize}
-            boardState={position.board}
-            deadStones={proposal ? [...proposal.deadStones] : []}
+            boardState={phase === "finished" && result?.kind === "score" && proposal
+              ? removeDeadStones(position.board, [...proposal.deadStones]) : position.board}
+            deadStones={phase === "scoring" && proposal ? [...proposal.deadStones] : []}
+            territory={phase === "finished" && result?.kind === "score" && proposal
+              ? countedTerritoryPoints(position.board, [...proposal.deadStones], [...proposal.neutralRegionSeeds]) : undefined}
             disabled={phase !== "playing" || position.turn !== "black"}
             lastMove={lastPlayedMove(position)}
             onIntersectionClick={playAt}

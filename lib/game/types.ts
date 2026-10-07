@@ -89,6 +89,10 @@ export type GameScoringState = {
   boardHash: string;
   stoppedMoveNumber: number;
   deadStones: Position[];
+  neutralRegionSeeds?: Position[];
+  uncertainStones?: Position[];
+  browserBotProposalReady?: boolean;
+  territory?: { black: Position[]; white: Position[] };
   blackConfirmed: boolean;
   whiteConfirmed: boolean;
   preview: ChineseAreaScore | JapaneseTerritoryPreview;

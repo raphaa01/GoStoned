@@ -48,13 +48,13 @@ import {
 import type { GameMessage } from "@/lib/game/chatService";
 import { describeGameChange } from "@/lib/game/gameAccessibility";
 import { gamePollUrl, gameStateFromPoll } from "@/lib/game/gamePolling";
-import { groupMarkedDeadStones, toggleDeadGroup } from "@/lib/game/scoring";
+import { groupMarkedDeadStones, removeDeadStones, toggleDeadGroup } from "@/lib/game/scoring";
 import type { GamePollResponse, GameState, Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { ChatPanel } from "./ChatPanel";
 import { BrowserBotController } from "./BrowserBotController";
 import { proposeJapaneseSettlement } from "@/lib/bot/browserBotClient";
-import type { GoStoneJapaneseSettlementProposal } from "@/lib/bot/modelV1";
+import { goStoneBotModelForIdentity, type GoStoneJapaneseSettlementProposal } from "@/lib/bot/modelV1";
 import { GamePanel } from "./GamePanel";
 import { GamePassNotice } from "./GamePassNotice";
 import { GameResultModal } from "./GameResultModal";
@@ -285,6 +285,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     latestGameVersion.current = nextGame.version;
     gameStatus.current = nextGame.status;
+    if (previousGame?.moveCount !== nextGame.moveCount || nextGame.phase !== "play") setEstimate(null);
     const announcement = describeGameChange(acceptedGame.current, nextGame, copy);
     if (
       nextGame.status === "active"
@@ -744,7 +745,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && yourColor
     && game.status === "active"
     && game.phase === "scoring"
-    && game.scoring,
+    && game.scoring
+    && (!game.browserBotModelVersion || game.scoring.browserBotProposalReady),
   ) && gameInteractionAllowed && !busy;
   const pendingMovePreview = useMemo(
     () => game
@@ -921,7 +923,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setEstimateBusy(true);
     setError(null);
     try {
-      setEstimate(await proposeJapaneseSettlement({
+      const model = goStoneBotModelForIdentity(
+        game.browserBotModelVersion ?? undefined,
+        game.browserBotModelSha256 ?? undefined,
+      );
+      const proposal = await proposeJapaneseSettlement({
         gameId: game.id,
         boardSize: game.boardSize,
         board: game.board,
@@ -929,7 +935,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
         komi: game.komi,
         targetRating: Number(yourColor === "black" ? game.blackRating : game.whiteRating) || 1_200,
         gameVersion: game.version,
-      }));
+        modelVersion: model.modelVersion,
+        modelSha256: model.artifactSha256,
+      });
+      if (acceptedGame.current?.id === game.id && acceptedGame.current.version === game.version) {
+        setEstimate(proposal);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : copy.estimateFailed);
     } finally {
@@ -1402,11 +1413,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <div className="focused-board-wrap">
             <GoBoard
               boardSize={game.boardSize}
-              boardState={pendingMovePreview?.board ?? game.board}
-              deadStones={scoringDeadStones ?? undefined}
-              selectedDeadStones={selectedDisputeGroup?.stones}
+              boardState={game.status === "finished" && game.scoring?.finalizedAt
+                ? removeDeadStones(game.board, game.scoring.deadStones)
+                : pendingMovePreview?.board ?? game.board}
+              deadStones={game.status === "active" ? scoringDeadStones ?? undefined : undefined}
+              territory={game.status === "finished" && game.finishReason === "score"
+                ? game.scoring?.territory : undefined}
+              selectedDeadStones={game.status === "active" ? selectedDisputeGroup?.stones : undefined}
               disabled={!canMove && !canMarkDead}
-              interactionMode={game.phase === "scoring" ? "mark-dead" : "play"}
+              interactionMode={game.status === "active" && game.phase === "scoring" ? "mark-dead" : "play"}
               lastMove={(() => {
                 if (pendingMovePreview?.applied && pendingMove) return pendingMove;
                 const move = game.moves.at(-1);
@@ -1447,7 +1462,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               ])}
             />
           </div>
-          {game.phase === "scoring" || game.boardSize > 9 ? (
+          {game.status === "active" && (game.phase === "scoring" || game.boardSize > 9) ? (
             <p className="scoring-board-hint">
               {game.phase === "scoring"
                 ? copy.scoringBoardHint
@@ -1512,6 +1527,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             onLeave={() => clearFinishedGame("/play")}
             onPass={() => makeMove({ isPass: true }, game.version)}
             onConfirmScore={() => scoringAction("confirm", {})}
+            onResolveGroup={(point, dead) => void scoringAction("dead-stones", { ...point, dead })}
             onSelectDisputeGroup={(representative) => {
               if (!game.scoring) return;
               setSelectedDisputeSelection({

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import "dotenv/config";
 import { closePool, getPool, query, withTransaction } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
 import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
+import type { GameState } from "../lib/game/types";
+import { GOSTONE_BOT_MODEL } from "../lib/bot/modelV1";
+import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
 import {
   assertSmokeDatabaseIdentity,
   withRollbackOnlyTransaction,
@@ -316,11 +320,92 @@ async function assertLegacyDeploymentWindowCompatibility() {
   await assertNoGuestLedgerEvent({ black, white, gameId, revision: 0 });
 }
 
+async function assertCompleteBrowserSettlement() {
+  const human = await createGuest();
+  const joined = await api("/api/matchmaking", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ boardSize: 9, timeControl: "classic" }) }, human.cookie, human.playerKey);
+  assert.equal(joined.response.status, 200);
+  await query("UPDATE matchmaking_queue SET bot_fallback_not_before = NOW() - INTERVAL '1 second' WHERE player_key = $1", [human.playerKey]);
+  const matched = await api("/api/matchmaking", { method: "GET" }, human.cookie, human.playerKey);
+  const gameId = (matched.body.matchmaking as { gameId: string }).gameId;
+  assert.ok(gameId);
+  const load = async () => (await api(`/api/games/${gameId}`, { method: "GET" }, human.cookie, human.playerKey)).body.game as GameState;
+  let game = await load();
+  assert.ok(game.blackPlayerIsBot || game.whitePlayerIsBot);
+  const humanColor = game.blackPlayerKey === human.playerKey ? "black" : "white";
+  const botAction = (body: Record<string, unknown>) => postGame(gameId, "/browser-bot", {
+    ...body, modelVersion: game.browserBotModelVersion, modelSha256: game.browserBotModelSha256,
+  }, human.cookie, human.playerKey);
+  // Human and browser-bot turns share the human's production move budget.
+  const burstWindowMs = RATE_LIMIT_POLICIES.moveBurst.windowMinutes * 60_000;
+  const moveIntervalMs = Math.ceil(burstWindowMs / RATE_LIMIT_POLICIES.moveBurst.limit) + 50;
+  for (const [color, move] of [
+    ["black", { x: 1, y: 0 }], ["white", { x: 3, y: 2 }],
+    ["black", { x: 0, y: 1 }], ["white", { isPass: true }],
+    ["black", { x: 2, y: 0 }], ["white", { isPass: true }],
+    ["black", { x: 0, y: 2 }], ["white", { isPass: true }], ["black", { isPass: true }],
+  ] as const) {
+    const moved = color === humanColor
+      ? await postGame(gameId, "/moves", move, human.cookie, human.playerKey)
+      : await botAction({ kind: "move", expectedVersion: game.version,
+          move: "isPass" in move ? { kind: "pass" } : { kind: "play", ...move } });
+    assert.equal(moved.response.status, 200, JSON.stringify(moved.body));
+    game = moved.body.game as GameState;
+    await delay(moveIntervalMs);
+  }
+  assert.equal(game.phase, "scoring");
+  assert.equal(game.browserBotModelVersion, GOSTONE_BOT_MODEL.modelVersion);
+  const revision = game.scoring!.revision;
+  const early = await postGame(gameId, "/scoring/confirm", { expectedRevision: revision }, human.cookie, human.playerKey);
+  assert.equal(early.response.status, 409);
+  assert.equal(early.body.code, "scoring_proposal_pending");
+  // Keep the proposal race within its own fresh burst window; do not disable limits.
+  await delay(burstWindowMs + 50);
+  const invalid = await botAction({ kind: "settlement", expectedRevision: revision,
+    deadStones: [{ x: 3, y: 2 }], neutralRegionSeeds: [{ x: 1, y: 0 }], uncertainStones: [] });
+  assert.equal(invalid.response.status, 400);
+  game = await load();
+  assert.equal(game.scoring!.revision, revision);
+  assert.deepEqual(game.scoring!.deadStones, [], "a rejected proposal writes no partial groups");
+  const proposal = { kind: "settlement", expectedRevision: revision, deadStones: [{ x: 3, y: 2 }],
+    neutralRegionSeeds: [{ x: 0, y: 0 }], uncertainStones: [{ x: 0, y: 1 }, { x: 0, y: 2 }] };
+  const raced = await Promise.all([botAction(proposal), botAction(proposal)]);
+  assert.deepEqual(raced.map(({ response }) => response.status).sort(), [200, 409]);
+  game = await load();
+  assert.equal(game.scoring!.revision, revision + 1, "the entire proposal advances one revision");
+  assert.equal(game.scoring!.browserBotProposalReady, true);
+  assert.deepEqual(game.scoring!.neutralRegionSeeds, proposal.neutralRegionSeeds);
+  const uncertainConfirm = await botAction({ kind: "confirm", expectedRevision: game.scoring!.revision });
+  assert.equal(uncertainConfirm.response.status, 409);
+  assert.equal(uncertainConfirm.body.code, "scoring_groups_uncertain");
+  const resolved = await postGame(gameId, "/scoring/dead-stones", {
+    x: 0, y: 1, dead: false, expectedRevision: game.scoring!.revision,
+  }, human.cookie, human.playerKey);
+  assert.equal(resolved.response.status, 200);
+  game = resolved.body.game as GameState;
+  assert.deepEqual(game.scoring!.uncertainStones, []);
+  assert.deepEqual(game.scoring!.neutralRegionSeeds, proposal.neutralRegionSeeds);
+  assert.equal(game.scoring!.preview.black, 77);
+  assert.equal(game.scoring!.preview.white, 6.5);
+  const humanConfirmed = await postGame(gameId, "/scoring/confirm", { expectedRevision: game.scoring!.revision }, human.cookie, human.playerKey);
+  assert.equal(humanConfirmed.response.status, 200);
+  const confirmed = await botAction({ kind: "confirm", expectedRevision: game.scoring!.revision });
+  assert.equal(confirmed.response.status, 200);
+  game = await load();
+  assert.equal(game.status, "finished");
+  assert.equal(game.result, "B+70.5");
+  assert.equal(game.scoring!.territory!.black.length, 76);
+  assert.equal(game.scoring!.territory!.white.length, 0);
+  assert.ok(!game.scoring!.territory!.black.some(({ x, y }) => x === 0 && y === 0));
+  assert.ok(game.scoring!.territory!.black.some(({ x, y }) => x === 3 && y === 2));
+}
+
 async function run() {
   await assertSmokeDatabaseIdentity(getPool());
   console.log(`Testing scoring races at ${new URL(baseUrl).origin}`);
 
   await assertLegacyDeploymentWindowCompatibility();
+  await assertCompleteBrowserSettlement();
 
   const confirmResume = await setupScoringFixture();
   const confirmResumeResults = await Promise.all([

@@ -1,5 +1,7 @@
 "use client";
 
+import { goStoneSettlementPosition } from "./modelV1";
+
 import type {
   GoStoneBotPosition,
   GoStoneBotWorkerRequest,
@@ -83,7 +85,7 @@ export async function proposeJapaneseSettlement(
   const response = await requestWorker({
     id: requestId("settlement"),
     kind: "settlement",
-    position,
+    position: goStoneSettlementPosition(position),
   });
   if (!response.ok) throw new Error(response.error);
   if (response.kind !== "settlement") {

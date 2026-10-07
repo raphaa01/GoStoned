@@ -11,6 +11,7 @@ import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { getFriendsCopy } from "@/lib/i18n/friends";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { presentRating } from "@/lib/rating/rankPolicy";
+import { getSettlementCopy } from "@/lib/i18n/settlement";
 import { PlayerClock } from "./PlayerClock";
 import { ScoringHelpButton } from "./ScoringHelpDialog";
 import { FinishedGameShareButton } from "./FinishedGameShareButton";
@@ -35,6 +36,7 @@ type GamePanelProps = {
   onPass: () => void;
   onResign: () => void;
   onConfirmScore: () => void;
+  onResolveGroup?: (point: Position, dead: boolean) => void;
   onShowScoringHelp: () => void;
   selectedDisputeStone: Position | null;
   onSelectDisputeGroup: (representative: Position) => void;
@@ -51,6 +53,7 @@ export function GamePanel({
   onPass,
   onResign,
   onConfirmScore,
+  onResolveGroup,
   onShowScoringHelp,
   selectedDisputeStone,
   onSelectDisputeGroup,
@@ -59,6 +62,7 @@ export function GamePanel({
 }: GamePanelProps) {
   const { dictionary, locale } = useI18n();
   const copy = dictionary.game;
+  const settlementCopy = getSettlementCopy(locale);
   const friendsCopy = getFriendsCopy(locale);
   const rulesSummary = localizedRulesSummary(game, dictionary);
   const prisoners = useMemo(
@@ -79,6 +83,8 @@ export function GamePanel({
   );
   const scoring = game.phase === "scoring" ? game.scoring : null;
   const activeScoring = game.status === "active" ? scoring : null;
+  const proposalPending = Boolean(game.browserBotModelVersion && activeScoring && !activeScoring.browserBotProposalReady);
+  const uncertainGroups = groupMarkedDeadStones(game.board, activeScoring?.uncertainStones ?? []);
   const disputeGroups = groupMarkedDeadStones(game.board, game.scoring?.deadStones ?? []);
   const selectedGroup = disputeGroups.find(({ stones }) =>
     selectedDisputeStone
@@ -201,12 +207,25 @@ export function GamePanel({
           </div>
           <button
             className="scoring-confirm-action"
-            disabled={controlsDisabled || Boolean(youConfirmed)}
+            disabled={controlsDisabled || Boolean(youConfirmed) || proposalPending || uncertainGroups.length > 0}
             onClick={onConfirmScore}
             type="button"
           >
-            <Check size={20} /> {youConfirmed ? copy.confirmed : copy.confirmScore}
+            <Check size={20} /> {proposalPending ? copy.estimatingScore : youConfirmed ? copy.confirmed : copy.confirmScore}
           </button>
+          {uncertainGroups.length > 0 ? (
+            <section className="scoring-uncertain-groups">
+              <strong>{settlementCopy.uncertain}</strong>
+              {uncertainGroups.map((group) => (
+                <div className="scoring-uncertain-group" key={group.key} role="group"
+                  aria-label={`${group.color === "black" ? copy.black : copy.white} · ${goCoordinate(game.boardSize, group.representative.x, group.representative.y)}`}>
+                  <span>{group.color === "black" ? copy.black : copy.white} · {goCoordinate(game.boardSize, group.representative.x, group.representative.y)}</span>
+                  <button disabled={controlsDisabled} onClick={() => onResolveGroup?.(group.representative, false)} type="button">{settlementCopy.alive}</button>
+                  <button disabled={controlsDisabled} onClick={() => onResolveGroup?.(group.representative, true)} type="button">{settlementCopy.dead}</button>
+                </div>
+              ))}
+            </section>
+          ) : null}
           <details className="scoring-breakdown">
             <summary>{copy.scoreBreakdown}</summary>
             {"blackStones" in activeScoring.preview ? (

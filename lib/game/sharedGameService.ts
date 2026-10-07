@@ -1,6 +1,7 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { withReadOnlyTransaction, withTransaction } from "@/lib/db";
 import { replayMovesWithPrisoners } from "./goEngine";
+import { countedTerritoryPoints } from "./japaneseScoring";
 import { GameServiceError } from "./gameServiceError";
 import type { Board, BoardSize, Position, Stone, StoredMove, TimeControlId } from "./types";
 
@@ -12,6 +13,8 @@ type SharedGameRow = QueryResultRow & {
   finish_reason: "score" | "resignation" | "timeout" | "legacy_score";
   time_control: TimeControlId;
   finished_at: Date;
+  neutral_region_seeds: Position[] | null;
+  finalized_at: Date | null;
 };
 
 type SharedMoveRow = QueryResultRow & {
@@ -34,6 +37,7 @@ export type SharedFinishedGame = Readonly<{
   moveCount: number;
   lastMove: Position | null;
   deadStones: Position[];
+  territory?: { black: Position[]; white: Position[] };
   finishedAt: string;
 }>;
 
@@ -83,6 +87,7 @@ export async function getSharedFinishedGame(token: string): Promise<SharedFinish
   return withReadOnlyTransaction(async (client: PoolClient) => {
     const game = await client.query<SharedGameRow>(
       `SELECT g.board_size, g.result, g.finish_reason, g.time_control, g.finished_at,
+              scoring.neutral_region_seeds, scoring.finalized_at,
               COALESCE(NULLIF(BTRIM(black_user.display_name), ''), black_user.username,
                 CASE WHEN g.black_player_key = bot.bot_player_key THEN bot.display_name END,
                 'Guest ' || UPPER(RIGHT(g.black_player_key, 6))) AS black_player_name,
@@ -94,6 +99,7 @@ export async function getSharedFinishedGame(token: string): Promise<SharedFinish
          LEFT JOIN users black_user ON g.black_player_key = 'user:' || black_user.id::text
          LEFT JOIN users white_user ON g.white_player_key = 'user:' || white_user.id::text
          LEFT JOIN game_bots bot ON bot.game_id = g.id
+         LEFT JOIN game_scoring_state scoring ON scoring.game_id = g.id
         WHERE share.token = $1 AND g.status = 'finished' AND g.finished_at IS NOT NULL
           AND g.result IS NOT NULL AND g.finish_reason IS NOT NULL`,
       [token],
@@ -120,6 +126,8 @@ export async function getSharedFinishedGame(token: string): Promise<SharedFinish
     return {
       boardSize: row.board_size,
       board,
+      territory: row.finish_reason === "score" && row.finalized_at
+        ? countedTerritoryPoints(board, deadResult.rows, row.neutral_region_seeds ?? []) : undefined,
       blackPlayerName: row.black_player_name,
       whitePlayerName: row.white_player_name,
       result: row.result,

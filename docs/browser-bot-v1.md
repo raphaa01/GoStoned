@@ -1,5 +1,24 @@
 # GoStone Browser Bot v1
 
+## Konsistente Wertung und Gebietsanzeige
+
+Spielstandsschätzung, Bot-Endvorschlag und Trainings-Endvorschlag verwenden
+dieselbe Bewertungsstärke aus `GOSTONE_BOT_MODEL.settlement.evaluationRating`.
+Die Schwierigkeit normaler Botzüge bleibt vom Gegner-Rating abhängig. Bereits
+gebundene Partien behalten auch bei der Schätzung ihre Modellversion und ihren Hash.
+
+Der Server übernimmt tote Gruppen, unklare Gruppen und neutrale Regionen gemeinsam
+in einer gesperrten Wertungsrevision. Vor dem vollständigen Vorschlag und solange
+unklare Gruppen offen sind, ist keine Bestätigung möglich. Menschen können unklare
+Gruppen als lebend oder tot beurteilen. Eine neue Seitenladung überschreibt diese
+Prüfung nicht. Bei geänderten Tot-Markierungen werden neutrale Regionen neu geprüft.
+
+Das Ergebnis bleibt eine beidseitig bestätigte Regelbuchwertung aus Zugprotokoll,
+Gefangenen, vereinbarten toten Gruppen, neutralen Regionen und Komi. Kleine schwarze
+und weiße Quadrate zeigen ausschließlich gezählte leere Gebietspunkte; Dame und
+vereinbart neutrales Gebiet bleiben unmarkiert. Die ursprüngliche gestoppte Stellung
+bleibt im Zugprotokoll erhalten.
+
 ## Verbindlicher Modellvertrag
 
 Für Botzüge und Vorschläge zur japanischen Endwertung ist ausschließlich
