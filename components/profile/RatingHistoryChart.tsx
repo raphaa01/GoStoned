@@ -39,7 +39,6 @@ export function RatingHistoryChart({
       <div className="rating-chart-empty">
         <span>{ratingLabel(currentRating)}</span>
         <strong>{copy.chartEmptyTitle}</strong>
-        <p>{copy.chartEmptyDescription}</p>
       </div>
     );
   }

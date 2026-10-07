@@ -118,7 +118,6 @@ export function Hero() {
             <div className="chapter-copy">
               <p className="chapter-kicker"><Gamepad2 aria-hidden="true" size={21} />{copy.playChapterKicker}</p>
               <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-              <p>{copy.playChapterBody}</p>
               <dl className="chapter-facts" aria-label={copy.playChapterTitle}>
                 <div><dt>{dictionary.play.boardSize}</dt><dd>19×19</dd></div>
                 <div><dt>{dictionary.play.timeControl}</dt><dd>{dictionary.timeControls.rapid.name}</dd></div>
@@ -143,7 +142,6 @@ export function Hero() {
             <span className="home-feature-copy">
               <small>{copy.learnChapterKicker}</small>
               <strong id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-              <span>{copy.learnChapterBody}</span>
             </span>
             <ArrowRight aria-hidden="true" size={20} />
           </Link>
@@ -152,7 +150,6 @@ export function Hero() {
             <span className="home-feature-copy">
               <small>{copy.puzzlesChapterKicker}</small>
               <strong id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-              <span>{copy.puzzlesChapterBody}</span>
             </span>
             <ArrowRight aria-hidden="true" size={20} />
           </Link>
@@ -161,7 +158,6 @@ export function Hero() {
             <span className="home-feature-copy">
               <small>{copy.reviewChapterKicker}</small>
               <strong id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-              <span>{copy.reviewChapterBody}</span>
             </span>
             <ArrowRight aria-hidden="true" size={20} />
           </Link>
@@ -172,7 +168,6 @@ export function Hero() {
             <div>
               <p className="chapter-kicker"><Trophy aria-hidden="true" size={21} />{copy.progressChapterKicker}</p>
               <h2 id="home-progress-title">{copy.progressChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-              <p>{copy.progressChapterBody}</p>
             </div>
             <Link className="chapter-symbol-link" href={profileHref}><Trophy aria-hidden="true" size={19} /><span>{copy.progressChapterAction}</span></Link>
           </div>

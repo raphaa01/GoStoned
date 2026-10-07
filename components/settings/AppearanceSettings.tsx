@@ -16,7 +16,7 @@ export function AppearanceSettings() {
   ] as const;
 
   return <section aria-labelledby="appearance-title" className="settings-section">
-    <header><h2 id="appearance-title">{copy.appearance}</h2><p>{copy.appearanceBody}</p></header>
+    <header><h2 id="appearance-title">{copy.appearance}</h2></header>
     <div aria-labelledby="appearance-title" className="settings-theme-picker" role="group">
       {choices.map(({ value, label, icon: Icon }) => <button
         aria-pressed={preference === value}

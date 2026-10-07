@@ -16,6 +16,7 @@ import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { accountRegistrationPath } from "@/lib/auth/returnPath";
+import { cachedRouteData, invalidateRouteData, readRouteData, puzzleRouteKey } from "@/lib/client/routeCache";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
@@ -75,7 +76,8 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     accountRegistrationPath("/puzzles?mode=practice"),
   );
   const [mode, setMode] = useState<PuzzleKind>(initialMode);
-  const [hub, setHub] = useState<PuzzleHub | null>(null);
+  const [hub, setHub] = useState<PuzzleHub | null>(() => playerKey ? cachedRouteData<PuzzleHub>(puzzleRouteKey(initialMode, playerKey)) ?? null : null);
+  const [hubOwner, setHubOwner] = useState(playerKey);
   const [selectedCategory, setSelectedCategory] = useState<PuzzleCatalogCategory | null>(null);
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -85,7 +87,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
   const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
-  const puzzles = useMemo(() => hub?.puzzles ?? [], [hub?.puzzles]);
+  const puzzles = useMemo(() => hubOwner === playerKey ? hub?.puzzles ?? [] : [], [hub?.puzzles, hubOwner, playerKey]);
 
   const redirectAccountFailure = useCallback((requestError: unknown) => {
     if (
@@ -100,13 +102,17 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   const requestHub = useCallback(async (signal?: AbortSignal) => {
     if (!playerKey || (mode === "practice" && !user)) return null;
-    const response = await fetch(`/api/puzzles?mode=${mode}`, {
-      cache: "no-store",
-      headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-      signal,
+    const data = await readRouteData(puzzleRouteKey(mode, playerKey), async () => {
+      const response = await fetch(`/api/puzzles?mode=${mode}`, {
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+        signal: AbortSignal.timeout(20_000),
+      });
+      const result = await readApi<PuzzleApiResponse>(response);
+      assertResponseActor(result.actor, playerKey);
+      return result;
     });
-    const data = await readApi<PuzzleApiResponse>(response);
-    assertResponseActor(data.actor, playerKey);
+    if (signal?.aborted) return null;
     return {
       status: data.status,
       mode: data.mode,
@@ -125,10 +131,12 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const acceptHub = useCallback((data: PuzzleHub | null) => {
     if (!data) return;
     setHub(data);
+    setHubOwner(playerKey);
     setError(null);
-  }, []);
+  }, [playerKey]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    if (playerKey) invalidateRouteData(puzzleRouteKey(mode, playerKey));
     try {
       acceptHub(await requestHub(signal));
     } catch (loadError) {
@@ -136,7 +144,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       if (redirectAccountFailure(loadError)) return;
       setError(localizedApiError(dictionary, loadError, copy.unavailable));
     }
-  }, [acceptHub, copy.unavailable, dictionary, redirectAccountFailure, requestHub]);
+  }, [acceptHub, copy.unavailable, dictionary, redirectAccountFailure, requestHub, mode, playerKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -180,6 +188,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   ), [puzzle, visibleLine]);
 
   const updatePuzzle = useCallback((attempt: PuzzleAttemptResult) => {
+    if (playerKey) invalidateRouteData(puzzleRouteKey(mode, playerKey));
     setHub((current) => current ? {
       ...current,
       puzzles: current.puzzles.map((entry) => entry.id === attempt.puzzleId ? {
@@ -192,7 +201,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
         solution: attempt.solution,
       } : entry),
     } : current);
-  }, []);
+  }, [mode, playerKey]);
 
   async function submitMove(x: number, y: number) {
     if (!puzzle || !playerKey || busy || puzzle.solved || branchLine) return;
@@ -332,7 +341,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       || 10;
     return (
       <button key={category.id} onClick={() => chooseCategory(category.id)} type="button">
-        <span><strong>{category.title}</strong><span>{category.description}</span></span>
+        <span><strong>{category.title}</strong></span>
         <small>{copy.catalogProgress.replace("{ready}", String(ready)).replace("{total}", String(total))}</small>
       </button>
     );

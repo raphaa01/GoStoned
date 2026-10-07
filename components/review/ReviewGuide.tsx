@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
-import type { RecentGame } from "@/lib/stats/statsService";
+import type { ProfileResponse } from "@/components/profile/ProfileView";
+import { invalidateRouteData, routeCacheKey } from "@/lib/client/routeCache";
+import { useRouteResource } from "@/components/useRouteResource";
 import styles from "./review.module.css";
 
 function signed(value: number) {
@@ -19,34 +21,16 @@ export function ReviewGuide() {
   const { user } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
-  const [games, setGames] = useState<RecentGame[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [retryRevision, setRetryRevision] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-    const controller = new AbortController();
-    let active = true;
-    fetch("/api/profile", { cache: "no-store", signal: controller.signal })
-      .then((response) => readApi<{ recentGames?: RecentGame[] }>(response))
-      .then((body) => {
-        if (!active) return;
-        setGames((body.recentGames ?? []).filter((game) => game.moveCount > 0));
-        setError(null);
-      })
-      .catch((loadError: unknown) => {
-        if (!active || controller.signal.aborted) return;
-        setError(localizedApiError(dictionary, loadError, dictionary.apiErrors.internal_error));
-      })
-      .finally(() => {
-        if (active) setLoaded(true);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [dictionary, retryRevision, user]);
+  const key = user ? routeCacheKey("profile", user.playerKey) : null;
+  const loadProfile = useCallback(() => {
+    void retryRevision;
+    return fetch("/api/profile", { cache: "no-store" }).then(readApi<ProfileResponse>);
+  }, [retryRevision]);
+  const resource = useRouteResource(key, loadProfile);
+  const loaded = resource.loaded;
+  const games = (resource.data?.recentGames ?? []).filter((game) => game.moveCount > 0);
+  const error = resource.error ? localizedApiError(dictionary, resource.error, dictionary.apiErrors.internal_error) : null;
 
   return (
     <div className={styles.hub}>
@@ -64,8 +48,7 @@ export function ReviewGuide() {
             <div className={styles.empty} role="alert">
               <p>{error}</p>
               <button className="button button--secondary" onClick={() => {
-                setLoaded(false);
-                setError(null);
+                if (key) invalidateRouteData(key);
                 setRetryRevision((current) => current + 1);
               }} type="button">{copy.retry}</button>
             </div>

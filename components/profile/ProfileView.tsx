@@ -11,7 +11,7 @@ import {
   Settings,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
@@ -20,6 +20,8 @@ import { BoardDesignPicker } from "@/components/profile/BoardDesignPicker";
 import { getSettingsCopy } from "@/lib/i18n/settings";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { readApi } from "@/lib/client/api";
+import { routeCacheKey } from "@/lib/client/routeCache";
+import { useRouteResource } from "@/components/useRouteResource";
 import type { Locale } from "@/lib/i18n/config";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
@@ -34,7 +36,7 @@ import type {
 } from "@/lib/stats/statsService";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
 
-type ProfileResponse = {
+export type ProfileResponse = {
   rating?: GlobalRatingSummary;
   preferences?: PublicRatingPreferences;
   history?: RatingHistoryEntry[];
@@ -59,12 +61,11 @@ export function ProfileView() {
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.profile;
   const settingsCopy = getSettingsCopy(locale);
-  const [rating, setRating] = useState<GlobalRatingSummary | null>(null);
-  const [preferences, setPreferences] = useState<PublicRatingPreferences | null>(null);
-  const [history, setHistory] = useState<RatingHistoryEntry[]>([]);
-  const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const loadProfile = useCallback(() => fetch("/api/profile", { cache: "no-store" }).then(readApi<ProfileResponse>), []);
+  const resource = useRouteResource(user ? routeCacheKey("profile", user.playerKey) : null, loadProfile);
+  const { rating, preferences, history = [], recentGames = [] } = resource.data ?? {};
+  const loaded = resource.loaded;
+  const error = resource.error ? localizedApiError(dictionary, resource.error, copy.loadFailed) : null;
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<ProfileAvatarStyle>(DEFAULT_PROFILE_AVATAR_STYLE);
   const [avatarSaving, setAvatarSaving] = useState(false);
@@ -90,32 +91,6 @@ export function ProfileView() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [avatarPickerOpen, user?.avatarStyle]);
-
-  useEffect(() => {
-    if (!user) {
-      const timeout = window.setTimeout(() => setLoaded(true), 0);
-      return () => window.clearTimeout(timeout);
-    }
-    const controller = new AbortController();
-    void fetch("/api/profile", { cache: "no-store", signal: controller.signal })
-      .then((response) => readApi<ProfileResponse>(response))
-      .then((body) => {
-        setRating(body.rating ?? null);
-        setPreferences(body.preferences ?? null);
-        setHistory(body.history ?? []);
-        setRecentGames(body.recentGames ?? []);
-        setError(null);
-      })
-      .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(localizedApiError(dictionary, requestError, copy.loadFailed));
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoaded(true);
-      });
-    return () => controller.abort();
-  }, [copy.loadFailed, dictionary, user]);
 
   const saveAvatar = async () => {
     if (!user || avatarSaving || selectedAvatarStyle === user.avatarStyle) return;
@@ -248,7 +223,7 @@ export function ProfileView() {
       <section aria-label={copy.ratingsLabel} className="profile-performance">
         <div className="profile-performance__main">
           <article className="profile-rating-band">
-            <span className="profile-rating-band__eyebrow">{copy.globalRating}</span>
+            <span className="profile-rating-band__eyebrow">{dictionary.leaderboard.rating}</span>
             <RatingLabel
               locale={locale}
               preference={preferences.displayPreference}

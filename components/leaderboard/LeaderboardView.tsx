@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { RatingLabel } from "@/components/rating/RatingLabel";
+import { cachedRouteData, invalidateRouteData, readRouteData } from "@/lib/client/routeCache";
 import { readApi } from "@/lib/client/api";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { presentRating } from "@/lib/rating/rankPolicy";
@@ -17,9 +18,9 @@ export function LeaderboardView() {
   const { rating: viewerRating, user } = useAuth();
   const { dictionary, locale } = useI18n();
   const copy = dictionary.leaderboard;
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [observedAt, setObservedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>(() => cachedRouteData<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.leaderboard ?? []);
+  const [observedAt, setObservedAt] = useState<string | null>(() => cachedRouteData<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.observedAt ?? null);
+  const [loading, setLoading] = useState(() => !cachedRouteData("public:leaderboard"));
   const [error, setError] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState(0);
   const [viewerPreference, setViewerPreference] = useState<{
@@ -35,12 +36,12 @@ export function LeaderboardView() {
 
     void (async () => {
       try {
-        const response = await fetch("/api/stats", {
-          signal: controller.signal,
+        const snapshot = await readRouteData("public:leaderboard", async () => {
+          const response = await fetch("/api/stats", { signal: AbortSignal.timeout(20_000) });
+          const body = await readApi<unknown>(response);
+          return parsePublicLeaderboardSnapshot(body);
         });
-        const body = await readApi<unknown>(response);
         if (!active) return;
-        const snapshot = parsePublicLeaderboardSnapshot(body);
         setEntries(snapshot.leaderboard);
         setObservedAt(snapshot.observedAt);
         setError(null);
@@ -96,6 +97,7 @@ export function LeaderboardView() {
     ? viewerPreference.displayPreference
     : "both";
   const retry = () => {
+    invalidateRouteData("public:leaderboard");
     focusRetryStatus.current = true;
     setLoading(true);
     setError(null);
@@ -112,7 +114,6 @@ export function LeaderboardView() {
 
       <section className="leaderboard-card">
         <div className="leaderboard-title"><strong>{copy.globalScope} · {copy.players}</strong></div>
-        <p className="leaderboard-method">{copy.ratingMethod}</p>
         {user && viewerRating ? (
           <aside
             aria-label={`${dictionary.profile.currentRating}: ${user.displayName}`}
@@ -210,7 +211,7 @@ export function LeaderboardView() {
               <p
                 aria-atomic="true"
                 aria-live="polite"
-                className="leaderboard-snapshot"
+                className="sr-only"
                 ref={resultStatusRef}
                 role="status"
                 tabIndex={-1}
