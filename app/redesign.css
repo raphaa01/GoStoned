@@ -2277,9 +2277,9 @@ body {
   box-shadow: inset 3px 0 0 var(--color-moss);
 }
 
-.player-clock.is-running strong,
-.player-clock.is-running span {
-  color: white;
+.player-clock.is-running:not(.is-byo-yomi) strong,
+.player-clock.is-running:not(.is-byo-yomi) span {
+  color: var(--color-canvas);
 }
 
 .player-clock.is-byo-yomi {
@@ -2287,7 +2287,8 @@ body {
   border-color: rgb(129 91 36 / .28);
 }
 
-.player-clock.is-byo-yomi strong {
+.player-clock.is-byo-yomi strong,
+.player-clock.is-byo-yomi span {
   color: var(--color-warning);
 }
 
@@ -2446,7 +2447,6 @@ body {
 }
 
 .stone {
-  animation: board-stone-place 190ms var(--ease-out) both;
   aspect-ratio: 1;
   height: auto;
   transform-origin: center;
@@ -2495,11 +2495,6 @@ body {
 
 @keyframes live-pulse {
   50% { box-shadow: 0 0 0 9px rgb(71 117 99 / .12); }
-}
-
-@keyframes board-stone-place {
-  from { opacity: .3; transform: scale(.72) translateY(-8%); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 @keyframes overlay-fade-in {
@@ -6214,7 +6209,7 @@ body {
 
 .game-actions .game-action-pass {
   background: var(--color-ink) !important;
-  color: white;
+  color: var(--color-canvas);
 }
 .game-action-resign {
   background: transparent !important;
