@@ -95,6 +95,7 @@ export function registerGameReadabilityTests() {
           expect(Math.abs(offset.y)).toBeLessThan(.5);
         }
         release();
+        await expect(page.locator(".game-panel-player.is-you .player-clock")).not.toHaveClass(/is-running/);
         await expect(page.locator(".game-action-pass")).toBeDisabled();
         expect(await originalNode!.evaluate((element) => element.isConnected)).toBe(true);
         await expect(stone).toHaveCount(1);
