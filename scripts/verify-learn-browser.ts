@@ -170,6 +170,9 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
           }
         }
       }
+      for (let reply = 0; reply < (step.replies?.length ?? 0); reply++) {
+        await page.getByRole("button", { name: /^Nächsten Zug zeigen/ }).click();
+      }
       await expect(advance).toBeEnabled();
       if (lesson.id === "s1-board" && index === 2) {
         await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(2);
@@ -274,6 +277,11 @@ async function run() {
       for (const width of [320,390,768]) for (const colorScheme of ["light","dark"] as const) {
         await page.setViewportSize({width,height:844});
         await page.emulateMedia({colorScheme});
+        await page.evaluate(({ key, value }) => {
+          localStorage.setItem(key, value);
+          window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
+        }, { key: mobile ? "gostone.mobile.theme.v1" : "gostone.theme.v1", value: colorScheme });
+        await expect(page.locator("html")).toHaveAttribute(mobile ? "data-mobile-theme" : "data-theme", colorScheme);
         if (mobile) await page.evaluate((platform)=>{document.documentElement.dataset.mobilePlatform=platform;document.documentElement.dataset.nativeTabBar=platform === "ios" ? "true" : "false";},width === 390 ? "ios" : "android");
         await page.getByRole("button").filter({hasText:"Deine ersten Steine"}).click();
         await expect(page.getByRole("heading",{name:"Deine ersten Steine",exact:true})).toBeVisible();

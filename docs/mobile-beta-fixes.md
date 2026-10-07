@@ -43,3 +43,17 @@ build the mobile bundle and sync Capacitor; rebuild the iOS KataGo framework
 with `npm run mobile:katago:ios` before archiving so the C++ repair is included.
 Use the existing Android/iOS release scripts in `docs/mobile-store-release.md`.
 No database migration or new dependency is required.
+
+## Theme and lesson follow-up
+
+Fresh website and app sessions default to light, including on dark devices.
+Explicit dark, light and system choices are stored separately for each client;
+system mode is now stored rather than represented by a missing preference.
+Website water artwork, hero transitions and chapter panels use a consistent
+dark palette when dark mode is selected. Review cards use a complete border
+and the shared palette tokens.
+
+Teaching continuations advance with Show next move, one placement per tap.
+The lesson cannot complete until every reply is visible. Life or death explains
+the center move, Black's reply and White's capturing move in their respective
+positions. Restart restores the original board even midway through the example.

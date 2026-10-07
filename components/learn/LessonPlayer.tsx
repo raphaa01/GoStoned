@@ -56,6 +56,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const [wrong, setWrong] = useState(false);
   const [hint, setHint] = useState(false);
   const [gameOutcome, setGameOutcome] = useState<"won" | "lost" | "completed" | undefined>();
+  const [continuation, setContinuation] = useState<{ positions: LearnGamePosition[]; shown: number } | null>(null);
   const step = lesson.steps[stepIndex];
 
   const resetStep = (nextIndex = stepIndex, previous?: LearnGamePosition | null) => {
@@ -69,6 +70,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     setWrong(false);
     setHint(false);
     setGameOutcome(undefined);
+    setContinuation(null);
   };
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const success = step.success ? line(step.success, locale) : copy.correct;
 
   const handlePoint = (point: Position) => {
-    if (!interactive || solved || !position) return;
+    if (!interactive || solved || continuation || !position) return;
     const isTarget = targets.length === 0 || targets.some((target) => samePoint(target, point));
     if (!isTarget) {
       setWrong(true);
@@ -122,15 +124,32 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
       return;
     }
     let after = result.position;
+    const positions: LearnGamePosition[] = [];
     for (const reply of step.replies ?? []) {
       const played = playLearnMove(after, reply);
       if (!played.ok) throw new Error(`Invalid teaching reply in ${lesson.id}/${step.id}`);
       after = played.position;
+      positions.push(after);
     }
-    setPosition(after);
-    setSolved(true);
+    setPosition(result.position);
+    setContinuation(positions.length ? { positions, shown: 0 } : null);
+    setSolved(positions.length === 0);
     setWrong(false);
-    setFeedback(success);
+    setFeedback(positions.length ? step.replyExplanations?.[0] ? line(step.replyExplanations[0], locale) : copy.watchContinuation : success);
+  };
+
+  const showNextMove = () => {
+    if (!continuation) return;
+    const shown = continuation.shown + 1;
+    setPosition(continuation.positions[continuation.shown]);
+    if (shown === continuation.positions.length) {
+      setContinuation(null);
+      setSolved(true);
+      setFeedback(success);
+    } else {
+      setContinuation({ ...continuation, shown });
+      setFeedback(step.replyExplanations?.[shown] ? line(step.replyExplanations[shown], locale) : copy.watchContinuation);
+    }
   };
 
   const advance = () => {
@@ -153,9 +172,9 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const gameMode = step.kind === "capture-game" ? "capture"
     : step.kind === "guided-game" ? "guided"
       : step.kind === "beginner-game" ? "beginner" : null;
-  const stepMode = solved ? "solved" : step.kind === "info" ? "info" : gameMode ? "game" : "action";
-  const modeLabel = solved ? copy.taskSolved : step.kind === "info" ? copy.explanation : gameMode ? copy.practiceGame : copy.taskTurn;
-  const modeHelp = solved ? copy.readyToContinue : step.kind === "info" ? copy.explanationHelp
+  const stepMode = solved ? "solved" : continuation || step.kind === "info" ? "info" : gameMode ? "game" : "action";
+  const modeLabel = solved ? copy.taskSolved : continuation || step.kind === "info" ? copy.explanation : gameMode ? copy.practiceGame : copy.taskTurn;
+  const modeHelp = continuation ? copy.watchContinuation : solved ? copy.readyToContinue : step.kind === "info" ? copy.explanationHelp
     : gameMode ? copy.practiceGameHelp : step.kind === "pass" ? copy.passTaskHelp : copy.boardTaskHelp;
 
   return (
@@ -178,7 +197,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
           <span>{modeHelp}</span>
         </div>
         <LearnTeacher tone={wrong ? "correction" : solved ? "success" : "neutral"}>
-          {!solved ? <>
+          {!solved && !continuation ? <>
             <p>{line(step.body, locale)}</p>
             {step.task ? <strong className="learn-teacher__task">{line(step.task, locale)}</strong> : null}
           </> : null}
@@ -206,7 +225,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
         ) : board ? (
           <InteractiveLearnBoard
             board={board}
-            disabled={!interactive || solved}
+            disabled={!interactive || solved || Boolean(continuation)}
             emphasis={presentation.emphasis}
             group={presentation.group}
             interaction={boardInteraction}
@@ -235,13 +254,13 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             {step.hint && !solved ? (
               <button className="learn-text-button" onClick={() => setHint((current) => !current)} type="button"><Lightbulb aria-hidden="true" size={15} /> {copy.hint}</button>
             ) : null}
-            {(wrong || selected.length > 0 || solved) && !gameMode ? (
+            {(wrong || selected.length > 0 || solved || continuation) && !gameMode ? (
               <button className="learn-text-button" onClick={() => resetStep()} type="button"><RotateCcw aria-hidden="true" size={15} /> {copy.restart}</button>
             ) : null}
           </div>
 
-          <button className="button button--primary learn-player__next" disabled={!canAdvance} onClick={advance} type="button">
-            {stepIndex === lesson.steps.length - 1 ? copy.completeLesson : copy.continue}
+          <button className="button button--primary learn-player__next" disabled={!canAdvance && !continuation} onClick={continuation ? showNextMove : advance} type="button">
+            {continuation ? `${copy.showNextMove} (${continuation.shown + 1}/${continuation.positions.length})` : stepIndex === lesson.steps.length - 1 ? copy.completeLesson : copy.continue}
             <ArrowRight aria-hidden="true" size={17} />
           </button>
         </div>
