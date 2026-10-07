@@ -1,7 +1,8 @@
 import "server-only";
+import { trafficWindow, type TrafficPeriod } from "./trafficOptions";
 
 const VERCEL_ANALYTICS_API = "https://api.vercel.com/v1/query/web-analytics";
-const ADMIN_PATH_FILTER = "requestPath ne '/webanalytics'";
+const ADMIN_PATH_FILTER = "environment eq 'production' and not startswith(requestPath, '/webanalytics')";
 
 type FetchLike = typeof fetch;
 
@@ -13,6 +14,7 @@ type VisitRow = {
   deviceType?: string;
   browserName?: string;
   osName?: string;
+  route?: string;
   pageviews: number;
   visitors: number;
 };
@@ -32,6 +34,8 @@ export type TrafficDay = TrafficBreakdown & {
 };
 
 export type VercelTrafficReport = {
+  period: TrafficPeriod;
+  totals: { pageviews: number; visitors: number };
   lifetime: { pageviews: number; visitors: number };
   since: string;
   until: string;
@@ -42,6 +46,7 @@ export type VercelTrafficReport = {
   devices: TrafficBreakdown[];
   browsers: TrafficBreakdown[];
   operatingSystems: TrafficBreakdown[];
+  routes: TrafficBreakdown[];
 };
 
 type VercelAnalyticsConfig = {
@@ -56,16 +61,6 @@ function requiredConfig(): VercelAnalyticsConfig {
   const teamId = (process.env.WEB_ANALYTICS_TEAM_ID ?? process.env.VERCEL_ORG_ID)?.trim();
   if (!token || !projectId) throw new Error("Web Analytics API is not configured.");
   return { token, projectId, teamId: teamId || undefined };
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function reportWindow(now: Date): { since: string; until: string } {
-  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29));
-  const until = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  return { since: isoDate(since), until: isoDate(until) };
 }
 
 function finiteCount(value: unknown): number {
@@ -84,6 +79,7 @@ function visitRows(value: unknown): VisitRow[] {
       deviceType: typeof candidate.deviceType === "string" ? candidate.deviceType : undefined,
       browserName: typeof candidate.browserName === "string" ? candidate.browserName : undefined,
       osName: typeof candidate.osName === "string" ? candidate.osName : undefined,
+      route: typeof candidate.route === "string" ? candidate.route : undefined,
       pageviews: finiteCount(candidate.pageviews),
       visitors: finiteCount(candidate.visitors),
     };
@@ -126,8 +122,9 @@ export async function getVercelTrafficReport(
   now = new Date(),
   fetcher: FetchLike = fetch,
   config: VercelAnalyticsConfig = requiredConfig(),
+  period: TrafficPeriod = 30,
 ): Promise<VercelTrafficReport> {
-  const { since, until } = reportWindow(now);
+  const { since, until } = trafficWindow(now, period);
   const countParameters = new URLSearchParams({ filter: ADMIN_PATH_FILTER });
   const aggregateParameters = (by: string, limit = 20) => new URLSearchParams({
     since,
@@ -137,8 +134,9 @@ export async function getVercelTrafficReport(
     filter: ADMIN_PATH_FILTER,
   });
 
-  const [count, days, countries, pages, referrers, devices, browsers, operatingSystems] = await Promise.all([
+  const [count, totals, days, countries, pages, referrers, devices, browsers, operatingSystems, routes] = await Promise.all([
     queryVercel<{ data?: { pageviews?: unknown; visitors?: unknown } }>("visits/count", countParameters, config, fetcher),
+    queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("environment"), config, fetcher),
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("day", 31), config, fetcher),
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("country"), config, fetcher),
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("requestPath"), config, fetcher),
@@ -146,9 +144,12 @@ export async function getVercelTrafficReport(
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("deviceType"), config, fetcher),
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("browserName"), config, fetcher),
     queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("osName"), config, fetcher),
+    queryVercel<AggregateResponse>("visits/aggregate", aggregateParameters("route"), config, fetcher),
   ]);
 
   return {
+    period,
+    totals: { pageviews: visitRows(totals.data)[0]?.pageviews ?? 0, visitors: visitRows(totals.data)[0]?.visitors ?? 0 },
     lifetime: {
       pageviews: finiteCount(count.data?.pageviews),
       visitors: finiteCount(count.data?.visitors),
@@ -167,5 +168,6 @@ export async function getVercelTrafficReport(
     devices: breakdown(visitRows(devices.data), "deviceType", "Unbekannt"),
     browsers: breakdown(visitRows(browsers.data), "browserName", "Unbekannt"),
     operatingSystems: breakdown(visitRows(operatingSystems.data), "osName", "Unbekannt"),
+    routes: breakdown(visitRows(routes.data), "route", "Unbekannt"),
   };
 }

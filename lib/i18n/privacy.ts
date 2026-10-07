@@ -122,7 +122,7 @@ const heading = {
     "GoStone의 개인정보 처리, 쿠키, 서비스 제공업체, 보관 기간 및 개인정보 권리에 관한 정보입니다.",
   ),
   updatedLabel: text("Last updated", "Stand", "Dernière mise à jour", "Última actualización", "更新日期", "最終更新日", "최종 업데이트"),
-  updated: text("September 12, 2026", "12. September 2026", "12 septembre 2026", "12 de septiembre de 2026", "2026年9月12日", "2026年9月12日", "2026년 9월 12일"),
+  updated: text("October 7, 2026", "7. Oktober 2026", "7 octobre 2026", "7 de octubre de 2026", "2026年10月7日", "2026年10月7日", "2026년 10월 7일"),
 };
 
 const controller = {
@@ -176,6 +176,14 @@ const sections: LocalizedSection[] = [
       "我们使用 Vercel Web Analytics 了解页面访问频率及流量来源国家。该服务处理已删除查询参数及对局或复盘标识符的访问页面、来源页面、时间戳、由请求推断的国家、地区和城市、浏览器、操作系统和设备类型。服务不使用分析 Cookie 或 localStorage，不将分析数据与 GoStone 账户关联，也不将原始 IP 地址保存为分析数据点。访客识别使用每日重置的哈希。法律依据为 GDPR 第6条第1款(f)项；我们的合法利益是衡量访问量以及改进内容和可靠性。汇总分析数据依所购 Vercel 方案保存。",
       "ページの閲覧頻度とアクセス元の国を把握するため、Vercel Web Analytics を利用します。クエリパラメータと対局・レビュー ID を除去した閲覧ページ、リファラー、時刻、リクエストから推定される国・地域・都市、ブラウザー、OS、端末種別を処理します。解析 Cookie や localStorage は使わず、GoStone アカウントと解析データを結び付けず、生の IP アドレスを解析データとして保持しません。訪問者の識別には毎日リセットされるハッシュを使用します。法的根拠は GDPR 第6条1項(f)で、アクセス状況の把握とコンテンツ・信頼性の改善が正当な利益です。集計データは契約する Vercel プランに従って保存されます。",
       "페이지 방문 빈도와 트래픽 유입 국가를 파악하기 위해 Vercel Web Analytics를 사용합니다. 검색 매개변수와 대국·복기 식별자를 제거한 방문 페이지, 리퍼러, 시각, 요청에서 추정한 국가·지역·도시, 브라우저, 운영체제 및 기기 유형을 처리합니다. 분석 쿠키나 localStorage를 사용하지 않고, 분석 데이터를 GoStone 계정과 연결하지 않으며, 원본 IP 주소를 분석 데이터로 보관하지 않습니다. 방문자 인식에는 매일 초기화되는 해시를 사용합니다. 법적 근거는 GDPR 제6조 제1항 (f)이며, 방문 범위 측정과 콘텐츠 및 안정성 개선이 정당한 이익입니다. 집계 분석 데이터는 이용 중인 Vercel 요금제에 따라 보관됩니다.",
+    ), text(
+      "We also measure time while a page is visible. Every 30 seconds and on navigation or hiding the page, GoStone receives the redacted page path, visible milliseconds and a view-start counter. Only hourly totals per page are stored in our database; no account, visitor, session or IP identifiers are stored in these counters. No cookies or browser storage are used. Hidden tabs are excluded, and Do Not Track disables this additional measurement. The purpose is improving content and usability, based on Article 6(1)(f) GDPR. These anonymous totals are retained for trend analysis.",
+      "Zusätzlich messen wir die Zeit, in der eine Seite sichtbar ist. Alle 30 Sekunden sowie beim Seitenwechsel oder Ausblenden erhält GoStone den bereinigten Seitenpfad, sichtbare Millisekunden und einen Aufrufzähler. In unserer Datenbank werden nur stündliche Summen pro Seite gespeichert, ohne Konto-, Besucher-, Sitzungs- oder IP-Kennungen. Cookies oder Browserspeicher werden nicht verwendet. Verborgene Tabs werden nicht gezählt; Do Not Track deaktiviert diese zusätzliche Messung. Zweck ist die Verbesserung von Inhalten und Bedienbarkeit auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO. Die anonymen Summen werden für Trendanalysen aufbewahrt.",
+      "Nous mesurons aussi le temps où une page est visible. Toutes les 30 secondes et lors d’un changement ou masquage de page, GoStone reçoit le chemin expurgé, les millisecondes visibles et un compteur de vues. Seuls des totaux horaires par page sont conservés dans notre base, sans identifiants de compte, visiteur, session ou IP. Aucun cookie ni stockage navigateur n’est utilisé. Les onglets masqués sont exclus ; Do Not Track désactive cette mesure. Finalité : amélioration du contenu et de l’ergonomie sur la base de l’article 6(1)(f) du RGPD. Les totaux anonymes sont conservés pour analyser les tendances.",
+      "También medimos el tiempo durante el que una página es visible. Cada 30 segundos y al cambiar u ocultar la página, GoStone recibe la ruta depurada, milisegundos visibles y un contador de visitas. Solo se guardan totales por hora y página en nuestra base, sin identificadores de cuenta, visitante, sesión o IP. No usamos cookies ni almacenamiento del navegador. Se excluyen pestañas ocultas; Do Not Track desactiva esta medición. La finalidad es mejorar contenido y usabilidad según el artículo 6.1.f del RGPD. Conservamos estos totales anónimos para analizar tendencias.",
+      "我们还测量页面可见时间。每30秒以及页面切换或隐藏时，GoStone 接收去标识化的页面路径、可见毫秒数和访问计数。数据库仅保存每页每小时的汇总，不保存账户、访客、会话或 IP 标识符。不使用 Cookie 或浏览器存储，不计算隐藏标签页；Do Not Track 会禁用此额外测量。依据 GDPR 第6条第1款(f)项，用于改进内容和可用性。匿名汇总保留用于趋势分析。",
+      "ページが表示されている時間も測定します。30秒ごと、およびページ移動・非表示時に、識別情報を除いたパス、表示ミリ秒数、閲覧開始数を GoStone に送ります。データベースにはページごとの時間別合計のみ保存し、アカウント・訪問者・セッション・IP の識別子は保存しません。Cookie やブラウザー保存領域は使いません。非表示タブを除外し、Do Not Track で追加測定を無効にします。GDPR 第6条1項(f)に基づくコンテンツと使いやすさの改善が目的です。匿名集計は傾向分析のため保持します。",
+      "페이지가 보이는 시간도 측정합니다. 30초마다, 페이지 이동 또는 숨김 시 GoStone에 식별자를 제거한 경로, 표시 밀리초 및 방문 시작 횟수를 보냅니다. 데이터베이스에는 페이지별 시간 단위 합계만 저장하며 계정, 방문자, 세션, IP 식별자는 저장하지 않습니다. 쿠키나 브라우저 저장소를 사용하지 않습니다. 숨겨진 탭은 제외하며 Do Not Track은 추가 측정을 비활성화합니다. GDPR 제6조 제1항 (f)에 따른 콘텐츠와 사용성 개선이 목적입니다. 익명 합계는 추세 분석을 위해 보관합니다.",
     )],
   },
   {
@@ -501,7 +509,14 @@ function localize(locale: Locale, value: LocalizedText): string {
 }
 
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
-  if (locale === "ky") return kyPrivacy;
+  if (locale === "ky") return {
+    ...kyPrivacy,
+    updated: "7-октябрь, 2026-жыл",
+    sections: kyPrivacy.sections.map((section, index) => index === 2 ? {
+      ...section,
+      paragraphs: [...section.paragraphs, "Ошондой эле баракча көрүнүп турган убакыт өлчөнөт. Ар 30 секундда, баракча алмашканда же жашырылганда GoStone тазаланган жолду, көрүнгөн миллисекунддарды жана ачылыш санын алат. Маалымат базасында баракча боюнча сааттык суммалар гана сакталат; эсеп, келүүчү, сеанс же IP идентификаторлору сакталбайт. Кукилер жана браузер сактагычы колдонулбайт. Жашырылган өтмөктөр эсептелбейт; Do Not Track кошумча өлчөөнү өчүрөт. Максат — мазмунду жана колдонууга ыңгайлуулукту жакшыртуу; укуктук негиз — GDPR 6(1)(f). Анонимдүү суммалар тенденцияларды талдоо үчүн сакталат."],
+    } : section),
+  };
   return {
     kicker: localize(locale, heading.kicker),
     title: localize(locale, heading.title),

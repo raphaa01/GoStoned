@@ -1,18 +1,18 @@
 "use client";
 
 import { Analytics, type BeforeSendEvent } from "@vercel/analytics/next";
+import { EngagementTracker } from "./EngagementTracker";
+import { analyticsPath } from "@/lib/analytics/paths";
 
 export function redactSensitiveRouteData(event: BeforeSendEvent): BeforeSendEvent | null {
   const url = new URL(event.url);
 
-  if (url.pathname === "/webanalytics" || url.pathname.startsWith("/webanalytics/")) {
+  const path = analyticsPath(url.pathname);
+  if (!path) {
     return null;
   }
 
-  url.pathname = url.pathname.replace(
-    /\/(game|review)\/[^/]+$/,
-    "/$1/[id]",
-  );
+  url.pathname = path;
   url.search = "";
   url.hash = "";
 
@@ -23,5 +23,5 @@ export function redactSensitiveRouteData(event: BeforeSendEvent): BeforeSendEven
 }
 
 export function WebAnalytics() {
-  return <Analytics beforeSend={redactSensitiveRouteData} />;
+  return <><Analytics beforeSend={redactSensitiveRouteData} /><EngagementTracker /></>;
 }
