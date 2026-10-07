@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { EngagementReport } from "@/lib/analytics/engagement";
-import { TRAFFIC_PERIODS, type TrafficPeriod } from "@/lib/analytics/trafficOptions";
+import { ENGAGEMENT_PERIODS, TRAFFIC_PERIODS, type EngagementPeriod, type TrafficPeriod } from "@/lib/analytics/trafficOptions";
+import type { PriceSurveyReport, ReviewAnalyticsReport } from "@/lib/analytics/reviewReport";
 import type { BusinessAnalyticsReport, BusinessBreakdown } from "@/lib/analytics/businessReport";
 import { analyticsAdminCopy as copy } from "@/lib/analytics/adminCopy";
 import type { TrafficBreakdown, VercelTrafficReport } from "@/lib/analytics/vercelReport";
 import styles from "@/app/(en)/webanalytics/webanalytics.module.css";
 
 const numberFormatter = new Intl.NumberFormat("de-DE");
+const priceFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateFormatter = new Intl.DateTimeFormat("de-DE", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -268,18 +270,87 @@ function BusinessContent({ report }: { report: BusinessAnalyticsReport }) {
   );
 }
 
+function reviewStatus(status: string) {
+  return status === "queued" ? copy.reviewStatusQueued : status === "running" ? copy.reviewStatusRunning
+    : status === "completed" ? copy.reviewStatusCompleted : status === "failed" ? copy.reviewStatusFailed : status;
+}
+
+function ReviewContent({ report }: { report: ReviewAnalyticsReport }) {
+  const summary = report.summary;
+  return <>
+    <div className={styles.metrics}>
+      <Metric label={copy.reviewRequests} value={summary.requests} />
+      <Metric label={copy.reviewStarted} value={summary.started} />
+      <Metric label={copy.reviewCompleted} value={summary.completed} />
+      <Metric label={copy.reviewFailed} value={summary.failed} />
+      <Metric label={copy.reviewRequesters} value={summary.requesters} />
+      <Metric label={copy.reviewTotal} value={summary.totalRequests} />
+      <Metric label={copy.reviewTotalStarted} value={summary.totalStarted} />
+      <Metric label={copy.reviewQueued} value={summary.queued} />
+      <Metric label={copy.reviewRunning} value={summary.running} />
+    </div>
+    <Panel title={copy.reviewTrend}>
+      <div aria-label={copy.reviewTrend} className={styles.tableScroll} role="region" tabIndex={0}>
+        <table><thead><tr><th scope="col">{copy.date}</th><th scope="col">{copy.reviewRequestedAt}</th><th scope="col">{copy.reviewStartedAt}</th><th scope="col">{copy.reviewCompletedAt}</th></tr></thead>
+          <tbody>{report.days.map((day) => <tr key={day.date}><td>{formatDay(day.date)}</td><td>{formatNumber(day.requests)}</td><td>{formatNumber(day.started)}</td><td>{formatNumber(day.completed)}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </Panel>
+    <Panel title={copy.recentReviews}>
+      {report.recent.length === 0 ? <Empty /> : <div aria-label={copy.recentReviews} className={styles.tableScroll} role="region" tabIndex={0}>
+        <table><thead><tr><th scope="col">{copy.reviewJob}</th><th scope="col">{copy.reviewRequestedAt}</th><th scope="col">{copy.reviewStartedAt}</th><th scope="col">{copy.reviewCompletedAt}</th><th scope="col">{copy.status}</th><th scope="col">{copy.reviewAttempts}</th></tr></thead>
+          <tbody>{report.recent.map((job) => <tr key={job.id}><td>{job.id}</td><td>{formatDate(job.requestedAt)}</td><td>{job.startedAt ? formatDate(job.startedAt) : "—"}</td><td>{job.completedAt ? formatDate(job.completedAt) : "—"}</td><td>{reviewStatus(job.status)}</td><td>{formatNumber(job.attempts)}</td></tr>)}</tbody>
+        </table>
+      </div>}
+    </Panel>
+    <p className={styles.note}>{copy.reviewHistoryNote}</p>
+  </>;
+}
+
+function SurveyContent({ report }: { report: PriceSurveyReport }) {
+  return <>
+    <div className={styles.metrics}>
+      <Metric label={copy.surveyVoters} value={report.voters} />
+      <Metric label={copy.surveyParticipation} value={report.accounts ? `${numberFormatter.format(Math.round(report.voters / report.accounts * 1000) / 10)} %` : "—"} detail={copy.surveyParticipationNote} />
+      <Metric label={copy.surveyNewVoters} value={report.newVoters} />
+      <Metric label={copy.surveyUpdatedVotes} value={report.updatedVotes} />
+      <Metric label={copy.surveyAverage} value={report.averagePrice === null ? "—" : priceFormatter.format(report.averagePrice)} />
+    </div>
+    <Panel title={copy.surveyDistribution}>
+      <div aria-label={copy.surveyDistribution} className={styles.tableScroll} role="region" tabIndex={0}>
+        <table><thead><tr><th scope="col">{copy.surveyMonthlyPrice}</th><th scope="col">{copy.surveyVotes}</th><th scope="col">{copy.surveyShare}</th></tr></thead>
+          <tbody>{report.options.map((option) => <tr key={option.euros}><td>{priceFormatter.format(option.euros)}</td><td>{formatNumber(option.voters)}</td><td>{report.voters ? `${numberFormatter.format(Math.round(option.voters / report.voters * 1000) / 10)} %` : "—"}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </Panel>
+    <Panel title={copy.surveyRecent}>
+      {report.recent.length === 0 ? <Empty /> : <div aria-label={copy.surveyRecent} className={styles.tableScroll} role="region" tabIndex={0}>
+        <table><thead><tr><th scope="col">{copy.surveyMonthlyPrice}</th><th scope="col">{copy.surveyCreatedAt}</th><th scope="col">{copy.surveyUpdatedAt}</th></tr></thead>
+          <tbody>{report.recent.map((vote, index) => <tr key={`${vote.updatedAt}:${index}`}><td>{priceFormatter.format(vote.euros)}</td><td>{formatDate(vote.createdAt)}</td><td>{formatDate(vote.updatedAt)}</td></tr>)}</tbody>
+        </table>
+      </div>}
+    </Panel>
+  </>;
+}
+
 export function AnalyticsDashboard({
   engagement,
+  engagementPeriod,
   period,
   business,
   generatedAt,
   traffic,
+  reviews,
+  survey,
 }: {
   engagement: EngagementReport | null;
+  engagementPeriod: EngagementPeriod;
   period: TrafficPeriod;
   business: BusinessAnalyticsReport | null;
   generatedAt: string;
   traffic: VercelTrafficReport | null;
+  reviews: ReviewAnalyticsReport | null;
+  survey: PriceSurveyReport | null;
 }) {
   return (
     <div className={styles.dashboard}>
@@ -297,17 +368,35 @@ export function AnalyticsDashboard({
       <section className={styles.reportSection}>
         <header><h2>{copy.traffic}</h2><p>{copy.trafficWindow}</p></header>
         <nav aria-label={copy.period} className={styles.periods}>
-          {TRAFFIC_PERIODS.map((days) => <Link key={days} prefetch={false} href={`/webanalytics?period=${days}`} aria-current={period === days ? "page" : undefined}>
+          {TRAFFIC_PERIODS.map((days) => <Link key={days} prefetch={false} href={`/webanalytics?period=${days}&engagement=${engagementPeriod}`} aria-current={period === days ? "page" : undefined}>
             {days === 1 ? copy.today : `${days} ${copy.days}`}
           </Link>)}
-          <a href={`/webanalytics?period=${period}`}>{copy.refresh}</a>
+          <a href={`/webanalytics?period=${period}&engagement=${engagementPeriod}`}>{copy.refresh}</a>
         </nav>
         {traffic ? <TrafficContent report={traffic} /> : <p className={styles.unavailable}>{copy.trafficUnavailable}</p>}
       </section>
 
       <section className={styles.reportSection}>
         <header><h2>{copy.engagement}</h2><p>{copy.engagementNote}</p></header>
+        <p className={styles.note}>{copy.engagementWindow}</p>
+        <nav aria-label={copy.engagementPeriod} className={styles.periods}>
+          {ENGAGEMENT_PERIODS.map((days) => <Link key={days} prefetch={false} href={`/webanalytics?period=${period}&engagement=${days}`} aria-current={engagementPeriod === days ? "page" : undefined}>
+            {days === "all" ? copy.allTime : days === 1 ? copy.today : `${days} ${copy.days}`}
+          </Link>)}
+        </nav>
         {engagement ? <EngagementContent report={engagement} /> : <p className={styles.unavailable}>{copy.unavailable}</p>}
+      </section>
+
+      <section className={styles.reportSection}>
+        <header><h2>{copy.reviews}</h2><p>{copy.reviewsNote}</p></header>
+        <p className={styles.note}>{copy.reportPeriod}: {period === 1 ? copy.today : `${period} ${copy.days}`}.</p>
+        {reviews ? <ReviewContent report={reviews} /> : <p className={styles.unavailable}>{copy.unavailable}</p>}
+      </section>
+
+      <section className={styles.reportSection}>
+        <header><h2>{copy.survey}</h2><p>{copy.surveyNote}</p></header>
+        <p className={styles.note}>{copy.reportPeriod}: {period === 1 ? copy.today : `${period} ${copy.days}`}.</p>
+        {survey ? <SurveyContent report={survey} /> : <p className={styles.unavailable}>{copy.unavailable}</p>}
       </section>
 
       <section className={styles.reportSection}>

@@ -3,7 +3,7 @@ import test from "node:test";
 import { NextRequest } from "next/server";
 import { analyticsPath } from "./analytics/paths";
 import { parseEngagementSample } from "./analytics/engagement";
-import { parseTrafficPeriod, trafficWindow } from "./analytics/trafficOptions";
+import { parseEngagementPeriod, parseTrafficPeriod, trafficWindow } from "./analytics/trafficOptions";
 import { POST } from "../app/api/analytics/engagement/route";
 import type { Pool } from "pg";
 import { getEngagementReport } from "./analytics/engagement";
@@ -36,6 +36,10 @@ test("traffic periods are bounded and start on UTC days without querying future 
   assert.equal(parseTrafficPeriod("7"), 7);
   assert.equal(parseTrafficPeriod(["7"]), 30);
   assert.equal(parseTrafficPeriod("365"), 30);
+  assert.equal(parseEngagementPeriod("all"), "all");
+  assert.equal(parseEngagementPeriod("7"), 7);
+  assert.equal(parseEngagementPeriod(["all"], 1), 1);
+  assert.equal(parseTrafficPeriod("all"), 30);
 });
 
 test("engagement endpoint rejects foreign origins and bounded invalid payloads before writing", async () => {
@@ -48,6 +52,22 @@ test("engagement endpoint rejects foreign origins and bounded invalid payloads b
   assert.equal((await POST(request("{}"))).status, 400);
   assert.equal((await POST(request("x".repeat(513)))).status, 400);
   assert.equal((await POST(request(JSON.stringify({ path: "/webanalytics", milliseconds: 2, started: true })))).status, 400);
+});
+
+test("engagement since measurement began removes only the lower time bound", async () => {
+  const previousPool = globalThis.goStonedDbPool;
+  const parameters: unknown[][] = [];
+  globalThis.goStonedDbPool = { query: async (_sql: string, values: unknown[]) => {
+    parameters.push(values);
+    return { rows: [] };
+  } } as unknown as Pool;
+  try {
+    const now = new Date("2026-10-07T12:00:00Z");
+    const report = await getEngagementReport(now, "all");
+    await getEngagementReport(now, 1);
+    assert.deepEqual(parameters, [[null, now.toISOString()], ["2026-10-07T00:00:00.000Z", now.toISOString()]]);
+    assert.deepEqual(report, { views: 0, milliseconds: 0, pages: [] });
+  } finally { globalThis.goStonedDbPool = previousPool; }
 });
 
 test("same-origin engagement writes only anonymous counters and reports their sums", async () => {

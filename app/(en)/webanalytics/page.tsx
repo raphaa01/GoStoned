@@ -5,7 +5,8 @@ import { getBusinessAnalyticsReport } from "@/lib/analytics/businessReport";
 import { analyticsAdminCopy } from "@/lib/analytics/adminCopy";
 import { getVercelTrafficReport } from "@/lib/analytics/vercelReport";
 import { getEngagementReport } from "@/lib/analytics/engagement";
-import { parseTrafficPeriod } from "@/lib/analytics/trafficOptions";
+import { parseEngagementPeriod, parseTrafficPeriod } from "@/lib/analytics/trafficOptions";
+import { getPriceSurveyReport, getReviewAnalyticsReport } from "@/lib/analytics/reviewReport";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +16,19 @@ export const metadata: Metadata = {
 };
 
 export default async function WebAnalyticsPage({ searchParams }: {
-  searchParams: Promise<{ period?: string | string[] }>;
+  searchParams: Promise<{ period?: string | string[]; engagement?: string | string[] }>;
 }) {
   const now = new Date();
   const generatedAt = now.toISOString();
-  const period = parseTrafficPeriod((await searchParams).period);
-  const [trafficResult, businessResult, engagementResult] = await Promise.allSettled([
+  const parameters = await searchParams;
+  const period = parseTrafficPeriod(parameters.period);
+  const engagementPeriod = parseEngagementPeriod(parameters.engagement, period);
+  const [trafficResult, businessResult, engagementResult, reviewResult, surveyResult] = await Promise.allSettled([
     getVercelTrafficReport(now, fetch, undefined, period),
     getBusinessAnalyticsReport(),
-    getEngagementReport(now, period),
+    getEngagementReport(now, engagementPeriod),
+    getReviewAnalyticsReport(now, period),
+    getPriceSurveyReport(now, period),
   ]);
 
   if (trafficResult.status === "rejected") {
@@ -47,15 +52,27 @@ export default async function WebAnalyticsPage({ searchParams }: {
       error: engagementResult.reason instanceof Error ? engagementResult.reason.message : "Unknown error",
     }));
   }
+  for (const [result, message] of [
+    [reviewResult, analyticsAdminCopy.reviewErrorLog],
+    [surveyResult, analyticsAdminCopy.surveyErrorLog],
+  ] as const) {
+    if (result.status === "rejected") console.error(JSON.stringify({
+      level: "error", message,
+      error: result.reason instanceof Error ? result.reason.message : "Unknown error",
+    }));
+  }
 
   return (
     <AppShell>
       <AnalyticsDashboard
         period={period}
+        engagementPeriod={engagementPeriod}
         engagement={engagementResult.status === "fulfilled" ? engagementResult.value : null}
         business={businessResult.status === "fulfilled" ? businessResult.value : null}
         generatedAt={generatedAt}
         traffic={trafficResult.status === "fulfilled" ? trafficResult.value : null}
+        reviews={reviewResult.status === "fulfilled" ? reviewResult.value : null}
+        survey={surveyResult.status === "fulfilled" ? surveyResult.value : null}
       />
     </AppShell>
   );
