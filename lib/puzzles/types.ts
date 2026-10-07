@@ -102,3 +102,6 @@ export type PuzzleHint = {
   x: number;
   y: number;
 };
+
+export type PuzzleAttemptAction = "play" | "pass" | "undo" | "restart";
+export type PuzzleAttemptInput = { x: number; y: number; revision: number; action?: PuzzleAttemptAction };

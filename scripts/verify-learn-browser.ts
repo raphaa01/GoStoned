@@ -249,7 +249,7 @@ async function run() {
     }
     assert.deepEqual(errors,[]);
     {
-      await expect(page.getByText("12 von 12 Lektionen abgeschlossen",{exact:true})).toBeVisible();
+      await expect(page.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
       await expect.poll(async () => {
         if (mobile) return mobileProgress?.completedLessonIds.length;
         return (await readAccountProgress(page)).progress?.completedLessonIds.length;
@@ -267,11 +267,9 @@ async function run() {
         assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,31);
         await freshDevice.close();
       }
-      await page.getByRole("button").filter({hasText:"Deine ersten Steine"}).click();
       await page.getByRole("button", {name:"Das Go-Brett 2 Min.", exact:true}).click();
       await expect(page.getByRole("heading", {name:"Das Go-Brett", exact:true})).toBeVisible();
       await page.getByRole("button", {name:"Lernpfad", exact:true}).click();
-      await page.getByRole("button", {name:"Etappen", exact:true}).click();
       await expect(page.getByText("31 von 31 Lektionen abgeschlossen", {exact:true})).toBeVisible();
       for (const width of [320,390,768]) for (const colorScheme of ["light","dark"] as const) {
         await page.setViewportSize({width,height:844});
@@ -282,8 +280,8 @@ async function run() {
         }, { key: mobile ? "gostone.mobile.theme.v1" : "gostone.theme.v1", value: colorScheme });
         await expect(page.locator("html")).toHaveAttribute(mobile ? "data-mobile-theme" : "data-theme", colorScheme);
         if (mobile) await page.evaluate((platform)=>{document.documentElement.dataset.mobilePlatform=platform;document.documentElement.dataset.nativeTabBar=platform === "ios" ? "true" : "false";},width === 390 ? "ios" : "android");
-        await page.getByRole("button").filter({hasText:"Deine ersten Steine"}).click();
         await expect(page.getByRole("heading",{name:"Deine ersten Steine",exact:true})).toBeVisible();
+        await page.getByRole("heading",{name:"Deine ersten Steine",exact:true}).scrollIntoViewIfNeeded();
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth), "Learning path overflows horizontally");
         const box = await page.locator(".learn-next-dock").boundingBox();
         assert.ok(box && box.y+box.height <= 844-(mobile ? width===390 ? 49:64:0), "Lesson button overlaps navigation");
@@ -302,13 +300,10 @@ async function run() {
           await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-explanation-${colorScheme}.png`,fullPage:true});
           await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         }
-        await page.getByRole("button",{name:"Etappen",exact:true}).click();
-        await page.getByRole("button").filter({hasText:"Deine erste Go-Partie"}).click();
         await page.getByRole("button",{name:"Worum geht es? 3 Min.",exact:true}).click();
         await verifyBoardGeometry(page);
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-9x9-${width}-${colorScheme}.png`,fullPage:true});
         await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
-        await page.getByRole("button",{name:"Etappen",exact:true}).click();
       }
     }
     console.log(mobile ? "Bundled mobile learning flow, layouts and worker passed with isolated account API fixtures." : "Authenticated beginner learning flow and account persistence passed without browser errors.");

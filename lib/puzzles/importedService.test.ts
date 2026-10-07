@@ -28,7 +28,7 @@ test("wrong branches remain interactive until their endpoint, survive reload, un
   } as unknown as PoolClient;
   const previous = globalThis.goStonedDbPool;
   globalThis.goStonedDbPool = {connect:async()=>client, query:client.query.bind(client)} as unknown as Pool;
-  const play = (ply: PuzzlePly) => attemptImportedPuzzle(puzzle.id, "user:test-import", {...ply, revision}, true);
+  const play = (ply: PuzzlePly) => attemptImportedPuzzle(puzzle.id, "user:test-import", {...ply, revision, action: ply.move === "pass" ? "pass" : "play"}, true);
   try {
     const unknown = await attemptImportedPuzzle(puzzle.id, "user:test-import", {x:18,y:18,revision}, true);
     assert.equal(unknown.outcome, "unknown");
@@ -38,7 +38,7 @@ test("wrong branches remain interactive until their endpoint, survive reload, un
     assert.equal(firstAttemptCorrect, null, "no early failure label or first-try penalty");
     const continued = await play(wrong[2]);
     assert.equal(continued.outcome, "continue");
-    const undone = await attemptImportedPuzzle(puzzle.id, "user:test-import", {x:-1,y:-1,revision}, true);
+    const undone = await attemptImportedPuzzle(puzzle.id, "user:test-import", {x:0,y:0,revision,action:"undo"}, true);
     assert.deepEqual(undone.variationProgress, wrong.slice(0,2));
     await play(wrong[2]);
     const failure = await play(wrong[4]);

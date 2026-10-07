@@ -24,6 +24,7 @@ import { localizedApiError } from "@/lib/i18n/dictionary";
 import {
   DAILY_PUZZLE_CYCLE_LENGTH,
   type PuzzleAttemptResult,
+  type PuzzleAttemptAction,
   type PuzzleHub,
   type PuzzleHint,
   type PuzzleKind,
@@ -193,11 +194,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     } : current);
   }, [playerKey]);
 
-  async function submitMove(x: number, y: number) {
-    if (!puzzle || !playerKey || busy || puzzle.solved || (branchLine && x >= 0)) return;
+  async function submitMove(x: number, y: number, action: PuzzleAttemptAction = "play") {
+    if (!puzzle || !playerKey || busy || puzzle.solved || (branchLine && action === "play")) return;
     setSelectedPuzzleId(puzzle.id);
     setSelectedPuzzleOwner(playerKey);
-    if (x >= 0) setPendingMove({ x, y, color: puzzle.toPlay });
+    if (action === "play") setPendingMove({ x, y, color: puzzle.toPlay });
     setBusy(true);
     setHintMove(null);
     setError(null);
@@ -208,7 +209,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
           "Content-Type": "application/json",
           [EXPECTED_PLAYER_HEADER]: playerKey,
         },
-        body: JSON.stringify({ x, y, revision: puzzle.variationRevision }),
+        body: JSON.stringify({ x, y, revision: puzzle.variationRevision, ...(action === "play" ? {} : { action }) }),
       });
       const data = await readApi<{ actor: string; attempt: PuzzleAttemptResult }>(response);
       assertResponseActor(data.actor, playerKey);
@@ -270,7 +271,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   function undoPuzzleMove() {
     if (!branchLine?.length) {
-      void submitMove(-1, -1);
+      void submitMove(0, 0, "undo");
       return;
     }
 
@@ -377,9 +378,10 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
                 targetStones={puzzle.targetStones}
               />
-              {!puzzle.solved && (branchLine || puzzle.variationProgress.length > 0) ? (
+              {!puzzle.solved ? (
                 <div className={styles.feedbackActions}>
-                  <button className="button button--primary" disabled={busy} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(-2, -2); }} type="button">
+                  <button className="button button--secondary" disabled={busy || branchLine !== null} onClick={() => void submitMove(0, 0, "pass")} type="button">{dictionary.game.pass}</button>
+                  <button className="button button--primary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
                     <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
                   </button>
                   <button className="button button--secondary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={undoPuzzleMove} type="button">

@@ -353,6 +353,7 @@
 
 .feedbackActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 9px;
   margin-top: 12px;
 }
@@ -360,7 +361,7 @@
 .feedbackActions button {
   align-items: center;
   display: inline-flex;
-  flex: 1 1 0;
+  flex: 1 1 96px;
   gap: 7px;
   justify-content: center;
   min-height: 44px;

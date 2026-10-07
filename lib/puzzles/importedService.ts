@@ -5,7 +5,7 @@ import { toGtpCoordinate } from "@/lib/analysis/coordinates";
 import { deriveGoRank } from "@/lib/rating/rankPolicy";
 import { IMPORTED_PUZZLES, IMPORTED_CATALOG_VERSION, dailyImportedPuzzle, matchingPuzzlePaths, puzzleText, replayPuzzleLine, type ImportedPuzzle } from "./importedCatalog";
 import { orderPuzzleQueue } from "./queue";
-import { PUZZLE_CATEGORIES, type PuzzleAttemptResult, type PuzzleHint, type PuzzleHub, type PuzzleKind, type PuzzlePly, type PuzzleSolution, type PuzzleView } from "./types";
+import { PUZZLE_CATEGORIES, type PuzzleAttemptInput, type PuzzleAttemptResult, type PuzzleHint, type PuzzleHub, type PuzzleKind, type PuzzlePly, type PuzzleSolution, type PuzzleView } from "./types";
 
 type AttemptRow = { id: string; attempt_count: number | null; solved: boolean | null; first_attempt_correct: boolean | null; variation_progress: PuzzlePly[] | null; variation_revision: number | null };
 const catalogIds = IMPORTED_PUZZLES.map((puzzle) => puzzle.id);
@@ -46,7 +46,7 @@ async function assertAccess(puzzle: ImportedPuzzle, accountAccess: boolean) {
   const date = await query<{ today: string }>("SELECT CURRENT_DATE::text AS today");
   if (dailyImportedPuzzle(date.rows[0].today).id !== puzzle.id) throw new GameServiceError("Please log in first.", 401, "authentication_required");
 }
-export async function attemptImportedPuzzle(id: string, playerKey: string, selected: { x: number; y: number; revision: number }, accountAccess: boolean): Promise<PuzzleAttemptResult> {
+export async function attemptImportedPuzzle(id: string, playerKey: string, selected: PuzzleAttemptInput, accountAccess: boolean): Promise<PuzzleAttemptResult> {
   const puzzle = findPuzzle(id);
   await assertAccess(puzzle, accountAccess);
   return withTransaction(async (client) => {
@@ -62,18 +62,17 @@ export async function attemptImportedPuzzle(id: string, playerKey: string, selec
     let outcome: PuzzleAttemptResult["outcome"] = "continue";
     let failed = false;
     let feedback: PuzzleAttemptResult["feedback"] = null;
-    // Sentinel coordinates are explicit undo/restart commands, never moves.
-    const undo = selected.x === -1 && selected.y === -1;
-    const restart = selected.x === -2 && selected.y === -2;
+    const undo = selected.action === "undo";
+    const restart = selected.action === "restart";
     if (undo || restart) {
       let lastPlayer = progress.length - 1;
       while (lastPlayer >= 0 && progress[lastPlayer].color !== puzzle.toPlay) lastPlayer--;
       nextProgress = restart ? [] : progress.slice(0, Math.max(0, lastPlayer));
     } else {
       const board = replayPuzzleLine(puzzle.board, progress);
-      const placed = applyMove(board, puzzle.toPlay, selected.x, selected.y);
-      if (!placed.ok) throw new GameServiceError("That intersection is not available.", 409, "puzzle_move_unavailable");
-      const played: PuzzlePly = { color: puzzle.toPlay, x: selected.x, y: selected.y, move: toGtpCoordinate(19, { ...selected, isPass: false }) };
+      const pass = selected.action === "pass";
+      if (!pass && !applyMove(board, puzzle.toPlay, selected.x, selected.y).ok) throw new GameServiceError("That intersection is not available.", 409, "puzzle_move_unavailable");
+      const played: PuzzlePly = pass ? { color: puzzle.toPlay, x: -1, y: -1, move: "pass" } : { color: puzzle.toPlay, x: selected.x, y: selected.y, move: toGtpCoordinate(19, { ...selected, isPass: false }) };
       const candidates = matchingPuzzlePaths(puzzle, [...progress, played]);
       const chosen = candidates.find((path) => path.solved) ?? candidates[0];
       if (!chosen) {

@@ -19,7 +19,7 @@ async function main() {
     assert.equal(hub.puzzles[0].rankKyu, 30);
     const secondHub = await readImportedPuzzleHub(player, "practice");
     assert.deepEqual(secondHub,hub,"catalog initialization is idempotent");
-    const puzzle = IMPORTED_PUZZLES.find((candidate)=>candidate.paths[1].line.length === 6)!;
+    const puzzle = IMPORTED_PUZZLES.find((candidate)=>candidate.paths[1].line.length === 6 && candidate.paths[1].line.some((ply)=>ply.move==="pass" && ply.color===candidate.toPlay))!;
     let revision=0;
     const wrong=puzzle.paths[1].line;
     const opening=await attemptImportedPuzzle(puzzle.id,player,{...wrong[0],revision},true);
@@ -28,11 +28,11 @@ async function main() {
     const reloaded=(await readImportedPuzzleHub(player,"practice")).puzzles.find((candidate)=>candidate.id===puzzle.id)!;
     assert.deepEqual(reloaded.variationProgress,wrong.slice(0,2));
     await assert.rejects(attemptImportedPuzzle(puzzle.id,player,{...wrong[2],revision:0},true),/puzzle changed/i);
-    const undone=await attemptImportedPuzzle(puzzle.id,player,{x:-1,y:-1,revision},true);
+    const undone=await attemptImportedPuzzle(puzzle.id,player,{x:0,y:0,revision,action:"undo"},true);
     assert.deepEqual(undone.variationProgress,[]);
     revision=undone.variationRevision;
     for(const ply of wrong.filter((ply)=>ply.color===puzzle.toPlay)) {
-      const result=await attemptImportedPuzzle(puzzle.id,player,{...ply,revision},true);
+      const result=await attemptImportedPuzzle(puzzle.id,player,{...ply,revision,action:ply.move==="pass"?"pass":"play"},true);
       revision=result.variationRevision;
       assert.equal(result.outcome,ply===wrong[4]?"retry":"continue");
     }

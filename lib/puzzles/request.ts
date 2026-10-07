@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { assertAuthMutationRequest } from "@/lib/auth/credentialRequest";
 import { GameServiceError } from "@/lib/game/gameService";
+import type { PuzzleAttemptInput } from "./types";
 
 const CANONICAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -28,7 +29,7 @@ export function assertPuzzleAttemptMetadata(request: NextRequest): void {
 
 export async function readPuzzleAttemptBody(
   request: NextRequest,
-): Promise<{ x: number; y: number; revision: number }> {
+): Promise<PuzzleAttemptInput> {
   const body = await readBoundedJsonObject(request, {
     maxBytes: 128,
     maxChunks: 16,
@@ -38,7 +39,9 @@ export async function readPuzzleAttemptBody(
   });
   const fields = Object.keys(body);
   if (
-    fields.length !== 3
+    (fields.length !== 3 && fields.length !== 4)
+    || fields.some((field) => !["x", "y", "revision", "action"].includes(field))
+    || (body.action !== undefined && !["play", "pass", "undo", "restart"].includes(body.action as string))
     || !Object.prototype.hasOwnProperty.call(body, "x")
     || !Object.prototype.hasOwnProperty.call(body, "y")
     || !Object.prototype.hasOwnProperty.call(body, "revision")
@@ -50,5 +53,5 @@ export async function readPuzzleAttemptBody(
   ) {
     throw invalidPuzzleRequest();
   }
-  return { x: body.x as number, y: body.y as number, revision: body.revision as number };
+  return { x: body.x as number, y: body.y as number, revision: body.revision as number, ...(body.action === undefined ? {} : { action: body.action as PuzzleAttemptInput["action"] }) };
 }
