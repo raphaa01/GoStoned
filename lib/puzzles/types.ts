@@ -69,6 +69,9 @@ export type PuzzleView = {
   variationProgress: PuzzlePly[];
   variationRevision: number;
   solution: PuzzleSolution | null;
+  viewportSize?: number;
+  goal?: LocalizedText;
+  targetStones?: Array<{ x: number; y: number }>;
 };
 
 export type PuzzleHub = {
@@ -83,13 +86,14 @@ export type PuzzleHub = {
 export type PuzzleAttemptResult = {
   puzzleId: string;
   correct: boolean;
-  outcome: "continue" | "retry" | "solved";
+  outcome: "continue" | "retry" | "solved" | "unknown";
   solved: boolean;
   attemptCount: number;
   firstAttemptCorrect: boolean | null;
   variationProgress: PuzzlePly[];
   variationRevision: number;
   displayLine: PuzzlePly[];
+  displayLineIsComplete?: boolean;
   feedback: LocalizedText | null;
   solution: PuzzleSolution | null;
 };

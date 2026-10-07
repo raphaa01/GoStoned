@@ -1,0 +1,3 @@
+Jedes Puzzle enthält playback.initialPosition (Ausgangsstellung), playback.kyu, playback.solution (Lösungsweg) und playback.wrongPaths (Fehlerweg 1 und 2). Farben, Spielerrollen und Gegenantworten stehen an jedem Zug. Fehlerwege enden mit outcome=wrong und goalReached=false.
+
+Die Dateien unter puzzles/ enthalten jeweils eine Aufgabe als lesbares JSON. sgf/ enthält dieselben drei benannten Wege für Go-Programme. gostone-puzzles.json enthält das Gesamtpaket. exportSummary listet Aufgaben auf, denen zwei bewiesene Fehlerwege fehlen; diese bleiben in der lokalen Bibliothek. Weitere Hinweise: INTEGRATION.md.

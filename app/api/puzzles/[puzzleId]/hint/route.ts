@@ -9,7 +9,7 @@ import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { getRequestUser, resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { gameMutationRouteError } from "@/lib/game/gameMutationRequest";
 import { GameServiceError } from "@/lib/game/gameService";
-import { readPuzzleHint } from "@/lib/puzzles/puzzleService";
+import { readImportedPuzzleHint } from "@/lib/puzzles/importedService";
 import { assertPuzzleId } from "@/lib/puzzles/request";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, context: Context) {
     return noStoreJson({
       ok: true,
       actor: playerKey,
-      hint: await readPuzzleHint(puzzleId, playerKey, Boolean(account)),
+      hint: await readImportedPuzzleHint(puzzleId, playerKey, Boolean(account)),
     });
   } catch (error) {
     return gameMutationRouteError(error);
