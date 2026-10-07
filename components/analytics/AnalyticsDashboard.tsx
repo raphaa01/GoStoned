@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import type { EngagementReport } from "@/lib/analytics/engagement";
+import { TRAFFIC_PERIODS, type TrafficPeriod } from "@/lib/analytics/trafficOptions";
 import type { BusinessAnalyticsReport, BusinessBreakdown } from "@/lib/analytics/businessReport";
 import { analyticsAdminCopy as copy } from "@/lib/analytics/adminCopy";
 import type { TrafficBreakdown, VercelTrafficReport } from "@/lib/analytics/vercelReport";
@@ -37,11 +40,11 @@ function countryName(code: string): string {
   }
 }
 
-function Metric({ label, value, detail }: { label: string; value: number; detail?: string }) {
+function Metric({ label, value, detail }: { label: string; value: number | string; detail?: string }) {
   return (
     <article className={styles.metric}>
       <span>{label}</span>
-      <strong>{formatNumber(value)}</strong>
+      <strong>{typeof value === "number" ? formatNumber(value) : value}</strong>
       {detail ? <small>{detail}</small> : null}
     </article>
   );
@@ -60,23 +63,25 @@ function Empty() {
   return <p className={styles.empty}>{copy.noData}</p>;
 }
 
-function TrafficTable({ rows, title, country = false }: {
+function TrafficTable({ rows, title, country = false, total }: {
   rows: TrafficBreakdown[];
   title: string;
   country?: boolean;
+  total: number;
 }) {
   return (
     <Panel title={title}>
       {rows.length === 0 ? <Empty /> : (
         <div aria-label={title} className={styles.tableScroll} role="region" tabIndex={0}>
           <table>
-            <thead><tr><th scope="col">{title}</th><th scope="col">{copy.visitors}</th><th scope="col">{copy.pageviews}</th></tr></thead>
+            <thead><tr><th scope="col">{title}</th><th scope="col">{copy.visitors}</th><th scope="col">{copy.pageviews}</th><th scope="col">{copy.share}</th></tr></thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.label}>
                   <td>{country ? countryName(row.label) : row.label}</td>
                   <td>{formatNumber(row.visitors)}</td>
                   <td>{formatNumber(row.pageviews)}</td>
+                  <td>{total > 0 ? `${numberFormatter.format(Math.round(row.pageviews / total * 1000) / 10)} %` : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -105,9 +110,9 @@ function BusinessBreakdownTable({ rows, title }: { rows: BusinessBreakdown[]; ti
 function TrafficTrend({ report }: { report: VercelTrafficReport }) {
   const maximum = Math.max(1, ...report.days.map((day) => day.pageviews));
   return (
-    <Panel title={copy.trafficTrend}>
+    <Panel title={`${copy.trend} · ${report.period} ${report.period === 1 ? copy.day : copy.days}`}>
       {report.days.length === 0 ? <Empty /> : (
-        <div className={styles.trend}>
+        <div className={styles.trend} style={{ gridTemplateColumns: `repeat(${report.days.length}, minmax(9px, 1fr))` }}>
           {report.days.map((day) => (
             <div className={styles.trendDay} key={day.date} title={`${formatDay(day.date)}: ${day.pageviews} ${copy.pageviews}`}>
               <span style={{ height: `${Math.max(3, (day.pageviews / maximum) * 100)}%` }} />
@@ -146,20 +151,51 @@ function TrafficContent({ report }: { report: VercelTrafficReport }) {
   return (
     <>
       <div className={styles.metrics}>
+        <Metric label={copy.periodVisitors} value={report.totals.visitors} />
+        <Metric label={copy.periodPageviews} value={report.totals.pageviews} />
+        <Metric label={copy.viewsPerVisitor} value={report.totals.visitors ? numberFormatter.format(Math.round(report.totals.pageviews / report.totals.visitors * 10) / 10) : "—"} />
         <Metric label={copy.totalVisitors} value={report.lifetime.visitors} />
         <Metric label={copy.totalPageviews} value={report.lifetime.pageviews} />
       </div>
+      <p className={styles.note}>{copy.visitorsNote}</p>
       <TrafficTrend report={report} />
       <div className={styles.panelGrid}>
-        <TrafficTable country rows={report.countries} title={copy.countries} />
-        <TrafficTable rows={report.pages} title={copy.pages} />
-        <TrafficTable rows={report.referrers} title={copy.referrers} />
-        <TrafficTable rows={report.devices} title={copy.devices} />
-        <TrafficTable rows={report.browsers} title={copy.browsers} />
-        <TrafficTable rows={report.operatingSystems} title={copy.operatingSystems} />
+        <TrafficTable total={report.totals.pageviews} country rows={report.countries} title={copy.countries} />
+        <TrafficTable total={report.totals.pageviews} rows={report.pages} title={copy.pages} />
+        <TrafficTable total={report.totals.pageviews} rows={report.referrers} title={copy.referrers} />
+        <TrafficTable total={report.totals.pageviews} rows={report.devices} title={copy.devices} />
+        <TrafficTable total={report.totals.pageviews} rows={report.browsers} title={copy.browsers} />
+        <TrafficTable total={report.totals.pageviews} rows={report.operatingSystems} title={copy.operatingSystems} />
+        <TrafficTable total={report.totals.pageviews} rows={report.routes} title={copy.routes} />
       </div>
+      <p className={styles.note}>{copy.vercelLimitations}</p>
     </>
   );
+}
+
+function duration(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1000);
+  return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+}
+
+function EngagementContent({ report }: { report: EngagementReport }) {
+  return <>
+    <div className={styles.metrics}>
+      <Metric label={copy.averageTime} value={report.views ? duration(report.milliseconds / report.views) : "—"} />
+      <Metric label={copy.visibleTime} value={duration(report.milliseconds)} />
+      <Metric label={copy.measuredViews} value={report.views} />
+    </div>
+    <Panel title={copy.pages}>
+      {report.pages.length === 0 ? <Empty /> : <div className={styles.tableScroll} role="region" aria-label={copy.engagement} tabIndex={0}>
+        <table>
+          <thead><tr><th scope="col">{copy.pages}</th><th scope="col">{copy.measuredViews}</th><th scope="col">{copy.visibleTime}</th><th scope="col">{copy.averageTime}</th></tr></thead>
+          <tbody>{report.pages.map((row) => <tr key={row.path}>
+            <td>{row.path}</td><td>{formatNumber(row.views)}</td><td>{duration(row.milliseconds)}</td><td>{row.views ? duration(row.milliseconds / row.views) : "—"}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </Panel>
+  </>;
 }
 
 function BusinessContent({ report }: { report: BusinessAnalyticsReport }) {
@@ -233,10 +269,14 @@ function BusinessContent({ report }: { report: BusinessAnalyticsReport }) {
 }
 
 export function AnalyticsDashboard({
+  engagement,
+  period,
   business,
   generatedAt,
   traffic,
 }: {
+  engagement: EngagementReport | null;
+  period: TrafficPeriod;
   business: BusinessAnalyticsReport | null;
   generatedAt: string;
   traffic: VercelTrafficReport | null;
@@ -256,7 +296,18 @@ export function AnalyticsDashboard({
 
       <section className={styles.reportSection}>
         <header><h2>{copy.traffic}</h2><p>{copy.trafficWindow}</p></header>
-        {traffic ? <TrafficContent report={traffic} /> : <p className={styles.unavailable}>{copy.unavailable}</p>}
+        <nav aria-label={copy.period} className={styles.periods}>
+          {TRAFFIC_PERIODS.map((days) => <Link key={days} prefetch={false} href={`/webanalytics?period=${days}`} aria-current={period === days ? "page" : undefined}>
+            {days === 1 ? copy.today : `${days} ${copy.days}`}
+          </Link>)}
+          <a href={`/webanalytics?period=${period}`}>{copy.refresh}</a>
+        </nav>
+        {traffic ? <TrafficContent report={traffic} /> : <p className={styles.unavailable}>{copy.trafficUnavailable}</p>}
+      </section>
+
+      <section className={styles.reportSection}>
+        <header><h2>{copy.engagement}</h2><p>{copy.engagementNote}</p></header>
+        {engagement ? <EngagementContent report={engagement} /> : <p className={styles.unavailable}>{copy.unavailable}</p>}
       </section>
 
       <section className={styles.reportSection}>
