@@ -2447,7 +2447,6 @@ body {
 }
 
 .stone {
-  animation: board-stone-place 190ms var(--ease-out) both;
   aspect-ratio: 1;
   height: auto;
   transform-origin: center;
@@ -2496,11 +2495,6 @@ body {
 
 @keyframes live-pulse {
   50% { box-shadow: 0 0 0 9px rgb(71 117 99 / .12); }
-}
-
-@keyframes board-stone-place {
-  from { opacity: .3; }
-  to { opacity: 1; }
 }
 
 @keyframes overlay-fade-in {

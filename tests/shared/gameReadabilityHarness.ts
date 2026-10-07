@@ -85,7 +85,8 @@ export function registerGameReadabilityTests() {
             const stone = element.getBoundingClientRect();
             const cell = element.parentElement!.getBoundingClientRect();
             return { x: stone.x + stone.width / 2 - (cell.x + cell.width / 2),
-              y: stone.y + stone.height / 2 - (cell.y + cell.height / 2) };
+              y: stone.y + stone.height / 2 - (cell.y + cell.height / 2),
+              opacity: Number(getComputedStyle(element).opacity) };
           });
           animation?.play();
           return offsets;
@@ -93,6 +94,7 @@ export function registerGameReadabilityTests() {
         for (const offset of offsets) {
           expect(Math.abs(offset.x)).toBeLessThan(.5);
           expect(Math.abs(offset.y)).toBeLessThan(.5);
+          expect(offset.opacity).toBe(1);
         }
         release();
         await expect(page.locator(".game-panel-player.is-you .player-clock")).not.toHaveClass(/is-running/);
