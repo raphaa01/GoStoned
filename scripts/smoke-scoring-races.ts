@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import "dotenv/config";
 import { closePool, getPool, query, withTransaction } from "../lib/db";
 import { isUnambiguousLocalDatabase } from "../lib/env";
@@ -6,6 +7,7 @@ import { applyMove, boardHash, createEmptyBoard } from "../lib/game/goEngine";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 import type { GameState } from "../lib/game/types";
 import { GOSTONE_BOT_MODEL } from "../lib/bot/modelV1";
+import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
 import {
   assertSmokeDatabaseIdentity,
   withRollbackOnlyTransaction,
@@ -334,6 +336,9 @@ async function assertCompleteBrowserSettlement() {
   const botAction = (body: Record<string, unknown>) => postGame(gameId, "/browser-bot", {
     ...body, modelVersion: game.browserBotModelVersion, modelSha256: game.browserBotModelSha256,
   }, human.cookie, human.playerKey);
+  // Human and browser-bot turns share the human's production move budget.
+  const burstWindowMs = RATE_LIMIT_POLICIES.moveBurst.windowMinutes * 60_000;
+  const moveIntervalMs = Math.ceil(burstWindowMs / RATE_LIMIT_POLICIES.moveBurst.limit) + 50;
   for (const [color, move] of [
     ["black", { x: 1, y: 0 }], ["white", { x: 3, y: 2 }],
     ["black", { x: 0, y: 1 }], ["white", { isPass: true }],
@@ -346,6 +351,7 @@ async function assertCompleteBrowserSettlement() {
           move: "isPass" in move ? { kind: "pass" } : { kind: "play", ...move } });
     assert.equal(moved.response.status, 200, JSON.stringify(moved.body));
     game = moved.body.game as GameState;
+    await delay(moveIntervalMs);
   }
   assert.equal(game.phase, "scoring");
   assert.equal(game.browserBotModelVersion, GOSTONE_BOT_MODEL.modelVersion);
@@ -353,6 +359,8 @@ async function assertCompleteBrowserSettlement() {
   const early = await postGame(gameId, "/scoring/confirm", { expectedRevision: revision }, human.cookie, human.playerKey);
   assert.equal(early.response.status, 409);
   assert.equal(early.body.code, "scoring_proposal_pending");
+  // Keep the proposal race within its own fresh burst window; do not disable limits.
+  await delay(burstWindowMs + 50);
   const invalid = await botAction({ kind: "settlement", expectedRevision: revision,
     deadStones: [{ x: 3, y: 2 }], neutralRegionSeeds: [{ x: 1, y: 0 }], uncertainStones: [] });
   assert.equal(invalid.response.status, 400);
