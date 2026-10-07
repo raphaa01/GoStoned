@@ -12,7 +12,7 @@ test("Vercel report uses window visitor totals rather than adding dimensions and
     Module._resolveFilename = function(name, ...args) {
       return name === 'server-only' ? require.resolve('next/dist/compiled/server-only/empty.js') : originalResolve.call(this, name, ...args);
     };
-    const { getVercelTrafficReport } = await import('./lib/analytics/vercelReport.ts');
+    const { getVercelTrafficReport } = require('./lib/analytics/vercelReport.ts');
     const requests = [];
     const fetcher = async (input, options) => {
       const url = new URL(input);
