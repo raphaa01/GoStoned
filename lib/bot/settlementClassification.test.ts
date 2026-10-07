@@ -2,9 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifySettlementGroup,
+  neutralRegionCanBeProposed,
   ownershipSurvivalProbability,
   statusRequiresPlayerAgreement,
 } from "./settlementClassification";
+
+test("neutral proposals never exclude the territory containing agreed dead prisoners", () => {
+  const points = [{ x: 3, y: 2 }, { x: 4, y: 2 }];
+  assert.equal(neutralRegionCanBeProposed("black", points, new Set(["3:2"]), 0.1), false);
+  assert.equal(neutralRegionCanBeProposed("black", points, new Set(), 0.1), true);
+  assert.equal(neutralRegionCanBeProposed("white", points, new Set(), 0.9), false);
+  assert.equal(neutralRegionCanBeProposed(null, points, new Set(), 0.1), false);
+});
 
 test("derives stone survival from KataGo-compatible ownership perspective", () => {
   assert.equal(ownershipSurvivalProbability("black", -1), 1);

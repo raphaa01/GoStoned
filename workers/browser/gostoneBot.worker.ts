@@ -15,6 +15,7 @@ import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import type { Board, Position, Stone } from "@/lib/game/types";
 import {
   classifySettlementGroup,
+  neutralRegionCanBeProposed,
   ownershipSurvivalProbability,
   statusRequiresPlayerAgreement,
 } from "@/lib/bot/settlementClassification";
@@ -312,10 +313,10 @@ function settlementProposal(
   const scored = position.board.map((row, y) => row.map((stone, x) =>
     candidateDead.has(`${x}:${y}`) ? null : stone));
   const neutralRegionSeeds = territoryOwners(scored).regions
-    .filter((region) => region.owner !== null && region.points.reduce(
+    .filter((region) => neutralRegionCanBeProposed(region.owner, region.points, candidateDead, region.points.reduce(
       (sum, point) => sum + Math.abs(activeValue(ownership, position.boardSize, point)),
       0,
-    ) / region.points.length < GOSTONE_BOT_MODEL.settlement.neutralOwnershipThreshold)
+    ) / region.points.length))
     .map((region) => region.points[0]);
   const prisoners = replayMovesWithPrisoners(position.boardSize, [...position.moves]).prisoners;
   let estimate: ReturnType<typeof scoreJapaneseTerritory> | null = null;

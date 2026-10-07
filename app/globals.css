@@ -2700,9 +2700,9 @@ a {
 .scoring-uncertain-group { display: flex; align-items: center; gap: 8px; }
 .scoring-uncertain-group > span { flex: 1; min-width: 0; }
 .scoring-uncertain-group > button {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--panel);
   color: var(--text);
   padding: 8px 12px;
   min-height: 44px;
