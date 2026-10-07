@@ -186,7 +186,10 @@ export function LeaderboardView() {
                             <span aria-hidden="true">{String(entry.position).padStart(3, "0")}</span>
                           </span>
                         </td>
-                        <th scope="row">{entry.playerName}</th>
+                        <th scope="row">
+                          <span className="leaderboard-player-name">{entry.playerName}</span>
+                          <small className="leaderboard-player-stats">{entry.games} {copy.games} · {entry.wins} {copy.wins}</small>
+                        </th>
                         <td>{entry.games}</td>
                         <td>{entry.wins}</td>
                         <td>

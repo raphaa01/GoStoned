@@ -7,6 +7,7 @@ import { ModalDialog } from "@/components/ui/ModalDialog";
 import type { GameState } from "@/lib/game/types";
 import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { RatingLabel } from "@/components/rating/RatingLabel";
+import { FinishedGameShareButton } from "./FinishedGameShareButton";
 
 type GameResultModalProps = {
   game: GameState;
@@ -135,6 +136,7 @@ export function GameResultModal({
           <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">{copy.viewBoard}</button>
           <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button">{copy.home}</button>
         </div>
+        <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
     </ModalDialog>
   );
 }

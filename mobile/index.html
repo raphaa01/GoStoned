@@ -1,9 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mobile-app="true">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f4f0e7" />
+    <script>
+      (() => {
+        let preference = "system";
+        try { preference = localStorage.getItem("gostone.mobile.theme.v1"); } catch {}
+        const dark = preference === "dark" || (preference !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.mobileTheme = dark ? "dark" : "light";
+        document.documentElement.style.backgroundColor = dark ? "#111310" : "#f5f2eb";
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      })();
+    </script>
     <title>GoStone</title>
   </head>
   <body>

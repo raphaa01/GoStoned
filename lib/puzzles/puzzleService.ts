@@ -818,7 +818,7 @@ async function attemptVariationPuzzle(
       puzzleId: puzzle.id,
       playerKey,
       selected,
-      progress: [],
+      progress,
       solved: false,
       firstAttemptCorrect: false,
     });
@@ -829,7 +829,7 @@ async function attemptVariationPuzzle(
       solved: false,
       attemptCount: state.attempt_count,
       firstAttemptCorrect: state.first_attempt_correct,
-      variationProgress: [],
+      variationProgress: progress,
       variationRevision: state.variation_revision,
       displayLine: reply ? [userMove, reply] : [userMove],
       feedback: matching?.explanation ?? variation.fallbackExplanation,

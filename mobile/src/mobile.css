@@ -62,6 +62,7 @@ html[data-mobile-app="true"] {
   background: var(--mobile-bg);
   color-scheme: light;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 html[data-mobile-app="true"][data-mobile-theme="dark"] { color-scheme: dark; }
@@ -400,9 +401,10 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-app-content .leaderboard-method { font-size: 12px; }
 .mobile-app-content .leaderboard-table { border: 0 !important; border-radius: 0 !important; overflow: visible !important; }
 .mobile-app-content .leaderboard-table table, .mobile-app-content .leaderboard-table tbody { display: block; width: 100%; }
+.mobile-app-content .leaderboard-table table { min-width: 0; }
 .mobile-app-content .leaderboard-table thead { display: none; }
 .mobile-app-content .leaderboard-table tbody tr { align-items: center; border-bottom: 1px solid var(--mobile-border); display: grid; gap: 9px; grid-template-columns: 34px minmax(0, 1fr) auto; min-height: 58px; }
-.mobile-app-content .leaderboard-table th, .mobile-app-content .leaderboard-table td { border: 0 !important; padding: 8px 0 !important; }
+.mobile-app-content .leaderboard-table th, .mobile-app-content .leaderboard-table td { border: 0 !important; padding: 8px 0 !important; width: auto; }
 .mobile-app-content .leaderboard-table tr > td:nth-of-type(2), .mobile-app-content .leaderboard-table tr > td:nth-of-type(3) { display: none; }
 .mobile-app-content .leaderboard-table tr > th { font-size: 13px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-app-content .leaderboard-table tr > td:last-child { display: grid; font-size: 13px; justify-items: end; }
@@ -759,3 +761,52 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 @media (max-width: 370px) {
   .mobile-puzzle-screen [class*="feedbackActions"] button { gap: 5px; padding-inline: 6px; }
 }
+
+/* Native safe areas and every shared game surface use the selected palette. */
+html[data-mobile-app="true"] body {
+  --color-oxide: var(--mobile-danger);
+  --color-oxide-strong: var(--mobile-danger);
+  --color-oxide-soft: color-mix(in srgb, var(--mobile-danger) 15%, var(--mobile-bg));
+  --color-danger-soft: var(--color-oxide-soft);
+  --mobile-dock-gap: 0px;
+}
+html[data-mobile-app="true"][data-mobile-platform="ios"][data-native-tab-bar="true"] body { --mobile-dock-gap: 12px; }
+html[data-mobile-app="true"] #root { background: var(--mobile-bg); }
+html[data-mobile-theme="dark"] :is(.mobile-wordmark i, .mobile-home-stone span, .mobile-auth-mark span, .mobile-account-gate__stone, .mobile-screen-loading i, .mobile-play-stone) {
+  background: radial-gradient(circle at 35% 28%, #fff, #efeee8 56%, #c5c6be);
+  border-color: rgb(255 255 255 / 30%);
+  box-shadow: inset -2px -3px 5px rgb(70 74 65 / 24%), 0 3px 10px rgb(0 0 0 / 15%);
+}
+.mobile-play-dock { bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap)); }
+.mobile-app-shell.has-play-action .mobile-app-content { padding-bottom: calc(var(--mobile-tab-height) + var(--mobile-play-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 22px); }
+
+html[data-mobile-app="true"] .game-player-detail,
+html[data-mobile-app="true"] .game-player-name > .rating-label,
+html[data-mobile-app="true"] .game-turn-detail { display: none; }
+html[data-mobile-app="true"] .game-player-rank { color: var(--mobile-muted); display: inline; font-size: 12px; white-space: nowrap; }
+html[data-mobile-app="true"] .game-player-heading strong { overflow-wrap: anywhere; }
+html[data-mobile-app="true"] .game-panel,
+html[data-mobile-app="true"] .result-modal,
+html[data-mobile-app="true"] .game-chat,
+html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surface); border-color: var(--mobile-border); color: var(--mobile-text); }
+
+/* The current step can always advance without scrolling behind the tab bar. */
+.mobile-learn-screen .learn-player { padding-bottom: 76px; }
+.mobile-learn-screen .learn-player__next {
+  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 8px);
+  box-shadow: 0 0 0 8px var(--mobile-bg);
+  left: 50%;
+  margin: 0;
+  max-width: calc(var(--mobile-content-max) - var(--mobile-page-inline) - var(--mobile-page-inline));
+  min-height: 48px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: calc(100% - var(--mobile-page-inline) - var(--mobile-page-inline) - var(--mobile-safe-left) - var(--mobile-safe-right));
+  z-index: 79;
+}
+.mobile-app-content .play-pace-column { margin-top: 12px; }
+.mobile-app-content .play-pace-heading { border-top: 0; }
+.mobile-app-content .leaderboard-table tr > td:last-child { min-width: 0; text-align: right; }
+.mobile-app-content .leaderboard-table tr > td:last-child strong { font-size: 12px; white-space: nowrap; }
+.mobile-app-content .leaderboard-player-name { display: block; overflow: hidden; text-overflow: ellipsis; }
+.mobile-app-content .leaderboard-player-stats { color: var(--mobile-muted); display: block; font-size: 10px; font-weight: 400; margin-top: 4px; white-space: normal; }

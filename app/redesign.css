@@ -10512,6 +10512,15 @@ body {
 .learn-player__tools { display: flex; flex-wrap: wrap; gap: 16px; min-height: 34px; }
 .learn-player__next { justify-content: center; margin-top: 6px; width: 100%; }
 
+.game-player-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; }
+.game-player-rank { display: none; }
+.leaderboard-player-stats { display: none; }
+.game-pass-notice { align-items: center; background: var(--color-moss-soft); border-radius: 8px; color: var(--color-moss-strong); display: flex; font-size: 13px; gap: 8px; margin: 0 0 12px; padding: 10px 12px; }
+.finished-game-share input { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 6px; color: var(--color-ink-soft); font-size: 12px; margin-top: 8px; padding: 8px; width: 100%; }
+.finished-game-share--compact { margin-top: 12px; text-align: center; }
+.result-share-action { align-items: center; background: transparent; border: 0; color: var(--color-text-muted); display: inline-flex; font-size: 12px; gap: 6px; justify-content: center; min-height: 36px; }
+.result-share-action:hover { color: var(--color-moss-strong); }
+
 .interactive-learn-board-frame { max-width: 560px; width: 100%; }
 .interactive-learn-board {
   aspect-ratio: 1;

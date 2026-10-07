@@ -56,6 +56,7 @@ import { BrowserBotController } from "./BrowserBotController";
 import { proposeJapaneseSettlement } from "@/lib/bot/browserBotClient";
 import type { GoStoneJapaneseSettlementProposal } from "@/lib/bot/modelV1";
 import { GamePanel } from "./GamePanel";
+import { GamePassNotice } from "./GamePassNotice";
 import { GameResultModal } from "./GameResultModal";
 import { GoBoard } from "./GoBoard";
 import { ScoringHelpDialog } from "./ScoringHelpDialog";
@@ -1397,6 +1398,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               {game.moveCount + (pendingMovePreview?.applied ? 1 : 0)}
             </span>
           </div>
+          <GamePassNotice game={game} />
           <div className="focused-board-wrap">
             <GoBoard
               boardSize={game.boardSize}

@@ -10,6 +10,7 @@ import type { GameState, Position, Stone } from "@/lib/game/types";
 import { localizedRulesSummary } from "@/lib/i18n/gameTerms";
 import { getFriendsCopy } from "@/lib/i18n/friends";
 import { RatingLabel } from "@/components/rating/RatingLabel";
+import { presentRating } from "@/lib/rating/rankPolicy";
 import { PlayerClock } from "./PlayerClock";
 import { ScoringHelpButton } from "./ScoringHelpDialog";
 import { FinishedGameShareButton } from "./FinishedGameShareButton";
@@ -113,9 +114,11 @@ export function GamePanel({
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
-          <strong>{game.whitePlayerName}</strong>
-          <span>{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
-          <span>{copy.prisoners}: {prisoners.capturedBlackByWhite}</span>
+          <div className="game-player-heading"><strong>{game.whitePlayerName}</strong>
+            {game.whiteRating != null ? <span className="game-player-rank">{presentRating(game.whiteRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
+          </div>
+          <span className="game-player-detail">{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
+          <span className="game-player-detail">{copy.prisoners}: {prisoners.capturedBlackByWhite}</span>
           {game.whiteRating !== null && game.whiteRating !== undefined
             ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}
@@ -139,7 +142,7 @@ export function GamePanel({
         <span className={`player-stone player-stone--${game.turn ?? yourColor ?? "black"}`} />
         <div>
           <strong>{resultText}</strong>
-          <span>
+          <span className={game.status === "active" && !interactionDisabled && !activeScoring && !game.lastResume ? "game-turn-detail" : undefined}>
             {game.status === "finished"
               ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
               : interactionDisabled
@@ -162,9 +165,11 @@ export function GamePanel({
       <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
-          <strong>{game.blackPlayerName}</strong>
-          <span>{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
-          <span>{copy.prisoners}: {prisoners.capturedWhiteByBlack}</span>
+          <div className="game-player-heading"><strong>{game.blackPlayerName}</strong>
+            {game.blackRating != null ? <span className="game-player-rank">{presentRating(game.blackRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
+          </div>
+          <span className="game-player-detail">{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
+          <span className="game-player-detail">{copy.prisoners}: {prisoners.capturedWhiteByBlack}</span>
           {game.blackRating !== null && game.blackRating !== undefined
             ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
             : null}
