@@ -19,6 +19,7 @@ import { ReviewGuide } from "@/components/review/ReviewGuide";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionary";
 import { getMobileCopy } from "@/lib/i18n/mobile";
+import { allowsMobileBackGesture } from "@/lib/mobile/navigationPolicy";
 import { MobileAccountGate } from "./MobileAccountGate";
 import { MobileAuthScreen } from "./MobileAuthScreen";
 import { MobileHome } from "./MobileHome";
@@ -107,6 +108,10 @@ function MobileRoute() {
 }
 
 function MobileRoot() {
+  const pathname = usePathname();
+  useEffect(() => {
+    updateNativeChrome({ type: "navigation", canGoBack: allowsMobileBackGesture(pathname) });
+  }, [pathname]);
   return <><MobileRoute /><MobileSplash /></>;
 }
 

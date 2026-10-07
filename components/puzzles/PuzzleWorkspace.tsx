@@ -266,9 +266,10 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       return;
     }
 
-    const previousLine = branchLine.slice(0, -1);
-    setBranchLine(previousLine.length ? previousLine : null);
-    setFeedback(previousLine.length ? "incorrect" : null);
+    // The server retains the last correct decision. Remove the failed move
+    // together with its refutation so the next move can use that revision.
+    setBranchLine(null);
+    setFeedback(puzzle?.variationProgress.length ? "continue" : null);
     setError(null);
     setHintMove(null);
     setPendingMove(null);

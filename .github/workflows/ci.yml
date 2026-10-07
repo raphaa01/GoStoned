@@ -48,6 +48,11 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Verify native iOS review stream framing
+        run: |
+          g++ -std=c++17 -pthread -I tests/native/stubs -I native/gostone-katago/ios/Core/include tests/native/katago-stream.test.cpp -o "$RUNNER_TEMP/katago-stream-test"
+          "$RUNNER_TEMP/katago-stream-test"
+
       - name: Build
         run: npm run build
 

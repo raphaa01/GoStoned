@@ -61,8 +61,8 @@ class OutputBuffer final : public std::streambuf {
 
  protected:
   int_type overflow(int_type value) override {
+    std::lock_guard<std::mutex> lock(mutex);
     if(traits_type::eq_int_type(value, traits_type::eof())) {
-      flushLine();
       return traits_type::not_eof(value);
     }
     append(static_cast<char>(value));
@@ -70,13 +70,15 @@ class OutputBuffer final : public std::streambuf {
   }
 
   std::streamsize xsputn(const char* values, std::streamsize count) override {
+    std::lock_guard<std::mutex> lock(mutex);
     for(std::streamsize index = 0; index < count; index++)
       append(values[index]);
     return count;
   }
 
   int sync() override {
-    flushLine();
+    // cin/cerr are tied to cout and may flush while analysis writes JSON.
+    // Only a newline terminates a record; a flush must never publish a fragment.
     return 0;
   }
 
@@ -97,6 +99,7 @@ class OutputBuffer final : public std::streambuf {
   }
 
   GoStoneKataGoLineCallback callback;
+  std::mutex mutex;
   void* context;
   std::string line;
 };
@@ -155,6 +158,8 @@ extern "C" GoStoneKataGoEngine* gostone_katago_start(
       std::string error;
       std::streambuf* previousInput = std::cin.rdbuf(&rawEngine->input);
       std::streambuf* previousOutput = std::cout.rdbuf(&rawEngine->output);
+      // A previous stopped session leaves eofbit/failbit on the global stream.
+      std::cin.clear();
       try {
         const std::vector<std::string> arguments = {
           "analysis", "-model", rawEngine->modelPath, "-config", rawEngine->configPath,
