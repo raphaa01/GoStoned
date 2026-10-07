@@ -813,3 +813,4 @@
   }
   .panel { margin-inline: 0; }
 }
+.goal { color: var(--color-text-muted); font-size: 14px; margin: 0 0 12px; }

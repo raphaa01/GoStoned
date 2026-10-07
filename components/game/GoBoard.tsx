@@ -37,6 +37,7 @@ type GoBoardProps = {
   precisionRevision: string;
   hintMove?: Position | null;
   viewportSize?: number;
+  targetStones?: Position[];
   territory?: { black: Position[]; white: Position[] };
 };
 
@@ -119,6 +120,7 @@ export function GoBoard({
   precisionRevision,
   hintMove = null,
   viewportSize,
+  targetStones = [],
   territory,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
@@ -157,6 +159,7 @@ export function GoBoard({
       + (value / (visibleBoardSize - 1)) * BOARD_GRID_SPAN_RATIO
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
+  const targetStoneKeys = new Set(targetStones.map(({ x, y }) => `${x}:${y}`));
   const blackTerritory = new Set(territory?.black.map(({ x, y }) => `${x}:${y}`));
   const whiteTerritory = new Set(territory?.white.map(({ x, y }) => `${x}:${y}`));
   const selectedDeadStoneKeys = new Set(
@@ -535,6 +538,7 @@ export function GoBoard({
                   type="button"
                 >
                   {stone && <span className={`stone stone--${stone}`} />}
+                  {stone && targetStoneKeys.has(`${x}:${y}`) ? <span aria-hidden="true" className={`puzzle-target-mark puzzle-target-mark--${stone}`} /> : null}
                   {territoryOwner ? <span aria-hidden="true" className={`territory-mark territory-mark--${territoryOwner}`} data-territory={territoryOwner} /> : null}
                   {markedDead ? (
                     <span aria-hidden="true" className="dead-stone-mark">

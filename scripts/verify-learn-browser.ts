@@ -117,11 +117,7 @@ async function playGame(page: Page, capture: boolean) {
 }
 
 async function walkLesson(page: Page, lesson: LearnLesson) {
-  {
-    const nextStage = page.getByRole("button", {name: /^Nächste Etappe:/});
-    if (await nextStage.count()) await nextStage.click();
-    await page.getByRole("button", {name: `Nächste Lektion: ${line(lesson.title, "de")}`, exact:true}).click();
-  }
+  await page.getByRole("button", {name: `Weiterlernen: ${line(lesson.title, "de")}`, exact:true}).click();
   for (const [index, step] of lesson.steps.entries()) {
     await expect(page.getByRole("heading", {name:line(lesson.title,"de"),exact:true})).toBeVisible();
     const advance = page.getByRole("button", {name:index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact:true});
@@ -233,8 +229,11 @@ async function run() {
       assert.equal(registered.status(),201);
     }
     await page.goto(`${baseUrl}/de/learn`);
+    await expect(page.locator(".learn-route-node")).toHaveCount(LEARN_LESSONS.length);
+    await expect(page.locator(".learn-path-stage")).toHaveCount(3);
+    await expect(page.locator(".learn-path-stage.is-locked").first().locator(".learn-route-node").first()).toBeDisabled();
+    await expect(page.locator('.learn-route-node[aria-current="step"]')).toContainText("Das Go-Brett");
     {
-      await page.getByRole("button", {name:"Weiterlernen: Das Go-Brett",exact:true}).click();
       const dock = await page.locator(".learn-next-dock").boundingBox();
       assert.ok(dock && dock.y + dock.height <= 844);
     }
