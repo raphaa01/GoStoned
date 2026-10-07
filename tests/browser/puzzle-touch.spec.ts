@@ -95,7 +95,8 @@ async function installDailyPuzzleHarness(page: Page, incorrectAttempt = false) {
             firstAttemptCorrect: false,
             variationProgress: [],
             variationRevision: 1,
-            displayLine: [],
+            displayLine: [{ color: "black", move: "A13", x: 0, y: 0 }],
+            displayLineIsComplete: true,
             feedback: null,
             solution: null,
           },
@@ -136,7 +137,7 @@ async function installDailyPuzzleHarness(page: Page, incorrectAttempt = false) {
 
 test("daily puzzle mistakes show compact retry and undo controls below the board", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.endsWith("-touch"), "Touch interaction is mobile-only.");
-  await installDailyPuzzleHarness(page, true);
+  const harness = await installDailyPuzzleHarness(page, true);
   await page.goto("/de/puzzles");
 
   const board = page.locator('.go-board[data-size="13"]');
@@ -164,7 +165,11 @@ test("daily puzzle mistakes show compact retry and undo controls below the board
 
   await undo.click();
   await expect(feedback).toHaveCount(0);
-  await expect(retry).toHaveCount(0);
+  await expect(retry).toBeDisabled();
+  await expect(undo).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Passen", exact: true })).toBeEnabled();
+  await expect(board.getByRole("gridcell").first()).toBeEnabled();
+  expect(harness.attempts).toHaveLength(1);
 });
 
 test("daily 13x13 puzzles cancel outside drags and place only valid releases", async ({ page }, testInfo) => {
