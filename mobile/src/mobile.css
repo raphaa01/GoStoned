@@ -30,6 +30,8 @@
   --mobile-border: rgb(23 24 22 / 10%);
   --mobile-border-strong: rgb(23 24 22 / 17%);
   --mobile-danger: #7b302c;
+  --mobile-warning: #815b24;
+  --mobile-warning-soft: #f3e7d2;
   --mobile-positive: #315f4e;
   --mobile-selected: #e2ebe5;
   --mobile-nav: #fbf9f4;
@@ -52,6 +54,8 @@ html[data-mobile-theme="dark"] {
   --mobile-border: rgb(255 255 255 / 8%);
   --mobile-border-strong: rgb(255 255 255 / 13%);
   --mobile-danger: #d58b84;
+  --mobile-warning: #dfba7e;
+  --mobile-warning-soft: #3d3020;
   --mobile-positive: #91b5a5;
   --mobile-selected: #263a32;
   --mobile-nav: #181b17;
@@ -85,6 +89,8 @@ html[data-mobile-app="true"] body {
   --color-moss-strong: var(--mobile-accent-strong);
   --color-moss-soft: var(--mobile-accent-soft);
   --color-danger: var(--mobile-danger);
+  --color-warning: var(--mobile-warning);
+  --color-warning-soft: var(--mobile-warning-soft);
   --color-board: var(--mobile-board);
   --bg: var(--mobile-bg);
   --bg-deep: var(--mobile-surface);
