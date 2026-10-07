@@ -53,6 +53,36 @@ Visits crossing a window boundary can contribute time without a start. Vercel
 pageviews and measured view starts use different collection mechanisms and can
 differ. Historical time data cannot be reconstructed.
 
+Visible-time reports have an independent `engagement=1|7|30|all` selector.
+`all` reads every stored hourly counter through the current time, without a
+lower time bound. Traffic remains limited to its existing today/7/30-day windows.
+
+## Website reviews and price survey
+
+The protected page also reads `game_analysis_jobs` and `analysis_price_votes`
+through `lib/db.ts` in separate read-only repeatable-read transactions. No
+additional tracking, database tables, cookies or Vercel paid events are needed.
+
+Server review requests, first recorded execution starts and completions are
+counted by their own timestamps in the selected traffic window (UTC). The report
+also shows all-time request/start totals, current queue/running counts, distinct
+requesters and the latest 20 requested jobs with dates, status and attempts.
+Native mobile reviews use local IndexedDB/native KataGo and never write server
+review jobs. Browser bot turns and puzzle generation are separate systems.
+The website dispatches these server reviews to Modal; this report is not a
+provider billing or worker-call ledger. Reopening a cached review does not create
+a job. Failed jobs can be reused and their timestamps/attempts reset, so old retry
+history cannot be reconstructed from the current row.
+
+Price votes are one current choice per account (3/5/8/12 EUR monthly). Reports
+show all-time participants, distribution including zero-count choices, average
+chosen price, participation against all registered accounts, new participants
+and current answers last saved in the selected traffic window. The latest 20
+answers show first-vote and last-save times without account identifiers. A
+changed choice replaces the previous answer; saved answers are not a tally of
+all clicks and are not purchases. Deleted account votes disappear with the
+existing cascade, so the report reflects currently retained answers.
+
 References:
 - https://vercel.com/docs/analytics/web-analytics-api
 - https://vercel.com/docs/analytics/privacy-policy
