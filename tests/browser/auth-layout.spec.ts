@@ -15,7 +15,8 @@ test("keeps account creation first and moves experience setup into onboarding", 
   const onboarding = getBeginnerGuideCopy("en").onboarding;
   await page.goto("/register");
 
-  await expect(page.getByText("Keep your ratings and play under one username.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  await expect(page.getByText("Keep your ratings and play under one username.")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: onboarding.canPlayTitle })).toHaveCount(0);
   expect(await authControlOrder(page)).toEqual(["submit", "google"]);
@@ -30,7 +31,8 @@ test("keeps account creation first and moves experience setup into onboarding", 
 
   await page.goto("/login");
 
-  await expect(page.getByText("Continue with your saved profile and ratings.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Username" })).toBeVisible();
+  await expect(page.getByText("Continue with your saved profile and ratings.")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
   expect(await authControlOrder(page)).toEqual(["submit", "google"]);
 });
