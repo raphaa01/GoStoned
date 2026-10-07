@@ -11,7 +11,7 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const CHANGE_EVENT = "gostone:theme";
 const memoryPreferences = new Map<string, ThemePreference>();
-const serverPreference = () => "system" as const;
+const serverPreference = () => "light" as const;
 
 function subscribe(listener: () => void) {
   const onStorage = (event: StorageEvent) => {
@@ -42,7 +42,7 @@ export function ThemeProvider({
     try {
       return parseThemePreference(window.localStorage.getItem(storageKey));
     } catch {
-      return memoryPreferences.get(storageKey) ?? "system";
+      return memoryPreferences.get(storageKey) ?? "light";
     }
   }, [storageKey]);
   const preference = useSyncExternalStore(subscribe, snapshot, serverPreference);
@@ -62,8 +62,7 @@ export function ThemeProvider({
   const setPreference = useCallback((next: ThemePreference) => {
     memoryPreferences.set(storageKey, next);
     try {
-      if (next === "system") window.localStorage.removeItem(storageKey);
-      else window.localStorage.setItem(storageKey, next);
+      window.localStorage.setItem(storageKey, next);
     } catch {
       // The selected theme still works when browser storage is unavailable.
     }

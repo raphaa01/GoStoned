@@ -601,7 +601,7 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-review-screen [class*="hero"] { border-bottom: 1px solid var(--mobile-border); padding: 0 0 var(--space-3) !important; }
 .mobile-review-screen [class*="hero"]::before,
 .mobile-review-screen [class*="hero"]::after { display: none !important; }
-.mobile-review-screen [class*="gamePicker"] { background: transparent !important; border: 0 !important; padding: 0 !important; }
+.mobile-review-screen [class*="gamePicker"] { background: var(--mobile-surface) !important; border: 1px solid var(--mobile-border) !important; padding: 14px !important; }
 .mobile-review-screen [class*="sectionHeading"] { margin-bottom: var(--space-2) !important; }
 .mobile-review-screen [class*="sectionHeading"] h2 { font-size: 17px !important; }
 .mobile-review-screen [class*="gameRow"] {
@@ -748,7 +748,7 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-pushed-screen .profile-history,
 .mobile-pushed-screen .training-game { padding: var(--space-3) !important; }
 
-.mobile-review-screen [class*="gamePicker"] { border-left: 1px solid var(--mobile-border) !important; }
+.mobile-review-screen [class*="gamePicker"] { border-radius: var(--mobile-radius-md) !important; }
 .mobile-pushed-screen .friends-page .player-search { border-bottom: 1px solid var(--mobile-border) !important; }
 .mobile-pushed-screen .friends-page .friends-card { border-radius: 14px !important; }
 .mobile-pushed-screen .profile-history { margin-top: var(--space-2) !important; }

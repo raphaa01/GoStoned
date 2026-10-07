@@ -7,6 +7,7 @@ registerBetaGameTests(true);
 test("dark guest surfaces and portrait leaderboard stay inside the viewport", async ({ page }, info) => {
   await installHarness(page);
   await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => localStorage.setItem("gostone.mobile.theme.v1", "dark"));
   await page.route("**/api/auth/session", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, user: null }) }));
   await page.route("**/api/stats", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
     ok: true, observedAt: new Date().toISOString(), leaderboard: [{ position: 1, playerName: "Leaderboard Player", games: 24, wins: 15, rating: 1642, ratingDeviation: 58 }],

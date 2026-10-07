@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#f4f0e7" />
     <script>
       (() => {
-        let preference = "system";
+        let preference = "light";
         try { preference = localStorage.getItem("gostone.mobile.theme.v1"); } catch {}
-        const dark = preference === "dark" || (preference !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        const dark = preference === "dark" || (preference === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.mobileTheme = dark ? "dark" : "light";
         document.documentElement.style.backgroundColor = dark ? "#111310" : "#f5f2eb";
         document.documentElement.style.colorScheme = dark ? "dark" : "light";

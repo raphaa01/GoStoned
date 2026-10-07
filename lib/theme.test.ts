@@ -3,15 +3,16 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { parseThemePreference, resolveTheme, THEME_BOOTSTRAP } from "./theme";
 
-test("explicit themes override system changes; invalid preferences follow the system", () => {
+test("only an explicit system preference follows the device; new users default to light", () => {
   for (const systemDark of [false, true]) {
     assert.equal(resolveTheme("light", systemDark), "light");
     assert.equal(resolveTheme("dark", systemDark), "dark");
     assert.equal(resolveTheme("system", systemDark), systemDark ? "dark" : "light");
   }
-  for (const value of [null, undefined, "unknown", {}, "system"]) {
-    assert.equal(parseThemePreference(value), "system");
+  for (const value of [null, undefined, "unknown", {}]) {
+    assert.equal(parseThemePreference(value), "light");
   }
+  assert.equal(parseThemePreference("system"), "system");
   assert.equal(parseThemePreference("dark"), "dark");
   assert.equal(parseThemePreference("light"), "light");
 });
@@ -19,8 +20,8 @@ test("explicit themes override system changes; invalid preferences follow the sy
 test("the initial document palette respects saved preferences and blocked storage", () => {
   for (const [stored, systemDark, expected] of [
     ["light", true, "light"], ["dark", false, "dark"],
-    [null, true, "dark"], ["invalid", false, "light"],
-    ["blocked", true, "dark"],
+    [null, true, "light"], ["invalid", true, "light"],
+    ["blocked", true, "light"], ["system", true, "dark"], ["system", false, "light"],
   ] as const) {
     const document = { documentElement: { dataset: { theme: "" }, style: { colorScheme: "" } } };
     runInNewContext(THEME_BOOTSTRAP, {

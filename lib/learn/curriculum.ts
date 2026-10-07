@@ -36,6 +36,7 @@ export type LessonStep = Readonly<{
   lastMove?: Position;
   continuePosition?: boolean;
   replies?: readonly Position[];
+  replyExplanations?: readonly LocalizedLine[];
 }>;
 
 export type LearnLesson = Readonly<{
@@ -237,7 +238,7 @@ const STAGE_THREE: readonly LearnLesson[] = [
   {
     id: "s3-life-death", stage: 3, minutes: 4, title: t("Leben oder Tod?", "Life or death?"), steps: [
       { id: "make-life", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "black", targets: [p(3, 3)], body: t("Schwarz hat einen geraden Innenraum aus drei Punkten.", "Black has a straight three-point inner space."), task: t("Teile ihn mit einem Zug in zwei Augen.", "Split it into two eyes with one move."), success: t("Der Mittelpunkt erzeugt links und rechts je ein Auge.", "The center point creates one eye on each side."), wrong: t("Nur der mittlere Innenpunkt trennt den Raum in zwei Augen.", "Only the middle inner point splits the space into two eyes.") },
-      { id: "kill", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "white", targets: [p(3, 3)], replies: [p(2, 3), p(4, 3)], body: t("Jetzt ist Weiß zuerst am Zug.", "Now White moves first."), task: t("Besetze den vitalen Punkt, bevor Schwarz zwei Augen bildet.", "Take the vital point before Black makes two eyes."), success: t("Schwarz versucht links zu schließen. Weiß nimmt die letzte Freiheit rechts und schlägt die Gruppe.", "Black tries to close the left side. White takes the last liberty on the right and captures the group."), wrong: t("Der vitale Punkt liegt genau in der Mitte.", "The vital point is exactly in the middle.") },
+      { id: "kill", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "white", targets: [p(3, 3)], replies: [p(2, 3), p(4, 3)], replyExplanations: [t("Weiß besetzt die Mitte. Die schwarze Gruppe ist noch auf dem Brett. Schau jetzt, wie Schwarz antwortet.", "White takes the center. The black group is still on the board. Now watch Black's reply."), t("Schwarz schließt links. Rechts bleibt der Gruppe nur noch eine Freiheit. Zeige jetzt den weißen Schlagzug.", "Black closes the left side. The group has only one liberty left on the right. Now reveal White's capturing move.")], body: t("Jetzt ist Weiß zuerst am Zug.", "Now White moves first."), task: t("Besetze den vitalen Punkt, bevor Schwarz zwei Augen bildet.", "Take the vital point before Black makes two eyes."), success: t("Weiß nimmt rechts die letzte Freiheit und schlägt alle schwarzen Steine dieser Gruppe. Deshalb verschwinden sie vom Brett.", "White takes the last liberty on the right and captures every black stone in this group. That is why they leave the board."), wrong: t("Der vitale Punkt liegt genau in der Mitte.", "The vital point is exactly in the middle.") },
     ],
   },
   {
@@ -309,6 +310,8 @@ const LEARN_UI_COPY = {
     learn: "Lernen",
     lessonsComplete: "{done} von {total} Lektionen abgeschlossen",
     continue: "Weiter",
+    showNextMove: "Nächsten Zug zeigen",
+    watchContinuation: "Schau dir die Fortsetzung Zug für Zug an.",
     explanation: "Erklärung",
     explanationHelp: "Ansehen, dann „Weiter“.",
     taskTurn: "Du bist dran",
@@ -385,6 +388,8 @@ const LEARN_UI_COPY = {
     learn: "Learn",
     lessonsComplete: "{done} of {total} lessons complete",
     continue: "Continue",
+    showNextMove: "Show next move",
+    watchContinuation: "Follow the continuation one move at a time.",
     explanation: "Explanation",
     explanationHelp: "Look, then tap ‘Continue’.",
     taskTurn: "Your task",
