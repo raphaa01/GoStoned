@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { GAME_ID, installHarness, gameFor } from "../shared/boardDesignHarness";
 import { MOBILE_KATAGO } from "../../lib/mobile/katagoContract";
 
-async function nativeReview(page: Page, platform: "android" | "ios", timeout = false) {
+async function nativeReview(page: Page, platform: "android" | "ios", timeout: false | "reject" | "partial" = false) {
   const state = await installHarness(page);
   state.game = { ...gameFor(9, "friendly"), status: "finished", turn: null, result: "B+R", finishReason: "resignation" };
   let serverRequests = 0;
@@ -44,6 +44,7 @@ async function nativeReview(page: Page, platform: "android" | "ios", timeout = f
         }));
         if (timeout) {
           for (const turn of turns) listeners.get("progress")?.({ analysisId: options.analysisId, phase: "preview", completedTurns: turn.turnNumber + 1, totalTurns: 3, visitsPerTurn: 2, turn });
+          if (timeout === "partial") return { turns, visitsPerTurn: 2, complete: false };
           throw new Error("Local analysis exceeded its time budget.");
         }
         if (analyses === 1) return new Promise((_resolve, reject) => { pending = reject; });
@@ -81,12 +82,13 @@ for (const platform of ["android", "ios"] as const) {
     expect(serverRequests()).toBe(0);
   });
 
-  test(`${platform}: a native time limit retains the playable preview instead of Try again`, async ({ page }) => {
-    const serverRequests = await nativeReview(page, platform, true);
+  for (const timeout of ["reject", "partial"] as const) test(`${platform}: native ${timeout} time limit retains the playable preview instead of Try again`, async ({ page }) => {
+    const serverRequests = await nativeReview(page, platform, timeout);
     await page.goto(`/de/review/${GAME_ID}`);
     await page.getByRole("button", { name: "Mit KataGo analysieren", exact: true }).click();
     await expect(page.getByRole("slider", { name: "Zug", exact: true })).toHaveAttribute("max", "2");
     await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { reviewCalls: { method: string }[] }).reviewCalls.filter(call => call.method === "cancel").length)).toBe(1);
     expect(serverRequests()).toBe(0);
   });
 }

@@ -225,6 +225,9 @@ async function runNativeKataGoAnalysisWork(
       input,
       visitsPerTurn: MOBILE_KATAGO.defaultVisitsPerTurn,
     });
+    if (response.complete === false) {
+      cancellation ??= NativeKataGo.cancel({ analysisId }).catch(() => undefined);
+    }
     signal?.throwIfAborted();
   } catch (analysisError) {
     cancellation ??= NativeKataGo.cancel({ analysisId }).catch(() => undefined);

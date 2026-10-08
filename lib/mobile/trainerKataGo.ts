@@ -58,6 +58,9 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
           if (options.signal.aborted) throw aborted();
           validateTrainerAnalysis(response.turn, input);
           return response.turn;
+        } catch (analysisError) {
+          cancellation ??= plugin.cancel({ analysisId }).catch(() => undefined);
+          throw analysisError;
         } finally {
           options.signal.removeEventListener("abort", onAbort);
           await cancellation;

@@ -14,6 +14,29 @@ const turn: TrainerPositionAnalysis = {
 };
 const available = { available: true, engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 };
 
+test("a failed trainer position waits for the engine to close before the next review", async () => {
+  const queue = createNativeKataGoQueue();
+  let close!: () => void;
+  let cancelling!: () => void;
+  const closing = new Promise<void>(resolve => { close = resolve; });
+  const cancellationStarted = new Promise<void>(resolve => { cancelling = resolve; });
+  const client = createTrainerKataGoClient({
+    getStatus: async () => available,
+    analyzePosition: async () => { throw new Error("Position timed out"); },
+    cancel: async () => { cancelling(); await closing; },
+  }, true, queue);
+  const failed = assert.rejects(client.analyze(input, { visits: 2, signal: new AbortController().signal }), /Position timed out/);
+  await cancellationStarted;
+  let reviewStarted = false;
+  const review = queue(async () => { reviewStarted = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reviewStarted, false);
+  close();
+  await failed;
+  await review;
+  assert.equal(reviewStarted, true);
+});
+
 test("a review waits for native cancellation acknowledgement even if trainer rejects immediately", async () => {
   const queue = createNativeKataGoQueue();
   let rejectAnalysis!: (error: Error) => void;
