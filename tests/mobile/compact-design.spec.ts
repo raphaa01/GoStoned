@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { installHarness, USER, GAME_ID, assertNoOverflow } from "../shared/boardDesignHarness";
 import { installLearningFixture } from "../shared/betaFixHarness";
 
-async function installCompactFixture(page: Page) {
+async function installCompactFixture(page: Page, puzzleGate?: Promise<void>) {
   await installHarness(page);
   await installLearningFixture(page);
   const requests = { profile: 0, stats: 0, puzzles: 0, attempts: 0 };
@@ -35,6 +35,7 @@ async function installCompactFixture(page: Page) {
       } }) });
     }
     requests.puzzles++;
+    await puzzleGate;
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, actor: USER.playerKey, status: "ready", mode: "daily", expectedPerCategory: 1,
       categoryCounts: {}, puzzles: [{ id: GAME_ID, kind: "daily", category: null, dailyDate: new Date().toISOString().slice(0, 10), boardSize: 9, toPlay: "black",
         board: Array.from({ length: 9 }, () => Array(9).fill(null)), difficulty: "beginner", attemptCount: requests.attempts,
@@ -45,10 +46,43 @@ async function installCompactFixture(page: Page) {
   return requests;
 }
 
+test("Home prefetch and an immediate puzzle tab click share the same slow request", async ({ page }) => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const requests = await installCompactFixture(page, gate);
+  await page.goto("/");
+  await expect.poll(() => requests.puzzles).toBe(1);
+  await page.locator(".mobile-tab-bar").getByRole("link", { name: "Puzzles", exact: true }).click();
+  expect(requests.puzzles).toBe(1);
+  release();
+  await expect(page.locator(".go-board")).toBeVisible();
+  expect(requests.puzzles).toBe(1);
+});
+
+test("an expired puzzle paints its snapshot while a slow network refresh is pending", async ({ page }) => {
+  await page.clock.install();
+  await installCompactFixture(page);
+  await page.goto("/puzzles");
+  await expect(page.locator(".go-board")).toBeVisible();
+  await page.locator(".mobile-tab-bar").getByRole("link", { name: "Home", exact: true }).click();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let refreshing = false;
+  await page.route("**/api/puzzles?mode=daily", async route => { refreshing = true; await gate; await route.fallback(); });
+  await page.clock.fastForward(61_000);
+  await expect.poll(() => refreshing).toBe(true);
+  await page.locator(".mobile-tab-bar").getByRole("link", { name: "Puzzles", exact: true }).click();
+  await expect(page.locator(".go-board")).toBeVisible();
+  release();
+});
+
 test("returning to daily puzzle, leaderboard, review and profile reuses reads; moves invalidate puzzle progress", async ({ page }) => {
   const requests = await installCompactFixture(page);
   await page.goto("/");
   await expect(page.getByText("AutumnGoban3", { exact: true })).toBeVisible();
+  // Both destinations are warm before the first tab click, not just on return.
+  await expect.poll(() => requests.puzzles).toBe(1);
+  await expect.poll(() => requests.stats).toBe(1);
   const tabs = page.locator(".mobile-tab-bar");
   await tabs.getByRole("link", { name: "Puzzles", exact: true }).click();
   await expect(page.locator(".go-board")).toBeVisible();

@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-stale-codex/**",
+    ".cache/**",
+    ".venv-trainer/**",
     "out/**",
     "build/**",
     "mobile-dist/**",

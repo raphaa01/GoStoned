@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { RatingLabel } from "@/components/rating/RatingLabel";
-import { cachedRouteData, invalidateRouteData, readRouteData } from "@/lib/client/routeCache";
+import { routeSnapshot, invalidateRouteData, readRouteData } from "@/lib/client/routeCache";
 import { readApi } from "@/lib/client/api";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { presentRating } from "@/lib/rating/rankPolicy";
@@ -16,11 +16,12 @@ import {
 
 export function LeaderboardView() {
   const { rating: viewerRating, user } = useAuth();
+  const playerKey = user?.playerKey;
   const { dictionary, locale } = useI18n();
   const copy = dictionary.leaderboard;
-  const [entries, setEntries] = useState<LeaderboardEntry[]>(() => cachedRouteData<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.leaderboard ?? []);
-  const [observedAt, setObservedAt] = useState<string | null>(() => cachedRouteData<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.observedAt ?? null);
-  const [loading, setLoading] = useState(() => !cachedRouteData("public:leaderboard"));
+  const [entries, setEntries] = useState<LeaderboardEntry[]>(() => routeSnapshot<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.leaderboard ?? []);
+  const [observedAt, setObservedAt] = useState<string | null>(() => routeSnapshot<ReturnType<typeof parsePublicLeaderboardSnapshot>>("public:leaderboard")?.observedAt ?? null);
+  const [loading, setLoading] = useState(() => !routeSnapshot("public:leaderboard"));
   const [error, setError] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState(0);
   const [viewerPreference, setViewerPreference] = useState<{
@@ -62,17 +63,17 @@ export function LeaderboardView() {
   }, [copy.loadFailed, dictionary, requestKey]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!playerKey) return;
     const controller = new AbortController();
     void fetch("/api/profile/preferences", { signal: controller.signal })
       .then((response) => readApi<{ preferences: { displayPreference: RatingDisplayPreference } }>(response))
       .then((body) => setViewerPreference({
         displayPreference: body.preferences.displayPreference,
-        playerKey: user.playerKey,
+        playerKey,
       }))
       .catch(() => undefined);
     return () => controller.abort();
-  }, [user]);
+  }, [playerKey]);
 
   useEffect(() => {
     if (!focusRetryStatus.current) return;

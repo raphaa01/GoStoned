@@ -21,7 +21,10 @@ import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation"
 
 import type { ProfileResponse } from "@/components/profile/ProfileView";
 import { useRouteResource } from "@/components/useRouteResource";
-import { routeCacheKey } from "@/lib/client/routeCache";
+import { puzzleRouteKey, readRouteData, routeCacheKey } from "@/lib/client/routeCache";
+import { assertResponseActor } from "@/lib/client/identityAuthority";
+import type { PuzzleHub } from "@/lib/puzzles/types";
+import { parsePublicLeaderboardSnapshot } from "@/lib/stats/leaderboardContract";
 
 type HomeData = {
   playerKey: string | null;
@@ -46,6 +49,32 @@ export function MobileHome() {
   const profile = useRouteResource(playerKey ? routeCacheKey("profile", playerKey) : null, loadProfile);
   const { progress } = useLearnProgress();
   const learned = progress.completedLessonIds.length;
+
+  useEffect(() => {
+    if (!playerKey) return;
+    // Share pending reads with the destination. Leaving Home must not abort
+    // a request that the newly opened tab is already waiting for.
+    const timer = window.setTimeout(() => {
+      if (document.hidden || !navigator.onLine) return;
+      void Promise.allSettled([
+        readRouteData(puzzleRouteKey("daily", playerKey), async () => {
+          const response = await fetch("/api/puzzles?mode=daily", {
+            cache: "no-store",
+            headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+            signal: AbortSignal.timeout(20_000),
+          });
+          const body = await readApi<PuzzleHub & { actor: string }>(response);
+          assertResponseActor(body.actor, playerKey);
+          return body;
+        }),
+        readRouteData("public:leaderboard", async () => {
+          const response = await fetch("/api/stats", { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+          return parsePublicLeaderboardSnapshot(await readApi<unknown>(response));
+        }),
+      ]);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [playerKey]);
 
   useEffect(() => {
     if (!playerKey) return;

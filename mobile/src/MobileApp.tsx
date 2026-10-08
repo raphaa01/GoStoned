@@ -27,6 +27,7 @@ import { MobileSettings } from "./MobileSettings";
 import { getSettingsCopy } from "@/lib/i18n/settings";
 import { MobileProfile } from "./MobileProfile";
 import { MobileShell } from "./MobileShell";
+import { MobileSessionRefresh } from "./MobileSessionRefresh";
 import { MobileSplash } from "./MobileSplash";
 import { MobileCoachEntry, MobileCoachGate } from "./MobileCoachAccess";
 import { updateNativeChrome } from "./nativeChrome";
@@ -81,7 +82,7 @@ function MobileRoute() {
     return <NativeChromeHidden><main className="mobile-auth-screen" id="main-content"><OAuthUsernameForm returnTo={search.get("returnTo")} /></main></NativeChromeHidden>;
   }
   if (review) {
-    return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview gameId={review[1]} /></div></MobileShell>;
+    return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview key={review[1]} gameId={review[1]} /></div></MobileShell>;
   }
 
   let content: React.ReactNode;
@@ -123,6 +124,7 @@ export function MobileApp() {
   return (
     <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>
+        <MobileSessionRefresh />
         <BoardDesignProvider><BoardPlacementProvider><MobileThemeProvider><MobileRoot /></MobileThemeProvider></BoardPlacementProvider></BoardDesignProvider>
       </AuthProvider>
     </I18nProvider>

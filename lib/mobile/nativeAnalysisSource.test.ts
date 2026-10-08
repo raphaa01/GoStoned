@@ -20,7 +20,7 @@ test("native review loads the game but never queues server-side KataGo analysis"
   const nativeBranch = review.slice(nativeStart, serverStart);
   assert.match(nativeBranch, /fetch\(`\/api\/games\/\$\{gameId\}`/);
   assert.doesNotMatch(nativeBranch, /\/analysis/);
-  assert.match(nativeBranch, /runNativeKataGoAnalysis\(body\.game, setAnalysis\)/);
+  assert.match(nativeBranch, /runNativeKataGoAnalysis\(body\.game,[\s\S]*controller\.signal\)/);
   assert.match(review, /analysis\.status === "running"\) && !result/);
   assert.match(nativeRuntime, /catch \(analysisError\)[\s\S]*buildProgressiveGameAnalysis[\s\S]*storeResult\(game, partial\)/);
   assert.match(review, /if \(nativeAnalysis\) return;[\s\S]*setInterval/);

@@ -3,6 +3,7 @@ import type { AnalysisInput } from "@/lib/analysis/types";
 import type { TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import { MOBILE_KATAGO } from "./katagoContract";
 import { NativeKataGo, assertNativeKataGoStatus, type NativeKataGoStatus } from "./nativeKataGo";
+import { createNativeKataGoQueue, queueNativeKataGo } from "./nativeKataGoQueue";
 
 export interface TrainerKataGoPlugin {
   getStatus(): Promise<NativeKataGoStatus>;
@@ -31,8 +32,7 @@ export function validateTrainerAnalysis(turn: TrainerPositionAnalysis, input: An
 
 // Serialize calls, including the completion of cancelled native work. Undo may
 // revisit the same move count, so every request has a fresh id and UI revision.
-export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAvailable = true) {
-  let queue: Promise<unknown> = Promise.resolve();
+export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAvailable = true, enqueue = createNativeKataGoQueue()) {
   return {
     async status(): Promise<NativeKataGoStatus> {
       if (!nativeAvailable) return { available: false, engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 };
@@ -45,7 +45,8 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
         if (!nativeAvailable) throw new Error("Local KataGo training requires the native app.");
         if (options.signal.aborted) throw aborted();
         const analysisId = `trainer:${input.gameId}:${input.gameVersion}:${crypto.randomUUID()}`;
-        const onAbort = () => { void plugin.cancel({ analysisId }).catch(() => undefined); };
+        let cancellation: Promise<void> | undefined;
+        const onAbort = () => { cancellation = plugin.cancel({ analysisId }).catch(() => undefined); };
         options.signal.addEventListener("abort", onAbort, { once: true });
         try {
           const response = await plugin.analyzePosition({
@@ -57,15 +58,17 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
           if (options.signal.aborted) throw aborted();
           validateTrainerAnalysis(response.turn, input);
           return response.turn;
+        } catch (analysisError) {
+          cancellation ??= plugin.cancel({ analysisId }).catch(() => undefined);
+          throw analysisError;
         } finally {
           options.signal.removeEventListener("abort", onAbort);
+          await cancellation;
         }
       };
-      const work = queue.then(execute, execute);
-      queue = work.catch(() => undefined);
-      return work;
+      return enqueue(execute);
     },
   };
 }
 
-export const trainerKataGo = createTrainerKataGoClient(NativeKataGo, Capacitor.isNativePlatform());
+export const trainerKataGo = createTrainerKataGoClient(NativeKataGo, Capacitor.isNativePlatform(), queueNativeKataGo);

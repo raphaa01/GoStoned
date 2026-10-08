@@ -219,7 +219,13 @@ public class GoStoneKataGoPlugin extends Plugin {
         synchronized (activeLock) {
             job = activeAnalysis;
         }
-        if (job != null && (analysisId == null || analysisId.equals(job.id))) stop(job, true);
+        if (job != null && (analysisId == null || analysisId.equals(job.id))) {
+            stop(job, true);
+            // The next client request may start only after runAnalysis/runPosition
+            // has released activeAnalysis in its finally block.
+            analysisExecutor.execute(call::resolve);
+            return;
+        }
         call.resolve();
     }
 

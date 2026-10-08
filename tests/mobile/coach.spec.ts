@@ -6,6 +6,7 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
   await installHarness(page);
   const entitlement = { enabled };
   await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, user: { ...USER, coachBetaEnabled: entitlement.enabled } } }));
+  await page.route("**/api/matchmaking", route => route.fulfill({ json: { ok: true, actor: USER.playerKey, matchmaking: { status: "idle" } } }));
   await page.addInitScript(({ native, blunder, identity, platform, replyDelay }) => {
     if (!native) return;
     const calls: { method: string; options: Record<string, unknown> }[] = [];
@@ -114,6 +115,47 @@ test("disabled mobile accounts cannot see or open the coach", async ({ page }) =
   await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
   await page.goto("/de/play/coach");
   await expect(page.getByText("Diese Beta ist für dein Konto noch nicht freigeschaltet.")).toBeVisible();
+});
+
+for (const platform of ["android", "ios"] as const) {
+  test(`${platform}: changing the server flag refreshes the installed app without a reload`, async ({ page }) => {
+    const entitlement = await harness(page, true, false, false, platform);
+    await page.clock.install();
+    await page.goto("/de/play");
+    await expect(page.getByRole("button", { name: "Gegner finden", exact: true })).toBeVisible();
+    await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
+    entitlement.enabled = true;
+    // No auth event, new login, navigation or rebuilt binary.
+    await page.clock.fastForward(30_000);
+    await expect(page.locator(".mobile-coach-entry")).toBeVisible();
+    entitlement.enabled = false;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Gegner finden", exact: true })).toBeVisible();
+  });
+}
+
+test("a late session response cannot restore a revoked coach flag", async ({ page }) => {
+  await harness(page);
+  await page.goto("/de/play");
+  await expect(page.locator(".mobile-coach-entry")).toBeVisible();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let requests = 0;
+  await page.route("**/api/auth/session", async route => {
+    const old = ++requests === 1;
+    if (old) await gate;
+    await route.fulfill({ json: { ok: true, user: { ...USER, coachBetaEnabled: old } } });
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => requests).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new Event("gostone:auth-change")));
+  await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
+  const staleResponse = page.waitForResponse("**/api/auth/session");
+  release();
+  await staleResponse;
+  await expect(page.getByRole("button", { name: "Gegner finden", exact: true })).toBeVisible();
+  await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
 });
 
 test("real ONNX comment, reply, hint, ownership, undo and revocation work in the mobile flow", async ({ page }) => {
