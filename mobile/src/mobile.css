@@ -907,3 +907,32 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   .mobile-app-content .profile-metrics article > :last-child { grid-column: 2; justify-self: start; }
   .mobile-app-content .recent-form { justify-content: flex-start; max-width: 100%; }
 }
+
+/* Mobile-only coach beta; the normal training and web bot remain separate. */
+.mobile-coach-entry { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:1rem 1.2rem; margin:.5rem 0 1rem; border:1px solid var(--color-line); border-radius:18px; background:var(--color-surface); color:inherit; font-weight:650; text-decoration:none; }
+.mobile-coach-beta { display:inline-flex; align-items:center; border:1px solid currentColor; border-radius:999px; padding:.15rem .55rem; font-size:.7rem; letter-spacing:.06em; color:#97814e; }
+.mobile-coach { width:100%; max-width:560px; margin:0 auto; padding:.3rem 0 2rem; }
+.mobile-coach-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+.mobile-coach-heading h1 { font-size:1.4rem; margin:0; }
+.mobile-coach .learn-teacher { min-height:105px; margin:.8rem 0; }
+.mobile-coach .learn-teacher__speech p { margin:0 0 .5rem; }
+.mobile-coach .learn-teacher__speech p:last-child { margin-bottom:0; }
+.mobile-coach .learn-teacher[data-tone="correction"] .learn-teacher__speech { border-color:#d47a62; background:color-mix(in srgb,#d47a62 13%,var(--color-surface)); }
+.mobile-coach .learn-teacher[data-tone="success"] .learn-teacher__speech { border-color:#5d9c82; background:color-mix(in srgb,#5d9c82 13%,var(--color-surface)); }
+.mobile-coach fieldset { border:0; padding:0; margin:1.2rem 0; }
+.mobile-coach-sizes, .mobile-coach-tools, .mobile-coach-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
+.mobile-coach-sizes .button { flex:1; }
+.mobile-coach-sizes [aria-pressed="true"] { border-color:currentColor; background:color-mix(in srgb,#9b875b 17%,var(--color-surface)); }
+.mobile-coach-tools { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:1rem 0; }
+.mobile-coach-tools .button { padding:.6rem .2rem; font-size:.8rem; min-height:44px; }
+.mobile-coach-muted { font-size:.78rem; color:var(--color-text-muted); line-height:1.5; }
+.mobile-coach-status { font-size:.8rem; color:var(--color-text-muted); min-height:1.3rem; margin:.4rem 0; }
+.mobile-coach-show { border:0; background:none; color:inherit; text-decoration:underline; min-height:40px; padding:0; font:inherit; font-size:.8rem; }
+.mobile-coach .coach-point-mark { position:absolute; width:65%; height:65%; border:2px solid #ce745f; border-radius:50%; pointer-events:none; }
+.mobile-coach-estimate { border:1px solid var(--color-line); border-radius:14px; padding:.75rem; }
+.mobile-coach-estimate-toggle { display:flex; gap:.5rem; width:100%; align-items:center; min-height:36px; border:0; background:none; color:inherit; font:inherit; font-size:.85rem; text-align:left; }
+.mobile-coach-estimate-toggle > :first-child { flex:1; }
+.mobile-coach-estimate-toggle [data-judgement="blunder"], .mobile-coach-estimate-toggle [data-judgement="mistake"] { color:#ce745f; }
+.mobile-coach-scorebar { height:9px; overflow:hidden; border:1px solid #9b9b96; border-radius:99px; background:#ecece6; margin:.8rem 0; }
+.mobile-coach-scorebar span { display:block; height:100%; background:#333633; transition:width .2s ease; }
+.mobile-coach-estimate p { margin:.5rem 0; }

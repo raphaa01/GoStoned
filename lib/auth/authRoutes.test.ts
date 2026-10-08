@@ -515,6 +515,7 @@ test("successful registration exposes only the committed user and hardened sessi
       displayName: "atomic_player",
       playerKey: `user:${userId}`,
       avatarStyle: "kifu-classic",
+      coachBetaEnabled: false,
     },
   });
   const accountStatement = transactionStatements[2];

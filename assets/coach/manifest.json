@@ -1,0 +1,92 @@
+{
+  "contract": "gostone-coach-v5",
+  "epoch": 840,
+  "snapshot": "epoch-000840-8894fcc6",
+  "createdAt": 1791415797.6781301,
+  "files": {
+    "coach.onnx": {
+      "bytes": 7302200,
+      "sha256": "6194b5dad83f7c9a5f188cf2a92c02708b1d944250af79dbc85bbb494fe4d47f"
+    },
+    "INTEGRATION.md": {
+      "bytes": 3917,
+      "sha256": "21b518b4749a0b26fb9b04fc55675b14b7d011e0717455f2b5cd6b450927e650"
+    },
+    "schema.json": {
+      "bytes": 3836,
+      "sha256": "c3e9c8849f527b5fbeb53a36e54905d604d202c0bfd06f6f9f304706e6052532"
+    },
+    "tokenizer.json": {
+      "bytes": 282017,
+      "sha256": "330ecc50c389950ac61bf98391fc2ffb59603a1cd05ce4237cbfac49c9cf2aca"
+    },
+    "weights.pt": {
+      "bytes": 7301455,
+      "sha256": "5ef22781cb7bcf56c7de14d77a14f0015382b020191b085f8c77b9d2befba371"
+    }
+  },
+  "packageBytes": 14896164,
+  "maximumPackageBytes": 20000000,
+  "parameters": 1823108,
+  "metrics": {
+    "examples": 56,
+    "tokenLoss": 4.7881715297698975,
+    "reasonAgreement": 0.8571428571428571,
+    "usableTextRate": 0.25,
+    "generatedChecked": 12,
+    "humanQualityVerified": false
+  },
+  "config": {
+    "maxExamples": 20000,
+    "batchExamples": 64,
+    "epochsPerBatch": 8,
+    "initialLanguageEpochs": 36,
+    "maxGameMoves": 650,
+    "durationHours": 168,
+    "cpuThreads": 4,
+    "teacherVisits": 96,
+    "teacherSeconds": 16,
+    "seed": 20261003,
+    "mode": "real",
+    "languageTeacher": true,
+    "languageTeacherName": "LoGos-7B-Go-Q8_0",
+    "teacherPipeline": "go-expert-lessons-v2",
+    "trainingPolicy": "teacher-led-optional-corrections",
+    "maximumHumanShare": 0.2,
+    "contract": "gostone-coach-v5",
+    "initializedFrom": "7a0641fcee725130",
+    "collectionVersion": "balanced-go-collection-v3",
+    "scanVisits": 12,
+    "scanSeconds": 1.5,
+    "quietEvery": 16,
+    "reuseEvery": 4
+  },
+  "releaseReady": false,
+  "onnxVerified": true,
+  "onnxMaximumError": 5.7220458984375e-06,
+  "decoding": "approved-language-grammar",
+  "description": "Trainable reason selector and autoregressive German language decoder with constrained wording. Automatic labels are not human quality proof.",
+  "boardConditioning": true,
+  "trainedWithBoard": true,
+  "maximumHumanTrainingShare": 0.2,
+  "trainingPolicy": "teacher-led-optional-corrections",
+  "languageCoverage": {
+    "good": 18,
+    "uncertain": 2,
+    "score_loss": 26,
+    "capture": 68,
+    "save": 66,
+    "connect": 31,
+    "liberties": 36,
+    "enemy_atari": 44,
+    "own_threat": 32,
+    "group_loss": 18,
+    "opening_corner": 41,
+    "opening_side": 10,
+    "cut": 9,
+    "weak_group": 14,
+    "eyes": 2,
+    "direction": 32,
+    "pass": 2
+  }
+}

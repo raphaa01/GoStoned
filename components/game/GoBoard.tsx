@@ -38,6 +38,7 @@ type GoBoardProps = {
   hintMove?: Position | null;
   viewportSize?: number;
   targetStones?: Position[];
+  markedIntersections?: Position[];
   territory?: { black: Position[]; white: Position[] };
 };
 
@@ -121,6 +122,7 @@ export function GoBoard({
   hintMove = null,
   viewportSize,
   targetStones = [],
+  markedIntersections = [],
   territory,
 }: GoBoardProps) {
   const { dictionary } = useI18n();
@@ -160,6 +162,7 @@ export function GoBoard({
     ) * 100}%`;
   const deadStoneKeys = new Set(deadStones.map(({ x, y }) => `${x}:${y}`));
   const targetStoneKeys = new Set(targetStones.map(({ x, y }) => `${x}:${y}`));
+  const markedPointKeys = new Set(markedIntersections.map(({ x, y }) => `${x}:${y}`));
   const blackTerritory = new Set(territory?.black.map(({ x, y }) => `${x}:${y}`));
   const whiteTerritory = new Set(territory?.white.map(({ x, y }) => `${x}:${y}`));
   const selectedDeadStoneKeys = new Set(
@@ -539,6 +542,7 @@ export function GoBoard({
                 >
                   {stone && <span className={`stone stone--${stone}`} />}
                   {stone && targetStoneKeys.has(`${x}:${y}`) ? <span aria-hidden="true" className={`puzzle-target-mark puzzle-target-mark--${stone}`} /> : null}
+                  {!stone && markedPointKeys.has(`${x}:${y}`) ? <span aria-hidden="true" className="coach-point-mark" /> : null}
                   {territoryOwner ? <span aria-hidden="true" className={`territory-mark territory-mark--${territoryOwner}`} data-territory={territoryOwner} /> : null}
                   {markedDead ? (
                     <span aria-hidden="true" className="dead-stone-mark">

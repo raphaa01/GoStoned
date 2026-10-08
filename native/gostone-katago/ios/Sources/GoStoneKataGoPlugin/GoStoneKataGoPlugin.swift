@@ -34,6 +34,7 @@ private final class ActiveAnalysis {
     let requestedVisits: Int
     let totalTurns: Int
     var qualityVisits = previewVisits
+    var positionOnly = false
     var phase = "preview"
     var currentRequestId = ""
     var expectedPhaseTurns = 0
@@ -90,6 +91,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "analyze", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "analyzePosition", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise)
     ]
 
@@ -199,6 +201,57 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         #endif
         #else
         call.reject("The KataGo Metal core is unavailable.", "native_runtime_unavailable")
+        #endif
+    }
+
+    @objc public func analyzePosition(_ call: CAPPluginCall) {
+        #if canImport(GoStoneKataGoCore) && !targetEnvironment(simulator)
+        guard let analysisId = call.getString("analysisId"), !analysisId.isEmpty,
+              let input = call.getObject("input") else {
+            call.reject("A valid analysisId and input are required.", "invalid_analysis_request")
+            return
+        }
+        let visits = max(2, min(maximumVisits, call.getInt("visits") ?? 40))
+        let ownership = call.getBool("includeOwnership") ?? false
+        stateQueue.async {
+            guard self.activeAnalysis == nil else {
+                call.reject("Another local analysis is already running.", "analysis_busy")
+                return
+            }
+            do {
+                guard !self.isThermallyConstrained else {
+                    throw NativeError.message("The device is too warm to start local analysis.")
+                }
+                let moveCount = (input["moves"] as? [Any])?.count ?? 0
+                let job = ActiveAnalysis(owner: self, id: analysisId, call: call, input: input, requestedVisits: visits, totalTurns: moveCount + 1)
+                job.positionOnly = true
+                job.phase = "position"
+                job.currentRequestId = analysisId
+                job.expectedPhaseTurns = 1
+                job.qualityVisits = visits
+                self.activeAnalysis = job
+                _ = try self.ensureWarmEngine(self.ensureRuntime())
+                var value = try self.request(id: analysisId, input: input, visits: visits, pvLength: qualityPVLength, analyzeTurns: [moveCount])
+                value["includeOwnership"] = ownership
+                let requestedTime = call.getDouble("maxTime") ?? 5.0
+                value["overrideSettings"] = ["maxTime": requestedTime.isFinite ? min(8.0, max(0.1, requestedTime)) : 5.0]
+                try self.send(value, to: job)
+                let timeout = DispatchWorkItem { [weak self, weak job] in
+                    guard let self, let job, self.activeAnalysis === job, !job.resolved else { return }
+                    self.fail(job, message: "KataGo did not finish the training position within 30 seconds.")
+                }
+                job.timeout = timeout
+                self.stateQueue.asyncAfter(deadline: .now() + .seconds(30), execute: timeout)
+            } catch {
+                if let job = self.activeAnalysis, job.id == analysisId {
+                    self.fail(job, message: self.safeMessage(error))
+                } else {
+                    call.reject(self.safeMessage(error), "native_analysis_failed")
+                }
+            }
+        }
+        #else
+        call.reject("Local KataGo training requires a linked core and physical iOS device.", "native_runtime_unavailable")
         #endif
     }
 
@@ -459,12 +512,25 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             job.phaseTurns[turnNumber] = response
             job.bestTurns[turnNumber] = response
-            self.emitProgress(job: job, visits: job.phase == "preview" ? previewVisits : job.qualityVisits, turn: response)
+            if !job.positionOnly {
+                self.emitProgress(job: job, visits: job.phase == "preview" ? previewVisits : job.qualityVisits, turn: response)
+            }
             if self.isThermallyConstrained {
                 self.fail(job, message: "Local analysis stopped because the device became too warm.")
                 return
             }
             guard job.phaseTurns.count >= job.expectedPhaseTurns else { return }
+            if job.positionOnly {
+                guard turnNumber == job.totalTurns - 1 else {
+                    self.fail(job, message: "KataGo returned a different training position.")
+                    return
+                }
+                job.resolved = true
+                job.timeout?.cancel()
+                self.activeAnalysis = nil
+                job.call.resolve(["turn": response])
+                return
+            }
             do {
                 if job.phase == "preview" {
                     try self.sendNextPreviewChunk(job)
@@ -567,7 +633,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func fail(_ job: ActiveAnalysis, message: String, stopEngine: Bool = true) {
         guard !job.resolved else { return }
-        if job.bestTurns[0] != nil && job.bestTurns[1] != nil && !job.cancelled {
+        if !job.positionOnly && job.bestTurns[0] != nil && job.bestTurns[1] != nil && !job.cancelled {
             resolve(job, visits: previewVisits, complete: false, warning: message, keepEngine: !stopEngine)
         } else {
             job.resolved = true

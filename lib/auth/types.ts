@@ -10,6 +10,7 @@ export type AuthUser = {
   displayName: string;
   playerKey: string;
   avatarStyle: ProfileAvatarStyle;
+  coachBetaEnabled?: boolean;
 };
 
 export type AuthUserRow = {
@@ -17,6 +18,7 @@ export type AuthUserRow = {
   username: string;
   display_name: string | null;
   avatar_style?: string | null;
+  coach_beta_enabled?: boolean;
 };
 
 export function serializeAuthUser(user: AuthUserRow): AuthUser {
@@ -25,6 +27,7 @@ export function serializeAuthUser(user: AuthUserRow): AuthUser {
     username: user.username,
     displayName: user.display_name?.trim() || user.username,
     playerKey: `user:${user.id}`,
+    coachBetaEnabled: user.coach_beta_enabled === true,
     avatarStyle: isProfileAvatarStyle(user.avatar_style)
       ? user.avatar_style
       : DEFAULT_PROFILE_AVATAR_STYLE,

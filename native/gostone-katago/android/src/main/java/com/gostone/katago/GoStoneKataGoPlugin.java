@@ -141,6 +141,78 @@ public class GoStoneKataGoPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void analyzePosition(PluginCall call) {
+        String analysisId = call.getString("analysisId");
+        JSObject input = call.getObject("input");
+        Integer requestedVisits = call.getInt("visits");
+        boolean ownership = Boolean.TRUE.equals(call.getBoolean("includeOwnership"));
+        if (analysisId == null || analysisId.isBlank() || input == null) {
+            call.reject("A valid analysisId and input are required.", "invalid_analysis_request");
+            return;
+        }
+        final int visits = Math.max(2, Math.min(MAX_VISITS, requestedVisits == null ? 40 : requestedVisits));
+        final ActiveAnalysis job = new ActiveAnalysis(analysisId);
+        synchronized (activeLock) {
+            if (activeAnalysis != null) {
+                call.reject("Another local analysis is already running.", "analysis_busy");
+                return;
+            }
+            activeAnalysis = job;
+        }
+        double requestedTime = call.getDouble("maxTime", 5.0);
+        double maxTime = Double.isFinite(requestedTime) ? Math.max(0.1, Math.min(8.0, requestedTime)) : 5.0;
+        analysisExecutor.execute(() -> runPosition(call, job, input, visits, ownership, maxTime));
+    }
+
+    private void runPosition(PluginCall call, ActiveAnalysis job, JSObject input, int visits, boolean ownership, double maxTime) {
+        boolean keepWarm = false;
+        ScheduledFuture<?> timeout = null;
+        try {
+            if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
+                throw new IllegalStateException("The device is too warm to start local analysis.");
+            }
+            WarmSession session = ensureWarmSession(ensureRuntime());
+            job.process = session.process;
+            job.writer = session.writer;
+            timeout = timeoutExecutor.schedule(() -> {
+                job.timedOut.set(true);
+                stop(job, false);
+            }, 30L, TimeUnit.SECONDS);
+            int moveCount = input.getJSONArray("moves").length();
+            JSONObject request = buildRequest(job.id, input, visits, QUALITY_PV_LENGTH, turnRange(moveCount, moveCount + 1));
+            request.put("includeOwnership", ownership);
+            // A visit cap alone can take minutes on a phone's CPU backend.
+            request.put("overrideSettings", new JSONObject().put("maxTime", maxTime));
+            TreeMap<Integer, JSONObject> turns = new TreeMap<>();
+            boolean complete = analyzePhase(job, session, request, "position", visits, 1, 1, turns);
+            if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
+            if (!complete || job.timedOut.get() || !turns.containsKey(moveCount)) {
+                throw new IllegalStateException("KataGo did not finish the training position.");
+            }
+            timeout.cancel(false);
+            keepWarm = true;
+            // Release the native job before resolving so a queued turn can start.
+            synchronized (activeLock) {
+                if (activeAnalysis == job) activeAnalysis = null;
+            }
+            JSObject result = new JSObject();
+            result.put("turn", turns.get(moveCount));
+            call.resolve(result);
+        } catch (Exception exception) {
+            synchronized (activeLock) {
+                if (activeAnalysis == job) activeAnalysis = null;
+            }
+            call.reject(safeMessage(exception), job.cancelled.get() ? "analysis_cancelled" : "native_analysis_failed", exception);
+        } finally {
+            if (timeout != null) timeout.cancel(false);
+            if (!keepWarm) discardWarmSession(job.process);
+            synchronized (activeLock) {
+                if (activeAnalysis == job) activeAnalysis = null;
+            }
+        }
+    }
+
+    @PluginMethod
     public void cancel(PluginCall call) {
         String analysisId = call.getString("analysisId");
         ActiveAnalysis job;
@@ -301,7 +373,7 @@ public class GoStoneKataGoPlugin extends Plugin {
             phaseTurns.put(turnNumber, response);
             bestTurns.put(turnNumber, response);
             int completed = "preview".equals(phase) ? bestTurns.size() : phaseTurns.size();
-            emitProgress(job.id, phase, completed, totalProgressTurns, visits, response);
+            if (!"position".equals(phase)) emitProgress(job.id, phase, completed, totalProgressTurns, visits, response);
             if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
                 stop(job, false);
                 throw new IllegalStateException("Local analysis stopped because the device became too warm.");

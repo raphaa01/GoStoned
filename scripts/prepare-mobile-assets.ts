@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import { MOBILE_KATAGO } from "@/lib/mobile/katagoContract";
+import { COACH_MODEL } from "@/lib/learn/coachModel";
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(repository, ".mobile-assets");
@@ -42,6 +43,9 @@ async function downloadKataGoModel() {
 async function main() {
   await rm(output, { force: true, recursive: true });
   await mkdir(output, { recursive: true });
+  for (const [file, hash] of Object.entries(COACH_MODEL.files)) {
+    await verifiedCopy(join(repository, "assets", "coach", file), join(output, "coach", file), hash);
+  }
   await verifiedCopy(
     join(repository, "public", GOSTONE_BOT_MODEL.artifactUrl),
     join(output, GOSTONE_BOT_MODEL.artifactUrl),
@@ -69,6 +73,7 @@ async function main() {
     contractVersion: "gostone-mobile-assets-v1",
     bot: GOSTONE_BOT_MODEL,
     katago: withKataGo ? MOBILE_KATAGO : null,
+    coach: COACH_MODEL,
   }, null, 2));
 }
 

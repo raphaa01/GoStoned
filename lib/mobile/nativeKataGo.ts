@@ -1,7 +1,8 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { buildGameAnalysis, buildProgressiveGameAnalysis } from "@/lib/analysis/evaluate";
 import { gameAnalysisInput } from "@/lib/analysis/input";
-import type { AnalysisJobView, GameAnalysisResult, KataGoTurnResult } from "@/lib/analysis/types";
+import type { AnalysisInput, AnalysisJobView, GameAnalysisResult, KataGoTurnResult } from "@/lib/analysis/types";
+import type { TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import type { GameState } from "@/lib/game/types";
 import { MOBILE_KATAGO, type MobileKataGoProgress } from "./katagoContract";
 
@@ -14,6 +15,7 @@ export type NativeKataGoStatus = {
 
 interface GoStoneKataGoPlugin {
   getStatus(): Promise<NativeKataGoStatus>;
+  analyzePosition(options: { analysisId: string; input: AnalysisInput; visits: number; includeOwnership: boolean; maxTime: number }): Promise<{ turn: TrainerPositionAnalysis }>;
   analyze(options: {
     analysisId: string;
     input: ReturnType<typeof gameAnalysisInput>;
@@ -26,7 +28,7 @@ interface GoStoneKataGoPlugin {
   ): Promise<PluginListenerHandle>;
 }
 
-const NativeKataGo = registerPlugin<GoStoneKataGoPlugin>("GoStoneKataGo");
+export const NativeKataGo = registerPlugin<GoStoneKataGoPlugin>("GoStoneKataGo");
 const DATABASE_NAME = "gostone-mobile-analysis-v1";
 const STORE_NAME = "analyses";
 const PREVIEW_PERSIST_INTERVAL = 16;

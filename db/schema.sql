@@ -3925,3 +3925,9 @@ SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 ALTER TABLE puzzles DROP CONSTRAINT IF EXISTS puzzles_visits_check;
 ALTER TABLE puzzles ADD CONSTRAINT puzzles_visits_check CHECK (visits BETWEEN 0 AND 10000);
+
+-- Mobile coach beta: enabled only for individually invited accounts.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_beta_enabled BOOLEAN NOT NULL DEFAULT false;
+
+-- Explicitly invited beta account; every other account remains opt-in.
+UPDATE users SET coach_beta_enabled = true WHERE lower(username) = 'rapha';
