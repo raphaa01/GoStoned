@@ -15,7 +15,7 @@ import { GoBoard } from "@/components/game/GoBoard";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { accountRegistrationPath } from "@/lib/auth/returnPath";
-import { cachedRouteData, invalidateRouteData, readRouteData, puzzleRouteKey } from "@/lib/client/routeCache";
+import { routeSnapshot, invalidateRouteData, readRouteData, puzzleRouteKey } from "@/lib/client/routeCache";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { applyMove } from "@/lib/game/goEngine";
@@ -70,7 +70,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     accountRegistrationPath("/puzzles?mode=practice"),
   );
   const [mode, setMode] = useState<PuzzleKind>(initialMode);
-  const [hub, setHub] = useState<PuzzleHub | null>(() => playerKey ? cachedRouteData<PuzzleHub>(puzzleRouteKey(initialMode, playerKey)) ?? null : null);
+  const [hub, setHub] = useState<PuzzleHub | null>(() => playerKey ? routeSnapshot<PuzzleHub>(puzzleRouteKey(initialMode, playerKey)) ?? null : null);
   const [hubOwner, setHubOwner] = useState(playerKey);
   const [selectedPuzzleId, setSelectedPuzzleId] = useState<string | null>(null);
   const [selectedPuzzleOwner, setSelectedPuzzleOwner] = useState(playerKey);
@@ -95,8 +95,9 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     return true;
   }, [mode, personalPuzzlesRegistrationHref, router]);
 
+  const authenticated = Boolean(user);
   const requestHub = useCallback(async (signal?: AbortSignal) => {
-    if (!playerKey || (mode === "practice" && !user)) return null;
+    if (!playerKey || (mode === "practice" && !authenticated)) return null;
     const data = await readRouteData(puzzleRouteKey(mode, playerKey), async () => {
       const response = await fetch(`/api/puzzles?mode=${mode}`, {
         cache: "no-store",
@@ -116,7 +117,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       categoryCounts: data.categoryCounts,
       dailyCycleLength: data.dailyCycleLength,
     } satisfies PuzzleHub;
-  }, [mode, playerKey, user]);
+  }, [mode, playerKey, authenticated]);
 
   useEffect(() => {
     if (mode !== "practice" || authLoading || user) return;

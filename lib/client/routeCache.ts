@@ -12,6 +12,12 @@ export function cachedRouteData<T>(key: string, now = Date.now()): T | undefined
   return entry && entry.expires > now ? entry.value as T | undefined : undefined;
 }
 
+// A screen may paint its last snapshot while readRouteData revalidates it.
+// Identity changes and mutations still remove snapshots through invalidation.
+export function routeSnapshot<T>(key: string): T | undefined {
+  return entries.get(key)?.value as T | undefined;
+}
+
 export function invalidateRouteData(key?: string) {
   if (key) entries.delete(key);
   else entries.clear();
@@ -22,7 +28,7 @@ export function readRouteData<T>(key: string, load: () => Promise<T>, ttl = 60_0
   if (cached !== undefined) return Promise.resolve(cached);
   const existing = entries.get(key);
   if (existing?.pending) return existing.pending as Promise<T>;
-  const entry: Entry = { expires: 0 };
+  const entry: Entry = { value: existing?.value, expires: 0 };
   // Defer the loader so concurrent mounts share the same request, including in Strict Mode.
   const pending = Promise.resolve().then(load).then((value) => {
     if (entries.get(key) === entry) {
@@ -32,7 +38,10 @@ export function readRouteData<T>(key: string, load: () => Promise<T>, ttl = 60_0
     }
     return value;
   }, (error: unknown) => {
-    if (entries.get(key) === entry) entries.delete(key);
+    if (entries.get(key) === entry) {
+      entry.pending = undefined;
+      if (entry.value === undefined) entries.delete(key);
+    }
     throw error;
   });
   entry.pending = pending;
