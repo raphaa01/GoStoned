@@ -2,14 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { installHarness, USER, assertNoOverflow } from "../shared/boardDesignHarness";
 import { MOBILE_KATAGO } from "../../lib/mobile/katagoContract";
 
-async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android", replyDelay = 300) {
+async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android", replyDelay: number | "hold" = 300) {
   await installHarness(page);
   const entitlement = { enabled };
   await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, user: { ...USER, coachBetaEnabled: entitlement.enabled } } }));
   await page.addInitScript(({ native, blunder, identity, platform, replyDelay }) => {
     if (!native) return;
     const calls: { method: string; options: Record<string, unknown> }[] = [];
+    const pendingReplies: (() => void)[] = [];
     Object.defineProperty(window, "coachNativeCalls", { value: calls });
+    Object.defineProperty(window, "coachReleaseReply", { value: () => pendingReplies.shift()?.() });
     if (platform === "android") Object.defineProperty(window, "androidBridge", { value: {} });
     else Object.defineProperty(window, "webkit", { value: { messageHandlers: { bridge: { postMessage: () => undefined }, gostoneChrome: { postMessage: () => undefined } } } });
     Object.defineProperty(window, "Capacitor", { writable: true, configurable: true, value: {
@@ -22,7 +24,7 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
         if (plugin !== "GoStoneKataGo") return {};
         calls.push({ method, options });
         if (method === "getStatus") return { available: true, ...identity };
-        if (method === "cancel") return {};
+        if (method === "cancel") { pendingReplies.splice(0).forEach(resolve => resolve()); return {}; }
         const input = options.input as { boardSize: number; moves: { move: string; color: string }[] };
         const moveCount = input.moves.length;
         const player = input.moves.at(-1)?.color === "black" ? "W" : "B";
@@ -31,7 +33,8 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
         const move = input.moves.at(-1)?.move === "pass" ? "pass" : !input.moves.some(m => m.move === preferred) ? preferred : [...columns].find(c => !input.moves.some(m => m.move === `${c}1`))! + "1";
         const scoreLead = blunder && player === "W" ? 12 : 0;
         // Search remains asynchronous to exercise cancellation and stale guards.
-        await new Promise(resolve => setTimeout(resolve, options.maxTime === 7 ? replyDelay : 15));
+        if (options.maxTime === 7 && replyDelay === "hold") await new Promise<void>(resolve => pendingReplies.push(resolve));
+        else await new Promise(resolve => setTimeout(resolve, options.maxTime === 7 ? replyDelay as number : 15));
         return { turn: { turnNumber: moveCount, rootInfo: { currentPlayer: player, visits: 32, winrate: .5, scoreLead }, moveInfos: [{ move, order: 0, visits: 30, winrate: .5, scoreLead, pv: [move] }], ...(options.includeOwnership ? { ownership: Array.from({ length: input.boardSize ** 2 }, (_, i) => i % 2 ? .8 : -.8) } : {}) } };
       },
     } });
@@ -43,16 +46,25 @@ async function place(page: Page, x: number, y: number) {
   await page.locator('.go-board [role="gridcell"]').nth(y * 9 + x).click();
 }
 
+async function waitForReply(page: Page, count: number) {
+  await expect.poll(() => page.evaluate(() => (window as unknown as { coachNativeCalls: { options: { maxTime?: number } }[] }).coachNativeCalls.filter(call => call.options?.maxTime === 7).length)).toBe(count);
+}
+
+async function releaseReply(page: Page) {
+  await page.evaluate(() => (window as unknown as { coachReleaseReply: () => void }).coachReleaseReply());
+}
+
 for (const platform of ["android", "ios"] as const) {
   test(`${platform}: tapping during the opponent turn leaves no ghost preview`, async ({ page }, info) => {
     test.setTimeout(90000);
-    await harness(page, true, true, false, platform, 1200);
+    await harness(page, true, true, false, platform, "hold");
     await page.route("**/api/profile/preferences", route => route.fulfill({ json: { ok: true, preferences: { boardPlacement: "zoom" } } }));
     await page.goto("/de/play/coach");
     await expect(page.getByRole("button", { name: "Spiel starten" })).toBeEnabled({ timeout: 30000 });
     await page.getByRole("button", { name: "Spiel starten" }).click();
     await place(page, 2, 6);
     await expect(page.getByText("Coach überlegt …", { exact: true })).toBeVisible();
+    await waitForReply(page, 1);
     const point = page.locator('.go-board [role="gridcell"]').nth(4 * 9 + 3);
     await expect(point).toHaveAttribute("aria-disabled", "true");
     const bounds = await point.boundingBox();
@@ -60,6 +72,7 @@ for (const platform of ["android", "ios"] as const) {
     const x = bounds!.x + bounds!.width / 2, y = bounds!.y + bounds!.height / 2;
     if (info.project.use.hasTouch) await page.touchscreen.tap(x, y);
     else await page.mouse.click(x, y);
+    await releaseReply(page);
     await expect(page.getByRole("button", { name: "Hilfe", exact: true })).toBeEnabled();
     await expect(point).toHaveAttribute("aria-disabled", "false");
     await expect(page.locator(".go-board .stone")).toHaveCount(2);
@@ -154,18 +167,21 @@ test("confirmed blunders offer retry before the reply and undo restores human tu
 
 test("dark coach survives undo during reply, passes and resignation without stale stones", async ({ page }) => {
   test.setTimeout(90000);
-  await harness(page);
+  await harness(page, true, true, false, "android", "hold");
   await page.addInitScript(() => localStorage.setItem("gostone.mobile.theme.v1", "dark"));
   await page.goto("/de/play/coach");
   await expect(page.getByRole("button", { name: "Spiel starten" })).toBeEnabled({ timeout: 30000 });
   await page.getByRole("button", { name: "Spiel starten" }).click();
   await place(page, 2, 6);
   await expect(page.getByText("Coach überlegt …", { exact: true })).toBeVisible();
+  await waitForReply(page, 1);
   await page.getByRole("button", { name: "Zug zurück", exact: true }).click();
   await expect(page.getByRole("button", { name: "Passen", exact: true })).toBeEnabled();
   await expect(page.locator(".go-board .stone")).toHaveCount(0);
   await page.screenshot({ path: `test-results/coach-dark-${page.viewportSize()!.width}.png`, fullPage: true });
   await page.getByRole("button", { name: "Passen", exact: true }).click();
+  await waitForReply(page, 2);
+  await releaseReply(page);
   await expect(page.getByText(/Beide haben gepasst/)).toBeVisible({ timeout: 15000 });
   await expect(page.locator(".go-board .stone")).toHaveCount(0);
   await page.getByRole("button", { name: "Neues Spiel", exact: true }).click();
