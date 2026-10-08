@@ -8,6 +8,7 @@ export type ProductionSchemaSnapshot = Readonly<{
   queueAdaptiveConstraint: string | null;
   initialRatingPolicyConstraint: string | null;
   puzzleCategoryConstraint: string | null;
+  puzzleVisitsConstraint: string | null;
   boardPlacementDataType: string | null;
   boardPlacementDefault: string | null;
   boardPlacementNullable: string | null;
@@ -108,6 +109,9 @@ export function validateProductionSchemaContract(
       fragment,
       "historical puzzle-category constraint",
     );
+  }
+  for (const fragment of ["visits >= 0", "visits <= 10000"]) {
+    requireFragment(snapshot.puzzleVisitsConstraint, fragment, "imported puzzle visits constraint (migration 052)");
   }
   requireFragment(snapshot.gameRulesDefault, "japanese", "games.rules default");
   requireFragment(

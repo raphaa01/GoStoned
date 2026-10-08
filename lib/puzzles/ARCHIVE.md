@@ -17,3 +17,9 @@ worker remain here as an archive, with their original source information and
 tests. Public puzzle routes use `importedService.ts` exclusively. Existing
 database puzzle rows and attempts are preserved; only the imported UUIDs are
 listed publicly. No historical rows or progress are deleted.
+
+Daily practice starts with catalog entry 1 on 2026-10-08 (UTC), advances one
+entry per day and repeats after all 61 entries. Each date has a deterministic
+instance UUID and independent attempts, so a new cycle can be played again
+without clearing More puzzles progress. Dated instances use uncategorized
+storage and are never listed in the practice queue or sent to generation jobs.
