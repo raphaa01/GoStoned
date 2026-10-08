@@ -13,6 +13,7 @@ type SchemaRow = {
   queue_adaptive_constraint: string | null;
   initial_rating_policy_constraint: string | null;
   puzzle_category_constraint: string | null;
+  puzzle_visits_constraint: string | null;
   board_placement_data_type: string | null;
   board_placement_default: string | null;
   board_placement_nullable: string | null;
@@ -77,6 +78,11 @@ async function checkProductionSchema(): Promise<void> {
          WHERE conname = 'puzzles_category_shape_check'
            AND conrelid = 'public.puzzles'::regclass)
          AS puzzle_category_constraint,
+       (SELECT pg_get_constraintdef(oid)
+          FROM pg_constraint
+         WHERE conname = 'puzzles_visits_check'
+           AND conrelid = 'public.puzzles'::regclass)
+         AS puzzle_visits_constraint,
        (SELECT data_type FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'board_design') AS board_design_data_type,
        (SELECT column_default FROM information_schema.columns
@@ -167,6 +173,7 @@ async function checkProductionSchema(): Promise<void> {
     queueAdaptiveConstraint: row.queue_adaptive_constraint,
     initialRatingPolicyConstraint: row.initial_rating_policy_constraint,
     puzzleCategoryConstraint: row.puzzle_category_constraint,
+    puzzleVisitsConstraint: row.puzzle_visits_constraint,
     boardPlacementDataType: row.board_placement_data_type,
     boardPlacementDefault: row.board_placement_default,
     boardPlacementNullable: row.board_placement_nullable,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { IMPORTED_PUZZLES, PUZZLE_EXPORT_SUMMARY, dailyImportedPuzzle, matchingPuzzlePaths, replayPuzzleLine } from "./importedCatalog";
+import { IMPORTED_PUZZLES, PUZZLE_EXPORT_SUMMARY, dailyImportedPuzzle, dailyImportedPuzzleId, matchingPuzzlePaths, replayPuzzleLine } from "./importedCatalog";
 import { nextUnsolvedPuzzle, orderPuzzleQueue } from "./queue";
 import type { PuzzleView } from "./types";
 
@@ -25,9 +25,15 @@ test("the supplied export contains 61 unique verified puzzles and records the fo
 });
 
 test("daily rotation covers the entire imported catalog deterministically", () => {
-  const selected = Array.from({length: 61}, (_, day) => dailyImportedPuzzle(new Date(Date.UTC(2026, 9, 7 + day)).toISOString().slice(0, 10)).id);
+  const dates = Array.from({length: 122}, (_, day) => new Date(Date.UTC(2026, 9, 8 + day)).toISOString().slice(0, 10));
+  const selected = dates.map((date) => dailyImportedPuzzle(date).id);
+  assert.deepEqual(selected.slice(0, 61), IMPORTED_PUZZLES.map((puzzle) => puzzle.id));
   assert.equal(new Set(selected).size, 61);
-  assert.equal(dailyImportedPuzzle("2026-10-07").id, selected[0]);
+  assert.deepEqual(selected.slice(61), selected.slice(0, 61));
+  assert.equal(dailyImportedPuzzle(dates[0]).id, selected[0]);
+  assert.equal(new Set(dates.map(dailyImportedPuzzleId)).size, 122, "each recurrence can be solved again");
+  assert.equal(dailyImportedPuzzleId(dates[0]), dailyImportedPuzzleId(dates[0]));
+  assert.equal(dailyImportedPuzzle("2026-10-07").id, selected[60], "dates before launch wrap correctly too");
 });
 
 test("kyu matches come first, solved puzzles are skipped, and all other ranks remain available", () => {

@@ -1,4 +1,5 @@
 import bundle from "./imported/gostone-puzzles.json";
+import { createHash } from "node:crypto";
 import { fromGtpCoordinate, toGtpCoordinate } from "@/lib/analysis/coordinates";
 import { applyMove, boardHash, createEmptyBoard } from "@/lib/game/goEngine";
 import type { Board, Position, Stone } from "@/lib/game/types";
@@ -28,6 +29,7 @@ export type ImportedPuzzle = {
   target: Position[]; targetColor: Stone; goalType: string;
 };
 export const IMPORTED_CATALOG_VERSION = "gostone-import-0.1";
+export const IMPORTED_DAILY_START_DATE = "2026-10-08";
 export const PUZZLE_EXPORT_SUMMARY = bundle.exportSummary;
 export function puzzleText(en: string, de: string): LocalizedText {
   return Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [locale, locale === "de" ? de : en])) as LocalizedText;
@@ -90,8 +92,14 @@ function importPuzzle(source: SourcePuzzle, index: number): ImportedPuzzle {
 }
 export const IMPORTED_PUZZLES = (bundle.puzzles as unknown as SourcePuzzle[]).map(importPuzzle);
 export function dailyImportedPuzzle(date: string): ImportedPuzzle {
-  const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+  const day = Math.floor((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${IMPORTED_DAILY_START_DATE}T00:00:00Z`)) / 86_400_000);
   return IMPORTED_PUZZLES[((day % IMPORTED_PUZZLES.length) + IMPORTED_PUZZLES.length) % IMPORTED_PUZZLES.length];
+}
+export function dailyImportedPuzzleId(date: string): string {
+  // Each date has separate attempts, so solving practice or a previous cycle
+  // never reveals today's answer or prevents playing the repeated position.
+  return createHash("sha256").update(`${IMPORTED_CATALOG_VERSION}:daily:${date}`).digest("hex").slice(0, 32)
+    .replace(/^(........)(....)(....)(....)(............)$/, "$1-$2-$3-$4-$5");
 }
 export function matchingPuzzlePaths(puzzle: ImportedPuzzle, progress: readonly PuzzlePly[]): ImportedPath[] {
   return puzzle.paths.filter((path) => progress.every((ply, i) => path.line[i]?.move === ply.move && path.line[i]?.color === ply.color));

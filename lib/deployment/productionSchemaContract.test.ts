@@ -25,6 +25,7 @@ const currentSnapshot: ProductionSchemaSnapshot = {
     "CHECK (policy_version IN ('starting-strength-v1', 'starting-strength-v2'))",
   puzzleCategoryConstraint:
     "CHECK (board_size = 19 AND category IN ('gokyo_life', 'gokyo_death', 'gokyo_ko'))",
+  puzzleVisitsConstraint: "CHECK (((visits >= 0) AND (visits <= 10000)))",
   boardPlacementDataType: "text",
   boardPlacementDefault: "'zoom'::text",
   boardPlacementNullable: "NO",
@@ -115,6 +116,13 @@ test("rejects a puzzle schema that cannot store the historical catalog", () => {
     }),
     /historical puzzle-category constraint/,
   );
+});
+
+test("rejects the production constraint that blocked all imported puzzle reads", () => {
+  for (const puzzleVisitsConstraint of [null, "CHECK (((visits >= 1) AND (visits <= 10000)))", "CHECK ((visits >= 0))"]) {
+    assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, puzzleVisitsConstraint }), /imported puzzle visits constraint/);
+  }
+  assert.match(productionPreflight, /puzzles_visits_check/);
 });
 
 test("rejects a missing or incomplete board-placement preference", () => {

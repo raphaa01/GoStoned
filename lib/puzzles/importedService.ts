@@ -3,52 +3,63 @@ import { applyMove } from "@/lib/game/goEngine";
 import { GameServiceError } from "@/lib/game/gameService";
 import { toGtpCoordinate } from "@/lib/analysis/coordinates";
 import { deriveGoRank } from "@/lib/rating/rankPolicy";
-import { IMPORTED_PUZZLES, IMPORTED_CATALOG_VERSION, dailyImportedPuzzle, matchingPuzzlePaths, puzzleText, replayPuzzleLine, type ImportedPuzzle } from "./importedCatalog";
+import { IMPORTED_PUZZLES, IMPORTED_CATALOG_VERSION, dailyImportedPuzzle, dailyImportedPuzzleId, matchingPuzzlePaths, puzzleText, replayPuzzleLine, type ImportedPuzzle } from "./importedCatalog";
 import { orderPuzzleQueue } from "./queue";
 import { PUZZLE_CATEGORIES, type PuzzleAttemptInput, type PuzzleAttemptResult, type PuzzleHint, type PuzzleHub, type PuzzleKind, type PuzzlePly, type PuzzleSolution, type PuzzleView } from "./types";
 
 type AttemptRow = { id: string; attempt_count: number | null; solved: boolean | null; first_attempt_correct: boolean | null; variation_progress: PuzzlePly[] | null; variation_revision: number | null };
-const catalogIds = IMPORTED_PUZZLES.map((puzzle) => puzzle.id);
+type CatalogEntry = { puzzle: ImportedPuzzle; id: string; dailyDate: string | null };
+async function puzzleDate(): Promise<string> {
+  const date = await query<{ today: string }>("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS today");
+  return date.rows[0].today;
+}
 function puzzleSolution(puzzle: ImportedPuzzle, line = puzzle.paths[0].line): PuzzleSolution {
   return { ...line[0], explanation: puzzle.paths.find((path) => path.solved && path.line.map((ply) => ply.move).join("/") === line.map((ply) => ply.move).join("/"))?.explanation ?? puzzle.paths[0].explanation, line };
 }
 function puzzleView(puzzle: ImportedPuzzle, row: AttemptRow | undefined, mode: PuzzleKind, date: string): PuzzleView {
   const progress = row?.variation_progress ?? [];
-  return { id: puzzle.id, kind: mode, category: null, rankKyu: puzzle.rankKyu, collectionOrder: puzzle.order, dailyDate: mode === "daily" ? date : null, boardSize: 19, toPlay: puzzle.toPlay, board: puzzle.board, difficulty: puzzle.rankKyu >= 21 ? "beginner" : puzzle.rankKyu >= 10 ? "intermediate" : "advanced", publishedAt: "2026-10-07T00:00:00.000Z", attemptCount: row?.attempt_count ?? 0, solved: row?.solved ?? false, firstAttemptCorrect: row?.first_attempt_correct ?? null, variationProgress: progress, variationRevision: row?.variation_revision ?? 0, solution: row?.solved ? puzzleSolution(puzzle, progress) : null, viewportSize: puzzle.viewportSize, goal: puzzle.goal, targetStones: puzzle.target };
+  return { id: row?.id ?? puzzle.id, kind: mode, category: null, rankKyu: puzzle.rankKyu, collectionOrder: puzzle.order, dailyDate: mode === "daily" ? date : null, boardSize: 19, toPlay: puzzle.toPlay, board: puzzle.board, difficulty: puzzle.rankKyu >= 21 ? "beginner" : puzzle.rankKyu >= 10 ? "intermediate" : "advanced", publishedAt: "2026-10-07T00:00:00.000Z", attemptCount: row?.attempt_count ?? 0, solved: row?.solved ?? false, firstAttemptCorrect: row?.first_attempt_correct ?? null, variationProgress: progress, variationRevision: row?.variation_revision ?? 0, solution: row?.solved ? puzzleSolution(puzzle, progress) : null, viewportSize: puzzle.viewportSize, goal: puzzle.goal, targetStones: puzzle.target };
 }
-async function ensureImportedCatalog() {
+async function ensureImportedCatalog(entries: CatalogEntry[]) {
   // Existing catalog rows and their attempts remain untouched as an archive.
   // The new UUID list is the only public catalog; solutions stay server-side.
+  // Dated daily instances use uncategorized storage too, preserving legacy
+  // daily rows and their unique dates without overwriting historical attempts.
   await query(`INSERT INTO puzzles (id, kind, board_size, to_play, position_moves, board, solution_move, solution_x, solution_y, alternatives, difficulty, explanation, engine_version, model_name, visits)
-    SELECT id, 'practice', 19, to_play, '[]'::jsonb, board, solution_move, solution_x, solution_y, '[]'::jsonb, difficulty, explanation, $2, $2, 0
-      FROM jsonb_to_recordset($1::jsonb) AS source(id uuid, to_play text, board jsonb, solution_move text, solution_x int, solution_y int, difficulty text, explanation jsonb)
-    ON CONFLICT (id) DO NOTHING`, [JSON.stringify(IMPORTED_PUZZLES.map((puzzle) => ({ id: puzzle.id, to_play: puzzle.toPlay, board: puzzle.board, solution_move: puzzle.paths[0].line[0].move, solution_x: puzzle.paths[0].line[0].x, solution_y: puzzle.paths[0].line[0].y, difficulty: puzzle.rankKyu >= 21 ? "beginner" : puzzle.rankKyu >= 10 ? "intermediate" : "advanced", explanation: puzzle.paths[0].explanation }))), IMPORTED_CATALOG_VERSION]);
+    SELECT id, 'practice', 19, to_play, '[]'::jsonb, board, solution_move, solution_x, solution_y, '[]'::jsonb, difficulty, explanation, $2, model_name, 0
+      FROM jsonb_to_recordset($1::jsonb) AS source(id uuid, to_play text, board jsonb, solution_move text, solution_x int, solution_y int, difficulty text, explanation jsonb, model_name text)
+    ON CONFLICT (id) DO NOTHING`, [JSON.stringify(entries.map(({ puzzle, id, dailyDate }) => ({ id, to_play: puzzle.toPlay, board: puzzle.board, solution_move: puzzle.paths[0].line[0].move, solution_x: puzzle.paths[0].line[0].x, solution_y: puzzle.paths[0].line[0].y, difficulty: puzzle.rankKyu >= 21 ? "beginner" : puzzle.rankKyu >= 10 ? "intermediate" : "advanced", explanation: puzzle.paths[0].explanation, model_name: dailyDate ? `${IMPORTED_CATALOG_VERSION}:daily:${dailyDate}` : IMPORTED_CATALOG_VERSION }))), IMPORTED_CATALOG_VERSION]);
 }
 export async function readImportedPuzzleHub(playerKey: string, mode: PuzzleKind): Promise<PuzzleHub> {
-  await ensureImportedCatalog();
-  const result = await query<AttemptRow & { today: string; rating: number | null }>(`SELECT puzzle.id, CURRENT_DATE::text AS today, attempt.attempt_count, attempt.solved, attempt.first_attempt_correct, attempt.variation_progress, attempt.variation_revision, rating.rating::double precision AS rating
+  const date = await puzzleDate();
+  const entries: CatalogEntry[] = mode === "daily"
+    ? [{ puzzle: dailyImportedPuzzle(date), id: dailyImportedPuzzleId(date), dailyDate: date }]
+    : IMPORTED_PUZZLES.map((puzzle) => ({ puzzle, id: puzzle.id, dailyDate: null }));
+  await ensureImportedCatalog(entries);
+  const result = await query<AttemptRow & { rating: number | null }>(`SELECT puzzle.id, attempt.attempt_count, attempt.solved, attempt.first_attempt_correct, attempt.variation_progress, attempt.variation_revision, rating.rating::double precision AS rating
     FROM puzzles puzzle LEFT JOIN puzzle_attempts attempt ON attempt.puzzle_id = puzzle.id AND attempt.player_key = $1
-    LEFT JOIN player_glicko2_ratings rating ON rating.player_key = $1 WHERE puzzle.id = ANY($2::uuid[])`, [playerKey, catalogIds]);
-  const date = result.rows[0]?.today;
-  if (!date) throw new Error("Imported puzzle catalog is unavailable.");
+    LEFT JOIN player_glicko2_ratings rating ON rating.player_key = $1 WHERE puzzle.id = ANY($2::uuid[])`, [playerKey, entries.map((entry) => entry.id)]);
+  if (result.rows.length !== entries.length) throw new Error("Imported puzzle catalog is unavailable.");
   const rank = deriveGoRank(result.rows[0]?.rating ?? 500);
-  const daily = dailyImportedPuzzle(date);
-  const puzzles = (mode === "daily" ? [daily] : IMPORTED_PUZZLES).map((puzzle) => puzzleView(puzzle, result.rows.find((row) => row.id === puzzle.id), mode, date));
+  const puzzles = entries.map(({ puzzle, id }) => puzzleView(puzzle, result.rows.find((row) => row.id === id), mode, date));
   return { status: "ready", mode, puzzles: orderPuzzleQueue(puzzles, rank.kind === "kyu" ? rank.value : 1), expectedPerCategory: 0, categoryCounts: Object.fromEntries(PUZZLE_CATEGORIES.map((category) => [category, 0])) as PuzzleHub["categoryCounts"], dailyCycleLength: IMPORTED_PUZZLES.length };
 }
-function findPuzzle(id: string): ImportedPuzzle {
+async function findPuzzle(id: string): Promise<CatalogEntry> {
   const puzzle = IMPORTED_PUZZLES.find((candidate) => candidate.id === id);
-  if (!puzzle) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
-  return puzzle;
+  if (puzzle) return { puzzle, id, dailyDate: null };
+  const result = await query<{ model_name: string }>("SELECT model_name FROM puzzles WHERE id = $1 AND engine_version = $2", [id, IMPORTED_CATALOG_VERSION]);
+  const dailyDate = result.rows[0]?.model_name.match(/^gostone-import-0\.1:daily:(\d{4}-\d{2}-\d{2})$/)?.[1];
+  if (!dailyDate || dailyImportedPuzzleId(dailyDate) !== id) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
+  return { puzzle: dailyImportedPuzzle(dailyDate), id, dailyDate };
 }
-async function assertAccess(puzzle: ImportedPuzzle, accountAccess: boolean) {
+async function assertAccess(entry: CatalogEntry, accountAccess: boolean) {
   if (accountAccess) return;
-  const date = await query<{ today: string }>("SELECT CURRENT_DATE::text AS today");
-  if (dailyImportedPuzzle(date.rows[0].today).id !== puzzle.id) throw new GameServiceError("Please log in first.", 401, "authentication_required");
+  if (entry.dailyDate !== await puzzleDate()) throw new GameServiceError("Please log in first.", 401, "authentication_required");
 }
 export async function attemptImportedPuzzle(id: string, playerKey: string, selected: PuzzleAttemptInput, accountAccess: boolean): Promise<PuzzleAttemptResult> {
-  const puzzle = findPuzzle(id);
-  await assertAccess(puzzle, accountAccess);
+  const entry = await findPuzzle(id);
+  const { puzzle } = entry;
+  await assertAccess(entry, accountAccess);
   return withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`puzzle:${id}:${playerKey}`]);
     const stored = await client.query<AttemptRow>("SELECT puzzle_id AS id, attempt_count, solved, first_attempt_correct, variation_progress, variation_revision FROM puzzle_attempts WHERE puzzle_id = $1 AND player_key = $2 FOR UPDATE", [id, playerKey]);
@@ -111,8 +122,9 @@ export async function attemptImportedPuzzle(id: string, playerKey: string, selec
   });
 }
 export async function readImportedPuzzleHint(id: string, playerKey: string, accountAccess: boolean): Promise<PuzzleHint> {
-  const puzzle = findPuzzle(id);
-  await assertAccess(puzzle, accountAccess);
+  const entry = await findPuzzle(id);
+  const { puzzle } = entry;
+  await assertAccess(entry, accountAccess);
   const stored = await query<AttemptRow>("SELECT variation_progress FROM puzzle_attempts WHERE puzzle_id = $1 AND player_key = $2", [id, playerKey]);
   const progress = stored.rows[0]?.variation_progress ?? [];
   const hint = matchingPuzzlePaths(puzzle, progress).find((path) => path.solved)?.line[progress.length];
