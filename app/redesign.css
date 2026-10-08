@@ -10175,12 +10175,12 @@ body {
 }
 
 /* Preview the stone that the current player will actually place. */
-.go-board[data-preview-color="black"] .intersection[aria-disabled="false"]:hover::before,
+html:not([data-mobile-app="true"]) .go-board[data-preview-color="black"] .intersection[aria-disabled="false"]:hover::before,
 .go-board[data-preview-color="black"] .intersection:focus-visible::before {
   background: radial-gradient(circle at 31% 25%, rgb(100 100 100 / .76), rgb(3 4 3 / .78) 72%);
   border: 1px solid rgb(0 0 0 / .45);
 }
-.go-board[data-preview-color="white"] .intersection[aria-disabled="false"]:hover::before,
+html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .intersection[aria-disabled="false"]:hover::before,
 .go-board[data-preview-color="white"] .intersection:focus-visible::before {
   background: radial-gradient(circle at 31% 23%, rgb(255 255 255 / .9), rgb(205 202 194 / .82));
   border: 1px solid rgb(91 75 56 / .28);

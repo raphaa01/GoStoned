@@ -2,11 +2,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { installHarness, USER, assertNoOverflow } from "../shared/boardDesignHarness";
 import { MOBILE_KATAGO } from "../../lib/mobile/katagoContract";
 
-async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android") {
+async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android", replyDelay = 300) {
   await installHarness(page);
   const entitlement = { enabled };
   await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, user: { ...USER, coachBetaEnabled: entitlement.enabled } } }));
-  await page.addInitScript(({ native, blunder, identity, platform }) => {
+  await page.addInitScript(({ native, blunder, identity, platform, replyDelay }) => {
     if (!native) return;
     const calls: { method: string; options: Record<string, unknown> }[] = [];
     Object.defineProperty(window, "coachNativeCalls", { value: calls });
@@ -31,16 +31,60 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
         const move = input.moves.at(-1)?.move === "pass" ? "pass" : !input.moves.some(m => m.move === preferred) ? preferred : [...columns].find(c => !input.moves.some(m => m.move === `${c}1`))! + "1";
         const scoreLead = blunder && player === "W" ? 12 : 0;
         // Search remains asynchronous to exercise cancellation and stale guards.
-        await new Promise(resolve => setTimeout(resolve, options.maxTime === 7 ? 300 : 15));
+        await new Promise(resolve => setTimeout(resolve, options.maxTime === 7 ? replyDelay : 15));
         return { turn: { turnNumber: moveCount, rootInfo: { currentPlayer: player, visits: 32, winrate: .5, scoreLead }, moveInfos: [{ move, order: 0, visits: 30, winrate: .5, scoreLead, pv: [move] }], ...(options.includeOwnership ? { ownership: Array.from({ length: input.boardSize ** 2 }, (_, i) => i % 2 ? .8 : -.8) } : {}) } };
       },
     } });
-  }, { native, blunder, platform, identity: { engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 } });
+  }, { native, blunder, platform, replyDelay, identity: { engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 } });
   return entitlement;
 }
 
 async function place(page: Page, x: number, y: number) {
   await page.locator('.go-board [role="gridcell"]').nth(y * 9 + x).click();
+}
+
+for (const platform of ["android", "ios"] as const) {
+  test(`${platform}: tapping during the opponent turn leaves no ghost preview`, async ({ page }, info) => {
+    test.setTimeout(90000);
+    await harness(page, true, true, false, platform, 1200);
+    await page.route("**/api/profile/preferences", route => route.fulfill({ json: { ok: true, preferences: { boardPlacement: "zoom" } } }));
+    await page.goto("/de/play/coach");
+    await expect(page.getByRole("button", { name: "Spiel starten" })).toBeEnabled({ timeout: 30000 });
+    await page.getByRole("button", { name: "Spiel starten" }).click();
+    await place(page, 2, 6);
+    await expect(page.getByText("Coach überlegt …", { exact: true })).toBeVisible();
+    const point = page.locator('.go-board [role="gridcell"]').nth(4 * 9 + 3);
+    await expect(point).toHaveAttribute("aria-disabled", "true");
+    const bounds = await point.boundingBox();
+    expect(bounds).not.toBeNull();
+    const x = bounds!.x + bounds!.width / 2, y = bounds!.y + bounds!.height / 2;
+    if (info.project.use.hasTouch) await page.touchscreen.tap(x, y);
+    else await page.mouse.click(x, y);
+    await expect(page.getByRole("button", { name: "Hilfe", exact: true })).toBeEnabled();
+    await expect(point).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator(".go-board .stone")).toHaveCount(2);
+    const preview = await point.evaluate(element => {
+      const style = getComputedStyle(element, "::before");
+      return { background: style.backgroundColor, image: style.backgroundImage, width: parseFloat(style.width) };
+    });
+    expect(preview.background).toBe("rgba(0, 0, 0, 0)");
+    expect(preview.image).toBe("none");
+    expect(preview.width).toBeLessThan(10);
+    // Removing hover must not remove the real star points.
+    const star = page.locator(".go-board .intersection.is-star").first();
+    expect(await star.evaluate(element => getComputedStyle(element, "::before").backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    if (info.project.use.hasTouch) {
+      const session = await page.context().newCDPSession(page);
+      await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+      await expect(page.locator(".touch-magnifier")).toBeVisible();
+      await expect(point).toHaveClass(/is-precision-preview/);
+      expect(await point.evaluate(element => getComputedStyle(element, "::after").content)).toBe('""');
+      await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+      await expect(page.locator(".touch-magnifier")).toHaveCount(0);
+      await expect(page.locator(".go-board .stone")).toHaveCount(2);
+      await session.detach();
+    }
+  });
 }
 
 test("coach entry is native-only, opt-in and direct routes fail closed", async ({ page }) => {

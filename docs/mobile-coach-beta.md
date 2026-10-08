@@ -98,7 +98,9 @@ npm run mobile:android:build
 The browser flow tests use the **real ONNX/WASM model**, with a simulated native
 KataGo bridge and account API. They cover account visibility, direct-route
 gating, comments only for human moves, hints, ownership, whole-turn undo,
-confirmed blunder retries and entitlement revocation. Unit tests verify bundle
+confirmed blunder retries, entitlement revocation and taps during the opponent
+turn without a sticky hover stone in either mobile platform. Desktop web hover,
+keyboard focus and the deliberate touch lens remain available. Unit tests verify bundle
 hashes, board masks, tactical evidence, forbidden ungrounded phrases, legal
 opponent selection, cancelled native work and score/ownership perspective.
 
