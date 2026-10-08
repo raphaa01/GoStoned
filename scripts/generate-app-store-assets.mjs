@@ -69,7 +69,7 @@ for (const [locale, language] of Object.entries(copy)) {
         text(margin, 193 * scale, font, fg, line1) +
         text(margin, 285 * scale, font, fg, line2) +
         text(margin, 365 * scale, 31 * scale, fg, subtitle, 400) +
-        `<rect x="${left - 9}" y="${top - 9}" width="${cw + 18}" height="${ch + 18}" rx="${46 * scale}" fill="#242722"/>`);
+        `<rect x="${left - 3}" y="${top - 3}" width="${cw + 6}" height="${ch + 6}" fill="#242722"/>`);
       const capture = await sharp(source).resize(cw, ch).png().toBuffer();
       const name = `${device}-${locale}-${scene}.png`;
       await sharp(backdrop).composite([{ input: capture, left, top }]).flatten({ background: bg }).png().toFile(join(directory, name));
