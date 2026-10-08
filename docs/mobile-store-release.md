@@ -96,6 +96,18 @@ bundle, builds `bundleRelease`, verifies its signature, arm64 payload and
 model hash, and places the `.aab` plus unstripped native symbol ZIP under
 `artifacts/release/<version>-<build>/android/`.
 
+The Android release command also supports Windows with JDK 21 and the Android
+SDK. It finds the standard SDK and Microsoft JDK installations, invokes npm
+through Node and `gradlew.bat`, and uses the JDK's `jar`/`jarsigner` tools for
+archive verification and symbols. Extra Unix `zip`/`unzip` tools are not
+required. Existing signing environment variables are still required.
+
+Reviews and the Coach share one native analysis queue. Leaving a review
+cancels its request; both platform bridges acknowledge cancellation after
+the old engine work has closed. Cached partial reviews remain available if
+the engine reaches its time budget. Test the next signed build on physical
+iOS/Android devices as well as the automated browser checks.
+
 For iOS, install an Apple Distribution identity with its private key and an
 App Store provisioning profile for `app.gostone` from the real team. Use the
 profile's UUID, not its display name. Release builds use manual signing for
