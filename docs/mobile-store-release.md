@@ -1,5 +1,38 @@
 # Mobile store release
 
+## iOS 1.0, build 2 (2026-10-08)
+
+Build 2 uses main commit `59e36c7`, including the mobile beta fixes, compact
+phone/tablet layout, full learning path, imported puzzle practice, improved
+dark game controls, scoring consistency and review lifecycle fixes. The
+account-gated Coach pilot remains a beta and is not advertised as generally
+available in App Store copy or screenshots.
+
+Both native AppIcon PNGs match the approved light/dark Sculpted masters in
+`app/icons/` byte for byte. Store headers also use the approved SVG masters.
+The signed IPA lives in `artifacts/release/1.0-2/ios/export/GoStone.ipa`;
+the archive, dSYMs and SHA-256 checksum remain alongside it outside Git.
+
+Create localized marketing compositions from actual Simulator PNG captures:
+
+```sh
+# Put captures in store-assets/raw/ as iphone-en-play.png, ipad-de-learn.png,
+# etc. Supported scenes: play, learn, puzzles, dark; locales: en, de.
+node scripts/generate-app-store-assets.mjs artifacts/release/1.0-2/store-assets
+```
+
+The script preserves the capture's proportions and app UI, produces opaque
+1206 × 2622 iPhone and 2064 × 2752 iPad images, adds localized captions, and
+generates light/dark 3840 × 1646 store headers plus gallery previews. It uses
+the already-installed Sharp dependency. Inspect every output before uploading;
+never substitute an account gate, loading state or error for a feature image.
+Keep the actual capture language consistent with its localized filename.
+
+Use Transporter to deliver the IPA, then select processed build 2 for version
+1.0 in App Store Connect. Retain **manual release** so the owner controls the
+final publication after Apple approval. Uploads and completed metadata are
+not themselves evidence that Apple review has approved or published the app.
+
 ## Approved branding
 
 The iOS AppIcon catalog contains the approved Sculpted light and dark 1024px
