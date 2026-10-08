@@ -5,6 +5,7 @@ import type { AnalysisInput, AnalysisJobView, GameAnalysisResult, KataGoTurnResu
 import type { TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import type { GameState } from "@/lib/game/types";
 import { MOBILE_KATAGO, type MobileKataGoProgress } from "./katagoContract";
+import { queueNativeKataGo } from "./nativeKataGoQueue";
 
 export type NativeKataGoStatus = {
   available: boolean;
@@ -139,8 +140,19 @@ function runningJob(
 export async function runNativeKataGoAnalysis(
   game: GameState,
   onProgress?: (value: AnalysisJobView) => void,
+  signal?: AbortSignal,
 ): Promise<AnalysisJobView> {
+  return queueNativeKataGo(() => runNativeKataGoAnalysisWork(game, onProgress, signal));
+}
+
+async function runNativeKataGoAnalysisWork(
+  game: GameState,
+  onProgress?: (value: AnalysisJobView) => void,
+  signal?: AbortSignal,
+): Promise<AnalysisJobView> {
+  signal?.throwIfAborted();
   const status = await NativeKataGo.getStatus();
+  signal?.throwIfAborted();
   assertNativeKataGoStatus(status);
   const input = gameAnalysisInput(game);
   const analysisId = crypto.randomUUID();
@@ -159,7 +171,7 @@ export async function runNativeKataGoAnalysis(
       .catch(() => undefined);
   };
   const publish = (force: boolean) => {
-    if (!latestProgress) return;
+    if (!latestProgress || signal?.aborted) return;
     const ordered = [...turns.values()].sort((left, right) => left.turnNumber - right.turnNumber);
     const result = buildProgressiveGameAnalysis(input, ordered, {
       version: MOBILE_KATAGO.engineVersion,
@@ -203,13 +215,20 @@ export async function runNativeKataGoAnalysis(
     publish(true);
   }, 10_000);
   let response: Awaited<ReturnType<GoStoneKataGoPlugin["analyze"]>>;
+  let cancellation: Promise<void> | undefined;
+  const onAbort = () => { cancellation = NativeKataGo.cancel({ analysisId }).catch(() => undefined); };
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
+    signal?.throwIfAborted();
     response = await NativeKataGo.analyze({
       analysisId,
       input,
       visitsPerTurn: MOBILE_KATAGO.defaultVisitsPerTurn,
     });
+    signal?.throwIfAborted();
   } catch (analysisError) {
+    cancellation ??= NativeKataGo.cancel({ analysisId }).catch(() => undefined);
+    signal?.throwIfAborted();
     const partial = buildProgressiveGameAnalysis(
       input,
       [...turns.values()].sort((left, right) => left.turnNumber - right.turnNumber),
@@ -226,8 +245,10 @@ export async function runNativeKataGoAnalysis(
     await storeResult(game, partial).catch(() => undefined);
     return job(game, partial)!;
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     window.clearTimeout(revealTimer);
-    await listener.remove();
+    await listener.remove().catch(() => undefined);
+    await cancellation;
   }
   for (const turn of response.turns) turns.set(turn.turnNumber, turn);
   const ordered = [...turns.values()].sort((left, right) => left.turnNumber - right.turnNumber);

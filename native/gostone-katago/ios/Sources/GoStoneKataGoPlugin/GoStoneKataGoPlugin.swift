@@ -68,6 +68,7 @@ private final class EngineSession {
     weak var owner: GoStoneKataGoPlugin?
     var engine: OpaquePointer?
     var stopping = false
+    var cancellationWaiters: [CAPPluginCall] = []
 
     init(owner: GoStoneKataGoPlugin) {
         self.owner = owner
@@ -266,6 +267,10 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
                 self.stop(job)
                 if self.activeAnalysis === job { self.activeAnalysis = nil }
+            }
+            if self.activeAnalysis == nil, let session = self.warmEngine, session.stopping {
+                session.cancellationWaiters.append(call)
+                return
             }
             call.resolve()
         }
@@ -592,6 +597,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 DispatchQueue.global().async { gostone_katago_destroy(engine) }
             }
             if self.warmEngine === session { self.warmEngine = nil }
+            // A replacement request can now acquire the native engine safely.
+            session.cancellationWaiters.forEach { $0.resolve() }
+            session.cancellationWaiters.removeAll()
         }
     }
 

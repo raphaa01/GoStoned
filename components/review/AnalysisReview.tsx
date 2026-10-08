@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, LoaderCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ApiRequestError, readApi } from "@/lib/client/api";
@@ -36,6 +36,8 @@ type PriceVoteResponse = { actor: string; monthlyPriceEur: AnalysisPriceOption |
 
 export function AnalysisReview({ gameId }: { gameId: string }) {
   const { user, loading } = useAuth();
+  const playerKey = user?.playerKey;
+  const requestController = useRef<AbortController | null>(null);
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
   const progressiveCopy = getMobileAnalysisCopy(locale);
@@ -52,14 +54,14 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const nativeAnalysis = usesNativeKataGoAnalysis();
 
   const loadSupportPrice = useCallback(async () => {
-    if (!user) return;
+    if (!playerKey) return;
     try {
       const response = await fetch("/api/analysis-price-vote", {
         cache: "no-store",
-        headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
       });
       const body = await readApi<PriceVoteResponse>(response);
-      assertResponseActor(body.actor, user.playerKey);
+      assertResponseActor(body.actor, playerKey);
       setSupportPrice(body.monthlyPriceEur);
       setSupportPriceSaved(body.monthlyPriceEur !== null);
       setSupportPriceError(null);
@@ -70,10 +72,10 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         dictionary.apiErrors.internal_error,
       ));
     }
-  }, [dictionary, user]);
+  }, [dictionary, playerKey]);
 
   const saveSupportPrice = useCallback(async (monthlyPriceEur: AnalysisPriceOption) => {
-    if (!user || supportPriceSaving) return;
+    if (!playerKey || supportPriceSaving) return;
     const previousPrice = supportPrice;
     const previousSaved = supportPriceSaved;
     setSupportPrice(monthlyPriceEur);
@@ -86,12 +88,12 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
-          [EXPECTED_PLAYER_HEADER]: user.playerKey,
+          [EXPECTED_PLAYER_HEADER]: playerKey,
         },
         body: JSON.stringify({ monthlyPriceEur }),
       });
       const body = await readApi<PriceVoteResponse>(response);
-      assertResponseActor(body.actor, user.playerKey);
+      assertResponseActor(body.actor, playerKey);
       setSupportPrice(body.monthlyPriceEur);
       setSupportPriceSaved(true);
     } catch (requestError) {
@@ -105,10 +107,14 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
     } finally {
       setSupportPriceSaving(false);
     }
-  }, [dictionary, supportPrice, supportPriceSaved, supportPriceSaving, user]);
+  }, [dictionary, supportPrice, supportPriceSaved, supportPriceSaving, playerKey]);
 
   const load = useCallback(async (method: "GET" | "POST" = "GET") => {
-    if (!user) return;
+    if (!playerKey) return;
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    const isCurrent = () => !controller.signal.aborted && requestController.current === controller;
     if (method === "POST") {
       setRequesting(true);
       setError(null);
@@ -117,9 +123,12 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       if (nativeAnalysis) {
         const response = await fetch(`/api/games/${gameId}`, {
           cache: "no-store",
-          headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+          signal: controller.signal,
         });
-        const body = await readApi<{ game: GameState }>(response);
+        const body = await readApi<{ actor: string; game: GameState }>(response);
+        assertResponseActor(body.actor, playerKey);
+        if (!isCurrent()) return;
         setGame(body.game);
         if (method === "POST") {
           const pendingAt = new Date().toISOString();
@@ -135,9 +144,15 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
             startedAt: pendingAt,
             completedAt: null,
           });
-          setAnalysis(await runNativeKataGoAnalysis(body.game, setAnalysis));
+          const next = await runNativeKataGoAnalysis(body.game, value => {
+            if (isCurrent()) setAnalysis(value);
+          }, controller.signal);
+          if (!isCurrent()) return;
+          setAnalysis(next);
         } else {
-          setAnalysis(await readNativeKataGoAnalysis(body.game));
+          const next = await readNativeKataGoAnalysis(body.game);
+          if (!isCurrent()) return;
+          setAnalysis(next);
         }
         setError(null);
         return;
@@ -145,13 +160,17 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       const response = await fetch(`/api/games/${gameId}/analysis`, {
         method,
         cache: "no-store",
-        headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+        signal: controller.signal,
       });
       const body = await readApi<ResponseBody>(response);
+      assertResponseActor(body.actor, playerKey);
+      if (!isCurrent()) return;
       setGame(body.game);
       setAnalysis(body.analysis);
       setError(null);
     } catch (requestError) {
+      if (!isCurrent()) return;
       if (
         method === "POST"
         && requestError instanceof ApiRequestError
@@ -165,13 +184,16 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       }
       setError(localizedApiError(dictionary, requestError, copy.failed));
     } finally {
-      if (method === "POST") setRequesting(false);
+      if (isCurrent()) setRequesting(false);
     }
-  }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, user]);
+  }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, playerKey]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requestController.current?.abort();
+    };
   }, [load]);
   useEffect(() => {
     if (nativeAnalysis) return;

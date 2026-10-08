@@ -70,6 +70,6 @@ test("the analysis limit screen loads and persists the selected vote", () => {
   assert.match(review, /fetch\("\/api\/analysis-price-vote"/);
   assert.match(review, /method: "POST"/);
   assert.match(review, /body: JSON\.stringify\(\{ monthlyPriceEur \}\)/);
-  assert.match(review, /assertResponseActor\(body\.actor, user\.playerKey\)/);
+  assert.match(review, /assertResponseActor\(body\.actor, playerKey\)/);
   assert.match(review, /supportPriceSaved \? <small>/);
 });

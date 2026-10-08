@@ -10,6 +10,14 @@ switching accounts, or a refreshed revoked entitlement unmounts the game and
 cancels native analysis and the language worker. These are local practice
 games, with no ranking changes or server bot calls.
 
+Installed apps refresh the session silently on native foreground, browser
+focus, visibility and reconnect, and every 30 seconds while visible and
+online. Changing the database flag therefore takes effect without another
+login or binary update once this client version is installed. Concurrent
+session reads use a generation guard so an older response cannot restore a
+revoked entitlement. Same-account refreshes retain route snapshots and do not
+restart puzzle loading or an active review.
+
 ## Bundle and inference
 
 `assets/coach/` contains the user-supplied v5 epoch-840 ONNX model, manifest,

@@ -38,8 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ratingLoading, setRatingLoading] = useState(false);
   const ratingRequestGeneration = useRef(0);
   const cacheOwner = useRef<string | null>(null);
+  const sessionRequestGeneration = useRef(0);
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    const generation = ++sessionRequestGeneration.current;
     if (!options?.silent) setLoading(true);
     try {
       const response = await fetch("/api/auth/session", { cache: "no-store" });
@@ -51,12 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok || !body.ok) {
         throw new Error(localizedAuthError(dictionary, body.code, "session_failed"));
       }
+      if (sessionRequestGeneration.current !== generation) return;
       const nextOwner = body.user?.playerKey ?? null;
       if (cacheOwner.current !== nextOwner) invalidateRouteData();
       cacheOwner.current = nextOwner;
       setUser(body.user ?? null);
       setError(null);
     } catch (requestError) {
+      if (sessionRequestGeneration.current !== generation) return;
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -64,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
       throw requestError;
     } finally {
-      if (!options?.silent) setLoading(false);
+      if (sessionRequestGeneration.current === generation) setLoading(false);
     }
   }, [dictionary]);
 
@@ -101,9 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw logoutError;
     }
     invalidateRouteData();
+    sessionRequestGeneration.current += 1;
     cacheOwner.current = null;
     ratingRequestGeneration.current += 1;
     setUser(null);
+    setLoading(false);
     setRating(null);
     setRatingLoading(false);
     setError(null);
