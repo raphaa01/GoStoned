@@ -2633,7 +2633,9 @@ a {
   50% { transform: scale(.78); }
 }
 
-.intersection[aria-disabled="false"]:hover::before,
+/* Touch WebViews can retain :hover across turns. Apps use the explicit touch
+   lens instead; keep keyboard focus and the board's star points intact. */
+html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::before,
 .intersection:focus-visible::before {
   background: rgba(25, 21, 17, 0.22);
   height: 78%;

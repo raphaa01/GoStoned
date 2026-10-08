@@ -28,6 +28,7 @@ import { getSettingsCopy } from "@/lib/i18n/settings";
 import { MobileProfile } from "./MobileProfile";
 import { MobileShell } from "./MobileShell";
 import { MobileSplash } from "./MobileSplash";
+import { MobileCoachEntry, MobileCoachGate } from "./MobileCoachAccess";
 import { updateNativeChrome } from "./nativeChrome";
 import { usePathname, useRouter, useSearchParams } from "./next-navigation";
 import { MobileThemeProvider } from "./theme";
@@ -90,7 +91,8 @@ function MobileRoute() {
       content = <MobileHome />;
       showPlayAction = true;
       break;
-    case "/play": content = <PushedScreen><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
+    case "/play": content = <PushedScreen><MobileCoachEntry /><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
+    case "/play/coach": content = <PushedScreen><MobileCoachGate /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
     case "/profile/settings": content = <PushedScreen><MobileAccountGate returnTo="/profile/settings" title={getSettingsCopy(locale).title}><MobileSettings /></MobileAccountGate></PushedScreen>; break;
     case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub /></MobileAccountGate></PushedScreen>; break;

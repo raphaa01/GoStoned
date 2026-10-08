@@ -1,3 +1,3 @@
 export function allowsMobileBackGesture(pathname: string): boolean {
-  return !/\/(?:game\/[^/]+|learn\/ai)\/?$/.test(pathname);
+  return !/\/(?:game\/[^/]+|learn\/ai|play\/coach)\/?$/.test(pathname);
 }

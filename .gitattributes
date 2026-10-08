@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Preserve uploaded model bundle bytes: its manifest verifies exact SHA-256.
+assets/coach/* -text whitespace=cr-at-eol
