@@ -2,4 +2,4 @@
 * text=auto
 
 # Preserve uploaded model bundle bytes: its manifest verifies exact SHA-256.
-assets/coach/* -text
+assets/coach/* -text whitespace=cr-at-eol
