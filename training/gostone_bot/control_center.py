@@ -118,16 +118,33 @@ class RunManager:
             model_version = None
             base_model = None
             base_model_version = None
+            comparison_model = None
+            comparison_model_version = None
+            replay_data_dirs: list[str] = []
+            replay_model_versions: list[int] = []
             display_name = "GoStone AI Technical Test"
             training_seed = 20260801
             if preset.id != "smoke":
-                model_version = max((artifact.model_version or 0 for artifact in real_models), default=0) + 1
+                # V5 is a clean architecture start. V6+ inherit only V5-family
+                # checkpoints and replay all V5-family data, never V1–V4 data.
+                family_models = [artifact for artifact in real_models if artifact.architecture_version >= 5]
+                model_version = max((artifact.model_version or 4 for artifact in family_models), default=4) + 1
                 display_name = f"GoStone AI v{model_version}"
                 training_seed = secrets.randbelow(2_000_000_000) + 1
-                if real_models:
-                    newest = max(real_models, key=lambda artifact: artifact.created_at)
+                previous = [artifact for artifact in real_models if (artifact.model_version or 0) < model_version]
+                if previous:
+                    comparison = max(previous, key=lambda artifact: artifact.model_version or 0)
+                    comparison_model = str(comparison.checkpoint.resolve())
+                    comparison_model_version = comparison.model_version
+                if model_version > 5 and family_models:
+                    newest = max(family_models, key=lambda artifact: artifact.model_version or 0)
                     base_model = str(newest.checkpoint.resolve())
                     base_model_version = newest.model_version
+                    for artifact in sorted(family_models, key=lambda item: item.model_version or 0):
+                        replay_dir = artifact.run_dir / "data"
+                        if replay_dir.is_dir():
+                            replay_data_dirs.append(str(replay_dir.resolve()))
+                            replay_model_versions.append(int(artifact.model_version or 0))
             run_id = time.strftime("%Y%m%d-%H%M%S") + f"-{preset.id}"
             run_dir = self.runs_dir / run_id
             suffix = 1
@@ -143,11 +160,15 @@ class RunManager:
                     "seed": training_seed,
                     "created_at": time.time(),
                     "rules": "japanese",
-                    "model_limit_bytes": 8 * 1024 * 1024,
+                    "model_limit_bytes": 15 * 1024 * 1024,
                     "model_version": model_version,
                     "display_name": display_name,
                     "base_model_checkpoint": base_model,
                     "base_model_version": base_model_version,
+                    "comparison_model_checkpoint": comparison_model,
+                    "comparison_model_version": comparison_model_version,
+                    "replay_data_dirs": replay_data_dirs,
+                    "replay_model_versions": replay_model_versions,
                 },
             )
             journal = RunJournal(run_dir)

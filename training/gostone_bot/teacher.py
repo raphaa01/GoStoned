@@ -4,6 +4,7 @@ import json
 import queue
 import subprocess
 import threading
+import time
 import uuid
 from collections import deque
 from pathlib import Path
@@ -31,6 +32,7 @@ class KataGoTeacher:
         self,
         human_model: Path,
         image: str = DEFAULT_IMAGE,
+        cpu_threads: int | None = None,
     ) -> None:
         if not human_model.is_file():
             raise FileNotFoundError(
@@ -38,13 +40,21 @@ class KataGoTeacher:
                 "Run npm run bot:teacher:download first."
             )
         mount = f"{human_model.resolve()}:/models/human.bin.gz:ro"
+        analysis_config = repository_root() / "docker" / "katago" / "analysis.cfg"
+        config_mount = f"{analysis_config.resolve()}:/models/analysis.cfg:ro"
         command = [
             "docker",
             "run",
             "--rm",
             "-i",
+        ]
+        if cpu_threads is not None:
+            command.extend(("--cpus", str(max(1, cpu_threads))))
+        command.extend([
             "-v",
             mount,
+            "-v",
+            config_mount,
             "--entrypoint",
             "/opt/katago/katago",
             image,
@@ -54,8 +64,8 @@ class KataGoTeacher:
             "-human-model",
             "/models/human.bin.gz",
             "-config",
-            "/opt/katago/analysis.cfg",
-        ]
+            "/models/analysis.cfg",
+        ])
         self._process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -66,7 +76,9 @@ class KataGoTeacher:
             bufsize=1,
         )
         self._stderr_tail: deque[str] = deque(maxlen=80)
-        self._responses: queue.Queue[dict[str, Any]] = queue.Queue()
+        self._pending: dict[str, queue.Queue[dict[str, Any]]] = {}
+        self._pending_lock = threading.Lock()
+        self._write_lock = threading.Lock()
         threading.Thread(target=self._drain_stderr, daemon=True).start()
         threading.Thread(target=self._drain_stdout, daemon=True).start()
 
@@ -79,26 +91,72 @@ class KataGoTeacher:
         assert self._process.stdout is not None
         for line in self._process.stdout:
             try:
-                self._responses.put(json.loads(line))
+                result = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if result.get("isDuringSearch") is True:
+                continue
+            query_id = result.get("id")
+            if not isinstance(query_id, str):
+                continue
+            with self._pending_lock:
+                response_queue = self._pending.get(query_id)
+            if response_queue is not None:
+                response_queue.put(result)
 
-    def analyze(
-        self,
-        *,
-        moves: list[list[str]],
-        size: int,
-        komi: float,
-        profile: str,
-        visits: int,
-        include_ownership: bool = True,
-    ) -> dict[str, Any]:
+    def _submit(self, query: dict[str, Any]) -> tuple[str, queue.Queue[dict[str, Any]]]:
         if self._process.poll() is not None:
             details = "\n".join(self._stderr_tail)
             raise RuntimeError(f"KataGo teacher stopped unexpectedly.\n{details}")
-        query_id = f"student:{uuid.uuid4().hex}"
-        query = {
-            "id": query_id,
+        query_id = str(query["id"])
+        response_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
+        with self._pending_lock:
+            self._pending[query_id] = response_queue
+        try:
+            assert self._process.stdin is not None
+            with self._write_lock:
+                self._process.stdin.write(json.dumps(query, separators=(",", ":")) + "\n")
+                self._process.stdin.flush()
+        except BaseException:
+            with self._pending_lock:
+                self._pending.pop(query_id, None)
+            raise
+        return query_id, response_queue
+
+    def _receive(
+        self,
+        query_id: str,
+        response_queue: queue.Queue[dict[str, Any]],
+        timeout: float = 600.0,
+    ) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    details = "\n".join(self._stderr_tail)
+                    raise TimeoutError(f"KataGo teacher query exceeded {timeout:.0f} seconds.\n{details}")
+                try:
+                    result = response_queue.get(timeout=min(1.0, remaining))
+                    break
+                except queue.Empty:
+                    if self._process.poll() is not None:
+                        details = "\n".join(self._stderr_tail)
+                        raise RuntimeError(f"KataGo teacher stopped unexpectedly.\n{details}")
+        finally:
+            with self._pending_lock:
+                self._pending.pop(query_id, None)
+        if "error" in result:
+            raise RuntimeError(f"KataGo rejected training position: {result['error']}")
+        return result
+
+    @staticmethod
+    def _query(
+        *, moves: list[list[str]], size: int, komi: float, profile: str,
+        visits: int, include_ownership: bool,
+    ) -> dict[str, Any]:
+        return {
+            "id": f"student:{uuid.uuid4().hex}",
             "moves": moves,
             "rules": "japanese",
             "komi": komi,
@@ -116,20 +174,31 @@ class KataGoTeacher:
                 "rootNumSymmetriesToSample": 1,
             },
         }
-        assert self._process.stdin is not None
-        self._process.stdin.write(json.dumps(query, separators=(",", ":")) + "\n")
-        self._process.stdin.flush()
-        while True:
-            try:
-                result = self._responses.get(timeout=180)
-            except queue.Empty as error:
-                details = "\n".join(self._stderr_tail)
-                raise TimeoutError(f"KataGo teacher query exceeded 180 seconds.\n{details}") from error
-            if result.get("id") != query_id or result.get("isDuringSearch") is True:
-                continue
-            if "error" in result:
-                raise RuntimeError(f"KataGo rejected training position: {result['error']}")
-            return result
+
+    def analyze(
+        self,
+        *,
+        moves: list[list[str]],
+        size: int,
+        komi: float,
+        profile: str,
+        visits: int,
+        include_ownership: bool = True,
+    ) -> dict[str, Any]:
+        query = self._query(
+            moves=moves, size=size, komi=komi, profile=profile,
+            visits=visits, include_ownership=include_ownership,
+        )
+        query_id, response_queue = self._submit(query)
+        return self._receive(query_id, response_queue)
+
+    def analyze_many(self, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Submit a batch before waiting so KataGo can batch neural evaluations."""
+        submitted: list[tuple[str, queue.Queue[dict[str, Any]]]] = []
+        for request in requests:
+            query = self._query(**request)
+            submitted.append(self._submit(query))
+        return [self._receive(query_id, response_queue) for query_id, response_queue in submitted]
 
     def close(self) -> None:
         if self._process.poll() is not None:
