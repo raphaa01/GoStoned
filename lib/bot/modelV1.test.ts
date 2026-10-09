@@ -14,6 +14,7 @@ import {
   type GoStoneBotPosition,
 } from "./modelV1";
 import { buildLegacyV4Features, buildV8Features } from "./v8Features";
+import { chooseBrowserBotMove } from "./browserMovePolicy";
 
 const artifactPath = join(process.cwd(), "public", "bot-models", "gostone-japanese-v8.onnx");
 
@@ -118,6 +119,15 @@ test("the v8 ONNX graph accepts every board size and exposes the full output con
   assert.deepEqual(outputs.status_logits.dims, [3, 4, 361]);
   assert.deepEqual(outputs.score_logits.dims, [3, 41]);
   assert.ok([...outputs.policy_logits.data as Float32Array].every(Number.isFinite));
+  positions.forEach((position, index) => {
+    const policy = (outputs.policy_logits.data as Float32Array).slice(index * 362, (index + 1) * 362);
+    const ownership = (outputs.ownership.data as Float32Array).slice(index * 361, (index + 1) * 361);
+    for (const targetRating of [500, 750, 1000, 2100]) {
+      const move = chooseBrowserBotMove({ ...position, targetRating }, policy, ownership, "v8");
+      assert.ok(move.kind === "play");
+      assert.ok(move.x >= 0 && move.y >= 0 && move.x < position.boardSize && move.y < position.boardSize);
+    }
+  });
 
   const strengthPositions = GOSTONE_BOT_MODEL.strengthProfiles.map(({ nominalElo }) =>
     emptyPosition(19, nominalElo));

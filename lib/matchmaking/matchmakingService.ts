@@ -159,7 +159,7 @@ export function browserBotTargetForQueue(input: {
     ? parsedRatingDeviation
     : GUEST_BROWSER_BOT_RATING_DEVIATION;
   return {
-    rating: Math.max(600, Math.min(2_100, Math.round(rating))),
+    rating: Math.max(500, Math.min(2_100, Math.round(rating))),
     ratingDeviation: Math.max(80, Math.min(350, Math.round(ratingDeviation))),
   };
 }

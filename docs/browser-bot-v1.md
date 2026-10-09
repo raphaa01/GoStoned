@@ -70,20 +70,48 @@ müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
 
 ## Training und Rating
 
-Die Elo-Anpassung wählt weiterhin temperaturgewichtet aus den besten legalen
-Policy-Kandidaten. `lib/bot/browserMoveSelection.ts` begrenzt diesen Pool zusätzlich
-auf Kandidaten, deren Policy-Gewicht weniger als Faktor 8 unter dem besten liegt
-(Logit-Abstand kleiner als `ln(8)`, vor Anwendung der Elo-Temperatur). Liegt bereits
-der zweitbeste Zug mindestens Faktor 8 zurück, wird immer der beste Zug gespielt,
-unabhängig von Elo und Zufallswert. Auch bei mehreren ähnlich guten Zügen werden
-deutlich schwächere Alternativen ausgeschlossen. Die bisherigen Legalitäts-, Ko-,
-Wiederholungs- und frühen Passfilter sowie der Passbonus nach gegnerischem Passen
-bleiben im Browser-Worker und werden vor der Auswahl angewendet.
+Die Zugauswahl in `lib/bot/browserMovePolicy.ts` wird vom gemeinsamen Worker
+für Website, Android und iOS verwendet. Sie prüft Legalität, Wiederholung und
+vom Server ausgeschlossene Züge vor jeder Auswahl. Das Matchmaking erhält
+Ratings ab 500 statt sie auf 600 anzuheben: 30 Kyu = 500, 25 Kyu = 750,
+20 Kyu = 1000. Der trainierte Strength-Kanal bleibt unter 600 bei 0; die
+feinere Abstufung entsteht durch die Zugauswahl, nicht durch untrainierte Eingaben.
 
-Dieser Abstand beschreibt die Präferenz des Modells, keinen Unterschied in
-Go-Punkten und keine garantierte taktische Notwendigkeit. Das Modell muss den
-wichtigen Zug selbst erkennen; der Schutz verhindert, dass die Zufallsauswahl
-eine bereits deutlich erkannte Präferenz verwirft.
+`lib/bot/browserMoveSelection.ts` blendet das Anfängerprofil kontinuierlich
+zwischen Rating 500 und 1100 (18 Kyu) aus. Bei 30 Kyu kommen höchstens die
+24 besten Modellkandidaten mit weniger als Faktor 64 Policy-Abstand infrage;
+die Temperatur beträgt etwa 2,87. Bei 25 Kyu sind es 16 Kandidaten, Faktor
+26,91 und Temperatur 2,17; bei 20 Kyu 8 Kandidaten, Faktor 11,31 und
+Temperatur 1,46. Die Wahrscheinlichkeit, den besten Zug zu übersehen und aus
+den verbleibenden Kandidaten zu wählen, sinkt von 70 % über 40,83 % auf
+11,67 %. Ohne passende Alternative wird weiterhin der beste Zug gespielt.
+Anfänger-Alternativen, die ein eigenes echtes Auge füllen oder ohne Schlag
+eine Gruppe in Selbst-Atari bringen, werden ausgeschlossen. Der beste Modellzug
+bleibt für notwendige taktische Ausnahmen verfügbar. Es werden niemals beliebige
+Brettkoordinaten als absichtliche Fehler hinzugefügt. Ab Rating 1100 gelten
+wieder die bisherigen stärkeren Profile und der strikte Abstand kleiner `ln(8)`.
+
+Policy-Abstände beschreiben Modellpräferenzen, keine Go-Punktverluste.
+Diese Parameter geben abgestufte Schwierigkeiten vor; tatsächliche menschliche
+Gewinnquoten müssen weiterhin mit Partien kalibriert werden.
+
+## Passen
+
+Passen wird getrennt von der temperaturgewichteten Zugauswahl entschieden.
+Ein schwächeres Profil erzeugt dadurch keine zufälligen Pässe. Sind legale
+Brettzüge verfügbar, darf der Bot erst nach mindestens `ceil(Brettfläche * 0,4)`
+Steinsetzungen passen (33 auf 9×9, 68 auf 13×13, 145 auf 19×19). Spieler-Pässe
+zählen nicht als Fortschritt und heben diese Sperre nicht auf. Mindestens 20 %
+des Bretts müssen noch mit Steinen besetzt sein. Bei mehr als `max(4,
+floor(Brettfläche * 0,08))` leeren Punkten mit unsicherem Ownership-Signal
+(Betrag kleiner 0,55 oder fehlender/ungültiger Wert) wird weitergespielt.
+
+Ein eigener Pass benötigt mindestens den Policy-Vorsprung `ln(1,5)` gegenüber
+dem besten legalen Brettzug. Nach einem Spieler-Pass genügt ein knapperer
+Vergleich mit einem Logit-Bonus von 0,75; Spielfortschritts- und Ownership-Prüfung
+bleiben verpflichtend. Ohne legalen Brettzug ist Passen weiterhin möglich.
+Diese Entscheidung beendet nur den Zugwechsel und übergibt an die bestehende
+Japanische Wertung mit Spielervereinbarung; sie setzt selbst keinen Gewinner.
 
 Der Strength-Kanal bildet die sechs trainierten Profile 600, 900, 1200, 1500,
 1800 und 2100 exakt auf 0,0 bis 1,0 ab. Das Artefakt ist versioniert; ein späteres
