@@ -3,14 +3,12 @@
 import * as ort from "onnxruntime-web/wasm";
 import { chooseLearnBotMove } from "@/lib/learn/lessonEngine";
 import {
-  applyMove,
-  boardHash,
   getGroup,
   getNeighbors,
   replayMovesWithPrisoners,
 } from "@/lib/game/goEngine";
 import { buildLegacyV4Features, buildV8Features } from "@/lib/bot/v8Features";
-import { selectBrowserBotMove } from "@/lib/bot/browserMoveSelection";
+import { chooseBrowserBotMove } from "@/lib/bot/browserMovePolicy";
 import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import type { Board, Position, Stone } from "@/lib/game/types";
 import {
@@ -23,7 +21,6 @@ import {
   GOSTONE_BOT_MODEL,
   goStoneBotModelForIdentity,
   type GoStoneBotRuntimeModel,
-  type GoStoneBotMove,
   type GoStoneBotPosition,
   type GoStoneBotWorkerRequest,
   type GoStoneBotWorkerResponse,
@@ -70,58 +67,6 @@ async function runModel(position: GoStoneBotPosition) {
     ),
   });
   return { model, outputs };
-}
-
-function deterministicUnit(seed: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 0x1_0000_0000;
-}
-
-function policyPoint(index: number, size: number): Position | null {
-  if (index === GOSTONE_BOT_MODEL.passIndex) return null;
-  const paddedY = Math.floor(index / 19);
-  const paddedX = index % 19;
-  const offset = boardOffset(size);
-  const x = paddedX - offset;
-  const y = paddedY - offset;
-  return x >= 0 && y >= 0 && x < size && y < size ? { x, y } : null;
-}
-
-function chooseMove(
-  position: GoStoneBotPosition,
-  policy: Float32Array,
-  modelVersion: string,
-): GoStoneBotMove {
-  const replay = replayMovesWithPrisoners(position.boardSize, [...position.moves]);
-  const priorHashes = new Set(replay.positionHistory);
-  const excluded = new Set((position.excludedMoves ?? []).map(positionKey));
-  const lastMove = position.moves.at(-1);
-  const candidates: Array<{ move: GoStoneBotMove; logit: number }> = [];
-
-  for (let index = 0; index < policy.length; index += 1) {
-    if (index === GOSTONE_BOT_MODEL.passIndex) {
-      const early = position.moves.length < position.boardSize * position.boardSize * 0.28;
-      if (!early || lastMove?.isPass) {
-        candidates.push({
-          move: { kind: "pass" },
-          logit: policy[index] + (lastMove?.isPass ? 1.5 : 0),
-        });
-      }
-      continue;
-    }
-    const point = policyPoint(index, position.boardSize);
-    if (!point || excluded.has(positionKey(point))) continue;
-    const applied = applyMove(position.board, position.toMove, point.x, point.y);
-    if (!applied.ok || priorHashes.has(boardHash(applied.board))) continue;
-    candidates.push({ move: { kind: "play", ...point }, logit: policy[index] });
-  }
-  return selectBrowserBotMove(candidates, position.targetRating, deterministicUnit(
-    `${position.gameId}:${position.gameVersion}:${modelVersion}`,
-  ));
 }
 
 function numericOutput(
@@ -384,9 +329,10 @@ async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneB
         id: request.id,
         ok: true,
         kind: "move",
-        move: chooseMove(
+        move: chooseBrowserBotMove(
           request.position,
           numericOutput(outputs, model.outputs.policy, model.modelVersion),
+          numericOutput(outputs, model.outputs.ownership, model.modelVersion),
           model.modelVersion,
         ),
         modelVersion: model.modelVersion,

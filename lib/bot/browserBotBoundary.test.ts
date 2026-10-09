@@ -68,6 +68,10 @@ test("the ten-second browser AI fallback serves guests and rated accounts", () =
     ratingSnapshot: 1460,
     ratingDeviationSnapshot: 180,
   }), { rating: 1460, ratingDeviation: 180 });
+  for (const rating of [500, 550, 600, 750, 1000]) {
+    assert.equal(browserBotTargetForQueue({ ratingSnapshot: rating }).rating, rating);
+  }
+  assert.equal(browserBotTargetForQueue({ ratingSnapshot: 100 }).rating, 500);
 });
 
 test("browser AI bindings accept both account and guest player identities", async () => {
