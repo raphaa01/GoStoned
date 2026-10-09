@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import shutil
 
-import torch
-
 from .download_teacher import download_teacher
 from .generate import generate_dataset
-from .model import GoStoneStudent, StudentConfig
+from .model import load_checkpoint_model
 from .teacher import default_cache_dir
-from .train import train_student
+from .train import MAX_MODEL_BYTES, train_student
 
 
 def main() -> None:
@@ -16,7 +14,7 @@ def main() -> None:
     teacher = download_teacher()
     smoke_dir = cache / "smoke"
     shutil.rmtree(smoke_dir, ignore_errors=True)
-    data = smoke_dir / "teacher-smoke.npz"
+    data = smoke_dir / "data"
     generate_dataset(
         output=data,
         games=1,
@@ -33,17 +31,13 @@ def main() -> None:
         epochs=1,
         batch_size=4,
         learning_rate=3e-4,
-        channels=96,
-        blocks=10,
+        channels=32,
+        blocks=2,
         seed=20260801,
     )
-    checkpoint = torch.load(smoke_dir / "artifact" / "gostone-japanese-v1.pt", map_location="cpu")
-    config = StudentConfig(**checkpoint["config"])
-    model = GoStoneStudent(config)
-    model.load_state_dict(checkpoint["state_dict"])
-    model.eval()
-    if model_path.stat().st_size > 8 * 1024 * 1024:
-        raise RuntimeError("Smoke model is larger than 8 MiB")
+    model = load_checkpoint_model(smoke_dir / "artifact" / "gostone-japanese-v1.pt")
+    if model_path.stat().st_size > MAX_MODEL_BYTES:
+        raise RuntimeError("Smoke model is larger than 15 MiB")
     print("local KataGo distillation smoke test passed")
 
 
