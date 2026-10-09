@@ -80,12 +80,25 @@
               </div>
             </div>
             <div id="preset-list" class="preset-list" aria-label="Training scope"></div>
-            <p class="training-lineage-note"><strong>Every real run continues from the latest successful version:</strong> new KataGo games, balanced colors, and complete endgame phases. Use the AI Arena to verify whether the new version is actually stronger.</p>
+            <p class="training-lineage-note"><strong>Only a measured improvement becomes a new version:</strong> held-out KataGo games compare every candidate with the released AI. Rejected candidates stay resumable and focus their next epochs on the weakest outputs.</p>
             <label class="cpu-control" for="cpu-threads">
               <span><strong>CPU threads</strong><small>More threads run faster but make the laptop warmer.</small></span>
               <output id="cpu-output" for="cpu-threads">6</output>
             </label>
             <input id="cpu-threads" type="range" min="1" max="10" value="6">
+          </article>
+
+          <article class="panel run-history-panel">
+            <div class="panel-heading compact">
+              <div>
+                <p class="kicker">Saved checkpoints</p>
+                <h2>Resume an earlier run</h2>
+              </div>
+            </div>
+            <label class="field-label" for="run-select">Local training run</label>
+            <select id="run-select"><option value="">No saved runs</option></select>
+            <p id="run-summary" class="run-summary">Stopped runs and their KataGo positions remain available here, even after a system check.</p>
+            <button id="select-run-button" class="button secondary" type="button" disabled>Select run</button>
           </article>
 
           <article class="panel capabilities-panel">

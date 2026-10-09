@@ -15,10 +15,13 @@ const statusLabels = {
   stopping: "Stopping safely",
   stopped: "Stopped",
   completed: "Completed",
+  quality_rejected: "Needs more training",
   failed: "Failed",
 };
 let presets = [];
+let runs = [];
 let selectedPreset = "short";
+let selectedRun = "";
 let lastArtifact = "";
 let arenaState = null;
 let arenaBusy = false;
@@ -70,6 +73,27 @@ function formatNumber(value) {
   return new Intl.NumberFormat("en-US").format(Number(value || 0));
 }
 
+function renderRuns() {
+  const select = $("#run-select");
+  const current = runs.find((run) => run.selected);
+  if (!runs.some((run) => run.id === selectedRun)) selectedRun = current?.id || runs[0]?.id || "";
+  select.replaceChildren();
+  if (!runs.length) {
+    select.append(new Option("No saved runs", ""));
+  } else {
+    for (const run of runs) {
+      const progress = `${formatNumber(run.completed_games)}/${formatNumber(run.target_games)} games · ${formatNumber(run.positions)} positions`;
+      select.append(new Option(`${run.name || run.id} · ${run.status} · ${progress}`, run.id));
+    }
+  }
+  select.value = selectedRun;
+  const selected = runs.find((run) => run.id === selectedRun);
+  $("#select-run-button").disabled = !selected || selected.selected;
+  $("#run-summary").textContent = selected
+    ? `${selected.completed_games}/${selected.target_games} games, ${formatNumber(selected.positions)} KataGo positions, ${selected.completed_epochs}/${selected.target_epochs} epochs. ${selected.resumable ? "This checkpoint can be resumed." : "This run is preserved for inspection."}`
+    : "Stopped runs and their KataGo positions remain available here, even after a system check.";
+}
+
 function renderStatus(state) {
   const status = state.status || "idle";
   const progress = Math.max(0, Math.min(1, Number(state.overall_progress || 0)));
@@ -92,7 +116,7 @@ function renderStatus(state) {
   const active = ["starting", "running", "paused", "stopping"].includes(status);
   $("#start-button").disabled = active;
   $("#pause-button").disabled = !["starting", "running"].includes(status);
-  $("#resume-button").disabled = !["paused", "stopped", "failed"].includes(status);
+  $("#resume-button").disabled = !["paused", "stopped", "failed", "quality_rejected"].includes(status);
   $("#stop-button").disabled = !active;
   document.querySelectorAll(".preset input, #cpu-threads").forEach((input) => { input.disabled = active; });
   lastArtifact = state.artifact || "";
@@ -123,9 +147,11 @@ function renderLogs(logs) {
 
 async function refresh() {
   try {
-    const [status, logs] = await Promise.all([api("/api/status"), api("/api/logs")]);
+    const [status, logs, savedRuns] = await Promise.all([api("/api/status"), api("/api/logs"), api("/api/runs")]);
+    runs = savedRuns;
     renderStatus(status);
     renderLogs(logs);
+    renderRuns();
   } catch (error) {
     $("#status-message").textContent = error.message;
   }
@@ -148,6 +174,11 @@ $("#start-button").addEventListener("click", () => action("/api/start", {
 $("#pause-button").addEventListener("click", () => action("/api/pause"));
 $("#resume-button").addEventListener("click", () => action("/api/resume"));
 $("#stop-button").addEventListener("click", () => action("/api/stop"));
+$("#run-select").addEventListener("change", (event) => {
+  selectedRun = event.target.value;
+  renderRuns();
+});
+$("#select-run-button").addEventListener("click", () => action("/api/select-run", { run_id: selectedRun }));
 $("#cpu-threads").addEventListener("input", (event) => { $("#cpu-output").value = event.target.value; });
 $("#copy-path").addEventListener("click", async () => {
   if (!lastArtifact) return;
