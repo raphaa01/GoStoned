@@ -1,4 +1,5 @@
-import type { Position, Stone } from "@/lib/game/types";
+import type { BoardSize, Position, Stone } from "@/lib/game/types";
+import { LATER_STAGES } from "./laterCurriculum";
 import type { LearnLessonId } from "./progress";
 import type { LearnStone } from "./lessonEngine";
 
@@ -35,21 +36,28 @@ export type LessonStep = Readonly<{
   group?: readonly Position[];
   lastMove?: Position;
   continuePosition?: boolean;
-  replies?: readonly Position[];
+  replies?: readonly (Position | null)[];
   replyExplanations?: readonly LocalizedLine[];
+  replyBatch?: number;
+  selectionCount?: number;
+  hintArea?: readonly Position[];
+  gameSize?: BoardSize;
+  requireWin?: boolean;
+  links?: readonly ("play" | "puzzles" | "review")[];
 }>;
 
 export type LearnLesson = Readonly<{
   id: LearnLessonId;
-  stage: 1 | 2 | 3;
+  stage: LearnStageId;
   title: LocalizedLine;
   minutes: number;
   challenge?: boolean;
   steps: readonly LessonStep[];
 }>;
 
+export type LearnStageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type LearnStage = Readonly<{
-  id: 1 | 2 | 3;
+  id: LearnStageId;
   title: LocalizedLine;
   lessons: readonly LearnLesson[];
 }>;
@@ -289,6 +297,7 @@ export const LEARN_STAGES: readonly LearnStage[] = [
   { id: 1, title: t("Deine ersten Steine", "Your first stones"), lessons: STAGE_ONE },
   { id: 2, title: t("Deine erste Go-Partie", "Your first Go game"), lessons: STAGE_TWO },
   { id: 3, title: t("Überleben", "Survival"), lessons: STAGE_THREE },
+  ...LATER_STAGES,
 ] as const;
 
 export const LEARN_LESSONS: readonly LearnLesson[] = LEARN_STAGES.flatMap((stage) => stage.lessons);
@@ -308,6 +317,15 @@ const LEARN_UI_COPY = {
     whiteStoneAt: "Weißer Stein auf {coordinate}",
     emptyAt: "Freier Schnittpunkt {coordinate}",
     learn: "Lernen",
+    wholeBoard: "Ganzes Brett anzeigen",
+    enlargeBoard: "Brett vergrößern · dann verschieben",
+    winCheckpointOpen: "Diese Sieg-Challenge bleibt offen. Schau dir die Lernmomente an und spiele erneut.",
+    allStagesComplete: "Alle acht Etappen abgeschlossen",
+    keepPracticing: "Weiter üben",
+    ownGameLearning: "Weiterlernen in eigenen Partien",
+    playGame: "Partie spielen",
+    reviewOwnGame: "Eigene Partie analysieren",
+    boardPuzzles: "Brettaufgaben",
     lessonsComplete: "{done} von {total} Lektionen abgeschlossen",
     continue: "Weiter",
     showNextMove: "Nächsten Zug zeigen",
@@ -386,6 +404,15 @@ const LEARN_UI_COPY = {
     whiteStoneAt: "White stone on {coordinate}",
     emptyAt: "Empty intersection {coordinate}",
     learn: "Learn",
+    wholeBoard: "Show whole board",
+    enlargeBoard: "Enlarge board · then pan",
+    winCheckpointOpen: "This win checkpoint remains open. Review the learning moments and try again.",
+    allStagesComplete: "All eight stages completed",
+    keepPracticing: "Keep practicing",
+    ownGameLearning: "Keep learning in your own games",
+    playGame: "Play a game",
+    reviewOwnGame: "Review your game",
+    boardPuzzles: "Board puzzles",
     lessonsComplete: "{done} of {total} lessons complete",
     continue: "Continue",
     showNextMove: "Show next move",
