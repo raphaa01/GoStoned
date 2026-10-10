@@ -1,14 +1,17 @@
 # Lernpfad: Etappen 4–8
 
-Die 31 bestehenden Lektionen in Etappen 1–3 bleiben wort- und positionsgleich.
-Ein Fingerprint-Test schützt diesen Abschnitt. Die Erweiterung ergänzt 89 Knoten
+Die Erweiterung bewahrte zunächst die 31 Lektionen in Etappen 1–3 wort- und positionsgleich.
+Die anschließende, ausdrücklich gewünschte Ablaufkorrektur hält jetzt die Spielerfarbe
+innerhalb jeder Lektion fest; Zugwechsel-Einführung und Ko-Demonstration sind daran
+angepasst. Ein aktualisierter Fingerprint-Test schützt diesen Abschnitt. Die Erweiterung ergänzt 89 Knoten
 im vorhandenen `LessonPlayer`, mit derselben Lehrerfigur, Sprechblase und Route.
 Es gibt keine zweite Kursoberfläche und keine neuen Abhängigkeiten.
 
 ## Inhalt und Ausführung
 
 - Etappe 4: konkrete taktische Stellungen, vollständige Leiter, Leiterbrecher,
-  zwei Netz-Fluchten, echter Snapback, Schlagrennen und gemischte Aufgaben.
+  fünf verschiedene Übungsstellungen pro neuer Taktik, vollständige Netz-Fluchten,
+  echte Snapbacks, Schlagrennen und gemischte Aufgaben.
 - Etappe 5: 9×9-Entscheidungen, Formen, Endspiel, Zählen, kommentierte Beispielpartie
   und eine echte Sieg-Prüfung. Eine Niederlage speichert den Versuch, nicht den Abschluss.
 - Etappen 6 und 7: 13×13 beziehungsweise 19×19, lokal spielbare Beispiele zu
@@ -18,8 +21,10 @@ Es gibt keine zweite Kursoberfläche und keine neuen Abhängigkeiten.
 
 `sequence()` erzeugt wiederherstellbare Stellungen durch echte Regelzüge und
 bricht bei illegalen Fortsetzungen ab. Die UI bewahrt die Ko-Historie bei
-Fortsetzungen. Zugantworten erscheinen erst nach einer expliziten Betätigung;
-lange kommentierte Aufzeichnungen können in kleinen Gruppen weiterlaufen.
+Fortsetzungen. Die erste gegnerische Antwort erscheint unmittelbar; zusammenhängende
+eigene Züge können ohne „Weiter“ gespielt werden. Zusätzliche Trainerzüge einer
+Erklärung werden einzeln durch „Nächsten Zug zeigen“ aufgedeckt, niemals in Gruppen.
+Details und Prüfungen stehen in [learn-turn-flow.md](learn-turn-flow.md).
 Die symmetrischen kommentierten 9×9/13×13-Aufzeichnungen lehren ausdrücklich den
 Ablauf bis zur japanischen Wertung, nicht eine vermeintlich ideale Spielstrategie.
 

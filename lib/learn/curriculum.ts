@@ -1,5 +1,6 @@
 import type { BoardSize, Position, Stone } from "@/lib/game/types";
 import { LATER_STAGES } from "./laterCurriculum";
+import { stableLessonColor } from "./lessonFlow";
 import type { LearnLessonId } from "./progress";
 import type { LearnStone } from "./lessonEngine";
 
@@ -38,7 +39,6 @@ export type LessonStep = Readonly<{
   continuePosition?: boolean;
   replies?: readonly (Position | null)[];
   replyExplanations?: readonly LocalizedLine[];
-  replyBatch?: number;
   selectionCount?: number;
   hintArea?: readonly Position[];
   gameSize?: BoardSize;
@@ -96,8 +96,8 @@ const STAGE_ONE: readonly LearnLesson[] = [
   {
     id: "s1-turns", stage: 1, minutes: 2, title: t("Abwechselnde Züge", "Taking turns"), steps: [
       { id: "order", kind: "info", size: 5, stones: [b(1, 1), w(3, 1), b(2, 3)], lastMove: p(2, 3), body: t("Schwarz beginnt. Danach setzen Schwarz und Weiß immer abwechselnd.", "Black begins. After that, Black and White alternate." ) },
-      { id: "black-turn", kind: "play", size: 5, stones: [], toPlay: "black", targets: [p(1, 2)], emphasis: [p(1, 2)], body: t("Schwarz ist zuerst am Zug.", "Black moves first."), task: t("Setze Schwarz auf den markierten Punkt.", "Place Black on the marked point."), success: t("Jetzt ist Weiß am Zug.", "Now it is White's turn."), wrong: t("Nutze den markierten Schnittpunkt.", "Use the marked intersection.") },
-      { id: "white-turn", kind: "play", size: 5, stones: [b(1, 2)], toPlay: "white", targets: [p(3, 2)], emphasis: [p(3, 2)], body: t("Nach Schwarz kommt Weiß.", "White follows Black."), task: t("Setze den weißen Stein.", "Place the white stone."), success: t("Der nächste Zug gehört wieder Schwarz.", "The next move belongs to Black."), wrong: t("Setze Weiß auf den markierten Punkt.", "Place White on the marked point.") },
+      { id: "black-turn", kind: "play", size: 5, stones: [], toPlay: "black", targets: [p(1, 2)], emphasis: [p(1, 2)], replies: [p(3, 2)], body: t("Du spielst Schwarz. Weiß antwortet nach deinem Zug.", "You play Black. White replies after your move."), task: t("Setze Schwarz auf den markierten Punkt.", "Place Black on the marked point."), success: t("Weiß hat geantwortet. Jetzt bist du wieder mit Schwarz am Zug.", "White has replied. Now it is your turn as Black again."), wrong: t("Nutze den markierten Schnittpunkt.", "Use the marked intersection.") },
+      { id: "black-again", kind: "play", size: 5, continuePosition: true, stones: [b(1, 2), w(3, 2)], toPlay: "black", targets: [p(2, 3)], emphasis: [p(2, 3)], body: t("Nach dem weißen Stein folgt wieder Schwarz.", "After the white stone, Black moves again."), task: t("Setze deinen nächsten schwarzen Stein.", "Place your next black stone."), success: t("Schwarz, Weiß, Schwarz: Beide Spieler setzen abwechselnd; jeder behält seine Farbe.", "Black, White, Black: the players alternate; each keeps their color."), wrong: t("Setze Schwarz auf den markierten Punkt.", "Place Black on the marked point.") },
     ],
   },
   {
@@ -174,10 +174,10 @@ const STAGE_TWO: readonly LearnLesson[] = [
   },
   {
     id: "s2-ko", stage: 2, minutes: 4, title: t("Ko", "Ko"), steps: [
-      { id: "capture", kind: "play", size: 5, stones: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "black", targets: [p(2, 3)], body: t("Der einzelne weiße Stein hat eine Freiheit.", "The single white stone has one liberty."), task: t("Schlage ihn.", "Capture it."), success: t("Schwarz hat geschlagen. Der neue schwarze Stein hat selbst nur eine Freiheit.", "Black captured. The new black stone now has only one liberty."), wrong: t("Fülle die Freiheit direkt unter dem weißen Stein.", "Fill the liberty directly below the white stone.") },
+      { id: "capture", kind: "info", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], lastMove: p(2, 3), body: t("Schwarz hat gerade den weißen Stein in der Mitte geschlagen. Der markierte schwarze Stein hat selbst nur eine Freiheit. Du spielst in dieser Aufgabe Weiß.", "Black just captured the white stone in the center. The marked black stone itself has only one liberty. You play White in this exercise.") },
       { id: "blocked-recapture", kind: "illegal", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], koPreviousBoard: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(2, 2)], expectedError: "ko", body: t("Ein sofortiger Rückschlag würde genau die vorige Stellung wiederholen.", "An immediate recapture would repeat the previous position exactly."), task: t("Versuche, sofort zurückzuschlagen.", "Try to recapture immediately."), success: t("Die Ko-Regel blockiert den Zug. Weiß muss zuerst woanders spielen.", "The ko rule blocks the move. White must play elsewhere first."), wrong: t("Versuche den Rückschlag auf dem gerade frei gewordenen Punkt.", "Try the recapture on the point that just became empty.") },
       { id: "elsewhere", kind: "play", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(0, 4)], emphasis: [p(0, 4)], replies: [p(4, 0)], body: t("Weiß spielt zuerst an einer anderen Stelle. Schwarz antwortet woanders.", "White first plays somewhere else. Black replies elsewhere."), task: t("Setze Weiß auf den markierten Punkt.", "Play White on the marked point."), success: t("Die letzte Stellung ist jetzt eine andere. Der Rückschlag ist wieder erlaubt.", "The preceding position is now different. Recapturing is allowed again.") },
-      { id: "later-recapture", kind: "play", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2), w(0, 4), b(4, 0)], toPlay: "white", targets: [p(2, 2)], body: t("Weiß und Schwarz haben inzwischen je einen Zug woanders gespielt.", "White and Black have each played elsewhere in the meantime."), task: t("Jetzt darf Weiß zurückschlagen.", "Now White may recapture."), success: t("Nach einem Zwischenzug ist der Rückschlag erlaubt.", "After an intervening move, the recapture is allowed."), wrong: t("Schlage den schwarzen Ko-Stein zurück.", "Recapture the black ko stone.") },
+      { id: "later-recapture", kind: "play", size: 5, continuePosition: true, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2), w(0, 4), b(4, 0)], toPlay: "white", targets: [p(2, 2)], body: t("Weiß und Schwarz haben inzwischen je einen Zug woanders gespielt.", "White and Black have each played elsewhere in the meantime."), task: t("Jetzt darf Weiß zurückschlagen.", "Now White may recapture."), success: t("Nach einem Zwischenzug ist der Rückschlag erlaubt.", "After an intervening move, the recapture is allowed."), wrong: t("Schlage den schwarzen Ko-Stein zurück.", "Recapture the black ko stone.") },
     ],
   },
   {
@@ -293,12 +293,12 @@ const STAGE_THREE: readonly LearnLesson[] = [
   },
 ] as const;
 
-export const LEARN_STAGES: readonly LearnStage[] = [
+export const LEARN_STAGES: readonly LearnStage[] = ([
   { id: 1, title: t("Deine ersten Steine", "Your first stones"), lessons: STAGE_ONE },
   { id: 2, title: t("Deine erste Go-Partie", "Your first Go game"), lessons: STAGE_TWO },
   { id: 3, title: t("Überleben", "Survival"), lessons: STAGE_THREE },
   ...LATER_STAGES,
-] as const;
+] satisfies readonly LearnStage[]).map((stage) => ({ ...stage, lessons: stage.lessons.map(stableLessonColor) }));
 
 export const LEARN_LESSONS: readonly LearnLesson[] = LEARN_STAGES.flatMap((stage) => stage.lessons);
 
@@ -329,7 +329,9 @@ const LEARN_UI_COPY = {
     lessonsComplete: "{done} von {total} Lektionen abgeschlossen",
     continue: "Weiter",
     showNextMove: "Nächsten Zug zeigen",
-    watchContinuation: "Schau dir die Fortsetzung Zug für Zug an.",
+    yourBlackTurn: "Du spielst Schwarz.",
+    yourWhiteTurn: "Du spielst Weiß.",
+    watchContinuation: "Die Antwort ist gespielt. Weitere Trainerzüge zeigst du einzeln.",
     explanation: "Erklärung",
     explanationHelp: "Ansehen, dann „Weiter“.",
     taskTurn: "Du bist dran",
@@ -416,7 +418,9 @@ const LEARN_UI_COPY = {
     lessonsComplete: "{done} of {total} lessons complete",
     continue: "Continue",
     showNextMove: "Show next move",
-    watchContinuation: "Follow the continuation one move at a time.",
+    yourBlackTurn: "You play Black.",
+    yourWhiteTurn: "You play White.",
+    watchContinuation: "The reply is on the board. Reveal further trainer moves one at a time.",
     explanation: "Explanation",
     explanationHelp: "Look, then tap ‘Continue’.",
     taskTurn: "Your task",

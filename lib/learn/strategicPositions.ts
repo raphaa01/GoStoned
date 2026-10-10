@@ -77,7 +77,7 @@ export function commentedGame(size: 9 | 13): LessonStep[] {
   decisions[4] = { ...decisions[4], replies: [...decisions[4].replies, ...turns.slice(5).flatMap((turn) => [turn.move, ...turn.replies]), null, null] };
   const steps = sequence(`record-${size}`, size, [], "black", decisions);
   const terminal = [...moves.map(({x,y})=>b(x,y)), ...moves.map(({x,y})=>w(size-1-x,size-1-y))];
-  return [...steps.map((step, index) => ({ ...step, emphasis: step.targets, replyBatch: index === 4 ? 8 : 1,
+  return [...steps.map((step, index) => ({ ...step, emphasis: step.targets,
     success: index === 4 ? t("Beide Seiten haben ihre Grenzen geschlossen und zweimal gepasst. Der mittlere Streifen berührt beide Farben und ist neutral.", "Both sides closed their boundaries and passed twice. The central strip touches both colors and is neutral.") : step.success })),
     { ...mark("count-black", size, terminal, territoryPoints(boardFromStones(size, terminal), "black"), t("Tippe einen leeren Punkt in einem schwarzen Gebiet an.", "Tap an empty point inside Black's territory."), t("Gezählt werden leere Gebietspunkte und Gefangene. Weiß bekommt zusätzlich 6,5 Komi; in dieser symmetrischen Partie gewinnt Weiß dadurch.", "Count empty territory points and prisoners. White gets an additional 6.5 komi; it wins this symmetric game by that amount.")), selectionCount: 1 },
     info("record-purpose", size, terminal, t("Diese vereinfachte Beispielpartie zeigt den Ablauf bis zur Wertung, keine ideale Strategie. In echten Partien kann der Gegner offene Räume angreifen oder besetzen.", "This simplified example shows the flow through scoring, not ideal strategy. In real games, the opponent can attack or occupy open spaces.")),
