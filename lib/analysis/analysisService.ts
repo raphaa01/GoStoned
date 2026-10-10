@@ -1,4 +1,5 @@
 import { query, withTransaction } from "@/lib/db";
+import { hasDeveloperAccess } from "@/lib/auth/developerAccess";
 import { GameServiceError, getGameState } from "@/lib/game/gameService";
 import {
   type AnalysisJobStatus,
@@ -109,7 +110,7 @@ export async function queueGameAnalysis(gameId: string, playerKey: string, userI
     const existing = existingResult.rows[0];
     if (existing && existing.status !== "failed") return existing;
 
-    if (!existing && !account.analysis_unlimited) {
+    if (!existing && !account.analysis_unlimited && !hasDeveloperAccess({ id: userId })) {
       const usageResult = await client.query<AnalysisUsageRow>(
         `SELECT COUNT(*)::int AS used,
                 GREATEST(

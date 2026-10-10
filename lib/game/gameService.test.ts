@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Pool } from "pg";
+import { queueGameAnalysis, WeeklyAnalysisLimitError } from "@/lib/analysis/analysisService";
 import {
   confirmScore,
   GameServiceError,
@@ -259,6 +260,7 @@ async function withFakeDatabase(
     moveRows?: Record<string, unknown>[];
     resumeRows?: Record<string, unknown>[];
     allowMoveWrite?: boolean;
+    analysisAccount?: { unlimited: boolean; used: number };
   },
   action: () => Promise<unknown>,
 ): Promise<string[]> {
@@ -284,6 +286,18 @@ async function withFakeDatabase(
       if (sql.includes("FROM game_dead_stones")) {
         const deadRows = rows.deadRows ?? [];
         return { rows: deadRows, rowCount: deadRows.length };
+      }
+      if (rows.analysisAccount && sql.includes("FROM users")) {
+        return { rows: [{ analysis_unlimited: rows.analysisAccount.unlimited }], rowCount: 1 };
+      }
+      if (rows.analysisAccount && sql.includes("COUNT(*)::int AS used")) {
+        return { rows: [{ used: rows.analysisAccount.used, retry_after_seconds: 60 }], rowCount: 1 };
+      }
+      if (rows.analysisAccount && sql.includes("INSERT INTO game_analysis_jobs")) {
+        return { rows: [{ id: gameId, game_id: gameId, game_version: 1, status: "queued", attempts: 0, result: null, progress: null, error_code: null, created_at: new Date(), started_at: null, completed_at: null }], rowCount: 1 };
+      }
+      if (rows.analysisAccount && sql.includes("FROM game_analysis_jobs")) {
+        return { rows: [], rowCount: 0 };
       }
       if (rows.allowMoveWrite && sql.includes("INSERT INTO moves")) {
         const inserted = {
@@ -337,6 +351,40 @@ async function withFakeDatabase(
   }
   return statements;
 }
+
+test("game nametags use joined account IDs and cannot be claimed through display names", async () => {
+  for (const id of ["2f507157-9a4a-4960-b3c8-87fa721cdd26", "normal-user", null]) {
+    await withFakeDatabase({
+      game: gameRow({ black_player_name: "developer", white_player_name: "developer", black_player_user_id: id }),
+      scoring: null,
+    }, async () => {
+      const game = await getGameState(gameId, blackKey);
+      assert.equal(game.blackPlayerIsDeveloper, id === "2f507157-9a4a-4960-b3c8-87fa721cdd26");
+      assert.equal(game.whitePlayerIsDeveloper, false);
+    });
+  }
+});
+
+test("analysis quota bypass is server-bound to the developer identity; other accounts remain limited", async () => {
+  for (const id of ["2f507157-9a4a-4960-b3c8-87fa721cdd26", "normal-user"]) {
+    const key = `user:${id}`;
+    const statements = await withFakeDatabase({
+      game: gameRow({ black_player_key: key, status: "finished", phase: "play", to_move: null, result: "B+R", finish_reason: "resignation", winner_key: key, version: 1, finished_at: new Date() }),
+      scoring: null,
+      moveRows: persistedMoveRows([storedMove(1, "black", 4, 4)]),
+      analysisAccount: { unlimited: false, used: 10 },
+    }, async () => {
+      if (id === "normal-user") {
+        await assert.rejects(queueGameAnalysis(gameId, key, id), WeeklyAnalysisLimitError);
+      } else {
+        const result = await queueGameAnalysis(gameId, key, id);
+        assert.equal(result.analysis.status, "queued");
+      }
+    });
+    assert.equal(statements.some((sql) => sql.includes("COUNT(*)::int AS used")), id === "normal-user");
+    assert.equal(statements.some((sql) => sql.includes("INSERT INTO game_analysis_jobs")), id !== "normal-user");
+  }
+});
 
 async function assertRejectedWithoutWrites(
   rows: {

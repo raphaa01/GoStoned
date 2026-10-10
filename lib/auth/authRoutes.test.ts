@@ -516,6 +516,8 @@ test("successful registration exposes only the committed user and hardened sessi
       playerKey: `user:${userId}`,
       avatarStyle: "kifu-classic",
       coachBetaEnabled: false,
+      developerAccess: false,
+      analysisUnlimited: false,
     },
   });
   const accountStatement = transactionStatements[2];

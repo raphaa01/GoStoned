@@ -10518,6 +10518,8 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .learn-player__next { justify-content: center; margin-top: 6px; width: 100%; }
 
 .game-player-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; }
+.developer-tag { background: var(--color-moss-soft); border: 1px solid var(--color-moss); border-radius: 4px; color: var(--color-moss-strong); display: inline-block; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; letter-spacing: .05em; line-height: 1.4; margin-inline-start: 5px; padding: 1px 4px; vertical-align: middle; }
+.learn-overview__header .learn-developer-access { font-size: 12px; line-height: 1.5; max-width: 36em; }
 .game-player-rank { display: none; }
 .leaderboard-player-stats { display: none; }
 .game-pass-notice { align-items: center; background: var(--color-moss-soft); border-radius: 8px; color: var(--color-moss-strong); display: flex; font-size: 13px; gap: 8px; margin: 0 0 12px; padding: 10px 12px; }

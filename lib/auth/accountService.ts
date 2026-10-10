@@ -140,7 +140,9 @@ export async function authenticateAccount(
   password: string,
 ): Promise<AuthUser> {
   const result = await query<LoginRow>(
-    `SELECT id, username, display_name, avatar_style, password_hash
+    `SELECT id, username, display_name, avatar_style, password_hash,
+            COALESCE((to_jsonb(users)->>'coach_beta_enabled')::boolean, false) AS coach_beta_enabled,
+            COALESCE((to_jsonb(users)->>'analysis_unlimited')::boolean, false) AS analysis_unlimited
        FROM users
       WHERE LOWER(username) = LOWER($1)
       LIMIT 1`,

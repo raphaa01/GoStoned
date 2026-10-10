@@ -1,5 +1,6 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { query, withReadOnlyTransaction, withTransaction } from "@/lib/db";
+import { hasDeveloperAccess } from "@/lib/auth/developerAccess";
 import { GameServiceError } from "./gameServiceError";
 export { GameServiceError } from "./gameServiceError";
 import {
@@ -66,6 +67,8 @@ type GameRow = {
   white_player_key: string;
   black_player_name: string;
   white_player_name: string;
+  black_player_user_id?: string | null;
+  white_player_user_id?: string | null;
   black_player_is_bot: boolean;
   white_player_is_bot: boolean;
   browser_bot_model_version: string | null;
@@ -817,6 +820,8 @@ async function loadGame(
               white_user.username,
               'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
             ) AS white_player_name,
+            black_user.id AS black_player_user_id,
+            white_user.id AS white_player_user_id,
             g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
             g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
             browser_binding.model_version AS browser_bot_model_version,
@@ -1373,6 +1378,8 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
     whitePlayerKey: game.white_player_key,
     blackPlayerName: game.black_player_name,
     whitePlayerName: game.white_player_name,
+    blackPlayerIsDeveloper: hasDeveloperAccess(game.black_player_user_id ? { id: game.black_player_user_id } : null),
+    whitePlayerIsDeveloper: hasDeveloperAccess(game.white_player_user_id ? { id: game.white_player_user_id } : null),
     blackPlayerIsBot: game.black_player_is_bot,
     whitePlayerIsBot: game.white_player_is_bot,
     browserBotModelVersion: game.browser_bot_model_version,
