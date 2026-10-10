@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium, expect, type Page } from "@playwright/test";
 import { LEARN_LESSONS, line, type LearnLesson } from "../lib/learn/curriculum";
+import { continuesOwnTurn } from "../lib/learn/lessonFlow";
 import { allGroups, chooseLearnBotMove, createLearnGame, groupLiberties, legalLearnMoves, playLearnMove, passLearnMove, storedLearnMoves, territoryPoints, withLearnTurn } from "../lib/learn/lessonEngine";
 import type { Board, BoardSize, Position } from "../lib/game/types";
 import type { GoStoneBotPosition, GoStoneBotWorkerResponse, GoStoneBotMove } from "../lib/bot/modelV1";
@@ -166,6 +167,7 @@ async function playGame(page: Page, capture: boolean, advance: ReturnType<Page["
 async function walkLesson(page: Page, lesson: LearnLesson) {
   await page.getByRole("button", {name: `Weiterlernen: ${line(lesson.title, "de")}`, exact:true}).click();
   for (const [index, step] of lesson.steps.entries()) {
+    await expect(page.locator(".learn-player")).toHaveAttribute("data-step-id", step.id);
     await expect(page.getByRole("heading", {name:line(lesson.title,"de"),exact:true})).toBeVisible();
     const advance = page.getByRole("button", {name:index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact:true});
     const gameStep = step.kind.endsWith("game");
@@ -203,6 +205,8 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
       }
       const targets = step.targets?.length ? step.kind === "select" ? step.targets.slice(0,step.selectionCount??step.targets.length) : [step.targets[0]]
         : [{x: index === 1 ? 2 : index === 2 ? 3 : 1, y:2}];
+      let expected = step.kind === "play"
+        ? withLearnTurn({ ...createLearnGame(step.size!), board: await readBoard(page) }, step.toPlay ?? "black") : null;
       for (const [answerIndex, target] of targets.entries()) {
         await page.getByRole("gridcell").nth(target.y * step.size! + target.x).click();
         if (step.kind === "select") {
@@ -213,14 +217,36 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
           }
         }
       }
-      for (let reply = 0; reply < (step.replies?.length ?? 0); reply += step.replyBatch??1) {
+      if (expected) {
+        const own = playLearnMove(expected, targets[0]); assert.ok(own.ok); expected = own.position;
+        const first = step.replies?.[0];
+        if (first === null) expected = passLearnMove(expected);
+        else if (first) { const reply = playLearnMove(expected, first); assert.ok(reply.ok); expected = reply.position; }
+        await expect.poll(async () => boardHash(await readBoard(page))).toBe(boardHash(expected.board));
+      }
+      // The first opponent reply is automatic; additional trainer plies need one click EACH.
+      for (let reply = 1; reply < (step.replies?.length ?? 0); reply++) {
         await page.getByRole("button", { name: /^Nächsten Zug zeigen/ }).click();
       }
+      if (expected && (step.replies?.length ?? 0) > 1) {
+        for (const move of step.replies!.slice(1)) {
+          if (move === null) expected = passLearnMove(expected);
+          else { const next = playLearnMove(expected, move); assert.ok(next.ok); expected = next.position; }
+        }
+        await expect.poll(async () => boardHash(await readBoard(page))).toBe(boardHash(expected!.board));
+      }
+      if (continuesOwnTurn(step, lesson.steps[index + 1])) {
+        await expect(page.locator(".learn-player")).toHaveAttribute("data-step-id", lesson.steps[index + 1].id);
+        await expect(page.getByRole("button", { name: /^Nächsten Zug zeigen/ })).toHaveCount(0);
+        await expect(page.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+        await expect(page.locator('.interactive-learn-board__point[aria-disabled="false"]').first()).toBeVisible();
+        continue;
+      }
       await expect(advance).toBeEnabled();
-      if (lesson.id === "s1-board" && index === 2) {
-        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(2);
+      if (lesson.id === "s1-board" && index === 3) {
+        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(3);
         await page.getByRole("button", {name:"Neu starten",exact:true}).click();
-        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(1);
+        await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(2);
         await expect(advance).toBeDisabled();
         await page.getByRole("gridcell").nth(targets[0].y * step.size! + targets[0].x).click();
         await expect(advance).toBeEnabled();

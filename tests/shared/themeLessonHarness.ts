@@ -21,7 +21,7 @@ export function registerThemeLessonTests(mobile: boolean) {
     await expect(page.locator("html")).toHaveAttribute(attribute, "light");
   });
 
-  test("life and death reveals each teaching move before the capture", async ({ page }, info) => {
+  test("life and death answers automatically, then reveals the trainer capture separately", async ({ page }, info) => {
     await installHarness(page);
     const progress = { ...emptyLearnProgress(), completedLessonIds: LEARN_LESSON_IDS.slice(0, 23),
       currentLessonId: "s3-life-death", lastStepByLesson: { "s3-life-death": 1 }, updatedAt: new Date().toISOString() };
@@ -30,25 +30,21 @@ export function registerThemeLessonTests(mobile: boolean) {
     await page.locator(".learn-next-dock__button").click();
     await expect(page.getByRole("heading", { name: "Leben oder Tod?", exact: true })).toBeVisible();
     const board = page.locator(".interactive-learn-board");
-    await expect(board.locator(".is-black.has-stone")).toHaveCount(12);
+    await expect(board.locator(".is-white.has-stone")).toHaveCount(12);
     await board.getByRole("gridcell").nth(24).click();
-    await expect(board.locator(".is-black.has-stone")).toHaveCount(12);
-    await expect(board.locator(".is-white.has-stone")).toHaveCount(21);
+    await expect(board.locator(".is-white.has-stone")).toHaveCount(13);
+    await expect(board.locator(".is-black.has-stone")).toHaveCount(21);
     await expect(board.locator('[aria-disabled="false"]')).toHaveCount(0);
     const reveal = page.getByRole("button", { name: /^Nächsten Zug zeigen/ });
-    await expect(reveal).toHaveText(/1\/2/);
-    await reveal.click();
-    await expect(board.locator(".is-black.has-stone")).toHaveCount(13);
-    await expect(board.locator(".is-last")).toHaveAttribute("aria-label", /Schwarzer Stein/);
+    await expect(board.locator(".is-last")).toHaveAttribute("aria-label", /Weißer Stein/);
     await expect(reveal).toHaveText(/2\/2/);
     await page.getByRole("button", { name: "Neu starten", exact: true }).click();
-    await expect(board.locator(".is-black.has-stone")).toHaveCount(12);
-    await expect(board.locator(".is-white.has-stone")).toHaveCount(20);
+    await expect(board.locator(".is-white.has-stone")).toHaveCount(12);
+    await expect(board.locator(".is-black.has-stone")).toHaveCount(20);
     await board.getByRole("gridcell").nth(24).click();
     await reveal.click();
-    await reveal.click();
-    await expect(board.locator(".is-black.has-stone")).toHaveCount(0);
-    await expect(board.locator(".is-white.has-stone")).toHaveCount(22);
+    await expect(board.locator(".is-white.has-stone")).toHaveCount(0);
+    await expect(board.locator(".is-black.has-stone")).toHaveCount(22);
     await expect(page.getByRole("button", { name: "Lektion abschließen", exact: true })).toBeEnabled();
     await expect(page.locator(".learn-player__feedback")).toContainText("Deshalb verschwinden sie");
     await assertNoOverflow(page);

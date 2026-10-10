@@ -1,5 +1,6 @@
 import type { LearnLesson, LessonStep } from "./curriculum";
 import { b, w, p, t, task, mark, info, sequence, mirror, ladderSteps, DOUBLE_ATARI, SNAPBACK, NET, RACE } from "./laterLessonTools";
+import { NET_PRACTICE, SNAPBACK_PRACTICE, rotatePractice } from "./tacticalPractice";
 
 const double = task("two-groups", 5, DOUBLE_ATARI, "black", [p(2, 2)],
   t("Die beiden weißen Gruppen haben je zwei Freiheiten. Ein Punkt grenzt an beide.", "Each white group has two liberties. One point touches both."),
@@ -28,38 +29,71 @@ const mixed: LessonStep[] = [
 ];
 
 export const STAGE_FOUR: readonly LearnLesson[] = [
-  { id: "s4-double-atari", stage: 4, title: t("Double Atari", "Double atari"), minutes: 3, steps: [double, {...double,id:"diagonal-groups",stones:[w(1,1),w(2,2),b(1,0),b(1,2),b(2,3)],targets:[p(2,1)]}] },
-  { id: "s4-ladder", stage: 4, title: t("Leiter", "Ladder"), minutes: 4, steps: ladderSteps() },
+  { id: "s4-double-atari", stage: 4, title: t("Double Atari", "Double atari"), minutes: 4, steps: [double,
+    ...rotatePractice([double], 1, "vertical"),
+    ...[0, 1, 2].flatMap((rotation) => rotatePractice([{...double,id:"diagonal-groups",stones:[w(1,1),w(2,2),b(1,0),b(1,2),b(2,3)],targets:[p(2,1)]}], rotation, `diagonal-${rotation}`)),
+  ] },
+  { id: "s4-ladder", stage: 4, title: t("Leiter", "Ladder"), minutes: 5, steps: [
+    ...ladderSteps(),
+    ...[1, 2, 3].flatMap((rotation) => rotatePractice([{ ...ladderSteps().at(-1)!, continuePosition: false,
+      body: t("Die Leiter erreicht den Rand. Nimm die letzte Freiheit der weißen Gruppe.", "The ladder reaches the edge. Take the white group's last liberty."),
+    }], rotation, `edge-${rotation}`)),
+    mirror({ ...ladderSteps().at(-1)!, continuePosition: false }, "edge-mirrored"),
+  ] },
   { id: "s4-ladder-breaker", stage: 4, title: t("Eine Leiter brechen", "Ladder breaker"), minutes: 3, steps: [
     ...ladderSteps(true), mark("support", 7, [w(1, 1), b(0, 1), b(1, 0), b(2, 0), w(4, 2)], [p(4, 2)], t("Welche weiße Unterstützung liegt auf dem Weg der Leiter?", "Which supporting white stone lies in the ladder's path?"), t("Dieser Stein gibt Weiß beim Verbinden zusätzliche Freiheiten. Prüfe solche Steine vor dem Verfolgen.", "Connecting to this stone gives White extra liberties. Check for such stones before chasing."), "stone"),
+    ...[1, 2, 3].flatMap((rotation) => rotatePractice([{ ...ladderSteps(true)[2], continuePosition: false,
+      body: t("Lass den Verbindungspunkt zum weißen Unterstützungsstein frei. Spiele Atari auf der anderen Freiheit und prüfe die Antwort.", "Leave the connection point to White's supporting stone empty. Play atari at the other liberty and check the reply."),
+      success: t("Weiß verbindet mit dem Unterstützungsstein und hat jetzt vier Freiheiten. Die Leiter ist gebrochen.", "White connects to the supporting stone and now has four liberties. The ladder is broken."),
+    }], rotation, `breaker-${rotation}`)),
+    mirror({ ...ladderSteps(true)[2], continuePosition: false, body: t("Lass den Verbindungspunkt zum weißen Unterstützungsstein frei. Nimm die andere Freiheit: Kann Weiß sich anschließen?", "Leave the connection point to White's supporting stone empty. Take the other liberty: can White connect?"), success: t("Die Verbindung gibt Weiß vier Freiheiten. Ein weiteres Atari ist nicht mehr möglich: Die Leiter ist gebrochen.", "Connecting gives White four liberties. Another atari is no longer possible: the ladder is broken.") }, "breaker-mirrored"),
   ] },
-  { id: "s4-net", stage: 4, title: t("Netz / Geta", "Net / geta"), minutes: 3, steps: [net,
-    ...sequence("net-proof", 5, [...NET, b(2, 2)], "white", [
-      { move: p(2, 1), replies: [p(2, 0)], body: t("Spiele jetzt Weiß. Versuche, nach rechts zu entkommen.", "Now play White. Try escaping to the right."), success: t("Schwarz blockiert oben. Weiß bleibt nur die untere Freiheit.", "Black blocks above. White has only the lower liberty left.") },
-      { move: p(1, 2), replies: [p(0, 2)], body: t("Weiß muss nach unten erweitern. Versuche diesen Ausweg.", "White must extend downward. Try that exit."), success: t("Schwarz schließt links und schlägt die ganze Gruppe. Das Netz hält.", "Black closes the left exit and captures the group. The net holds.") },
-    ])] },
-  { id: "s4-snapback", stage: 4, title: t("Snapback", "Snapback"), minutes: 3, steps: [...snap, mirror(snap[1], "recapture-other-edge")] },
-  { id: "s4-throw-in", stage: 4, title: t("Einwerfen", "Throw-in"), minutes: 3, steps: [
+  { id: "s4-net", stage: 4, title: t("Netz / Geta", "Net / geta"), minutes: 5, steps: [
+    info("net-term", 5, NET, t("Ein Netz schließt Fluchtwege mit Abstand ein. Du spielst Schwarz: Setze die Umfassung und stoppe danach die Fluchtversuche von Weiß.", "A net encloses escape routes from a distance. You play Black: set the enclosure, then stop White's escape attempts.")),
+    ...NET_PRACTICE,
+  ] },
+  { id: "s4-snapback", stage: 4, title: t("Snapback", "Snapback"), minutes: 5, steps: [
+    info("snapback-term", 5, SNAPBACK, t("Beim Snapback opferst du einen Stein und schlägst danach eine größere Gruppe zurück. Prüfe nach dem gegnerischen Schlag ihre letzte Freiheit.", "In snapback, you sacrifice one stone and then recapture a larger group. After the opponent captures, check that group's last liberty.")),
+    ...SNAPBACK_PRACTICE,
+  ] },
+  { id: "s4-throw-in", stage: 4, title: t("Einwerfen", "Throw-in"), minutes: 5, steps: [
     info("purpose", 5, SNAPBACK, t("Der neue Stein am Rand soll nicht überleben. Er zwingt Weiß zum Schlagen und nimmt der weißen Form Platz.", "The new edge stone is not meant to survive. It forces White to capture and reduces White's space.")),
     ...snap.map((step, index) => ({ ...step, id: `throw-${index}`, success: index === 0 ? t("Der geopferte Stein ist weg. Weiß hat jetzt weniger Freiheiten für die ganze Gruppe.", "The sacrificed stone is gone. White now has fewer liberties for the whole group.") : step.success })),
+    ...SNAPBACK_PRACTICE.filter((step) => step.id.startsWith("right-") || step.id.startsWith("bottom-") || step.id.startsWith("left-") || step.id.startsWith("four-")),
   ] },
-  { id: "s4-shortage", stage: 4, title: t("Eine Freiheit zu wenig", "Shortage of liberties"), minutes: 3, steps: [
+  { id: "s4-shortage", stage: 4, title: t("Eine Freiheit zu wenig", "Shortage of liberties"), minutes: 4, steps: [
     mark("count", 5, snap[1].stones!, [p(1, 0)], t("Markiere die Freiheiten der weißen Eckgruppe aus drei Steinen.", "Mark the liberties of White's three-stone corner group."), t("Nur eine Freiheit bleibt. Der weiße Schlag war deshalb keine sichere Rettung.", "Only one liberty remains. White's capture was therefore not a safe rescue.")),
     { ...snap[1], id: "punish", continuePosition: false },
     mirror({ ...snap[1], continuePosition: false }, "other-side"),
+    ...rotatePractice([{ ...snap[1], continuePosition: false }], 1, "bottom-edge"),
+    ...rotatePractice([{ ...snap[1], continuePosition: false }], 2, "lower-corner"),
+    ...rotatePractice([{ ...snap[1], continuePosition: false }], 3, "left-edge"),
   ] },
-  { id: "s4-semeai", stage: 4, title: t("Schlagrennen / Semeai", "Capturing race / semeai"), minutes: 4, steps: [
+  { id: "s4-semeai", stage: 4, title: t("Schlagrennen / Semeai", "Capturing race / semeai"), minutes: 5, steps: [
     mark("black-liberties", 5, RACE, [p(0, 0), p(1, 0), p(0, 2), p(1, 2)], t("Die schwarze Zweiergruppe links kämpft gegen die weiße Zweiergruppe. Markiere Schwarz' Freiheiten.", "The black pair on the left races against the white pair. Mark Black's liberties."), t("Schwarz: vier Freiheiten.", "Black: four liberties.")),
     mark("white-liberties", 5, RACE, [p(2, 0), p(2, 2), p(3, 2)], t("Markiere jetzt die Freiheiten der weißen Zweiergruppe.", "Now mark the white pair's liberties."), t("Weiß: drei Freiheiten. Schwarz beginnt und kann zuerst schlagen.", "White: three liberties. Black moves first and can capture first.")),
     ...race,
+    ...[1, 2, 3].flatMap((rotation) => rotatePractice(race.map((step, index) => ({ ...step,
+      body: [
+        [t("Nimm die Freiheit rechts neben dem oberen Stein der weißen Zweiergruppe.", "Take the liberty to the right of the upper stone of the white pair."), t("Nimm jetzt die Freiheit links neben dem oberen Stein der weißen Zweiergruppe.", "Now take the liberty to the left of the upper stone of the white pair.")],
+        [t("Nimm die Freiheit unter dem rechten Stein der weißen Zweiergruppe.", "Take the liberty below the right stone of the white pair."), t("Nimm jetzt die Freiheit über dem rechten Stein der weißen Zweiergruppe.", "Now take the liberty above the right stone of the white pair.")],
+        [t("Nimm die Freiheit links neben dem unteren Stein der weißen Zweiergruppe.", "Take the liberty to the left of the lower stone of the white pair."), t("Nimm jetzt die Freiheit rechts neben dem unteren Stein der weißen Zweiergruppe.", "Now take the liberty to the right of the lower stone of the white pair.")],
+      ][rotation - 1][index] ?? t("Schlage Weiß auf seiner letzten Freiheit.", "Capture White at its last liberty."),
+    })), rotation, `race-${rotation}`)),
+    ...race.map((step, index) => ({ ...mirror(step, `race-mirrored-${index}`), continuePosition: index > 0,
+      body: [t("Nimm die Freiheit über dem rechten Stein der weißen Zweiergruppe.", "Take the liberty above the right stone of the white pair."), t("Nimm jetzt die Freiheit unter dem rechten Stein der weißen Zweiergruppe.", "Now take the liberty below the right stone of the white pair."), t("Schlage Weiß auf seiner letzten Freiheit.", "Capture White at its last liberty.")][index],
+    })),
     mark("shared", 5, [b(1, 1), w(2, 2)], [p(2, 1), p(1, 2)], t("Hier sind zwei Freiheiten gemeinsam: Sie grenzen direkt an beide Farben. Markiere nur diese.", "Here two liberties are shared: they touch both colors directly. Mark only those."), t("Eine gemeinsame Freiheit gehört beiden Gruppen. Ihr Besetzen nimmt auch der eigenen Gruppe eine Freiheit.", "A shared liberty belongs to both groups. Filling it also takes a liberty from your own group.")),
   ] },
-  { id: "s4-sacrifice", stage: 4, title: t("Ein Stein als Opfer", "Sacrifice"), minutes: 3, steps: [
+  { id: "s4-sacrifice", stage: 4, title: t("Ein Stein als Opfer", "Sacrifice"), minutes: 5, steps: [
     ...snap.map((step, index) => ({ ...step, id: `trade-${index}`, body: index === 0 ? t("Ein eigener Stein gegen drei gegnerische: Bereite den Tausch am oberen Rand vor.", "One own stone for three opposing stones: prepare the trade on the top edge.") : step.body })),
+    ...SNAPBACK_PRACTICE.filter((step) => step.id.startsWith("right-") || step.id.startsWith("bottom-") || step.id.startsWith("left-") || step.id.startsWith("four-")),
     info("trade-result", 5, [b(1, 0), w(2, 0), b(2, 1), b(0, 2), b(1, 2), b(2, 2)], t("Ein Opfer wird nach dem Ergebnis beurteilt, nicht danach, ob jeder eigene Stein bleibt. Hier gewinnt Schwarz zwei Gefangene mehr als Weiß.", "Judge a sacrifice by its result, not by whether every stone survives. Here Black gains two more prisoners than White.")),
   ] },
-  { id: "s4-tesuji", stage: 4, title: t("Was heißt Tesuji?", "What is a tesuji?"), minutes: 3, steps: [
+  { id: "s4-tesuji", stage: 4, title: t("Was heißt Tesuji?", "What is a tesuji?"), minutes: 4, steps: [
     info("term", 5, NET, t("Tesuji nennt man einen besonders wirkungsvollen lokalen Zug. Netz, Einwerfen und Snapback können solche Züge sein; Tesuji ist keine einzelne Zugart.", "A tesuji is a particularly effective local move. Nets, throw-ins, and snapbacks can be tesuji; it is not one specific move type.")), net, { ...snap[1], id: "recapture", continuePosition: false },
+    double, { ...race.at(-1)!, id: "race-tesuji", continuePosition: false },
+    ...rotatePractice([{ ...net, body: t("Weiß hat zwei Ausgänge. Schließe beide mit einem diagonalen Zug ein.", "White has two exits. Enclose both with one diagonal move."), wrong: t("Ein direktes Atari lässt den anderen Ausgang offen. Suche die diagonale Umfassung.", "A direct atari leaves the other exit open. Find the diagonal enclosure.") }], 2, "net-tesuji"),
   ] },
   { id: "s4-mix", stage: 4, title: t("Taktik-Mix", "Tactics mix"), minutes: 5, steps: mixed },
   { id: "s4-challenge", stage: 4, title: t("Taktik-Challenge", "Tactics challenge"), minutes: 5, challenge: true, steps: [

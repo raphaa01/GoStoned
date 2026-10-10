@@ -6,6 +6,7 @@ import { boardHash } from "@/lib/game/goEngine";
 import type { Board, Position } from "@/lib/game/types";
 import { formatLearn, learnUiCopy, line, type LearnLesson } from "@/lib/learn/curriculum";
 import { lessonBoardPresentation } from "@/lib/learn/presentation";
+import { automaticReplyCount, continuesOwnTurn } from "@/lib/learn/lessonFlow";
 import {
   boardFromStones,
   createLearnGame,
@@ -86,6 +87,21 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const targets = step.targets ?? [];
   const success = step.success ? line(step.success, locale) : copy.correct;
 
+  const finishDecision = (after: LearnGamePosition) => {
+    if (continuesOwnTurn(step, lesson.steps[stepIndex + 1])) {
+      const next = stepIndex + 1;
+      setStepIndex(next);
+      resetStep(next, after);
+      // Keep the consequence visible alongside the next instruction.
+      setFeedback(success);
+    } else {
+      setPosition(after);
+      setContinuation(null);
+      setSolved(true);
+      setFeedback(success);
+    }
+  };
+
   const handlePoint = (point: Position) => {
     if (!interactive || solved || continuation || !position) return;
     const isTarget = targets.length === 0 || targets.some((target) => samePoint(target, point));
@@ -137,21 +153,25 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
       after = played.position;
       positions.push(after);
     }
-    setPosition(result.position);
-    setContinuation(positions.length ? { positions, shown: 0 } : null);
-    setSolved(positions.length === 0);
     setWrong(false);
-    setFeedback(positions.length ? step.replyExplanations?.[0] ? line(step.replyExplanations[0], locale) : copy.watchContinuation : success);
+    const shown = automaticReplyCount(step);
+    const visible = shown ? positions[shown - 1] : result.position;
+    if (shown === positions.length) {
+      finishDecision(visible);
+    } else {
+      setPosition(visible);
+      setContinuation({ positions, shown });
+      setSolved(false);
+      setFeedback(step.replyExplanations?.[shown] ? line(step.replyExplanations[shown], locale) : copy.watchContinuation);
+    }
   };
 
   const showNextMove = () => {
     if (!continuation) return;
-    const shown = Math.min(continuation.positions.length, continuation.shown + (step.replyBatch ?? 1));
+    const shown = continuation.shown + 1;
     setPosition(continuation.positions[shown - 1]);
     if (shown === continuation.positions.length) {
-      setContinuation(null);
-      setSolved(true);
-      setFeedback(success);
+      finishDecision(continuation.positions[shown - 1]);
     } else {
       setContinuation({ ...continuation, shown });
       setFeedback(step.replyExplanations?.[shown] ? line(step.replyExplanations[shown], locale) : copy.watchContinuation);
@@ -181,10 +201,11 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const stepMode = solved ? "solved" : continuation || step.kind === "info" ? "info" : gameMode ? "game" : "action";
   const modeLabel = solved ? copy.taskSolved : continuation || step.kind === "info" ? copy.explanation : gameMode ? copy.practiceGame : copy.taskTurn;
   const modeHelp = continuation ? copy.watchContinuation : solved ? copy.readyToContinue : step.kind === "info" ? copy.explanationHelp
-    : gameMode ? copy.practiceGameHelp : step.kind === "pass" ? copy.passTaskHelp : copy.boardTaskHelp;
+    : gameMode ? copy.practiceGameHelp : step.kind === "pass" ? copy.passTaskHelp
+      : step.kind === "play" || step.kind === "illegal" ? step.toPlay === "white" ? copy.yourWhiteTurn : copy.yourBlackTurn : copy.boardTaskHelp;
 
   return (
-    <article className="learn-player">
+    <article className="learn-player" data-step-id={step.id} data-player-color={step.toPlay ?? "black"}>
       <header className="learn-player__topbar">
         <button className="learn-text-button" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={17} /> {copy.learningPath}</button>
         <span>{stepIndex + 1} / {lesson.steps.length}</span>
@@ -263,7 +284,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             {(step.hint || (step.hintArea && failedAttempts >= 3)) && !solved ? (
               <button className="learn-text-button" onClick={() => setHint((current) => !current)} type="button"><Lightbulb aria-hidden="true" size={15} /> {copy.hint}</button>
             ) : null}
-            {(wrong || selected.length > 0 || solved || continuation) && !gameMode ? (
+            {(wrong || selected.length > 0 || solved || continuation || step.continuePosition) && !gameMode ? (
               <button className="learn-text-button" onClick={() => resetStep()} type="button"><RotateCcw aria-hidden="true" size={15} /> {copy.restart}</button>
             ) : null}
           </div>
