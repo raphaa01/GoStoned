@@ -84,8 +84,8 @@ function captureCandidate(board: Board): Position | null {
 async function strongTestMove(page: Page, input: GoStoneBotPosition) {
   return page.evaluate(async (position) => {
     // Only the verification player uses this worker. The opponent is the unmodified app worker.
-    const scope=window as unknown as {__learnBotUrl:string;__testPlayer?:Worker};
-    const worker=scope.__testPlayer??(scope.__testPlayer=new Worker(scope.__learnBotUrl,{type:"module",name:"verification-player"}));
+    const scope=window as unknown as {__learnBotUrl:string;__learnBotOptions?:WorkerOptions;__testPlayer?:Worker};
+    const worker=scope.__testPlayer??(scope.__testPlayer=new Worker(scope.__learnBotUrl,{...scope.__learnBotOptions,name:"verification-player"}));
     const id=crypto.randomUUID();
     return new Promise<GoStoneBotMove>((resolve,reject)=>{
       const timeout=setTimeout(()=>{worker.removeEventListener("message",receive);reject(new Error("Verification player timed out"));},30000);
@@ -253,7 +253,7 @@ async function run() {
     await page.addInitScript(()=>{
       const Original=window.Worker;
       window.Worker=class extends Original {
-        constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(options?.name==="gostone-bot-v1")(window as unknown as {__learnBotUrl:string}).__learnBotUrl=String(url);}
+        constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(options?.name==="gostone-bot-v1"){const scope=window as unknown as {__learnBotUrl:string;__learnBotOptions?:WorkerOptions};scope.__learnBotUrl=String(url);scope.__learnBotOptions=options;}}
       };
     });
     let mobileProgress: LearnProgress | null = null;
