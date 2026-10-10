@@ -10527,6 +10527,9 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .result-share-action:hover { color: var(--color-moss-strong); }
 
 .interactive-learn-board-frame { max-width: 560px; width: 100%; }
+.learn-board-viewport { width: 100%; }
+.interactive-learn-board-frame.is-enlarged .learn-board-viewport { overscroll-behavior: contain; scrollbar-width: thin; }
+.learn-board-zoom { margin-bottom: 12px; }
 .interactive-learn-board {
   aspect-ratio: 1;
   background: var(--color-board);

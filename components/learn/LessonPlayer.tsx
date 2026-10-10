@@ -9,6 +9,7 @@ import { lessonBoardPresentation } from "@/lib/learn/presentation";
 import {
   boardFromStones,
   createLearnGame,
+  passLearnMove,
   playLearnMove,
   samePoint,
   withLearnTurn,
@@ -25,6 +26,7 @@ type LessonPlayerProps = Readonly<{
   onBack: () => void;
   onStep: (step: number) => void;
   onComplete: (outcome?: "won" | "lost" | "completed") => void;
+  onAttempt?: (outcome: "lost") => void;
 }>;
 
 function positionForStep(lesson: LearnLesson, stepIndex: number, previous?: LearnGamePosition | null): LearnGamePosition | null {
@@ -41,7 +43,7 @@ function positionForStep(lesson: LearnLesson, stepIndex: number, previous?: Lear
   return position;
 }
 
-export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onComplete }: LessonPlayerProps) {
+export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onComplete, onAttempt }: LessonPlayerProps) {
   const copy = learnUiCopy(locale);
   let safeInitial = Math.min(Math.max(initialStep, 0), lesson.steps.length - 1);
   // Free placements cannot be reconstructed from a step number alone.
@@ -55,6 +57,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const [feedback, setFeedback] = useState<string | null>(null);
   const [wrong, setWrong] = useState(false);
   const [hint, setHint] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
   const [gameOutcome, setGameOutcome] = useState<"won" | "lost" | "completed" | undefined>();
   const [continuation, setContinuation] = useState<{ positions: LearnGamePosition[]; shown: number } | null>(null);
   const step = lesson.steps[stepIndex];
@@ -69,6 +72,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     setFeedback(null);
     setWrong(false);
     setHint(false);
+    setFailedAttempts(0);
     setGameOutcome(undefined);
     setContinuation(null);
   };
@@ -86,6 +90,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     if (!interactive || solved || continuation || !position) return;
     const isTarget = targets.length === 0 || targets.some((target) => samePoint(target, point));
     if (!isTarget) {
+      setFailedAttempts((count) => count + 1);
       setWrong(true);
       setFeedback(step.wrong ? line(step.wrong, locale) : copy.checkAgain);
       return;
@@ -96,11 +101,11 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
       const next = [...selected, point];
       setSelected(next);
       setWrong(false);
-      if (next.length === targets.length) {
+      if (next.length === (step.selectionCount ?? targets.length)) {
         setSolved(true);
         setFeedback(success);
       } else {
-        setFeedback(formatLearn(copy.markedCount, { done: next.length, total: targets.length }));
+        setFeedback(formatLearn(copy.markedCount, { done: next.length, total: step.selectionCount ?? targets.length }));
       }
       return;
     }
@@ -126,6 +131,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     let after = result.position;
     const positions: LearnGamePosition[] = [];
     for (const reply of step.replies ?? []) {
+      if (reply === null) { after = passLearnMove(after); positions.push(after); continue; }
       const played = playLearnMove(after, reply);
       if (!played.ok) throw new Error(`Invalid teaching reply in ${lesson.id}/${step.id}`);
       after = played.position;
@@ -140,8 +146,8 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
 
   const showNextMove = () => {
     if (!continuation) return;
-    const shown = continuation.shown + 1;
-    setPosition(continuation.positions[continuation.shown]);
+    const shown = Math.min(continuation.positions.length, continuation.shown + (step.replyBatch ?? 1));
+    setPosition(continuation.positions[shown - 1]);
     if (shown === continuation.positions.length) {
       setContinuation(null);
       setSolved(true);
@@ -165,7 +171,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   const canAdvance = step.kind === "info" || solved;
   const stepProgress = ((stepIndex + Number(solved || step.kind === "info")) / lesson.steps.length) * 100;
   const presentation = lessonBoardPresentation(step, {
-    solved, wrong, hint, lastMove: position?.moves.at(-1)?.position ?? null,
+    solved, wrong, hint, failedAttempts, lastMove: position?.moves.at(-1)?.position ?? null,
   });
   const boardInteraction = step.kind === "select" ? step.selectFrom ?? "any" : "empty";
 
@@ -216,6 +222,9 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             key={`${lesson.id}:${step.id}`}
             locale={locale}
             mode={gameMode}
+            boardSize={step.gameSize}
+            requireWin={step.requireWin}
+            onAttempt={onAttempt}
             onComplete={(outcome) => {
               setGameOutcome(outcome);
               setSolved(true);
@@ -251,7 +260,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
           ) : null}
 
           <div className="learn-player__tools">
-            {step.hint && !solved ? (
+            {(step.hint || (step.hintArea && failedAttempts >= 3)) && !solved ? (
               <button className="learn-text-button" onClick={() => setHint((current) => !current)} type="button"><Lightbulb aria-hidden="true" size={15} /> {copy.hint}</button>
             ) : null}
             {(wrong || selected.length > 0 || solved || continuation) && !gameMode ? (
@@ -264,6 +273,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             <ArrowRight aria-hidden="true" size={17} />
           </button>
         </div>
+        {step.links ? <nav className="learn-game__actions" aria-label={locale === "de" ? "Weiter üben" : "Keep practicing"}>{step.links.map((destination) => <a className="button button--secondary" href={`/${locale}/${destination}`} key={destination}>{destination === "review" ? locale === "de" ? "Eigene Partie analysieren" : "Review your game" : destination === "puzzles" ? locale === "de" ? "Brettaufgaben" : "Board puzzles" : locale === "de" ? "Partie spielen" : "Play a game"}</a>)}</nav> : null}
       </div>
     </article>
   );

@@ -55,6 +55,7 @@ function InteractiveLearnBoardComponent({
   const groupKeys = useMemo(() => keys(group), [group]);
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [enlarged, setEnlarged] = useState(false);
   // Half a grid interval at each edge leaves room for full-size corner stones.
   const inset = 50 / size;
   const span = 100 - inset * 2;
@@ -63,7 +64,9 @@ function InteractiveLearnBoardComponent({
   const copy = learnUiCopy(locale);
 
   return (
-    <div className="interactive-learn-board-frame">
+    <div className={`interactive-learn-board-frame${enlarged ? " is-enlarged" : ""}`}>
+      {size >= 13 ? <button className="learn-text-button learn-board-zoom" aria-pressed={enlarged} onClick={() => setEnlarged((current) => !current)} type="button">{locale === "de" ? enlarged ? "Ganzes Brett anzeigen" : "Brett vergrößern · dann verschieben" : enlarged ? "Show whole board" : "Enlarge board · then pan"}</button> : null}
+      <div className="learn-board-viewport" style={enlarged ? { maxHeight: "70svh", overflow: "auto" } : undefined}>
       <div
         aria-colcount={size}
         aria-label={formatLearn(copy.boardLabel, { size })}
@@ -75,6 +78,7 @@ function InteractiveLearnBoardComponent({
           "--learn-board-inset": `${inset}%`,
           "--learn-board-span": `${span}%`,
           "--learn-board-point": `${span / (size - 1)}%`,
+          ...(enlarged ? { minWidth: `${size * 36}px` } : {}),
         } as CSSProperties}
       >
         <div aria-hidden="true" className="interactive-learn-board__grid">
@@ -153,6 +157,7 @@ function InteractiveLearnBoardComponent({
             </div>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );

@@ -30,6 +30,22 @@ export const LEARN_LESSON_IDS = [
   "s3-sacrifice",
   "s3-challenge",
   "s3-second-game",
+  "s4-double-atari", "s4-ladder", "s4-ladder-breaker", "s4-net", "s4-snapback", "s4-throw-in",
+  "s4-shortage", "s4-semeai", "s4-sacrifice", "s4-tesuji", "s4-mix", "s4-challenge",
+  "s5-opening", "s5-too-close", "s5-too-far", "s5-territory-influence", "s5-attack", "s5-defend",
+  "s5-urgent", "s5-tenuki", "s5-sente-gote", "s5-shape", "s5-empty-triangle", "s5-tiger-mouth",
+  "s5-bamboo", "s5-endgame", "s5-big-endgame", "s5-count", "s5-commented-game", "s5-win-game",
+  "s6-bigger", "s6-corner-side-center", "s6-corner-points", "s6-approach", "s6-extension", "s6-base",
+  "s6-influence", "s6-moyo", "s6-reduction", "s6-invasion", "s6-invasion-reduction", "s6-direction",
+  "s6-whole-board", "s6-commented-game", "s6-first-game",
+  "s7-bigger", "s7-fuseki", "s7-corners", "s7-star-point", "s7-komoku", "s7-san-san", "s7-approach",
+  "s7-extension", "s7-joseki", "s7-context", "s7-direction", "s7-thickness", "s7-weak-groups",
+  "s7-profit", "s7-moyo", "s7-invasion", "s7-reduction", "s7-tenuki", "s7-middle-game", "s7-endgame",
+  "s7-commented-opening", "s7-first-game",
+  "s8-life-death", "s8-nakade", "s8-eye-shapes", "s8-semeai", "s8-ko-threats", "s8-ko-strategy",
+  "s8-fighting-shape", "s8-haengma", "s8-cutting-points", "s8-forcing", "s8-sabaki", "s8-attack-defense",
+  "s8-thickness", "s8-overconcentration", "s8-endgame-values", "s8-sente-endgame", "s8-counting",
+  "s8-reading", "s8-candidates", "s8-review", "s8-ai-analysis", "s8-final",
 ] as const;
 
 export type LearnLessonId = (typeof LEARN_LESSON_IDS)[number];
@@ -84,11 +100,11 @@ export function parseLearnProgress(value: unknown): LearnProgress {
   const currentLessonId = isLearnLessonId(value.currentLessonId)
     ? value.currentLessonId
     : LEARN_LESSON_IDS.find((id) => !completedLessonIds.includes(id)) ?? LEARN_LESSON_IDS.at(-1)!;
-  const completedStages = [1, 2, 3].filter((stage) => LEARN_LESSON_IDS.filter((id) => id.startsWith(`s${stage}-`)).every((id) => completedLessonIds.includes(id)));
+  const completedStages = [1, 2, 3, 4, 5, 6, 7, 8].filter((stage) => LEARN_LESSON_IDS.filter((id) => id.startsWith(`s${stage}-`)).every((id) => completedLessonIds.includes(id)));
   const lastStepByLesson: Partial<Record<LearnLessonId, number>> = {};
   if (isRecord(value.lastStepByLesson)) {
     for (const [id, step] of Object.entries(value.lastStepByLesson)) {
-      if (isLearnLessonId(id) && Number.isInteger(step) && (step as number) >= 0 && (step as number) <= 20) {
+      if (isLearnLessonId(id) && Number.isInteger(step) && (step as number) >= 0 && (step as number) <= 200) {
         lastStepByLesson[id] = step as number;
       }
     }
@@ -147,7 +163,7 @@ export function completeLearnLesson(
   challengeOutcome?: LearnChallengeResult["outcome"],
 ): LearnProgress {
   const completedLessonIds = LEARN_LESSON_IDS.filter((id) => (
-    progress.completedLessonIds.includes(id) || id === lessonId
+    progress.completedLessonIds.includes(id) || (id === lessonId && (lessonId !== "s5-win-game" || challengeOutcome === "won"))
   ));
   const stageIds = LEARN_LESSON_IDS.filter((id) => id.startsWith(`s${stage}-`));
   const completedStages = stageIds.every((id) => completedLessonIds.includes(id))

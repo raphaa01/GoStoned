@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { chromium, expect, type Page } from "@playwright/test";
 import { LEARN_LESSONS, line, type LearnLesson } from "../lib/learn/curriculum";
-import { allGroups, chooseLearnBotMove, createLearnGame, groupLiberties, legalLearnMoves, playLearnMove, withLearnTurn } from "../lib/learn/lessonEngine";
-import type { Board, Position } from "../lib/game/types";
-import { boardHash } from "../lib/game/goEngine";
+import { allGroups, chooseLearnBotMove, createLearnGame, groupLiberties, legalLearnMoves, playLearnMove, passLearnMove, storedLearnMoves, territoryPoints, withLearnTurn } from "../lib/learn/lessonEngine";
+import type { Board, BoardSize, Position } from "../lib/game/types";
+import type { GoStoneBotPosition, GoStoneBotWorkerResponse, GoStoneBotMove } from "../lib/bot/modelV1";
+import { boardHash, getNeighbors } from "../lib/game/goEngine";
 import { scoreLearnGame } from "../lib/learn/gameScoring";
 import "dotenv/config";
 import { closePool, getPool } from "../lib/db";
@@ -80,34 +81,80 @@ function captureCandidate(board: Board): Position | null {
   return best;
 }
 
-async function playGame(page: Page, capture: boolean) {
+async function strongTestMove(page: Page, input: GoStoneBotPosition) {
+  return page.evaluate(async (position) => {
+    // Only the verification player uses this worker. The opponent is the unmodified app worker.
+    const scope=window as unknown as {__learnBotUrl:string;__testPlayer?:Worker};
+    const worker=scope.__testPlayer??(scope.__testPlayer=new Worker(scope.__learnBotUrl,{type:"module",name:"verification-player"}));
+    const id=crypto.randomUUID();
+    return new Promise<GoStoneBotMove>((resolve,reject)=>{
+      const timeout=setTimeout(()=>{worker.removeEventListener("message",receive);reject(new Error("Verification player timed out"));},30000);
+      const receive=(event:MessageEvent<GoStoneBotWorkerResponse>)=>{
+        if(event.data.id!==id)return;
+        clearTimeout(timeout);worker.removeEventListener("message",receive);
+        if(event.data.ok&&event.data.kind==="move")resolve(event.data.move);
+        else reject(new Error("Verification player failed"));
+      };
+      worker.addEventListener("message",receive);worker.postMessage({id,kind:"move",position});
+    });
+  },input);
+}
+
+function finishCandidate(record: ReturnType<typeof createLearnGame>):Position|null {
+  let best:Position|null=null,bestScore=-Infinity;
+  for(const point of legalLearnMoves(record)) {
+    const neighbors=getNeighbors(record.board,point);
+    if(neighbors.every((p)=>record.board[p.y][p.x]==="black"))continue; // preserve eyes
+    const next=playLearnMove(record,point);if(!next.ok||(!next.captured.length&&point.liberties<2))continue;
+    const rescue=neighbors.some((p)=>record.board[p.y][p.x]==="black"&&groupLiberties(record.board,p).length===1);
+    const score=next.captured.length*10000+Number(rescue)*1000+territoryPoints(next.position.board,"black").length*50-territoryPoints(next.position.board,"white").length*50
+      +neighbors.filter((p)=>record.board[p.y][p.x]==="black").length*12+neighbors.filter((p)=>record.board[p.y][p.x]==="white").length*6+Math.min(point.liberties,4)*4;
+    if(score>bestScore){best=point;bestScore=score;}
+  }
+  return best;
+}
+
+async function playGame(page: Page, capture: boolean, advance: ReturnType<Page["getByRole"]>, requireWin=false) {
   let previousBlackBoard: Board | null = null;
-  for (let turn = 0; turn < 220; turn++) {
-    const finish = page.getByRole("button", {name: "Lektion abschließen", exact: true});
+  let record=createLearnGame(capture?5:Math.sqrt(await page.getByRole("gridcell").count()));
+  for (let turn = 0; turn < 850; turn++) {
+    const finish = advance;
     if (await finish.isEnabled()) return;
     const confirm = page.getByRole("button", {name: "Markierung bestätigen und zählen", exact: true});
     if (await confirm.count()) {
       await confirm.click();
+      await expect(page.locator(".learn-game__score")).toBeVisible();
+      if(requireWin&&!(await finish.isEnabled()))throw new Error("The verification player lost the win checkpoint; progression correctly stays locked");
       await expect(finish).toBeEnabled();
       return;
     }
     await expect(page.locator(".learn-game__status strong")).toHaveText("Du bist am Zug", {timeout: 30_000});
     const board = await readBoard(page);
+    if(!capture&&record.turn==="white") {
+      let white:Position|null=null;
+      for(let y=0;y<board.length;y++)for(let x=0;x<board.length;x++)if(board[y][x]==="white"&&record.board[y][x]!=="white")white={x,y};
+      if(white){const next=playLearnMove(record,white);assert.ok(next.ok);record=next.position;}else record=passLearnMove(record);
+      assert.equal(boardHash(record.board),boardHash(board),"Observed opponent move must match the real rules");
+    }
     const occupied = board.flat().filter(Boolean).length;
     const black = withLearnTurn({...createLearnGame(board.length), board,
       history:previousBlackBoard ? [boardHash(previousBlackBoard),boardHash(board)] : [boardHash(board)],
     }, "black");
-    const point = capture ? captureCandidate(board) : chooseLearnBotMove(black);
-    if ((!point || turn > 90 || occupied > 62) && !capture) {
+    const action = capture ? null : await strongTestMove(page,{gameId:"verify-full",boardSize:board.length as BoardSize,board,moves:storedLearnMoves(record),toMove:"black",komi:6.5,targetRating:requireWin?2100:1200,gameVersion:record.moves.length});
+    const rawScore=territoryPoints(board,"black").length+record.capturedWhiteByBlack-territoryPoints(board,"white").length-record.capturedBlackByWhite;
+    const point = capture ? captureCandidate(board) : action?.kind==="play" ? action : requireWin&&rawScore<=6.5 ? finishCandidate(record) : null;
+    if ((!point || (!requireWin&&(turn > board.length*board.length||occupied > board.length*board.length*0.8))) && !capture) {
       previousBlackBoard = board;
       await page.getByRole("button", {name: "Passen", exact: true}).click();
       if (await page.getByText(/Auf dem Brett gibt es noch offene Bereiche/).count()) await page.getByRole("button", {name: "Passen", exact: true}).click();
+      record=passLearnMove(record);
     } else {
       assert.ok(point, "Capture challenge has no safe continuation");
       const played = playLearnMove(black,point);
       assert.ok(played.ok,"The verification player must also respect ko");
       previousBlackBoard = played.position.board;
       await page.getByRole("gridcell").nth(point.y * board.length + point.x).click();
+      if(!capture){const next=playLearnMove(record,point);assert.ok(next.ok);record=next.position;}
     }
     await expect.poll(async () => (await page.locator(".learn-game__status strong").innerText()) !== "Bot zieht" || await page.getByRole("button", {name:"Botzug erneut berechnen"}).count() > 0, {timeout:30_000}).toBeTruthy();
     assert.equal(await page.getByRole("button", {name:"Botzug erneut berechnen"}).count(), 0, "Browser worker failed");
@@ -138,7 +185,7 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     }
     if (step.size || gameStep) await verifyBoardGeometry(page);
     if (step.kind === "capture-game" || step.kind === "guided-game" || step.kind === "beginner-game") {
-      await playGame(page, step.kind === "capture-game");
+      await playGame(page, step.kind === "capture-game",advance,step.requireWin);
     } else if (step.kind === "pass") {
       await page.getByRole("button", {name:"Passen",exact:true}).click();
     } else if (step.kind !== "info") {
@@ -154,7 +201,7 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
         await page.getByRole("button", {name:"Neu starten",exact:true}).click();
         await expectUnmarkedSelection(page);
       }
-      const targets = step.targets?.length ? step.kind === "select" ? step.targets : [step.targets[0]]
+      const targets = step.targets?.length ? step.kind === "select" ? step.targets.slice(0,step.selectionCount??step.targets.length) : [step.targets[0]]
         : [{x: index === 1 ? 2 : index === 2 ? 3 : 1, y:2}];
       for (const [answerIndex, target] of targets.entries()) {
         await page.getByRole("gridcell").nth(target.y * step.size! + target.x).click();
@@ -166,7 +213,7 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
           }
         }
       }
-      for (let reply = 0; reply < (step.replies?.length ?? 0); reply++) {
+      for (let reply = 0; reply < (step.replies?.length ?? 0); reply += step.replyBatch??1) {
         await page.getByRole("button", { name: /^Nächsten Zug zeigen/ }).click();
       }
       await expect(advance).toBeEnabled();
@@ -200,6 +247,15 @@ async function run() {
   try {
     const context = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
     const page = await context.newPage();
+    // tsx names nested callbacks when serializing evaluate(); Chromium has no such helper.
+    await page.addInitScript({content:"window.__name = (fn) => fn;"});
+    await page.addInitScript({content:"{ let n=0; crypto.randomUUID=()=>`00000000-0000-4000-8000-${String(++n).padStart(12,'0')}`; }"});
+    await page.addInitScript(()=>{
+      const Original=window.Worker;
+      window.Worker=class extends Original {
+        constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(options?.name==="gostone-bot-v1")(window as unknown as {__learnBotUrl:string}).__learnBotUrl=String(url);}
+      };
+    });
     let mobileProgress: LearnProgress | null = null;
     if (mobile) await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -217,7 +273,7 @@ async function run() {
       if (path === "/api/learn/game/score") {
         const body = route.request().postDataJSON();
         for (const point of body.moves) if (point !== null) assert.deepEqual(Object.keys(point).sort(),["x","y"],"Scoring moves must contain coordinates only, not worker metadata");
-        return route.fulfill({json:{ok:true,result:scoreLearnGame(body.moves,body.deadStones,body.neutralRegionSeeds)}});
+        return route.fulfill({json:{ok:true,result:scoreLearnGame(body.moves,body.deadStones,body.neutralRegionSeeds,body.boardSize)}});
       }
       throw new Error(`Unexpected mobile API request ${path}`);
     });
@@ -230,7 +286,7 @@ async function run() {
     }
     await page.goto(`${baseUrl}/de/learn`);
     await expect(page.locator(".learn-route-node")).toHaveCount(LEARN_LESSONS.length);
-    await expect(page.locator(".learn-path-stage")).toHaveCount(3);
+    await expect(page.locator(".learn-path-stage")).toHaveCount(8);
     await expect(page.locator(".learn-path-stage.is-locked").first().locator(".learn-route-node").first()).toBeDisabled();
     await expect(page.locator('.learn-route-node[aria-current="step"]')).toContainText("Das Go-Brett");
     {
@@ -249,28 +305,28 @@ async function run() {
     }
     assert.deepEqual(errors,[]);
     {
-      await expect(page.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
+      await expect(page.getByText("120 von 120 Lektionen abgeschlossen",{exact:true})).toBeVisible();
       await expect.poll(async () => {
         if (mobile) return mobileProgress?.completedLessonIds.length;
         return (await readAccountProgress(page)).progress?.completedLessonIds.length;
-      }).toBe(31);
+      }).toBe(120);
       await page.reload();
-      await expect(page.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
+      await expect(page.getByText("120 von 120 Lektionen abgeschlossen",{exact:true})).toBeVisible();
       const body = mobile ? {progress:mobileProgress!} : await readAccountProgress(page);
-      assert.equal(body.progress?.completedLessonIds.length,31);
-      assert.deepEqual(body.progress?.completedStages,[1,2,3]);
+      assert.equal(body.progress?.completedLessonIds.length,120);
+      assert.deepEqual(body.progress?.completedStages,[1,2,3,4,5,6,7,8]);
       if (!mobile) {
         const freshDevice = await browser.newContext({viewport:{width:390,height:844},storageState:{cookies:await context.cookies(),origins:[]}});
         const freshPage = await freshDevice.newPage();
         await freshPage.goto(`${baseUrl}/de/learn`);
-        await expect(freshPage.getByText("31 von 31 Lektionen abgeschlossen",{exact:true})).toBeVisible();
-        assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,31);
+        await expect(freshPage.getByText("120 von 120 Lektionen abgeschlossen",{exact:true})).toBeVisible();
+        assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,120);
         await freshDevice.close();
       }
       await page.getByRole("button", {name:"Das Go-Brett 2 Min.", exact:true}).click();
       await expect(page.getByRole("heading", {name:"Das Go-Brett", exact:true})).toBeVisible();
       await page.getByRole("button", {name:"Lernpfad", exact:true}).click();
-      await expect(page.getByText("31 von 31 Lektionen abgeschlossen", {exact:true})).toBeVisible();
+      await expect(page.getByText("120 von 120 Lektionen abgeschlossen", {exact:true})).toBeVisible();
       for (const width of [320,390,768]) for (const colorScheme of ["light","dark"] as const) {
         await page.setViewportSize({width,height:844});
         await page.emulateMedia({colorScheme});

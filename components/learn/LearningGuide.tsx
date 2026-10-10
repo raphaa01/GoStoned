@@ -32,6 +32,7 @@ export function LearningGuide() {
   const currentIndex = LEARN_LESSONS.findIndex((lesson) => lesson.id === firstIncomplete.id);
   const activeLesson = activeLessonId ? lessonById(activeLessonId) : null;
   const completedCount = progress.completedLessonIds.length;
+  const allDone = completedCount === LEARN_LESSONS.length;
   const percentage = Math.round((completedCount / LEARN_LESSONS.length) * 100);
 
   useEffect(() => {
@@ -77,6 +78,7 @@ export function LearningGuide() {
           locale={locale}
           onBack={() => { autoScrolled.current = false; setActiveLessonId(null); }}
           onComplete={(outcome) => finishLesson(activeLesson.id, outcome)}
+          onAttempt={(outcome) => commit((current) => completeLearnLesson(current, activeLesson.id, activeLesson.stage, outcome))}
           onStep={(step) => rememberStep(activeLesson.id, step)}
         />
       </div>
@@ -146,7 +148,7 @@ export function LearningGuide() {
 
       <div className="learn-next-dock">
         <span className="learn-next-dock__lesson">
-          <small>{copy.continue}</small>
+          <small>{allDone ? locale === "de" ? "Alle acht Etappen abgeschlossen" : "All eight stages completed" : copy.continue}</small>
           <strong>{line(firstIncomplete.title, locale)}</strong>
         </span>
         <button
@@ -160,6 +162,7 @@ export function LearningGuide() {
           <ChevronRight aria-hidden="true" size={20} />
         </button>
       </div>
+      {allDone ? <nav className="learn-game__actions" aria-label={locale === "de" ? "Weiterlernen in eigenen Partien" : "Keep learning in your own games"}>{["play","review","puzzles"].map((path)=><a className="button button--secondary" href={`/${locale}/${path}`} key={path}>{path === "play" ? locale === "de" ? "Partie spielen" : "Play a game" : path === "review" ? locale === "de" ? "Eigene Partie analysieren" : "Review your game" : locale === "de" ? "Brettaufgaben" : "Board puzzles"}</a>)}</nav> : null}
     </div>
   );
 }

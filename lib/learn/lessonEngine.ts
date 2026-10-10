@@ -220,18 +220,27 @@ export function learnReviewMoments(position: LearnGamePosition): LearnReviewMome
     }
     if (move.color === "black" && move.position && !kinds.has("reviewConnection")) {
       const precedingMoves = position.moves.slice(0, index);
-      const candidates = legalLearnMoves({
+      // A useful rescue connection must touch a weak group. Avoid replaying all
+      // 361 intersections for every move when reviewing a 19×19 teaching game.
+      const candidateKeys = new Map<string, Position>();
+      for (const group of allGroups(before,"black")) {
+        const liberties = groupLiberties(before,group[0]);
+        if (liberties.length <= 2) for (const point of liberties) candidateKeys.set(pointKey(point),point);
+      }
+      const precedingPosition = {
         ...createLearnGame(before.length),
         board: before,
-        turn: "black",
+        turn: "black" as const,
         moves: precedingMoves,
         history: [boardHash(createLearnGame(before.length).board), ...precedingMoves.map((prior) => boardHash(prior.board))],
-      });
-      for (const point of candidates) {
+      };
+      for (const point of candidateKeys.values()) {
         if (samePoint(point, move.position)) continue;
         const groups = getNeighbors(before, point).filter((p) => before[p.y][p.x] === "black").map((p) => getGroup(before, p));
         const unique = new Map(groups.map((g) => [g.map(pointKey).sort().join(","), g]));
-        if (unique.size < 2 || ![...unique.values()].some((g) => groupLiberties(before, g[0]).length <= 2) || point.liberties < 2) continue;
+        if (unique.size < 2 || ![...unique.values()].some((g) => groupLiberties(before, g[0]).length <= 2)) continue;
+        const connection = playLearnMove(precedingPosition,point);
+        if (!connection.ok || groupLiberties(connection.position.board,point).length < 2) continue;
         moments.push({ kind: "reviewConnection", board: before, group: [...unique.values()].flat(), emphasis: [point], lastMove: previousPoint, coordinate: `${"ABCDEFGHJKLMNOPQRST"[point.x]}${before.length - point.y}`, count: unique.size });
         kinds.add("reviewConnection");
         break;

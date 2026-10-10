@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { generateBrowserBotMove, generateCaptureGoMove } from "@/lib/bot/browserBotClient";
 import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import { getGroup } from "@/lib/game/goEngine";
-import type { Position, Stone } from "@/lib/game/types";
+import type { BoardSize, Position, Stone } from "@/lib/game/types";
 import { formatLearn, learnUiCopy } from "@/lib/learn/curriculum";
 import { allGroups, createLearnGame, groupLiberties, passLearnMove, playLearnMove, pointKey, storedLearnMoves, learnReviewMoments, type LearnGamePosition } from "@/lib/learn/lessonEngine";
 import type { scoreLearnGame } from "@/lib/learn/gameScoring";
@@ -16,20 +16,23 @@ type LearnGameProps = Readonly<{
   mode: "capture" | "guided" | "beginner";
   locale: string;
   onComplete: (outcome: "won" | "lost" | "completed") => void;
+  onAttempt?: (outcome: "lost") => void;
+  boardSize?: BoardSize;
+  requireWin?: boolean;
 }>;
 type GamePhase = "playing" | "scoring" | "finished";
 type ScoredGame = ReturnType<typeof scoreLearnGame>;
 
-function initialPosition(mode: LearnGameProps["mode"]): LearnGamePosition {
+function initialPosition(mode: LearnGameProps["mode"], size: BoardSize): LearnGamePosition {
   return mode === "capture" ? createLearnGame(5, [
     { x: 1, y: 1, color: "black" }, { x: 3, y: 3, color: "white" },
-  ]) : createLearnGame(9);
+  ]) : createLearnGame(size);
 }
 
-export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
+export function LearnGame({ mode, locale, onComplete, onAttempt, boardSize = 9, requireWin = false }: LearnGameProps) {
   const copy = learnUiCopy(locale);
   const [gameId, setGameId] = useState(() => crypto.randomUUID());
-  const [position, setPosition] = useState(() => initialPosition(mode));
+  const [position, setPosition] = useState(() => initialPosition(mode, boardSize));
   const [phase, setPhase] = useState<GamePhase>("playing");
   const [message, setMessage] = useState<string | null>(null);
   const [winner, setWinner] = useState<Stone | null>(null);
@@ -46,7 +49,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
 
   const reset = () => {
     setGameId(crypto.randomUUID());
-    setPosition(initialPosition(mode));
+    setPosition(initialPosition(mode, boardSize));
     setPhase("playing");
     setMessage(null);
     setWinner(null);
@@ -75,7 +78,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
         const excludedMoves: Position[] = [];
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const action = await generateBrowserBotMove({
-            gameId, boardSize: 9, board: position.board, moves: storedLearnMoves(position),
+            gameId, boardSize, board: position.board, moves: storedLearnMoves(position),
             toMove: "white", komi: GOSTONE_BOT_MODEL.komi, targetRating: 600,
             gameVersion: position.moves.length, excludedMoves,
           });
@@ -108,7 +111,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
       if (!cancelled) { setBotFailed(true); setMessage(copy.modelFailed); }
     });
     return () => { cancelled = true; };
-  }, [copy, gameId, mode, phase, position, retry]);
+  }, [boardSize, copy, gameId, mode, phase, position, retry]);
 
   const play = (point: Position) => {
     if (phase !== "playing" || position.turn !== "black") return;
@@ -167,7 +170,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
     try {
       const response = await fetch("/api/learn/game/score", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moves: position.moves.map((move) => move.position), deadStones, neutralRegionSeeds: neutralSeeds, agreed: true }),
+        body: JSON.stringify({ moves: position.moves.map((move) => move.position), deadStones, neutralRegionSeeds: neutralSeeds, agreed: true, boardSize }),
       });
       if (!response.ok) throw new Error("Settlement failed");
       const body = await response.json() as { result: ScoredGame };
@@ -176,7 +179,12 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
       setWinner(outcome.kind === "points" ? outcome.winner : null);
       setPhase("finished");
       setMessage(null);
-      if (!completionSent.current) { completionSent.current = true; onComplete("completed"); }
+      if (!completionSent.current) {
+        completionSent.current = true;
+        if (!requireWin) onComplete("completed");
+        else if (outcome.kind === "points" && outcome.winner === "black") onComplete("won");
+        else { onAttempt?.("lost"); setMessage(locale === "de" ? "Diese Sieg-Challenge bleibt offen. Schau dir die Lernmomente an und spiele erneut." : "This win checkpoint remains open. Review the learning moments and try again."); }
+      }
     } catch { setMessage(copy.invalidDead); }
     finally { setScoringBusy(false); }
   };
@@ -228,7 +236,7 @@ export function LearnGame({ mode, locale, onComplete }: LearnGameProps) {
         <LearnTeacher><p>{formatLearn(copy[review.kind], { count: review.count, coordinate: review.coordinate })}</p></LearnTeacher>
         {reviews.length > 1 ? <button className="button button--secondary" onClick={() => setReviewIndex((current) => (current + 1) % reviews.length)} type="button">{copy.nextMoment}</button> : null}
       </div> : null}
-      {mode === "capture" && winner !== "black" ? <button className="learn-text-button" onClick={reset} type="button"><RotateCcw aria-hidden="true" size={16} /> {copy.tryAgain}</button> : null}
+      {(mode === "capture" && winner !== "black") || (requireWin && phase === "finished" && winner !== "black") ? <button className="learn-text-button" onClick={reset} type="button"><RotateCcw aria-hidden="true" size={16} /> {copy.tryAgain}</button> : null}
     </div>
   );
 }

@@ -2,12 +2,13 @@ import { applyMove, boardHash, createEmptyBoard } from "@/lib/game/goEngine";
 import { replayJapaneseNormalPlayBoardLegality, type JapanesePersistedMove } from "@/lib/game/japaneseKo";
 import { scoreJapaneseTerritory } from "@/lib/game/japaneseScoring";
 import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
-import type { Position, Stone } from "@/lib/game/types";
+import type { BoardSize, Position, Stone } from "@/lib/game/types";
 import { pointKey, territoryPoints } from "./lessonEngine";
 
-export function scoreLearnGame(moves: readonly (Position | null)[], deadStones: Position[], neutralRegionSeeds: Position[]) {
+export function scoreLearnGame(moves: readonly (Position | null)[], deadStones: Position[], neutralRegionSeeds: Position[], size: BoardSize = 9) {
+  if (![9, 13, 19].includes(size)) throw new Error("invalid_board_size");
   if (moves.length < 2 || moves.at(-1) !== null || moves.at(-2) !== null) throw new Error("two_passes_required");
-  let board = createEmptyBoard(9);
+  let board = createEmptyBoard(size);
   const record: JapanesePersistedMove[] = [];
   for (const [index, point] of moves.entries()) {
     const color: Stone = index % 2 === 0 ? "black" : "white";
@@ -18,7 +19,7 @@ export function scoreLearnGame(moves: readonly (Position | null)[], deadStones: 
     }
     record.push({ moveNumber: index + 1, color, x: point?.x ?? null, y: point?.y ?? null, isPass: point === null, createdAt: "2000-01-01T00:00:00.000Z", boardHash: boardHash(board) });
   }
-  const replay = replayJapaneseNormalPlayBoardLegality(9, record);
+  const replay = replayJapaneseNormalPlayBoardLegality(size, record);
   const score = scoreJapaneseTerritory({ board, prisoners: replay.prisoners, deadStones, agreedNeutralRegionSeeds: neutralRegionSeeds, komi: GOSTONE_BOT_MODEL.komi });
   const settledBoard = board.map((row) => [...row]);
   deadStones.forEach(({ x, y }) => { settledBoard[y][x] = null; });
@@ -32,7 +33,7 @@ export function scoreLearnGame(moves: readonly (Position | null)[], deadStones: 
       if (excluded.has(key) || settledBoard[point.y]?.[point.x] !== null) continue;
       excluded.add(key);
       for (const [x, y] of [[point.x - 1, point.y], [point.x + 1, point.y], [point.x, point.y - 1], [point.x, point.y + 1]]) {
-        if (x >= 0 && y >= 0 && x < 9 && y < 9) pending.push({ x, y });
+        if (x >= 0 && y >= 0 && x < size && y < size) pending.push({ x, y });
       }
     }
   }
