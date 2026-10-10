@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { LEARN_LESSONS, lessonById } from "./curriculum";
 import { automaticReplyCount, continuesOwnTurn, stableLessonColor } from "./lessonFlow";
-import { boardFromStones, createLearnGame, passLearnMove, playLearnMove, withLearnTurn } from "./lessonEngine";
+import { allGroups, boardFromStones, createLearnGame, passLearnMove, playLearnMove, withLearnTurn } from "./lessonEngine";
 import { boardHash } from "@/lib/game/goEngine";
 
 test("all 120 lessons keep one learner colour, including mixed checks in stages 1–3", () => {
@@ -83,4 +83,22 @@ test("each new stage-four tactic has at least five distinct practice positions",
     assert.ok(starts.length >= 5, id);
     assert.ok(new Set(starts.map((step) => `${step.size}:${boardHash(boardFromStones(step.size!, step.stones!))}`)).size >= 5, `${id}: repeated the identical position`);
   }
+});
+
+test("rotated race directions name the correct stone of the white pair, not the attacking reply", () => {
+  let checked = 0;
+  for (const step of lessonById("s4-semeai").steps) {
+    if (!/^race-(?:[123]-|mirrored-)/.test(step.id) || !step.body.de.includes("Zweiergruppe")) continue;
+    const board = boardFromStones(step.size!, step.stones!);
+    const pair = allGroups(board, "white").find((group) => group.length === 2)!;
+    assert.ok(pair, step.id);
+    const stone = [...pair].sort((a, b) => step.body.de.includes("oberen") ? a.y - b.y
+      : step.body.de.includes("unteren") ? b.y - a.y : b.x - a.x)[0];
+    const direction = step.body.de.match(/Freiheit (rechts|links|unter|über)/)![1];
+    const expected = { x: stone.x + (direction === "rechts" ? 1 : direction === "links" ? -1 : 0),
+      y: stone.y + (direction === "unter" ? 1 : direction === "über" ? -1 : 0) };
+    assert.deepEqual(step.targets, [expected], step.id);
+    checked++;
+  }
+  assert.equal(checked, 8);
 });
