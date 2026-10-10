@@ -3,6 +3,9 @@
 import { Check, ChevronRight, Circle, Flag, Lock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { developerCopy } from "@/lib/i18n/developer";
+import { canOpenLearnLesson } from "@/lib/learn/access";
 import { formatLearn, learnUiCopy, LEARN_LESSONS, LEARN_STAGES, lessonById, line } from "@/lib/learn/curriculum";
 import { completeLearnLesson, type LearnLessonId, type LearnProgress } from "@/lib/learn/progress";
 import { LessonPlayer } from "./LessonPlayer";
@@ -19,6 +22,8 @@ function withOpenedLesson(progress: LearnProgress, lessonId: LearnLessonId, step
 
 export function LearningGuide() {
   const { locale } = useI18n();
+  const { user, loading: authLoading, error: authError } = useAuth();
+  const developerAccess = !authLoading && !authError && user?.developerAccess === true;
   const { progress, loaded, commit } = useLearnProgress();
   const [activeLessonId, setActiveLessonId] = useState<LearnLessonId | null>(null);
   const currentNode = useRef<HTMLButtonElement | null>(null);
@@ -30,7 +35,12 @@ export function LearningGuide() {
     LEARN_LESSONS.find((lesson) => !progress.completedLessonIds.includes(lesson.id)) ?? LEARN_LESSONS.at(-1)!
   ), [progress.completedLessonIds]);
   const currentIndex = LEARN_LESSONS.findIndex((lesson) => lesson.id === firstIncomplete.id);
-  const activeLesson = activeLessonId ? lessonById(activeLessonId) : null;
+  const activeLesson = activeLessonId && canOpenLearnLesson(
+    progress.completedLessonIds.includes(activeLessonId),
+    LEARN_LESSONS.findIndex((lesson) => lesson.id === activeLessonId),
+    currentIndex,
+    developerAccess,
+  ) ? lessonById(activeLessonId) : null;
   const completedCount = progress.completedLessonIds.length;
   const percentage = Math.round((completedCount / LEARN_LESSONS.length) * 100);
 
@@ -46,7 +56,7 @@ export function LearningGuide() {
 
   const openLesson = (lessonId: LearnLessonId) => {
     const index = LEARN_LESSONS.findIndex((lesson) => lesson.id === lessonId);
-    const unlocked = progress.completedLessonIds.includes(lessonId) || index <= currentIndex;
+    const unlocked = canOpenLearnLesson(progress.completedLessonIds.includes(lessonId), index, currentIndex, developerAccess);
     if (!loaded || !unlocked) return;
     commit((current) => withOpenedLesson(current, lessonId, current.lastStepByLesson[lessonId] ?? 0));
     setActiveLessonId(lessonId);
@@ -89,6 +99,7 @@ export function LearningGuide() {
         <div>
           <h1>{copy.learn}</h1>
           <p>{formatLearn(copy.lessonsComplete, { done: completedCount, total: LEARN_LESSONS.length })}</p>
+          {developerAccess ? <p className="learn-developer-access">{developerCopy(locale).learningAccess}</p> : null}
         </div>
         <div aria-label={`${percentage}%`} className="learn-overview__meter"><span style={{ width: `${percentage}%` }} /></div>
       </header>
@@ -96,7 +107,7 @@ export function LearningGuide() {
       <div className="learn-route">
         {[...LEARN_STAGES].reverse().map((stage) => {
           const done = stage.lessons.filter((lesson) => progress.completedLessonIds.includes(lesson.id)).length;
-          const unlocked = stage.id === 1 || progress.completedStages.includes(stage.id - 1);
+          const unlocked = developerAccess || stage.id === 1 || progress.completedStages.includes(stage.id - 1);
           return <section className={`learn-path-stage${unlocked ? "" : " is-locked"}`} aria-label={line(stage.title, locale)} key={stage.id}>
             <header className="learn-path-stage__header">
               <small>{formatLearn(copy.stage, { stage: stage.id })}{!unlocked ? <Lock aria-hidden="true" size={14} /> : null}</small>
@@ -117,7 +128,7 @@ export function LearningGuide() {
                 const index = LEARN_LESSONS.findIndex((candidate) => candidate.id === lesson.id);
                 const complete = progress.completedLessonIds.includes(lesson.id);
                 const current = lesson.id === firstIncomplete.id;
-                const unlocked = complete || index <= currentIndex;
+                const unlocked = canOpenLearnLesson(complete, index, currentIndex, developerAccess);
                 return (
                   <li className={`${complete ? "is-complete" : ""}${current ? " is-current" : ""}${!unlocked ? " is-locked" : ""}${lesson.challenge ? " is-challenge" : ""} learn-route-stop-${nodeIndex % 4}`} key={lesson.id}>
                     <button

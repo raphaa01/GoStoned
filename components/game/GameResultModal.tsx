@@ -8,6 +8,7 @@ import type { GameState } from "@/lib/game/types";
 import { localizedGameResult } from "@/lib/game/gameAccessibility";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { FinishedGameShareButton } from "./FinishedGameShareButton";
+import { DeveloperTag } from "./DeveloperTag";
 
 type GameResultModalProps = {
   game: GameState;
@@ -78,6 +79,7 @@ export function GameResultModal({
             <span className="player-stone player-stone--black" />
             <span>
               <strong>{game.blackPlayerName}</strong>
+              {game.blackPlayerIsDeveloper ? <DeveloperTag /> : null}
               <small>{game.blackPlayerKey === playerKey ? copy.youBlack : copy.black}</small>
               {game.blackRating !== null && game.blackRating !== undefined
                 ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
@@ -89,6 +91,7 @@ export function GameResultModal({
             <span className="player-stone player-stone--white" />
             <span>
               <strong>{game.whitePlayerName}</strong>
+              {game.whitePlayerIsDeveloper ? <DeveloperTag /> : null}
               <small>{game.whitePlayerKey === playerKey ? copy.youWhite : copy.white}</small>
               {game.whiteRating !== null && game.whiteRating !== undefined
                 ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />

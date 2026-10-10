@@ -42,6 +42,8 @@ test("credential requests retain normalized credential validation", async () => 
 test("credential requests require the exact username and password object", async () => {
   for (const body of [
     { username: "Named_Player", password: "password123", padding: "" },
+    { username: "developer", password: "test-password-only", developerAccess: true },
+    { username: "developer", password: "test-password-only", analysisUnlimited: true },
     { username: "Named_Player" },
     { password: "password123" },
     {},

@@ -15,6 +15,7 @@ import { getSettlementCopy } from "@/lib/i18n/settlement";
 import { PlayerClock } from "./PlayerClock";
 import { ScoringHelpButton } from "./ScoringHelpDialog";
 import { FinishedGameShareButton } from "./FinishedGameShareButton";
+import { DeveloperTag } from "./DeveloperTag";
 
 function deadStoneCounts(game: GameState) {
   return (game.scoring?.deadStones ?? []).reduce(
@@ -121,6 +122,7 @@ export function GamePanel({
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
           <div className="game-player-heading"><strong>{game.whitePlayerName}</strong>
+            {game.whitePlayerIsDeveloper ? <DeveloperTag /> : null}
             {game.whiteRating != null ? <span className="game-player-rank">{presentRating(game.whiteRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
           </div>
           <span className="game-player-detail">{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
@@ -172,6 +174,7 @@ export function GamePanel({
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
           <div className="game-player-heading"><strong>{game.blackPlayerName}</strong>
+            {game.blackPlayerIsDeveloper ? <DeveloperTag /> : null}
             {game.blackRating != null ? <span className="game-player-rank">{presentRating(game.blackRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
           </div>
           <span className="game-player-detail">{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
