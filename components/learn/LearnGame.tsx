@@ -183,7 +183,7 @@ export function LearnGame({ mode, locale, onComplete, onAttempt, boardSize = 9, 
         completionSent.current = true;
         if (!requireWin) onComplete("completed");
         else if (outcome.kind === "points" && outcome.winner === "black") onComplete("won");
-        else { onAttempt?.("lost"); setMessage(locale === "de" ? "Diese Sieg-Challenge bleibt offen. Schau dir die Lernmomente an und spiele erneut." : "This win checkpoint remains open. Review the learning moments and try again."); }
+        else { onAttempt?.("lost"); setMessage(copy.winCheckpointOpen); }
       }
     } catch { setMessage(copy.invalidDead); }
     finally { setScoringBusy(false); }

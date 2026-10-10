@@ -65,7 +65,7 @@ function InteractiveLearnBoardComponent({
 
   return (
     <div className={`interactive-learn-board-frame${enlarged ? " is-enlarged" : ""}`}>
-      {size >= 13 ? <button className="learn-text-button learn-board-zoom" aria-pressed={enlarged} onClick={() => setEnlarged((current) => !current)} type="button">{locale === "de" ? enlarged ? "Ganzes Brett anzeigen" : "Brett vergrößern · dann verschieben" : enlarged ? "Show whole board" : "Enlarge board · then pan"}</button> : null}
+      {size >= 13 ? <button className="learn-text-button learn-board-zoom" aria-pressed={enlarged} onClick={() => setEnlarged((current) => !current)} type="button">{enlarged ? copy.wholeBoard : copy.enlargeBoard}</button> : null}
       <div className="learn-board-viewport" style={enlarged ? { maxHeight: "70svh", overflow: "auto" } : undefined}>
       <div
         aria-colcount={size}

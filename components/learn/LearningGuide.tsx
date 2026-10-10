@@ -148,7 +148,7 @@ export function LearningGuide() {
 
       <div className="learn-next-dock">
         <span className="learn-next-dock__lesson">
-          <small>{allDone ? locale === "de" ? "Alle acht Etappen abgeschlossen" : "All eight stages completed" : copy.continue}</small>
+          <small>{allDone ? copy.allStagesComplete : copy.continue}</small>
           <strong>{line(firstIncomplete.title, locale)}</strong>
         </span>
         <button
@@ -162,7 +162,7 @@ export function LearningGuide() {
           <ChevronRight aria-hidden="true" size={20} />
         </button>
       </div>
-      {allDone ? <nav className="learn-game__actions" aria-label={locale === "de" ? "Weiterlernen in eigenen Partien" : "Keep learning in your own games"}>{["play","review","puzzles"].map((path)=><a className="button button--secondary" href={`/${locale}/${path}`} key={path}>{path === "play" ? locale === "de" ? "Partie spielen" : "Play a game" : path === "review" ? locale === "de" ? "Eigene Partie analysieren" : "Review your game" : locale === "de" ? "Brettaufgaben" : "Board puzzles"}</a>)}</nav> : null}
+      {allDone ? <nav className="learn-game__actions" aria-label={copy.ownGameLearning}>{["play","review","puzzles"].map((path)=><a className="button button--secondary" href={`/${locale}/${path}`} key={path}>{path === "play" ? copy.playGame : path === "review" ? copy.reviewOwnGame : copy.boardPuzzles}</a>)}</nav> : null}
     </div>
   );
 }

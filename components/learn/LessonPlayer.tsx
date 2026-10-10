@@ -273,7 +273,7 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             <ArrowRight aria-hidden="true" size={17} />
           </button>
         </div>
-        {step.links ? <nav className="learn-game__actions" aria-label={locale === "de" ? "Weiter üben" : "Keep practicing"}>{step.links.map((destination) => <a className="button button--secondary" href={`/${locale}/${destination}`} key={destination}>{destination === "review" ? locale === "de" ? "Eigene Partie analysieren" : "Review your game" : destination === "puzzles" ? locale === "de" ? "Brettaufgaben" : "Board puzzles" : locale === "de" ? "Partie spielen" : "Play a game"}</a>)}</nav> : null}
+        {step.links ? <nav className="learn-game__actions" aria-label={copy.keepPracticing}>{step.links.map((destination) => <a className="button button--secondary" href={`/${locale}/${destination}`} key={destination}>{destination === "review" ? copy.reviewOwnGame : destination === "puzzles" ? copy.boardPuzzles : copy.playGame}</a>)}</nav> : null}
       </div>
     </article>
   );
