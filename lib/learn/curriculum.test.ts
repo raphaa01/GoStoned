@@ -6,6 +6,7 @@ import {
   boardFromStones,
   createLearnGame,
   playLearnMove,
+  passLearnMove,
   pointKey,
   withLearnTurn,
   allGroups,
@@ -14,13 +15,15 @@ import {
 } from "./lessonEngine";
 import { LEARN_LESSON_IDS } from "./progress";
 
-test("the beginner curriculum is one complete linear path through stages one to three", () => {
-  assert.deepEqual(LEARN_STAGES.map(({ id }) => id), [1, 2, 3]);
+test("the complete curriculum extends the original beginner path through eight stages", () => {
+  assert.deepEqual(LEARN_STAGES.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.deepEqual(LEARN_LESSONS.map(({ id }) => id), LEARN_LESSON_IDS);
-  assert.equal(LEARN_LESSONS.length, 31);
-  assert.equal(LEARN_LESSONS.filter(({ challenge }) => challenge).length, 4);
+  assert.equal(LEARN_LESSONS.length, 120);
+  const beginner = LEARN_LESSONS.filter(({stage})=>stage <= 3);
+  assert.equal(beginner.length, 31);
+  assert.equal(beginner.filter(({ challenge }) => challenge).length, 4);
   assert.deepEqual(
-    LEARN_LESSONS.filter(({ steps }) => steps.some(({ kind }) => kind.endsWith("game"))).map(({ id }) => id),
+    beginner.filter(({ steps }) => steps.some(({ kind }) => kind.endsWith("game"))).map(({ id }) => id),
     ["s1-capture-go", "s2-first-game", "s3-second-game"],
   );
 });
@@ -34,7 +37,7 @@ test("every teaching board is bounded, unique, and every requested action is pla
         assert.ok(line(step.body, locale).length <= 260, `${lesson.id}/${step.id} is too verbose`);
       }
       if (!step.size) continue;
-      assert.ok(step.size >= 5 && step.size <= 9, `${lesson.id}/${step.id} uses an unexpected board size`);
+      assert.ok([5,7,9,13,19].includes(step.size), `${lesson.id}/${step.id} uses an unexpected board size`);
       const stoneKeys = (step.stones ?? []).map(pointKey);
       assert.equal(new Set(stoneKeys).size, stoneKeys.length, `${lesson.id}/${step.id} has duplicate stones`);
       for (const point of [...(step.stones ?? []), ...(step.targets ?? []), ...(step.emphasis ?? []), ...(step.territory ?? []), ...(step.group ?? [])]) {
@@ -70,6 +73,7 @@ test("every teaching board is bounded, unique, and every requested action is pla
           if (result.ok) {
             let after = result.position;
             for (const reply of step.replies ?? []) {
+              if (reply === null) { after = passLearnMove(after); continue; }
               const next = playLearnMove(after, reply);
               assert.ok(next.ok, `${lesson.id}/${step.id} has an illegal teaching reply ${pointKey(reply)}`);
               if (next.ok) after = next.position;

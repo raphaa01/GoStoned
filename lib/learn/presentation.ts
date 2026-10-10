@@ -9,6 +9,7 @@ export function lessonBoardPresentation(step: LessonStep, state: Readonly<{
   wrong: boolean;
   hint: boolean;
   lastMove: Position | null;
+  failedAttempts?: number;
 }>) {
   if (step.kind === "select") {
     return {
@@ -19,7 +20,9 @@ export function lessonBoardPresentation(step: LessonStep, state: Readonly<{
     };
   }
   return {
-    emphasis: state.wrong || state.hint ? [...(step.emphasis ?? NO_POINTS), ...(step.targets ?? NO_POINTS)] : step.emphasis ?? NO_POINTS,
+    emphasis: step.hintArea
+      ? state.hint ? step.targets ?? NO_POINTS : (state.failedAttempts ?? 0) >= 2 ? step.hintArea : step.emphasis ?? NO_POINTS
+      : state.wrong || state.hint ? [...(step.emphasis ?? NO_POINTS), ...(step.targets ?? NO_POINTS)] : step.emphasis ?? NO_POINTS,
     group: step.group ?? NO_POINTS,
     territory: step.territory ?? NO_POINTS,
     lastMove: step.lastMove ?? state.lastMove,

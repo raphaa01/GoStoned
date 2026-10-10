@@ -68,3 +68,12 @@ test("learning settlement replays legal moves and refuses invented results", asy
     assert.equal((await POST(request("/api/learn/game/score","POST",invalid,true))).status,400);
   }
 }));
+
+test("larger learning games score real 13×13 and 19×19 records with bounded coordinates", async () => withSession(async () => {
+  for (const boardSize of [13,19]) {
+    const body={boardSize,moves:[{x:boardSize-1,y:boardSize-1},{x:0,y:0},null,null],deadStones:[],neutralRegionSeeds:[],agreed:true};
+    const response=await POST(request("/api/learn/game/score","POST",body,true));
+    assert.equal(response.status,200);assert.equal((await response.json()).result.board.length,boardSize);
+    for(const invalid of [{...body,boardSize:10},{...body,moves:[{x:boardSize,y:0},null,null]},{...body,boardSize:9},{...body,deadStones:Array(362).fill({x:0,y:0})},{...body,admin:true}])assert.equal((await POST(request("/api/learn/game/score","POST",invalid,true))).status,400);
+  }
+}));
