@@ -190,6 +190,8 @@ const GAME_READ_SQL = `
            white_user.username,
            'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
          ) AS white_player_name,
+         black_user.id AS black_player_user_id,
+         white_user.id AS white_player_user_id,
          g.black_player_key = game_bot.bot_player_key AS black_player_is_bot,
          g.white_player_key = game_bot.bot_player_key AS white_player_is_bot,
          browser_binding.model_version AS browser_bot_model_version,

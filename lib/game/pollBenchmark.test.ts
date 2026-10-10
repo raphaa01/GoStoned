@@ -49,6 +49,18 @@ test("classifies every exact poll SQL fingerprint and rejects near misses", () =
   );
 });
 
+test("the reviewed game-read fingerprint matches the actual server query, including account tag provenance", () => {
+  const source = readFileSync(new URL("./gameService.ts", import.meta.url), "utf8");
+  const template = source.match(/const gameResult = await execute<GameRow>\(\s*`([\s\S]*?)`,/)?.[1];
+  assert.ok(template);
+  assert.match(template, /black_user\.id AS black_player_user_id/);
+  assert.match(template, /white_user\.id AS white_player_user_id/);
+  for (const lock of ["", " FOR UPDATE OF g"]) {
+    const sql: string = template.replace('${lock ? " FOR UPDATE OF g" : ""}', lock);
+    assert.equal(classifyPollQuery(sql), "game_read");
+  }
+});
+
 test("rejects unknown SQL before invoking the database operation", async () => {
   let executed = false;
   await assert.rejects(
