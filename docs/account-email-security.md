@@ -1,13 +1,14 @@
 # Password accounts and recovery
 
-Password registration requires a username, password, and normalized email address.
+Web and upgraded app registration require a username, password, and normalized email address.
 Registration does not send a verification code. Login accepts username or email,
 using the same account-wide rate-limit budget for both aliases.
 
 Existing password accounts without a local email can still authenticate. Their
 session exposes `emailRequired`; the shared web/mobile AuthProvider replaces
 account content with the email form and a logout button. Protected APIs reject
-these accounts with `email_required`, including when a guest cookie also exists.
+these accounts on the web and upgraded app contract with `email_required`,
+including when a guest cookie also exists.
 Only these incomplete password accounts can use `POST /api/auth/email`; the
 operation cannot replace an existing address.
 
@@ -43,11 +44,24 @@ smoke tests against production. The migration preserves existing users, password
 hashes, provider identities, sessions, and game history. Production builds check
 that the new storage is present before deploying.
 
-The bundled iOS/Android client must also be rebuilt and released before enforcing
-this policy for existing app installations. Older app bundles cannot display the
-new gate or submit the new email field. The shared client build has been checked;
-device testing, signing, and App Store/Play Store distribution are separate release
-steps and have not been performed in this draft.
+Already published iOS/Android apps keep working after the server release, including
+existing sessions, username/password login, and the old five-field registration
+without email. Their native CapacitorHttp requests carry neither Origin nor Fetch
+Metadata; WebView fallback origins are `capacitor://localhost` and `https://localhost`.
+Without a capability header these retain the legacy contract. Supplied malformed
+email is still rejected. Legacy-created accounts receive `emailRequired` and must
+add their email when they next use the website or an upgraded app.
+
+New app bundles send `x-gostone-account-security: 2` on GoStone API requests only,
+activating email-required registration and protected API restrictions. An explicit
+unknown version also uses the new restrictions. This capability is for compatibility,
+not authorization; all normal session, ownership, and stale-identity checks remain.
+Headerless non-browser API clients deliberately retain the old contract too.
+Web page access and the shared email gate enforce the policy independently.
+
+The new email/reset screens require an app update to reach installed devices.
+Building, signing, device testing, and distributing iOS/Android updates are separate
+release steps. This server release does not force old installations to update.
 
 Resend is provisioned through Vercel Marketplace on the free plan for
 `gostone.app` in `eu-west-1`. Its DKIM and SPF records are verified. The integration
@@ -66,5 +80,7 @@ Validation:
 - `npm run typecheck`, `npm test`, `npm run lint`, `npm run build`
 - `npm run mobile:typecheck`, `npm run mobile:build`
 - Browser coverage in `tests/browser/account-security.spec.ts`
+- New mobile bundle coverage in `tests/mobile/account-security.spec.ts`; old native
+  contracts and current-client enforcement in `lib/auth/clientContract.test.ts`
 - CI PostgreSQL coverage in `scripts/smoke-account-security.ts`, including code
   expiry, attempts surviving commit, resend/redeem concurrency, and revocation

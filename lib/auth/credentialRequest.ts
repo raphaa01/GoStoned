@@ -3,6 +3,7 @@ import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
 import { normalizeUsername, validatePasswordIssue } from "./password";
 import { requireEmail } from "./email";
+import { usesLegacyAccountContract } from "./clientContract";
 import { parseStartingStrength } from "@/lib/rating/preferences";
 import { parseBoardPlacementPreference } from "@/lib/boardPlacement";
 
@@ -136,9 +137,11 @@ export async function readCredentialRequest(request: NextRequest) {
 export async function readRegistrationRequest(request: NextRequest) {
   const body = await readCredentialBody(request);
   const fields = Object.keys(body);
+  const legacyWithoutEmail = usesLegacyAccountContract(request)
+    && !Object.prototype.hasOwnProperty.call(body, "email");
   if (
-    fields.length !== 6
-    || !Object.prototype.hasOwnProperty.call(body, "email")
+    fields.length !== (legacyWithoutEmail ? 5 : 6)
+    || (!legacyWithoutEmail && !Object.prototype.hasOwnProperty.call(body, "email"))
     || !Object.prototype.hasOwnProperty.call(body, "username")
     || !Object.prototype.hasOwnProperty.call(body, "password")
     || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
@@ -152,7 +155,7 @@ export async function readRegistrationRequest(request: NextRequest) {
     );
   }
   const credentials = validateCredentials(body.username, body.password);
-  const email = requireEmail(body.email);
+  const email = legacyWithoutEmail ? null : requireEmail(body.email);
   try {
     return {
       ...credentials,

@@ -4,24 +4,25 @@ import "dotenv/config";
 import { query, getPool, closePool } from "../lib/db";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { isUnambiguousLocalDatabase, getDatabaseUrl } from "../lib/env";
-import { authenticateAccount, loginRateLimitSubject } from "../lib/auth/accountService";
+import { authenticateAccount, loginRateLimitSubject, registerAccount } from "../lib/auth/accountService";
 import { completeAccountEmail } from "../lib/auth/accountEmailService";
 import { createSession, getSessionUser } from "../lib/auth/session";
 import { requestPasswordReset, resetAccountPassword } from "../lib/auth/passwordResetService";
-import { hashPassword } from "../lib/auth/password";
 import { assertAccountEmailComplete } from "../lib/auth/requestAuth";
 
 async function run() {
   assert.ok(isUnambiguousLocalDatabase(getDatabaseUrl()), "Account security smoke is local-only.");
   await assertSmokeDatabaseIdentity(getPool());
-  const id = randomUUID();
+  let id: string = randomUUID();
   const socialId = randomUUID();
   const username = `security_${id.replaceAll("-", "").slice(0, 10)}`;
   const email = `${username}@example.test`;
   const password = randomUUID();
   const nextPassword = randomUUID();
   try {
-    await query("INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)", [id, username, await hashPassword(password)]);
+    const created = await registerAccount(username, password, null);
+    id = created.user.id;
+    assert.equal(created.user.emailRequired, true);
     const legacy = await authenticateAccount(username, password);
     assert.equal(legacy.emailRequired, true);
     const session = await createSession(id);

@@ -24,7 +24,7 @@ test("email normalization preserves aliases and rejects malformed or oversized a
 
 function request(body: unknown) {
   return new NextRequest("https://gostone.test/api/auth/register", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "https://gostone.test" }, body: JSON.stringify(body),
   });
 }
 
@@ -44,7 +44,7 @@ test("incomplete accounts cannot use a player session or fall back to a guest", 
   assert.equal(user.emailRequired, true);
   assert.throws(() => assertAccountEmailComplete(user), { code: "email_required", status: 403 });
   assert.doesNotThrow(() => assertAccountEmailComplete(serializeAuthUser({ ...account, email_required: false })));
-  const req = new NextRequest("https://gostone.test/api/matchmaking", { headers: { Cookie: `gostoned_session=${"a".repeat(43)}` } });
+  const req = new NextRequest("https://gostone.test/api/matchmaking", { headers: { Cookie: `gostoned_session=${"a".repeat(43)}`, "sec-fetch-site": "same-origin" } });
   await assert.rejects(resolvePlayerKey(req, {
     getAccount: async () => user,
     getGuest: async () => { throw new Error("Must not resolve a guest"); },

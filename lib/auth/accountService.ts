@@ -85,11 +85,11 @@ type Registration = {
 export async function registerAccount(
   username: string,
   password: string,
-  emailValue: string,
+  emailValue: string | null,
   startingStrength: StartingStrength = { estimate: "unspecified", knownRank: null },
   boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
 ): Promise<Registration> {
-  const email = requireEmail(emailValue);
+  const email = emailValue === null ? null : requireEmail(emailValue);
   const passwordHash = await hashPassword(password);
   const initialRating = initialRatingForStartingStrength(startingStrength);
   return withTransaction(async (client) => {
@@ -97,7 +97,7 @@ export async function registerAccount(
       `WITH account AS (
          INSERT INTO users (username, password_hash, display_name, email)
          VALUES ($1, $2, $1, $11)
-         RETURNING id, username, display_name, avatar_style
+         RETURNING id, username, display_name, avatar_style, email IS NULL AS email_required
        ), preference AS (
          INSERT INTO player_rating_preferences
            (user_id,display_preference,bot_match_preference,handicap_preference,board_placement,
@@ -117,7 +117,7 @@ export async function registerAccount(
          SELECT user_id,$3,$4,rating,rating_deviation,$5,created_at
            FROM rating_state
        )
-       SELECT id,username,display_name,avatar_style FROM account`,
+       SELECT id,username,display_name,avatar_style,email_required FROM account`,
       [
         username,
         passwordHash,
