@@ -3,6 +3,7 @@ import { hashPassword, normalizeUsername, validatePasswordIssue, verifyPassword 
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
+import { requireEmail } from "./email";
 import {
   initialRatingForStartingStrength,
   STARTING_STRENGTH_POLICY_VERSION,
@@ -39,6 +40,9 @@ export function registrationDatabaseError(error: unknown): AuthError | null {
     return null;
   }
   const databaseError = error as { code?: string; constraint?: string };
+  if (databaseError.code === "23505" && databaseError.constraint === "idx_users_email_lower") {
+    return new AuthError("This email address is already in use.", 409, "email_taken");
+  }
   if (databaseError.code === "23505"
     && (
       databaseError.constraint === "users_username_key"
@@ -81,16 +85,18 @@ type Registration = {
 export async function registerAccount(
   username: string,
   password: string,
+  emailValue: string,
   startingStrength: StartingStrength = { estimate: "unspecified", knownRank: null },
   boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
 ): Promise<Registration> {
+  const email = requireEmail(emailValue);
   const passwordHash = await hashPassword(password);
   const initialRating = initialRatingForStartingStrength(startingStrength);
   return withTransaction(async (client) => {
     const result = await client.query<AuthUserRow>(
       `WITH account AS (
-         INSERT INTO users (username, password_hash, display_name)
-         VALUES ($1, $2, $1)
+         INSERT INTO users (username, password_hash, display_name, email)
+         VALUES ($1, $2, $1, $11)
          RETURNING id, username, display_name, avatar_style
        ), preference AS (
          INSERT INTO player_rating_preferences
@@ -123,6 +129,7 @@ export async function registerAccount(
         GLICKO2_INITIAL_VOLATILITY,
         GLICKO2_ALGORITHM_VERSION,
         boardPlacement,
+        email,
       ],
     ).catch((error: unknown) => {
       const authError = registrationDatabaseError(error);
@@ -141,10 +148,12 @@ export async function authenticateAccount(
 ): Promise<AuthUser> {
   const result = await query<LoginRow>(
     `SELECT id, username, display_name, avatar_style, password_hash,
+            (password_hash IS NOT NULL AND email IS NULL AND NOT EXISTS
+              (SELECT 1 FROM auth_identities WHERE user_id = users.id)) AS email_required,
             COALESCE((to_jsonb(users)->>'coach_beta_enabled')::boolean, false) AS coach_beta_enabled,
             COALESCE((to_jsonb(users)->>'analysis_unlimited')::boolean, false) AS analysis_unlimited
        FROM users
-      WHERE LOWER(username) = LOWER($1)
+      WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1)
       LIMIT 1`,
     [username],
   );
@@ -158,4 +167,13 @@ export async function authenticateAccount(
     throw new AuthError("Username or password is incorrect.", 401, "invalid_credentials");
   }
   return serializeAuthUser(account);
+}
+
+// Share the account-wide login budget between username and email aliases.
+export async function loginRateLimitSubject(identifier: string): Promise<string> {
+  const result = await query<{ id: string }>(
+    "SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1) LIMIT 1",
+    [identifier],
+  );
+  return result.rows[0]?.id ?? identifier;
 }

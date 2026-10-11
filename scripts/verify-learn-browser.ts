@@ -307,7 +307,7 @@ async function run() {
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => { if (message.type() === "error") console.error("Browser:", message.text()); });
     if (!mobile) {
-      const registered = await context.request.post(`${baseUrl}/api/auth/register`, {data:{username:`learn_${crypto.randomUUID().slice(0,8)}`,password:crypto.randomUUID(),startingStrength:"unspecified",knownRank:null,boardPlacement:"zoom"}});
+      const registered = await context.request.post(`${baseUrl}/api/auth/register`, {data:{email:`${crypto.randomUUID()}@example.test`,username:`learn_${crypto.randomUUID().slice(0,8)}`,password:crypto.randomUUID(),startingStrength:"unspecified",knownRank:null,boardPlacement:"zoom"}});
       assert.equal(registered.status(),201);
     }
     await page.goto(`${baseUrl}/de/learn`);

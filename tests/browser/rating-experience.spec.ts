@@ -135,6 +135,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     const prefix = locale === "en" ? "" : "/de";
     await page.goto(`${prefix}/register`);
     await page.getByLabel(dictionary.auth.username).fill("global_player");
+    await page.getByLabel(locale === "de" ? "E-Mail-Adresse" : "Email address").fill("player@example.test");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
     await page.getByRole("button", { name: dictionary.auth.createAccount }).click();
     const onboardingDialog = page.getByRole("dialog", { name: onboarding.canPlayTitle });
@@ -150,6 +151,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await expect(page.locator(".form-error")).toContainText(dictionary.auth.errors.username_taken);
     expect(registrationBody).toEqual({
       username: "global_player",
+      email: "player@example.test",
       password: "correct-horse-battery",
       startingStrength: "known",
       knownRank: "3k",

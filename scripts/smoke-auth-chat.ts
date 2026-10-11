@@ -79,6 +79,7 @@ async function run() {
     "/api/auth/register",
     json("POST", {
       username: firstUsername,
+      email: `${firstUsername}@example.test`,
       password,
       startingStrength: "unspecified",
       knownRank: null,
@@ -95,6 +96,7 @@ async function run() {
     "/api/auth/register",
     json("POST", {
       username: firstUsername.toUpperCase(),
+      email: `${firstUsername}@example.test`,
       password,
       startingStrength: "unspecified",
       knownRank: null,
@@ -137,6 +139,7 @@ async function run() {
     "/api/auth/register",
     json("POST", {
       username: secondUsername,
+      email: `${secondUsername}@example.test`,
       password,
       startingStrength: "unspecified",
       knownRank: null,

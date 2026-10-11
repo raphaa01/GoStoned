@@ -4132,3 +4132,16 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
     grid-template-columns: 1fr;
   }
 }
+.account-email-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background: var(--bg, #101820);
+}
+.account-email-gate .auth-card { width: min(100%, 480px); margin: auto; }
+.account-email-gate .auth-card > p { margin-block: 16px; line-height: 1.6; }
+.account-email-gate .auth-card > button { margin-top: 16px; }

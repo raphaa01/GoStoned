@@ -17,7 +17,7 @@ async function run() {
   const id = "2f507157-9a4a-4960-b3c8-87fa721cdd26";
   const username = `dev_test_${randomUUID().slice(0, 8)}`;
   const password = randomUUID(); // An ephemeral local fixture, never the real account password.
-  await query("INSERT INTO users (id, username, display_name, password_hash) VALUES ($1, $2, $2, $3)", [id, username, await hashPassword(password)]);
+  await query("INSERT INTO users (id, username, display_name, password_hash, email) VALUES ($1, $2, $2, $3, $4)", [id, username, await hashPassword(password), `${username}@example.test`]);
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });

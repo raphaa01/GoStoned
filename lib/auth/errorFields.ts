@@ -1,6 +1,7 @@
-export type AuthField = "username" | "password";
+export type AuthField = "username" | "password" | "email";
 
 export function affectedAuthFields(code: string | undefined): AuthField[] {
+  if (code === "invalid_email" || code === "email_taken") return ["email"];
   if (code === "invalid_username" || code === "username_taken") return ["username"];
   if (
     code === "password_required"

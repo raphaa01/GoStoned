@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
-import { normalizeUsername } from "./password";
+import { normalizeUsername, validatePasswordIssue } from "./password";
+import { requireEmail } from "./email";
 import { parseStartingStrength } from "@/lib/rating/preferences";
 import { parseBoardPlacementPreference } from "@/lib/boardPlacement";
 
-export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 1_024;
+export const MAX_CREDENTIAL_REQUEST_BODY_BYTES = 2_048;
 export const MAX_CREDENTIAL_REQUEST_BODY_CHUNKS = MAX_CREDENTIAL_REQUEST_BODY_BYTES;
 export const CREDENTIAL_REQUEST_BODY_IDLE_TIMEOUT_MS = 1_000;
 export const CREDENTIAL_REQUEST_BODY_TOTAL_TIMEOUT_MS = 2_000;
@@ -86,7 +87,7 @@ export function assertAuthMutationRequest(
   }
 }
 
-async function readCredentialBody(request: NextRequest) {
+export async function readCredentialBody(request: NextRequest) {
   assertAuthMutationRequest(request, { requireJson: true });
   const body = await readBoundedJsonObject(request, {
     maxBytes: MAX_CREDENTIAL_REQUEST_BODY_BYTES,
@@ -121,14 +122,23 @@ export async function readCredentialRequest(request: NextRequest) {
       "invalid_request",
     );
   }
-  return validateCredentials(body.username, body.password);
+  const identifier = typeof body.username === "string" && body.username.includes("@")
+    ? requireEmail(body.username)
+    : body.username;
+  if (typeof identifier === "string" && identifier.includes("@")) {
+    const issue = validatePasswordIssue(body.password);
+    if (issue) throw new AuthError(issue.message, 400, issue.code);
+    return { username: identifier, password: body.password as string };
+  }
+  return validateCredentials(identifier, body.password);
 }
 
 export async function readRegistrationRequest(request: NextRequest) {
   const body = await readCredentialBody(request);
   const fields = Object.keys(body);
   if (
-    fields.length !== 5
+    fields.length !== 6
+    || !Object.prototype.hasOwnProperty.call(body, "email")
     || !Object.prototype.hasOwnProperty.call(body, "username")
     || !Object.prototype.hasOwnProperty.call(body, "password")
     || !Object.prototype.hasOwnProperty.call(body, "startingStrength")
@@ -142,9 +152,11 @@ export async function readRegistrationRequest(request: NextRequest) {
     );
   }
   const credentials = validateCredentials(body.username, body.password);
+  const email = requireEmail(body.email);
   try {
     return {
       ...credentials,
+      email,
       startingStrength: parseStartingStrength(body.startingStrength, body.knownRank),
       boardPlacement: parseBoardPlacementPreference(body.boardPlacement),
     };

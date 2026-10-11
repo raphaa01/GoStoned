@@ -12,6 +12,8 @@ import { useAuth } from "./AuthProvider";
 import type { StartingStrength } from "@/lib/rating/preferences";
 import type { BoardPlacementPreference } from "@/lib/boardPlacement";
 import { BeginnerOnboardingDialog } from "./BeginnerOnboardingDialog";
+import { getAccountSecurityCopy } from "@/lib/i18n/accountSecurity";
+import { PasswordResetForm } from "./PasswordResetForm";
 
 type FormError = {
   message: string;
@@ -39,6 +41,8 @@ export function AuthForm({
   const { dictionary, href, locale } = useI18n();
   const router = useRouter();
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,6 +51,8 @@ export function AuthForm({
   const errorId = useId();
   const usernameInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const security = getAccountSecurityCopy(locale);
 
   function socialHref(provider: "google" | "apple") {
     const parameters = new URLSearchParams({ mode, locale });
@@ -67,6 +73,7 @@ export function AuthForm({
         body: JSON.stringify(mode === "register"
           ? {
               username,
+              email,
               password,
               startingStrength: strength?.estimate ?? "unspecified",
               knownRank: strength?.knownRank ?? null,
@@ -78,12 +85,13 @@ export function AuthForm({
       if (!response.ok || !body.ok) {
         const fields = affectedAuthFields(body.code);
         setError({
-          message: localizedAuthError(dictionary, body.code, "request_failed"),
+          message: security.errors[body.code as keyof typeof security.errors] ?? localizedAuthError(dictionary, body.code, "request_failed"),
           fields,
         });
         window.requestAnimationFrame(() => {
           if (fields[0] === "username") usernameInput.current?.focus();
           else if (fields[0] === "password") passwordInput.current?.focus();
+          else if (fields[0] === "email") emailInput.current?.focus();
         });
         setOnboardingOpen(false);
         return false;
@@ -128,6 +136,8 @@ export function AuthForm({
       setBusy(false);
     }
   }
+
+  if (resetOpen && mode === "login") return <PasswordResetForm onBack={() => setResetOpen(false)} />;
 
   if (user && !reauthenticate) {
     return (
@@ -181,23 +191,23 @@ export function AuthForm({
 
       <form className="auth-form" onSubmit={submit}>
         <label>
-          <span>{dictionary.auth.username}</span>
+          <span>{registering ? dictionary.auth.username : security.identifier}</span>
           <span className="input-wrap">
             <input
               aria-describedby={registering
                 ? `${usernameHintId}${error?.fields.includes("username") ? ` ${errorId}` : ""}`
                 : error?.fields.includes("username") ? errorId : undefined}
               aria-invalid={error?.fields.includes("username") || undefined}
-              aria-label={dictionary.auth.username}
+              aria-label={registering ? dictionary.auth.username : security.identifier}
               autoComplete="username"
               autoFocus
-              maxLength={20}
+              maxLength={registering ? 20 : 254}
               minLength={3}
               onChange={(event) => {
                 setUsername(event.target.value);
                 if (error) setError(null);
               }}
-              pattern="[A-Za-z0-9_]+"
+              pattern={registering ? "[A-Za-z0-9_]+" : undefined}
               placeholder={dictionary.auth.usernamePlaceholder}
               required
               ref={usernameInput}
@@ -206,6 +216,14 @@ export function AuthForm({
           </span>
           {registering ? <small id={usernameHintId}>{dictionary.auth.usernameHint}</small> : null}
         </label>
+        {registering ? <label>
+          <span>{security.email}</span><span className="input-wrap">
+            <input type="email" autoComplete="email" aria-label={security.email} required maxLength={254} ref={emailInput}
+              aria-invalid={error?.fields.includes("email") || undefined}
+              aria-describedby={error?.fields.includes("email") ? errorId : undefined}
+              value={email} onChange={(event) => { setEmail(event.target.value); if (error) setError(null); }} />
+          </span><small>{security.emailHint}</small>
+        </label> : null}
         <label>
           <span>{dictionary.auth.password}</span>
           <span className="input-wrap">
@@ -230,6 +248,7 @@ export function AuthForm({
         </label>
 
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
+        {!registering ? <button className="button" type="button" disabled={busy} onClick={() => setResetOpen(true)}>{security.forgot}</button> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}
           {busy

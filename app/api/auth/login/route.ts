@@ -3,6 +3,7 @@ import { apiError, noStoreJson } from "@/lib/api/responses";
 import {
   AuthError,
   authenticateAccount,
+  loginRateLimitSubject,
 } from "@/lib/auth/accountService";
 import {
   assertAuthMutationRequest,
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       RATE_LIMIT_POLICIES.loginTarget.limit,
       RATE_LIMIT_POLICIES.loginTarget.windowMinutes,
     );
-    const accountRateLimitKeys = await reserveLoginAccountAttempt(credentials.username);
+    const accountRateLimitKeys = await reserveLoginAccountAttempt(await loginRateLimitSubject(credentials.username));
     const user = await authenticateAccount(credentials.username, credentials.password);
     await Promise.all([targetRateLimitKey, ...accountRateLimitKeys].map(
       (key) => clearRateLimit(key),

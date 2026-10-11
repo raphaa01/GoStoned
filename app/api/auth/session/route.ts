@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.accountSessionLookup);
-    const user = await getRequestUser(request);
+    const user = await getRequestUser(request, { allowIncomplete: true });
     const response = noStoreJson({ ok: true, user });
     if (!user && request.cookies.has(SESSION_COOKIE)) {
       response.cookies.set(SESSION_COOKIE, "", {

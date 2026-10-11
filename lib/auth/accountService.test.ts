@@ -6,6 +6,10 @@ import type { Pool } from "pg";
 import { AuthError, registerAccount } from "./accountService";
 import { isSessionTokenFormat } from "./session";
 
+function registerWithEmail(username: string, password: string) {
+  return registerAccount(username, password, "player@example.test");
+}
+
 type FailureStage = "username" | "rating-policy" | "session" | "cleanup" | "commit-rejected";
 
 type Deferred = {
@@ -115,7 +119,7 @@ test("registration commits the user, session, and bounded cleanup before exposin
   const database = registrationPool({ commitGate, commitEntered });
   let registrationSettled = false;
 
-  const registration = withPool(database.pool, () => registerAccount(
+  const registration = withPool(database.pool, () => registerWithEmail(
     "atomic_player",
     "password123",
   ));
@@ -163,6 +167,7 @@ test("registration commits the user, session, and bounded cleanup before exposin
     0.06,
     "glicko2-v1-tau-0.5",
     "zoom",
+    "player@example.test",
   ]);
   assert.deepEqual(database.statements[3].values, [
     database.userId,
@@ -174,7 +179,7 @@ test("only a unique violation from the user insert maps to username_taken", asyn
   for (const constraint of ["users_username_key", "idx_users_username_lower"]) {
     const duplicate = registrationPool({ failAt: "username", usernameConstraint: constraint });
     await assert.rejects(
-      withPool(duplicate.pool, () => registerAccount("taken_player", "password123")),
+      withPool(duplicate.pool, () => registerWithEmail("taken_player", "password123")),
       (error: unknown) => {
         assert.ok(error instanceof AuthError);
         assert.equal(error.code, "username_taken");
@@ -195,7 +200,7 @@ test("only a unique violation from the user insert maps to username_taken", asyn
     usernameConstraint: "users_pkey",
   });
   await assert.rejects(
-    withPool(primaryKeyCollision.pool, () => registerAccount("new_player", "password123")),
+    withPool(primaryKeyCollision.pool, () => registerWithEmail("new_player", "password123")),
     (error: unknown) => {
       assert.equal(error instanceof AuthError, false);
       assert.match(String(error), /unique user conflict/);
@@ -207,7 +212,7 @@ test("only a unique violation from the user insert maps to username_taken", asyn
 
   const sessionCollision = registrationPool({ failAt: "session" });
   await assert.rejects(
-    withPool(sessionCollision.pool, () => registerAccount("new_player", "password123")),
+    withPool(sessionCollision.pool, () => registerWithEmail("new_player", "password123")),
     (error: unknown) => {
       assert.equal(error instanceof AuthError, false);
       assert.match(String(error), /duplicate session token/);
@@ -221,7 +226,7 @@ test("only a unique violation from the user insert maps to username_taken", asyn
 test("an outdated rating-policy constraint reports the missing database update", async () => {
   const database = registrationPool({ failAt: "rating-policy" });
   await assert.rejects(
-    withPool(database.pool, () => registerAccount("new_player", "password123")),
+    withPool(database.pool, () => registerWithEmail("new_player", "password123")),
     (error: unknown) => {
       assert.ok(error instanceof AuthError);
       assert.equal(error.status, 503);
@@ -239,7 +244,7 @@ test("session cleanup and deterministic commit rejection roll back the new user"
     await t.test(stage, async () => {
       const database = registrationPool({ failAt: stage });
       await assert.rejects(
-        withPool(database.pool, () => registerAccount(`${stage}_player`, "password123")),
+        withPool(database.pool, () => registerWithEmail(`${stage}_player`, "password123")),
         stage === "cleanup" ? /cleanup failed/ : /commit rejected/,
       );
 

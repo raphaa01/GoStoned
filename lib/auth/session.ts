@@ -29,6 +29,8 @@ const executeSessionDelete: SessionDeleteExecutor = async (tokenHash) => {
 const executeSessionLookup: SessionLookupExecutor = async (tokenHash) => {
   const result = await query<SessionRow>(
     `SELECT u.id, u.username, u.display_name, u.avatar_style, s.expires_at,
+            (u.password_hash IS NOT NULL AND u.email IS NULL AND NOT EXISTS
+              (SELECT 1 FROM auth_identities WHERE user_id = u.id)) AS email_required,
             COALESCE((to_jsonb(u)->>'coach_beta_enabled')::boolean, false) AS coach_beta_enabled,
             COALESCE((to_jsonb(u)->>'analysis_unlimited')::boolean, false) AS analysis_unlimited
        FROM user_sessions s
