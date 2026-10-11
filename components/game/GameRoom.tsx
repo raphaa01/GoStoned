@@ -1417,7 +1417,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 ? removeDeadStones(game.board, game.scoring.deadStones)
                 : pendingMovePreview?.board ?? game.board}
               deadStones={game.status === "active" ? scoringDeadStones ?? undefined : undefined}
-              territory={game.status === "finished" && game.finishReason === "score"
+              territory={game.phase === "scoring" && !pendingDeadStones
+                && (game.status === "active" || game.finishReason === "score")
                 ? game.scoring?.territory : undefined}
               selectedDeadStones={game.status === "active" ? selectedDisputeGroup?.stones : undefined}
               disabled={!canMove && !canMarkDead}

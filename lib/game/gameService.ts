@@ -1418,8 +1418,7 @@ function serializeGame(loaded: LoadedGame, now = new Date()): GameState {
       neutralRegionSeeds: scoring.neutral_region_seeds ?? [],
       uncertainStones: scoring.uncertain_stones ?? [],
       browserBotProposalReady: scoring.browser_bot_proposal_ready ?? false,
-      territory: scoring.finalized_at
-        ? countedTerritoryPoints(board, deadStones, scoring.neutral_region_seeds ?? []) : undefined,
+      territory: countedTerritoryPoints(board, deadStones, scoring.neutral_region_seeds ?? []),
       blackConfirmed: scoring.black_confirmed_revision === scoring.revision,
       whiteConfirmed: scoring.white_confirmed_revision === scoring.revision,
       preview: preview!,

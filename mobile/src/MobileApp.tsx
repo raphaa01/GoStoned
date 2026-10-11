@@ -82,7 +82,7 @@ function MobileRoute() {
     return <NativeChromeHidden><main className="mobile-auth-screen" id="main-content"><OAuthUsernameForm returnTo={search.get("returnTo")} /></main></NativeChromeHidden>;
   }
   if (review) {
-    return <MobileShell><div className="mobile-tab-screen mobile-review-screen"><AnalysisReview key={review[1]} gameId={review[1]} /></div></MobileShell>;
+    return <NativeChromeHidden><AnalysisReview key={review[1]} gameId={review[1]} /></NativeChromeHidden>;
   }
 
   let content: React.ReactNode;

@@ -297,3 +297,4 @@ npm run test:live
 npm run test:clock
 npm run test:scoring-races
 npm run test:learn-browser
+npx playwright test --config playwright.review.config.ts
