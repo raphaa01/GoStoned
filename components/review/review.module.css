@@ -23,24 +23,76 @@
 .open { display: flex; align-items: center; gap: 7px; color: var(--color-text-muted); font-weight: 700; transition: color .18s; }
 .empty, .loading { padding: 36px 0; color: var(--color-text-muted); text-align: center; }
 
-.reviewWorkspace { width: 100%; max-width: 100vw; min-height: 100dvh; overflow-x: clip; padding: clamp(12px, 2.2vw, 28px); background: var(--color-canvas); color: var(--color-ink); }
-.reviewHeader { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; width: 100%; max-width: 1240px; margin: 0 auto 18px; padding: 8px 2px 16px; border-bottom: 1px solid var(--color-line); }
-.reviewHeader > a { display: flex; align-items: center; gap: 7px; color: var(--color-text-muted); text-decoration: none; font-weight: 620; }
-.reviewHeader > a:hover { color: var(--color-moss-strong); }
-.reviewHeader > div { display: grid; text-align: center; }
-.reviewHeader > div span { color: var(--color-text-muted); font-size: .85rem; }
-.reviewHeader > div strong { margin-top: 3px; }
-.engineBadge { display: flex; justify-self: end; color: var(--color-text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .72rem; font-weight: 650; }
-.reviewMain { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(310px, .72fr); gap: clamp(22px, 3vw, 42px); width: 100%; max-width: 1240px; min-width: 0; margin: auto; }
-.analysisProgress { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 18px; padding: 11px 0; border-bottom: 1px solid var(--color-line); color: var(--color-text-muted); }
-.analysisProgress > div { display: grid; gap: 2px; }
-.analysisProgress strong { color: var(--color-ink); font-size: .9rem; }
-.analysisProgress span { font-size: .78rem; line-height: 1.45; }
-.analysisProgress > i { grid-column: 1 / -1; display: block; height: 3px; overflow: hidden; background: var(--color-line); }
-.analysisProgress b { display: block; height: 100%; background: var(--color-moss); transition: width 180ms ease; }
-.boardPanel, .insightPanel { min-width: 0; }
-.boardPanel { display: grid; align-content: start; justify-items: center; min-width: 0; }
-.board { display: block; width: min(100%, 690px); height: auto; max-width: 100%; filter: drop-shadow(0 12px 18px rgb(69 48 25 / .12)); }
+.reviewWorkspace { position: fixed; inset: 0; z-index: 85; height: 100dvh; width: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(14px + env(safe-area-inset-left, 0px)); overflow: hidden; background: var(--color-canvas); color: var(--color-ink); }
+.reviewHeader { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; max-width: 880px; margin: 0 auto; min-height: 40px; }
+.reviewHeader h1 { margin: 0; font-size: clamp(16px, 2.6vw, 22px); font-weight: 750; letter-spacing: -.035em; }
+.reviewHeader button { display: grid; place-items: center; height: 40px; width: 40px; background: none; border: 0; color: var(--color-ink-soft); border-radius: 9px; cursor: pointer; }
+.reviewCounter { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+.reviewMain { display: grid; grid-template-rows: auto auto minmax(0, 1fr) 40px 50px; gap: 10px; width: 100%; max-width: 680px; min-width: 0; min-height: 0; margin: 0 auto; }
+.evaluation { min-width: 0; }
+.evaluationLabels { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: clamp(10px, 2.9vw, 13px); margin-bottom: 6px; }
+.evaluationLabels > span { display: flex; align-items: center; gap: 5px; }
+.evaluationLabels > strong { font-weight: 750; font-size: clamp(11px, 3.2vw, 14px); }
+.metricStone { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+.blackMetricStone { background: #202321; border: 1px solid #71766e; }
+.whiteMetricStone { background: #faf9f4; border: 1px solid #8c9088; }
+.winrateBar { height: 10px; background: #faf9f4; border: 1px solid #8c9088; border-radius: 3px; overflow: hidden; }
+.winrateBar > span { display: block; height: 100%; background: #202321; transition: width 160ms ease; }
+.moveAssessment { min-width: 0; padding: 4px 0; }
+.moveAssessment > div { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; font-size: clamp(13px, 3.3vw, 16px); }
+.moveAssessment > div > span { font-weight: 780; }
+.moveAssessment strong { margin-left: auto; }
+.moveAssessment small { color: var(--color-text-muted); font-size: 10px; }
+.moveAssessment p { margin: 5px 0 0; color: var(--color-ink-soft); font-size: clamp(11px, 2.9vw, 14px); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.boardPanel { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; overflow: hidden; }
+.board { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.moveStrip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-inline: contain; }
+.moveStrip::-webkit-scrollbar { display: none; }
+.moveStrip button { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: none; color: var(--color-ink-soft); padding: 8px 9px; min-height: 38px; font: inherit; font-size: 13px; cursor: pointer; }
+.moveStrip small { color: var(--color-text-muted); font-size: 10px; }
+.moveStrip button[aria-current="step"] { background: var(--color-moss-soft); box-shadow: inset 0 -2px var(--color-moss-strong); color: var(--color-ink); }
+.moveControls { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.35fr) 36px; gap: 8px; min-width: 0; }
+.moveControls button, .summaryActions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); color: var(--color-ink); font: inherit; font-weight: 680; cursor: pointer; }
+.moveControls .jumpMove { border-color: transparent; background: none; color: var(--color-text-muted); }
+.moveControls .nextMove, .summaryActions .nextMove { background: var(--color-moss-strong); border-color: var(--color-moss-strong); color: var(--review-accent-text, #fff); font-weight: 800; }
+.moveControls button:disabled { opacity: .35; cursor: default; }
+.reviewWorkspace button:focus-visible { outline: 2px solid var(--color-moss-strong); outline-offset: 2px; }
+.summaryPage { width: 100%; max-width: 620px; min-height: 0; margin: 0 auto; display: grid; grid-template-rows: auto minmax(0, 1fr) auto 48px; gap: clamp(8px, 2dvh, 18px); align-content: start; }
+.summaryPlayers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; text-align: center; }
+.summaryPlayers article { display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.summaryPlayers article > strong { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: clamp(13px, 3.8vw, 18px); }
+.summaryPlayers small { color: var(--color-text-muted); font-size: 11px; }
+.playerStone { display: inline-block; width: 28px; height: 28px; border-radius: 50%; }
+.winner { font-size: 11px; font-weight: 750; color: var(--color-moss-strong); min-height: 16px; }
+.accuracy { font-size: clamp(26px, 6vw, 40px); letter-spacing: -.045em; line-height: 1.1; }
+.summaryCounts { display: grid; grid-template-rows: repeat(8, minmax(0, 1fr)); min-height: 0; max-height: 340px; padding-block: 8px; border-block: 1px solid var(--color-line); }
+.summaryCounts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 1.2fr) minmax(0, 1fr); align-items: center; text-align: center; font-size: clamp(11px, 3vw, 14px); }
+.summaryCounts strong { font-size: clamp(14px, 4vw, 19px); }
+.summaryNote { margin: 0; text-align: center; color: var(--color-text-muted); font-size: 11px; }
+.summaryActions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.reviewStatus { min-height: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 18px; text-align: center; }
+.reviewStatus h1 { margin: 0; font-size: clamp(20px, 4vw, 30px); }
+.reviewStatus p, .analysisNote { color: var(--color-text-muted); font-size: 13px; }
+@media (max-height: 650px) {
+  .reviewWorkspace { gap: 5px; padding-block: calc(5px + env(safe-area-inset-top, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .reviewMain { gap: 5px; grid-template-rows: auto auto minmax(0, 1fr) 36px 44px; }
+  .summaryPage { gap: 6px; grid-template-rows: auto minmax(0, 1fr) auto 44px; }
+  .summaryPlayers article { gap: 2px; }
+  .playerStone { height: 22px; width: 22px; }
+  .accuracy { font-size: 26px; }
+}
+@media (max-height: 500px) and (min-width: 600px) {
+  .reviewMain { max-width: 960px; grid-template-columns: minmax(220px, .8fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 36px 44px; column-gap: 18px; }
+  .evaluation { grid-column: 1; grid-row: 1; }
+  .moveAssessment { grid-column: 1; grid-row: 2; }
+  .boardPanel { grid-column: 2; grid-row: 1 / 3; }
+  .moveStrip, .moveControls { grid-column: 1 / -1; }
+  .summaryPage { max-width: 960px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto 44px; }
+  .summaryPlayers { align-self: center; }
+  .summaryCounts { grid-column: 2; grid-row: 1; height: 100%; }
+  .summaryNote, .summaryActions { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } .winrateBar > span { transition: none; } }
 .boardWood { fill: var(--color-board); }
 .boardLine { stroke: var(--color-board-line); stroke-width: .28; }
 .boardCoordinates { fill: rgb(72 53 31 / .78); font-size: 2.45px; font-weight: 650; text-anchor: middle; }
@@ -49,54 +101,6 @@
 .whiteStone { fill: #f4f1e8; stroke: #c6c1b5; stroke-width: .3; filter: drop-shadow(.4px .6px .5px rgba(0,0,0,.35)); }
 .playedMarker { fill: var(--color-oxide); stroke: #fff; stroke-width: .35; }
 .bestMarker { fill: rgb(71 117 99 / .12); stroke: var(--color-moss-strong); stroke-width: .8; stroke-dasharray: 1.8 1.2; }
-.moveControls { display: grid; grid-template-columns: 42px 42px minmax(0, 1fr) auto 42px; align-items: center; gap: 7px; width: min(100%, 690px); margin-top: 12px; }
-.moveControls button { display: flex; height: 40px; align-items: center; justify-content: center; gap: 7px; padding-inline: 10px; border: 1px solid var(--color-line); border-radius: 3px; background: transparent; color: var(--color-ink); cursor: pointer; }
-.moveControls button:hover:not(:disabled) { border-color: var(--color-moss); color: var(--color-moss-strong); }
-.moveControls button:disabled { opacity: .35; }
-.moveControls span { text-align: center; color: var(--color-text-muted); }
-.moveControls strong { color: var(--color-ink); }
-.nextMove span { color: inherit; font-weight: 720; }
-.moveSlider { width: min(100%, 560px); margin: 6px 0 8px; accent-color: var(--color-moss); }
-.insightPanel { min-width: 0; overflow: hidden; border-left: 1px solid var(--color-line); }
-.classification { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 14px 0 14px 24px; border-bottom: 1px solid var(--color-line); }
-.classification span { font-size: 1.02rem; font-weight: 820; }
-.classification strong { font-size: 1.35rem; }
-.explanationBlock { padding: 20px 0 20px 24px; }
-.explanationBlock > span, .metrics article > span { color: var(--color-text-muted); font-size: .72rem; font-weight: 680; }
-.explanation { margin: 9px 0 0; color: var(--color-ink-soft); font-size: .95rem; line-height: 1.55; }
-.metrics { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(145px, .8fr); border-block: 1px solid var(--color-line); }
-.metrics article { display: flex; min-width: 0; flex-direction: column; gap: 9px; padding: 18px 0 18px 24px; }
-.metrics article + article { border-left: 1px solid var(--color-line); }
-.metrics strong { font-size: 1.05rem; }
-.metrics small { color: var(--color-text-subtle); font-size: .7rem; line-height: 1.4; }
-.winrateValues { display: flex; justify-content: space-between; gap: 12px; }
-.winrateValues strong { align-items: center; display: flex; gap: 6px; white-space: nowrap; }
-.metricStone { display: inline-block; width: 11px; height: 11px; border-radius: 50%; }
-.blackMetricStone { background: #171816; }
-.whiteMetricStone { background: #fff; border: 1px solid var(--color-line-strong); }
-.winrateBar { height: 5px; overflow: hidden; border: 1px solid var(--color-line-strong); background: white; }
-.winrateBar span { display: block; height: 100%; background: #171816; }
-.scoreMetric strong { font-size: 1.35rem; }
-.alternatives { padding: 20px 0 22px 24px; }
-.alternatives h2 { margin: 0 0 12px; font-size: 1rem; }
-.alternatives article { display: grid; grid-template-columns: 25px 50px minmax(0, 1fr); align-items: center; gap: 8px; padding: 11px 0; border-top: 1px solid var(--color-line); }
-.alternatives article > span { color: var(--color-text-subtle); }
-.alternatives article > strong { font-size: 1.08rem; }
-.alternatives article div { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-.alternatives small { color: var(--color-text-subtle); }
-.moveStrip { display: flex; gap: 0; width: min(100%, 690px); max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; border-block: 1px solid var(--color-line); scrollbar-width: thin; }
-.moveStrip button { display: grid; flex: 0 0 94px; grid-template-columns: auto 1fr; gap: 2px 7px; min-width: 0; padding: 8px; border: 0; border-right: 1px solid var(--color-line); background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
-.moveStrip button[aria-current="step"] { box-shadow: inset 0 -3px currentColor; }
-.moveStrip small { color: var(--color-text-subtle); }
-.moveStrip span { grid-column: 1 / -1; overflow: hidden; font-size: .68rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
-.coachCard { display: none; }
-.nativeRecommendation { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-top: 5px; color: var(--color-ink-soft); font-size: .8rem; }
-.nativeRecommendation strong { margin-left: 5px; }
-.nativeRecommendation small { color: var(--color-text-muted); font-size: .7rem; }
-.reviewStatus { display: grid; min-height: min(620px, calc(100vh - 80px)); place-content: center; justify-items: center; gap: 12px; padding: 30px; color: var(--color-ink-soft); text-align: center; }
-.reviewStatus h1 { margin: 4px 0; font-size: clamp(1.7rem, 4vw, 3rem); }
-.reviewStatus p { color: var(--color-text-muted); }
-.analysisNote { max-width: 540px; line-height: 1.65; }
 .quotaPage { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: clamp(34px, 7vw, 100px); max-width: 1040px; min-height: min(650px, calc(100vh - 100px)); margin: auto; padding: clamp(70px, 10vw, 128px) 20px 60px; }
 .quotaIntro > span { color: var(--color-moss-strong); font-size: .75rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .quotaIntro h1 { max-width: 650px; margin: 14px 0 20px; font-size: clamp(2.8rem, 6vw, 5.2rem); font-weight: 540; letter-spacing: -.06em; line-height: .94; }
@@ -114,39 +118,30 @@
 .supportPoll small[role="alert"] { color: var(--color-danger); }
 .quotaBack { display: flex; align-items: center; gap: 7px; width: fit-content; color: var(--color-text-muted); text-decoration: none; }
 .spin { animation: spin 1s linear infinite; }
-.brilliant { color: #237a76; }
-.great { color: #376f91; }
+.brilliant { color: var(--review-brilliant, #237a76); }
+.great { color: var(--review-great, #376f91); }
 .best { color: var(--color-moss-strong); }
-.excellent { color: #4f7c4a; }
-.good { color: #607953; }
-.inaccuracy { color: #8a691f; }
-.mistake { color: #a25427; }
+.excellent { color: var(--review-excellent, #4f7c4a); }
+.good { color: var(--review-good, #607953); }
+.inaccuracy { color: var(--review-inaccuracy, #8a691f); }
+.mistake { color: var(--review-mistake, #a25427); }
 .blunder { color: var(--color-oxide); }
+:global(html:is([data-theme="dark"], [data-mobile-theme="dark"])) .reviewWorkspace {
+  --review-accent-text: #111310;
+  --review-brilliant: #64c5bd;
+  --review-great: #83b8d9;
+  --review-excellent: #99c08c;
+  --review-good: #a8b892;
+  --review-inaccuracy: #dfba7e;
+  --review-mistake: #eca47c;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
+
+/* Preserve the existing review index and quota layouts. */
 @media (max-width: 900px) {
   .hub { padding: 0 22px 64px; }
   .hero h1 { font-size: clamp(3rem, 14vw, 5.5rem); }
-  .reviewWorkspace { min-height: 100dvh; padding: 10px 14px calc(32px + env(safe-area-inset-bottom)); }
-  .reviewMain { grid-template-columns: minmax(0, 1fr); gap: 14px; width: min(100%, 620px); }
-  .reviewHeader { grid-template-columns: minmax(0, 1fr) auto; width: min(100%, 620px); margin-bottom: 12px; padding-bottom: 12px; }
-  .reviewHeader > div { grid-row: 2; grid-column: 1 / -1; padding-top: 5px; }
-  .engineBadge { grid-column: 2; }
-  .coachCard { display: grid; gap: 10px; padding: 16px 17px 17px; overflow: hidden; border: 1px solid var(--color-line); border-top: 3px solid currentColor; border-radius: 10px; background: var(--color-surface-raised); box-shadow: var(--shadow-hairline); }
-  .coachCardHeading { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; }
-  .coachCardHeading span { font-size: 1.05rem; font-weight: 820; }
-  .coachCardHeading strong { font-size: 1.18rem; }
-  .coachCardLabel { color: var(--color-text-muted); font-size: .72rem; font-weight: 680; }
-  .coachCard p { margin: -4px 0 0; color: var(--color-ink-soft); font-size: .94rem; line-height: 1.55; }
-  .boardPanel { width: 100%; min-width: 0; }
-  .board { width: 100%; max-height: none; }
-  .moveControls, .moveSlider { width: 100%; }
-  .nextMove { min-width: 104px; border-color: var(--color-moss) !important; background: var(--color-moss) !important; color: white !important; }
-  .nextMove:hover:not(:disabled) { background: var(--color-moss-strong) !important; }
-  .moveStrip { width: 100%; }
-  .insightPanel { border-top: 1px solid var(--color-line); border-left: 0; }
-  .classification, .explanationBlock { display: none; }
-  .metrics article:first-child, .alternatives { padding-left: 0; }
 }
 @media (max-width: 620px) {
   .hub { padding-inline: 14px; }
@@ -156,35 +151,12 @@
   .sectionHeading > a { display: none; }
   .gameRow { grid-template-columns: auto minmax(0, 1fr); }
   .open { display: none; }
-  .reviewWorkspace { padding-inline: 10px; }
-  .reviewHeader { margin-bottom: 10px; }
-  .reviewHeader > a { font-size: .88rem; }
-  .engineBadge { font-size: .62rem; }
-  .analysisProgress { grid-template-columns: 1fr; }
-  .analysisProgress > span { justify-self: start; }
-  .coachCard { padding: 14px 15px 15px; }
-  .moveControls { grid-template-columns: 38px 38px minmax(74px, 1fr) 88px 38px; gap: 4px; }
-  .moveControls button { height: 42px; padding-inline: 8px; }
-  .moveControls > span { font-size: .9rem; }
-  .nextMove { min-width: 0; }
-  .moveStrip { scrollbar-width: none; }
-  .moveStrip::-webkit-scrollbar { display: none; }
-  .metrics article { padding: 15px 0; }
-  .metrics article + article { padding-left: 15px; }
-  .alternatives { padding-left: 0; }
-  .alternatives article { grid-template-columns: 20px 42px 1fr; }
-  .alternatives article div { display: grid; justify-items: end; gap: 2px; }
 }
 @media (max-width: 520px) {
-  .metrics { grid-template-columns: 1fr; }
-  .metrics article + article { padding-left: 0; border-top: 1px solid var(--color-line); border-left: 0; }
-  .winrateValues { justify-content: flex-start; gap: 18px; }
   .quotaPage { padding-inline: 8px; }
   .supportPoll { padding: 22px 18px; }
   .supportPoll > div { grid-template-columns: repeat(2, 1fr); }
 }
-
-/* Review is a Go analysis surface, not a marketing landing page. */
 .hub { gap: clamp(30px, 4vw, 46px); padding: 48px 32px 84px; }
 .hero {
   border-bottom: 1px solid var(--color-line);
@@ -255,8 +227,6 @@
 .open { font-weight: 620; }
 .empty, .loading { border-top: 1px solid var(--color-line); padding: 36px 0; text-align: left; }
 
-.reviewStatus h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); }
-
 @media (max-width: 900px) {
   .hub { padding: 32px 22px 64px; }
   .quotaPage { grid-template-columns: 1fr; gap: 30px; padding-top: 50px; }
@@ -269,10 +239,7 @@
   .hero h1 { font-size: 43px; }
   .gamePicker { border-radius: 9px; padding: 19px 15px; }
   .gameRow { margin-inline: -4px; padding-inline: 4px; }
-  .engineBadge { font-size: .65rem; }
 }
-
-/* The review index is a tool selector, not a marketing card. */
 .hub {
   gap: clamp(30px, 5vw, 58px);
   padding: 0 0 80px;
@@ -329,8 +296,6 @@
   .hero h1 { font-size: 38px; }
   .gamePicker { padding: 0; }
 }
-
-/* Keep the review hub title aligned with the beginner-course heading. */
 .hero {
   border: 0;
   isolation: auto;
@@ -351,54 +316,6 @@
   .hero { padding-top: 24px; }
   .hero h1 { font-size: clamp(40px, 12vw, 52px); }
 }
-
-/* Keep the complete analysis flow visible on a laptop-sized viewport. */
-@media (min-width: 901px) {
-  .reviewWorkspace {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    height: 100dvh;
-    min-height: 620px;
-    overflow: hidden;
-    padding: 14px clamp(18px, 2.5vw, 34px) 10px;
-  }
-
-  .reviewHeader { margin-bottom: 12px; padding-bottom: 12px; }
-
-  .reviewMain {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .boardPanel {
-    grid-template-rows: minmax(0, 1fr) auto auto auto;
-    height: 100%;
-    min-height: 0;
-  }
-
-  .board {
-    height: auto;
-    max-height: 100%;
-    max-width: 100%;
-    width: min(100%, calc(100dvh - 205px), 690px);
-  }
-
-  .insightPanel { overflow-y: auto; }
-
-  .moveStrip {
-    max-height: 72px;
-    min-height: 58px;
-  }
-
-  .moveStrip button { flex-basis: 92px; padding-block: 7px; }
-}
-
-@media (max-width: 900px) {
-  .reviewWorkspace { height: auto; overflow-x: clip; overflow-y: visible; }
-}
-
-/* Review selection stays compact even though other page titles can be larger. */
 .hero h1 {
   font-size: clamp(36px, 4vw, 52px);
 }
@@ -407,92 +324,5 @@
   .hero h1 { font-size: 38px; }
 }
 
-/* Mobile review keeps the board and move controls in the first viewport. */
-@media (max-width: 620px) {
-  .reviewWorkspace {
-    padding: 6px 8px calc(24px + env(safe-area-inset-bottom));
-  }
-
-  .reviewHeader {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 8px;
-    margin-bottom: 6px;
-    padding: 3px 1px 7px;
-  }
-
-  .reviewHeader > a {
-    font-size: .8rem;
-    white-space: nowrap;
-  }
-
-  .reviewHeader > div {
-    grid-row: auto;
-    grid-column: auto;
-    min-width: 0;
-    padding-top: 0;
-  }
-
-  .reviewHeader > div span { display: none; }
-  .reviewHeader > div strong {
-    margin: 0;
-    overflow: hidden;
-    font-size: .78rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .engineBadge { font-size: .56rem; white-space: nowrap; }
-
-  .reviewMain { gap: 7px; }
-
-  .analysisProgress {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 3px 8px;
-    padding: 4px 0;
-  }
-
-  .analysisProgress > div { display: block; }
-  .analysisProgress strong { font-size: .72rem; }
-  .analysisProgress > div span { display: none; }
-  .analysisProgress > span {
-    justify-self: end;
-    font-size: .68rem;
-  }
-  .analysisProgress > i { height: 2px; }
-
-  .coachCard {
-    display: block;
-    padding: 8px 11px;
-    border-radius: 7px;
-  }
-
-  .coachCardHeading span { font-size: .92rem; }
-  .coachCardHeading strong { font-size: 1rem; }
-  .coachCardLabel,
-  .coachCard p { display: none; }
-
-  .board {
-    width: min(100%, calc(100dvh - 180px));
-  }
-
-  .moveControls {
-    grid-template-columns: 36px 36px minmax(64px, 1fr) 84px 36px;
-    margin-top: 5px;
-  }
-
-  .moveControls button { height: 38px; }
-  .moveSlider { margin: 2px 0 4px; }
-
-  .classification { display: none; }
-  .explanationBlock {
-    display: block;
-    padding: 16px 0;
-    border-bottom: 1px solid var(--color-line);
-  }
-
-  .explanationBlock .explanation {
-    margin-top: 7px;
-    font-size: .86rem;
-    line-height: 1.5;
-  }
-}
+.quotaPage { min-height: 0; overflow-y: auto; }
+@media(max-width: 700px) { .quotaPage { grid-template-columns: 1fr; padding: 16px; gap: 18px; } }

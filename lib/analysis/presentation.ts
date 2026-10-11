@@ -3,6 +3,7 @@ import type { MoveAnalysis } from "./types";
 import { applyMove, countLiberties, getGroup, getNeighbors } from "@/lib/game/goEngine";
 import type { Board, BoardSize, Stone } from "@/lib/game/types";
 import type { Locale } from "@/lib/i18n/config";
+import { getReviewExperienceCopy } from "@/lib/i18n/reviewExperience";
 
 export function normalizeWinrate(value: number): number {
   if (!Number.isFinite(value)) return 0.5;
@@ -121,4 +122,23 @@ export function moveExplanation(move: MoveAnalysis, boardBefore: Board, size: Bo
     ? `KataGo's first choice. ${englishShape(move.playedMove, played)}`
     : `${move.playedMove} is KataGo's first choice.`;
   return `KataGo recommends ${move.bestMove}. ${best ? englishShape(move.bestMove, best) : ""}${played ? ` Your move: ${englishShape(move.playedMove, played)}` : ""}`.trim();
+}
+
+/** Only observable tactical facts; omit generic engine preferences and numeric filler. */
+export function meaningfulMoveComment(move: MoveAnalysis, boardBefore: Board, size: BoardSize, locale: Locale): string | null {
+  const copy = getReviewExperienceCopy(locale);
+  const played = moveShape(boardBefore, size, move.color, move.playedMove);
+  if (!played || played.pass) return null;
+  if (played.captures > 0) return (played.captures === 1 ? copy.capturedOne : copy.captured)
+    .replace("{move}", move.playedMove).replace("{count}", String(played.captures));
+  if (played.liberties === 1) return copy.atari.replace("{move}", move.playedMove);
+  if (played.connections >= 2) return copy.connected.replace("{move}", move.playedMove);
+  const point = fromGtpCoordinate(size, move.playedMove);
+  if (point.x === undefined || point.y === undefined) return null;
+  const neighbors = getNeighbors(boardBefore, { x: point.x, y: point.y });
+  if (neighbors.some((neighbor) => boardBefore[neighbor.y][neighbor.x] === move.color
+    && countLiberties(boardBefore, getGroup(boardBefore, neighbor)) === 1)) {
+    return copy.saves.replace("{move}", move.playedMove);
+  }
+  return null;
 }

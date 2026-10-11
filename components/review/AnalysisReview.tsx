@@ -2,6 +2,7 @@
 
 import { ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight, LoaderCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
@@ -9,6 +10,8 @@ import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 import { getMobileAnalysisCopy } from "@/lib/i18n/mobileAnalysis";
+import { getReviewExperienceCopy } from "@/lib/i18n/reviewExperience";
+import { reviewPlayerSummary, REVIEW_CLASSIFICATIONS } from "@/lib/analysis/reviewSummary";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import type { AnalysisJobView } from "@/lib/analysis/types";
 import {
@@ -19,7 +22,7 @@ import {
   fixedColorScoreLead,
   fixedColorWinrates,
   formatWinrate,
-  moveExplanation,
+  meaningfulMoveComment,
 } from "@/lib/analysis/presentation";
 import { replayMoves } from "@/lib/game/goEngine";
 import type { GameState } from "@/lib/game/types";
@@ -41,6 +44,10 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
   const progressiveCopy = getMobileAnalysisCopy(locale);
+  const experienceCopy = getReviewExperienceCopy(locale);
+  const router = useRouter();
+  const timelineRef = useRef<HTMLElement | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
   const [game, setGame] = useState<GameState | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisJobView | null>(null);
   const [selectedMove, setSelectedMove] = useState(1);
@@ -203,6 +210,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   }, [analysis?.status, load, nativeAnalysis]);
 
   const result = analysis?.result ?? null;
+  const availableMoves = result?.moves.length ?? 0;
   const progress = analysis?.progress;
   const current = result?.moves[selectedMove - 1] ?? null;
   const board = useMemo(() => game ? replayMoves(game.boardSize, game.moves.slice(0, selectedMove)) : null, [game, selectedMove]);
@@ -210,24 +218,59 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
     () => game ? replayMoves(game.boardSize, game.moves.slice(0, Math.max(0, selectedMove - 1))) : null,
     [game, selectedMove],
   );
-  const winrates = current ? fixedColorWinrates(current) : null;
-  const scoreLead = current ? fixedColorScoreLead(current) : null;
+  const evaluation = current ?? (result?.moves[0] ? { color: result.moves[0].color,
+    winrateAfter: result.moves[0].winrateBefore, scoreLeadAfter: result.moves[0].scoreLeadBefore } : null);
+  const winrates = evaluation ? fixedColorWinrates(evaluation) : null;
+  const scoreLead = evaluation ? fixedColorScoreLead(evaluation) : null;
+  const comment = current && boardBefore ? meaningfulMoveComment(current, boardBefore, game?.boardSize ?? 19, locale) : null;
+  const summaries = useMemo(() => result ? {
+    black: reviewPlayerSummary(result.moves, "black"), white: reviewPlayerSummary(result.moves, "white"),
+  } : null, [result]);
+  const preliminary = Boolean(result && (analysis?.status !== "completed"
+    || result.moves.length < (game?.moveCount ?? 0) || summaries?.black.preliminary || summaries?.white.preliminary));
+  const exitReview = () => {
+    if (window.history.length > 1) router.back();
+    else router.replace(href("/review"));
+  };
+  useEffect(() => {
+    const strip = timelineRef.current;
+    const active = strip?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (strip && active) strip.scrollTo({ left: strip.scrollLeft + active.getBoundingClientRect().left
+      - strip.getBoundingClientRect().left - (strip.clientWidth - active.clientWidth) / 2, behavior: "instant" });
+  }, [selectedMove, result?.moves.length, showSummary]);
+  useEffect(() => {
+    if (!availableMoves || showSummary) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable]")) return;
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      setSelectedMove((move) => event.key === "Home" ? 0 : event.key === "End" ? availableMoves
+        : Math.max(0, Math.min(availableMoves, move + (event.key === "ArrowLeft" ? -1 : 1))));
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [availableMoves, showSummary]);
   const quotaReset = quotaRetryAt
     ? new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(quotaRetryAt)
     : null;
-  if (loading || !user) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
-  if (error && !game) return <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>;
-  if (!game || !board) return <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>;
-
   return (
     <div className={`${styles.reviewWorkspace} review-workspace`}>
       <header className={styles.reviewHeader}>
-        <Link href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
-        <div><span>{game.blackPlayerName} · {game.whitePlayerName}</span><strong>{game.boardSize}×{game.boardSize} · {game.result}</strong></div>
-        {result ? <span className={styles.engineBadge}>{result.engine.name} {result.engine.version}</span> : null}
+        <button aria-label={experienceCopy.back} onClick={exitReview} type="button"><ArrowLeft size={22} /></button>
+        <h1>{showSummary ? experienceCopy.summary : experienceCopy.title}</h1>
+        <span className={styles.reviewCounter}>{progress && analysis?.status === "running"
+          ? <><LoaderCircle aria-hidden="true" className={styles.spin} size={13} /> {progressiveCopy.progress
+            .replace("{done}", String(progress.completedMoves)).replace("{total}", String(progress.totalMoves))}</>
+          : game ? `${game.boardSize}×${game.boardSize}` : ""}</span>
       </header>
 
-      {error ? (
+      {loading || !user ? (
+        <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
+      ) : error && !game ? (
+        <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>
+      ) : !game || !board ? (
+        <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
+      ) : error ? (
         <section className={styles.reviewStatus}>
           <p role="alert">{error}</p>
           <button
@@ -283,84 +326,77 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p className={styles.analysisNote}>{copy.runningNote}</p></section>
       ) : analysis.status === "failed" ? (
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
-      ) : current && result && boardBefore && winrates && scoreLead ? (
-        <main className={styles.reviewMain}>
-          {progress ? (
-            <section aria-live="polite" className={styles.analysisProgress}>
-              <div>
-                <strong>{progress.phase === "preview" ? progressiveCopy.preview : progressiveCopy.quality}</strong>
-                <span>{progress.phase === "preview" ? progressiveCopy.previewNote : progressiveCopy.qualityNote}</span>
-              </div>
-              <span>{progressiveCopy.progress
-                .replace("{done}", String(progress.phase === "quality" ? progress.refinedMoves : progress.completedMoves))
-                .replace("{total}", String(progress.totalMoves))}</span>
-              <i aria-hidden="true"><b style={{ width: `${Math.min(100, ((progress.phase === "quality" ? progress.refinedMoves : progress.completedMoves) / Math.max(1, progress.totalMoves)) * 100)}%` }} /></i>
-            </section>
-          ) : null}
-          <section className={`${styles.coachCard} ${current.classification ? styles[current.classification] : ""}`}>
-            <div className={styles.coachCardHeading}>
-              <span>{current.classification ? copy.classifications[current.classification] : progressiveCopy.preview}</span>
-              <strong>{current.playedMove}</strong>
-            </div>
-            {nativeAnalysis && current.bestMove ? (
-              <div className={styles.nativeRecommendation}>
-                <span>{progressiveCopy.bestMove} <strong>{current.bestMove}</strong></span>
-                {current.provisional ? <small>{progressiveCopy.provisional}</small> : null}
-              </div>
-            ) : null}
-            <span className={styles.coachCardLabel}>{copy.explanation}</span>
-            <p>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
-          </section>
-
-          <section className={styles.boardPanel}>
-            <AnalysisBoard board={board} bestMove={current.bestMove ?? undefined} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current.playedMove} size={game.boardSize} />
-            <div className={styles.moveControls}>
-              <button aria-label={`${copy.previous} · 1`} disabled={selectedMove <= 1} onClick={() => setSelectedMove(1)} type="button"><ChevronsLeft /></button>
-              <button aria-label={copy.previous} disabled={selectedMove <= 1} onClick={() => setSelectedMove((move) => Math.max(1, move - 1))} type="button"><ArrowLeft /></button>
-              <span>{copy.move} <strong>{selectedMove}</strong> / {result.moves.length}</span>
-              <button className={styles.nextMove} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove((move) => Math.min(result.moves.length, move + 1))} type="button"><span>{copy.next}</span><ArrowRight /></button>
-              <button aria-label={`${copy.next} · ${result.moves.length}`} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove(result.moves.length)} type="button"><ChevronsRight /></button>
-            </div>
-            <input aria-label={copy.move} className={styles.moveSlider} max={result.moves.length} min="1" onChange={(event) => setSelectedMove(Number(event.target.value))} type="range" value={selectedMove} />
-            <nav aria-label={copy.movesLabel} className={styles.moveStrip}>
-              {result.moves.map((move) => (
-                <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} className={move.classification ? styles[move.classification] : undefined} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button"><small>{move.moveNumber}</small><strong>{move.playedMove}</strong><span>{move.classification ? copy.classifications[move.classification] : progressiveCopy.preview}</span></button>
-              ))}
-            </nav>
-          </section>
-
-          <aside className={styles.insightPanel}>
-            <div className={`${styles.classification} ${current.classification ? styles[current.classification] : ""}`}><span>{current.classification ? copy.classifications[current.classification] : progressiveCopy.preview}</span><strong>{current.playedMove}</strong></div>
-            <div className={styles.explanationBlock}>
-              <span>{copy.explanation}</span>
-              <p className={styles.explanation}>{moveExplanation(current, boardBefore, game.boardSize, locale)}</p>
-            </div>
-            <div className={styles.metrics}>
-              <article className={styles.winrateMetric}>
-                <span>{copy.winChance}</span>
-                <div className={styles.winrateValues}>
-                  <strong><i className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} {formatWinrate(winrates.black)}</strong>
-                  <strong><i className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} {formatWinrate(winrates.white)}</strong>
-                </div>
-                <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
-              </article>
-              <article className={styles.scoreMetric}>
-                <span>{copy.score}</span>
-                <strong>{scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +{scoreLead.points.toFixed(1)}</strong>
-              </article>
-            </div>
-            <section className={styles.alternatives}>
-              <h2>{copy.alternatives}</h2>
-              {current.alternatives.length === 0 ? <p>{progressiveCopy.noAlternatives}</p> : null}
-              {current.alternatives.map((alternative, index) => (
-                <article key={`${current.moveNumber}:${alternative.move}`}>
-                  <span>{index + 1}</span><strong>{alternative.move}</strong>
-                  <div><b>{current.color === "black" ? dictionary.game.black : dictionary.game.white} {formatWinrate(alternative.winrate)}</b></div>
+      ) : result && boardBefore && winrates && scoreLead ? (
+        showSummary && summaries ? (
+          <main className={styles.summaryPage} data-review-summary>
+            <div className={styles.summaryPlayers}>
+              {(["black", "white"] as const).map((color) => (
+                <article key={color}>
+                  <i aria-hidden="true" className={`${styles.playerStone} ${color === "black" ? styles.blackMetricStone : styles.whiteMetricStone}`} />
+                  <strong>{color === "black" ? game.blackPlayerName : game.whitePlayerName}</strong>
+                  <small>{color === "black" ? dictionary.game.black : dictionary.game.white}</small>
+                  <span className={styles.winner}>{game.winnerKey === (color === "black" ? game.blackPlayerKey : game.whitePlayerKey)
+                    ? experienceCopy.winner : game.winnerKey === null ? game.result : "\u00a0"}</span>
+                  <b className={styles.accuracy} title={experienceCopy.accuracyHelp}>{summaries[color].accuracy?.toFixed(1) ?? "—"}</b>
+                  <small title={experienceCopy.accuracyHelp}>{experienceCopy.accuracy}</small>
                 </article>
               ))}
+            </div>
+            <section className={styles.summaryCounts} aria-label={experienceCopy.summary}>
+              {REVIEW_CLASSIFICATIONS.map((classification) => (
+                <div className={styles[classification]} key={classification}>
+                  <strong>{summaries.black.counts[classification]}</strong>
+                  <span>{copy.classifications[classification]}</span>
+                  <strong>{summaries.white.counts[classification]}</strong>
+                </div>
+              ))}
             </section>
-          </aside>
-        </main>
+            <p className={styles.summaryNote}>{game.result}{preliminary ? ` · ${experienceCopy.partial
+              .replace("{done}", String(result.moves.length)).replace("{total}", String(game.moveCount))}` : ""}</p>
+            <div className={styles.summaryActions}>
+              <button onClick={() => setShowSummary(false)} type="button">{experienceCopy.returnToAnalysis}</button>
+              <button className={styles.nextMove} onClick={exitReview} type="button">{experienceCopy.done}</button>
+            </div>
+          </main>
+        ) : (
+          <main className={styles.reviewMain} data-review-player>
+            <section className={styles.evaluation} aria-label={copy.winChance}>
+              <div className={styles.evaluationLabels}>
+                <span><i aria-hidden="true" className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} <strong>{formatWinrate(winrates.black)}</strong></span>
+                <strong>{scoreLead.points < 0.05 ? "±0" : `${scoreLead.color === "black" ? dictionary.game.black : dictionary.game.white} +${scoreLead.points.toFixed(1)}`}</strong>
+                <span><i aria-hidden="true" className={`${styles.metricStone} ${styles.whiteMetricStone}`} />{dictionary.game.white} <strong>{formatWinrate(winrates.white)}</strong></span>
+              </div>
+              <div aria-hidden="true" className={styles.winrateBar}><span style={{ width: `${winrates.black * 100}%` }} /></div>
+            </section>
+            <section className={styles.moveAssessment} aria-live="polite">
+              <div>
+                <span className={current?.classification ? styles[current.classification] : undefined}>{current?.classification
+                  ? copy.classifications[current.classification] : current ? progressiveCopy.preview : experienceCopy.initial}</span>
+                <strong>{current ? `${current.moveNumber}. ${current.playedMove}` : ""}</strong>
+                {current?.provisional ? <small>{experienceCopy.preliminary}</small> : null}
+              </div>
+              {comment ? <p>{comment}</p> : null}
+            </section>
+            <section className={styles.boardPanel}>
+              <AnalysisBoard board={board} bestMove={current?.bestMove ?? undefined} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current?.playedMove} size={game.boardSize} />
+            </section>
+            <nav aria-label={copy.movesLabel} className={styles.moveStrip} ref={timelineRef}>
+              {result.moves.map((move) => (
+                <button aria-current={move.moveNumber === selectedMove ? "step" : undefined} key={move.moveNumber} onClick={() => setSelectedMove(move.moveNumber)} type="button">
+                  <small>{move.moveNumber}.</small><i aria-hidden="true" className={`${styles.metricStone} ${move.color === "black" ? styles.blackMetricStone : styles.whiteMetricStone}`} /><strong>{move.playedMove}</strong>
+                </button>
+              ))}
+            </nav>
+            <div className={styles.moveControls}>
+              <button aria-label={experienceCopy.first} className={styles.jumpMove} disabled={selectedMove <= 0} onClick={() => setSelectedMove(0)} type="button"><ChevronsLeft size={19} /></button>
+              <button aria-label={copy.previous} disabled={selectedMove <= 0} onClick={() => setSelectedMove((move) => Math.max(0, move - 1))} type="button"><ArrowLeft size={18} /><span>{experienceCopy.previous}</span></button>
+              <button className={styles.nextMove} onClick={() => selectedMove >= result.moves.length ? setShowSummary(true) : setSelectedMove((move) => move + 1)} type="button">
+                <span>{selectedMove >= result.moves.length ? experienceCopy.done : experienceCopy.next}</span><ArrowRight size={18} />
+              </button>
+              <button aria-label={experienceCopy.last} className={styles.jumpMove} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove(result.moves.length)} type="button"><ChevronsRight size={19} /></button>
+            </div>
+          </main>
+        )
       ) : null}
     </div>
   );

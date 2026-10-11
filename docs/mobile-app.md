@@ -148,3 +148,25 @@ See `native/gostone-katago/README.md` for the native build details and
 `docs/mobile-store-release.md` for the reproducible signing, archive,
 verification, and remaining account gates. Open `ios/App/App.xcodeproj` in
 Xcode; a top-level `ios/App/App.xcworkspace` does not exist.
+
+## Review presentation
+
+The website and bundled apps share `AnalysisReview`. The app hides its native
+tabs for this screen. The viewport contains fixed-color black/white evaluation,
+the current move classification, an optional factual tactical comment, the board,
+a coordinate-only horizontal timeline and four navigation controls. Initial
+position and final-move jumps are available; Next becomes Done at the last
+available analyzed move. Done opens the per-player summary, which can reopen the
+same move or return to the previous screen. The header back arrow returns directly.
+Safe-area padding and a two-column landscape layout keep the board and controls
+within short screens. Native preview chunks, persistence and quality refinement
+retain the analysis contract above; summaries with unfinished work are marked
+preliminary and update as more results arrive.
+
+Accuracy is a GoStone estimate from 0 to 100, not Chess.com's proprietary metric:
+each move contributes `100 * exp(-max(max(0, scoreLoss)/6, max(0, winrateLoss)*4))`.
+The summary averages available finite evaluations separately for each color;
+unsearched/missing losses do not invent accuracy. Classification counts use the
+existing engine classifications, including provisional results with the preliminary
+label. Comments describe observable captures, connections and atari, rather than
+repeating score changes or generic engine preferences.
