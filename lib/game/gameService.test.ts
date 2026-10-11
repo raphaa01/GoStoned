@@ -365,6 +365,36 @@ test("game nametags use joined account IDs and cannot be claimed through display
   }
 });
 
+test("two-pass scoring publishes territory before confirmation and updates neutral revisions", async () => {
+  const moves = persistedMoveRows([
+    storedMove(1, "black", 0, 1), storedMove(2, "white", 7, 8),
+    storedMove(3, "black", 1, 0), storedMove(4, "white", 8, 7),
+    storedMove(5, "black", null, null, true), storedMove(6, "white", null, null, true),
+  ]);
+  for (const confirmed of [false, true]) {
+    for (const neutral of [false, true]) {
+      const revision = neutral ? 2 : 1;
+      const rules = { rules: "japanese", rules_profile: "japanese-1989-gostone-v1", scoring_method: "territory", komi: "6.5" };
+      await withFakeDatabase({
+        game: gameRow({ ...rules, phase: "scoring", to_move: null, scoring_revision: revision, version: 7 }),
+        scoring: scoringRow({ ...rules, revision, stopped_move_number: 6, board_hash: moves[5].board_hash,
+          neutral_region_seeds: neutral ? [{ x: 0, y: 0 }] : [],
+          black_confirmed_revision: confirmed ? revision : null,
+          black_confirmed_at: confirmed ? new Date("2099-01-01T00:07:00.000Z") : null }),
+        moveRows: moves,
+      }, async () => {
+        const state = await getGameState(gameId, blackKey);
+        assert.equal(state.status, "active");
+        assert.equal(state.result, null);
+        assert.equal(state.scoring?.finalizedAt, null);
+        assert.deepEqual(state.scoring?.territory, { black: neutral ? [] : [{ x: 0, y: 0 }], white: [{ x: 8, y: 8 }] });
+        assert.equal(state.scoring?.preview.blackTerritory, neutral ? 0 : 1);
+        assert.equal(state.scoring?.preview.whiteTerritory, 1);
+      });
+    }
+  }
+});
+
 test("analysis quota bypass is server-bound to the developer identity; other accounts remain limited", async () => {
   for (const id of ["2f507157-9a4a-4960-b3c8-87fa721cdd26", "normal-user"]) {
     const key = `user:${id}`;
