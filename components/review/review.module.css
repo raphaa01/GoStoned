@@ -100,7 +100,7 @@
 .blackStone { fill: #151515; stroke: #000; stroke-width: .25; filter: drop-shadow(.4px .6px .5px rgba(0,0,0,.45)); }
 .whiteStone { fill: #f4f1e8; stroke: #c6c1b5; stroke-width: .3; filter: drop-shadow(.4px .6px .5px rgba(0,0,0,.35)); }
 .playedMarker { fill: var(--color-oxide); stroke: #fff; stroke-width: .35; }
-.bestMarker { fill: rgb(71 117 99 / .12); stroke: var(--color-moss-strong); stroke-width: .8; stroke-dasharray: 1.8 1.2; }
+.bestMarker { fill: none; stroke: var(--color-moss-strong); stroke-width: .8; stroke-dasharray: 1.8 1.2; pointer-events: none; }
 .quotaPage { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: clamp(34px, 7vw, 100px); max-width: 1040px; min-height: min(650px, calc(100vh - 100px)); margin: auto; padding: clamp(70px, 10vw, 128px) 20px 60px; }
 .quotaIntro > span { color: var(--color-moss-strong); font-size: .75rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .quotaIntro h1 { max-width: 650px; margin: 14px 0 20px; font-size: clamp(2.8rem, 6vw, 5.2rem); font-weight: 540; letter-spacing: -.06em; line-height: .94; }

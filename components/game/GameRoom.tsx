@@ -30,7 +30,7 @@ import {
 } from "@/lib/client/identityAuthority";
 import { leaveGameAndQueue } from "@/lib/client/leaveGame";
 import { latestGameMessageId, mergeGameMessages } from "@/lib/client/messages";
-import { previewPendingMove } from "@/lib/client/optimisticGame";
+import { previewPendingGameMove, type PendingGameMovePreview } from "@/lib/client/optimisticGame";
 import { createOperationLatch } from "@/lib/client/operationLatch";
 import {
   deriveGameOpponent,
@@ -97,7 +97,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [game, setGame] = useState<GameState | null>(null);
   const [messages, setMessages] = useState<GameMessage[]>([]);
   const [busy, setBusy] = useState(false);
-  const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
+  const [pendingMove, setPendingMove] = useState<PendingGameMovePreview | null>(null);
   const [pendingDeadStones, setPendingDeadStones] = useState<Position[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<GoStoneJapaneseSettlementProposal | null>(null);
@@ -750,7 +750,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   ) && gameInteractionAllowed && !busy;
   const pendingMovePreview = useMemo(
     () => game
-      ? previewPendingMove(game.board, pendingMove)
+      ? previewPendingGameMove(game, pendingMove)
       : null,
     [game, pendingMove],
   );
@@ -809,7 +809,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       && typeof move.y === "number"
       && game.turn
     ) {
-      setPendingMove({ x: move.x, y: move.y, color: game.turn });
+      setPendingMove({ x: move.x, y: move.y, color: game.turn, gameId: game.id, baseVersion: expectedVersion });
     }
     setBusy(true);
     setError(null);
@@ -1430,7 +1430,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   ? { x: move.x, y: move.y }
                   : null;
               })()}
-              pendingMove={pendingMove}
+              pendingMove={pendingMovePreview?.applied ? pendingMove : null}
               previewColor={yourColor ?? "black"}
               onIntersectionClick={(x, y) => {
                 if (game.phase === "scoring" && game.scoring) {

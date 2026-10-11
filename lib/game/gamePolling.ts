@@ -1,4 +1,5 @@
 import type { GamePollResponse, GameState } from "./types";
+import { gameBoardMatchesHistory } from "@/lib/client/gameBoardIntegrity";
 
 export const FULL_GAME_REFRESH_INTERVAL_MS = 30_000;
 export const MAX_PERSISTED_GAME_VERSION = 2_147_483_647;
@@ -66,6 +67,7 @@ export function gameStateFromPoll(
       }
     }
   }
+  if ("game" in response && !gameBoardMatchesHistory(current, candidate)) return null;
   return {
     ...candidate,
     clock: { ...candidate.clock, clientReceivedAt },

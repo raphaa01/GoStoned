@@ -374,11 +374,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
                   ? copy.classifications[current.classification] : current ? progressiveCopy.preview : experienceCopy.initial}</span>
                 <strong>{current ? `${current.moveNumber}. ${current.playedMove}` : ""}</strong>
                 {current?.provisional ? <small>{experienceCopy.preliminary}</small> : null}
+                {current?.bestMove && current.bestMove !== current.playedMove
+                  ? <small>{progressiveCopy.bestMove}: {current.bestMove}</small> : null}
               </div>
               {comment ? <p>{comment}</p> : null}
             </section>
             <section className={styles.boardPanel}>
-              <AnalysisBoard board={board} bestMove={current?.bestMove ?? undefined} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current?.playedMove} size={game.boardSize} />
+              <AnalysisBoard board={board} bestMove={current?.bestMove ?? undefined} bestMoveLabel={progressiveCopy.bestMove} label={copy.boardLabel.replaceAll("{size}", String(game.boardSize))} playedMove={current?.playedMove} size={game.boardSize} />
             </section>
             <nav aria-label={copy.movesLabel} className={styles.moveStrip} ref={timelineRef}>
               {result.moves.map((move) => (

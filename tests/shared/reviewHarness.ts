@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { AnalysisJobView, GameAnalysisResult, MoveAnalysis } from "../../lib/analysis/types";
 import { GAME_ID, USER, gameFor, installHarness } from "./boardDesignHarness";
+import { replayMoves } from "../../lib/game/goEngine";
+import { captureIncidentMoves } from "../../lib/game/fixtures/captureIncident9x9";
+import { toGtpCoordinate } from "../../lib/analysis/coordinates";
 
 async function reviewHarness(page: Page) {
   const state = await installHarness(page);
@@ -34,7 +37,7 @@ async function reviewHarness(page: Page) {
   const fixture: { job: AnalysisJobView } = { job: { id: "review-test", gameId: GAME_ID, gameVersion: game.version,
     status: "completed", attempts: 1, result, createdAt: time, startedAt: time, completedAt: time, errorCode: null } };
   await page.route(`**/api/games/${GAME_ID}/analysis`, route => route.fulfill({ json: { ok: true, actor: USER.playerKey, game, analysis: fixture.job } }));
-  return { fixture, result };
+  return { fixture, result, game };
 }
 
 async function fitsViewport(page: Page) {
@@ -60,6 +63,33 @@ export function registerReviewTests(authenticatedServer = false) {
       startingStrength: "unspecified", knownRank: null, boardPlacement: "direct",
     } });
     expect(registered.status()).toBe(201);
+  });
+  test("review preserves the incident's real stones and distinguishes an unplayed recommendation", async ({ page }) => {
+    const { fixture, result, game } = await reviewHarness(page);
+    Object.assign(game, { boardSize: 9, moveCount: 48, moves: captureIncidentMoves,
+      board: replayMoves(9, captureIncidentMoves), result: "B+2.5" });
+    fixture.job.result = { ...result, boardSize: 9, moves: captureIncidentMoves.map((move, index) => ({
+      ...result.moves[index], playedMove: toGtpCoordinate(9, move),
+      bestMove: move.moveNumber === 38 ? "D9" : toGtpCoordinate(9, move),
+    })) };
+    await page.goto(`/de/review/${GAME_ID}`);
+    const player = page.locator("[data-review-player]");
+    const timeline = player.getByRole("navigation").getByRole("button");
+    await expect(timeline).toHaveCount(48);
+    await timeline.nth(36).click();
+    await expect(player.locator('[data-review-stone="3:0"]')).toHaveCount(1);
+    await timeline.nth(37).click();
+    await expect(player.locator('[data-review-stone="3:0"]')).toHaveCount(0);
+    await expect(player.locator('[data-review-stone="2:0"]')).toHaveCount(1);
+    await expect(player).toContainText("C9 schlägt einen Stein.");
+    await expect(player).toContainText("Bester Zug: D9");
+    const recommendation = player.locator('[data-review-marker="recommendation"]');
+    await expect(recommendation.locator("title")).toHaveText("Bester Zug: D9");
+    expect(await recommendation.evaluate(element => getComputedStyle(element).fill)).toBe("none");
+    await timeline.nth(39).click();
+    await expect(player.locator('[data-review-stone="3:0"]')).toHaveCount(1);
+    await timeline.nth(47).click();
+    await expect(player.locator('[data-review-stone]')).toHaveCount(45);
   });
   test("minimal review fits phones, landscape and desktop; summary and back return to the previous screen", async ({ page }, info) => {
     const errors: string[] = [];

@@ -12,7 +12,7 @@ function point(move: string, size: BoardSize) {
   return x >= 0 && y >= 0 && x < size && y < size ? { x, y } : null;
 }
 
-export function AnalysisBoard({ board, size, playedMove, bestMove, label }: { board: Board; size: BoardSize; playedMove?: string; bestMove?: string; label: string }) {
+export function AnalysisBoard({ board, size, playedMove, bestMove, label, bestMoveLabel }: { board: Board; size: BoardSize; playedMove?: string; bestMove?: string; label: string; bestMoveLabel: string }) {
   const pad = 10;
   const span = 80;
   const position = (value: number) => pad + (value / (size - 1)) * span;
@@ -41,10 +41,12 @@ export function AnalysisBoard({ board, size, playedMove, bestMove, label }: { bo
         </g>
       ))}
       {board.flatMap((row, y) => row.map((stone, x) => stone ? (
-        <circle className={stone === "black" ? styles.blackStone : styles.whiteStone} cx={position(x)} cy={position(y)} key={`${x}:${y}`} r={stoneRadius} />
+        <circle className={stone === "black" ? styles.blackStone : styles.whiteStone} cx={position(x)} cy={position(y)} data-review-stone={`${x}:${y}`} key={`${x}:${y}`} r={stoneRadius} />
       ) : null))}
       {best && (best.x !== played?.x || best.y !== played?.y) ? (
-        <circle className={styles.bestMarker} cx={position(best.x)} cy={position(best.y)} r={stoneRadius + 1} />
+        <circle className={styles.bestMarker} cx={position(best.x)} cy={position(best.y)} data-review-marker="recommendation" r={stoneRadius + 1}>
+          <title>{bestMoveLabel}: {bestMove}</title>
+        </circle>
       ) : null}
       {played ? <circle className={styles.playedMarker} cx={position(played.x)} cy={position(played.y)} r={1.25} /> : null}
     </svg>
