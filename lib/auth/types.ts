@@ -14,6 +14,7 @@ export type AuthUser = {
   coachBetaEnabled?: boolean;
   developerAccess?: boolean;
   analysisUnlimited?: boolean;
+  emailRequired?: boolean;
 };
 
 export type AuthUserRow = {
@@ -23,12 +24,14 @@ export type AuthUserRow = {
   avatar_style?: string | null;
   coach_beta_enabled?: boolean;
   analysis_unlimited?: boolean;
+  email_required?: boolean;
 };
 
 export function serializeAuthUser(user: AuthUserRow): AuthUser {
   const developerAccess = hasDeveloperAccess(user);
   return {
     id: user.id,
+    ...(user.email_required === true ? { emailRequired: true } : {}),
     username: user.username,
     displayName: user.display_name?.trim() || user.username,
     playerKey: `user:${user.id}`,

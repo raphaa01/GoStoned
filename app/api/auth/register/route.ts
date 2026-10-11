@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     const { user, token } = await registerAccount(
       credentials.username,
       credentials.password,
+      credentials.email,
       credentials.startingStrength,
       credentials.boardPlacement,
     );

@@ -43,6 +43,7 @@ function credentialRequest(
     ? {
         username: "named_player",
         password: "password123",
+        email: "player@example.test",
         startingStrength: "unspecified",
         knownRank: null,
         boardPlacement: "zoom",
@@ -262,12 +263,12 @@ test("invalid credentials return 401 after reserving the shared account slot", a
   const accountKey = createRateLimitKey(
     RATE_LIMIT_POLICIES.loginAccountBurst.scope,
     "subject",
-    "named_player",
+    "44444444-4444-4444-8444-444444444444",
   );
   const accountReservation = statements.find(
     ({ sql, values }) => sql.includes("INSERT INTO auth_rate_limits") && values[0] === accountKey,
   );
-  const userLookupIndex = statements.findIndex(({ sql }) => sql.includes("FROM users"));
+  const userLookupIndex = statements.findIndex(({ sql }) => sql.includes("password_hash,") && sql.includes("FROM users"));
   assert.ok(accountReservation);
   assert.ok(statements.indexOf(accountReservation) < userLookupIndex);
 });
@@ -279,6 +280,7 @@ test("account and address denials return 429 without authenticating", async () =
     const pool = {
       async query(sql: string, values: readonly unknown[]) {
         statements.push({ sql, values });
+        if (sql.startsWith("SELECT id FROM users")) return { rows: [] };
         assert.match(sql, /INSERT INTO auth_rate_limits/);
         rateLimitWrites += 1;
         const denied = deniedBucket === "address" ? rateLimitWrites === 1 : rateLimitWrites === 3;
@@ -305,8 +307,8 @@ test("account and address denials return 429 without authenticating", async () =
     assert.equal(response.headers.get("Retry-After"), "17");
     assert.equal(response.headers.get("set-cookie"), null);
     assert.equal((await response.json()).code, "rate_limited");
-    assert.equal(statements.some(({ sql }) => sql.includes("FROM users")), false);
-    assert.equal(statements.length, deniedBucket === "address" ? 1 : 3);
+    assert.equal(statements.some(({ sql }) => sql.includes("password_hash,")), false);
+    assert.equal(statements.length, deniedBucket === "address" ? 1 : 4);
   }
 });
 
@@ -316,7 +318,7 @@ test("parallel cross-address guesses admit only one password verification", asyn
   const accountKey = createRateLimitKey(
     RATE_LIMIT_POLICIES.loginAccountBurst.scope,
     "subject",
-    username,
+    "55555555-5555-4555-8555-555555555555",
   );
   let accountReservations = 0;
   let passwordLookups = 0;
@@ -337,7 +339,7 @@ test("parallel cross-address guesses admit only one password verification", asyn
         };
       }
       if (sql.includes("FROM users")) {
-        passwordLookups += 1;
+        if (!sql.startsWith("SELECT id FROM users")) passwordLookups += 1;
         return {
           rows: [{
             id: "55555555-5555-4555-8555-555555555555",
@@ -395,6 +397,7 @@ test("session issuance failure after authentication rolls back and sets no login
   const client = {
     async query(sql: string) {
       transactionStatements.push(sql);
+      if (sql.startsWith("SELECT password_hash FROM users")) return { rows: [{ password_hash: passwordHash }] };
       if (sql.includes("WITH expired_sessions AS MATERIALIZED")) {
         throw new Error("cleanup unavailable");
       }
@@ -498,6 +501,7 @@ test("successful registration exposes only the committed user and hardened sessi
     JSON.stringify({
       username: "atomic_player",
       password: "password123",
+      email: "player@example.test",
       startingStrength: "known",
       knownRank: "12k",
       boardPlacement: "direct",
@@ -635,6 +639,7 @@ test("registration failures roll back the account and never set a session cookie
           JSON.stringify({
             username: `atomic_${index}`,
             password: "password123",
+            email: "player@example.test",
             startingStrength: "unspecified",
             knownRank: null,
             boardPlacement: "zoom",
@@ -698,6 +703,7 @@ test("successful login clears the target and every shared-account attempt bucket
   const client = {
     async query(sql: string, values: readonly unknown[] = []) {
       statements.push({ sql, values });
+      if (sql.startsWith("SELECT password_hash FROM users")) return { rows: [{ password_hash: passwordHash }] };
       if (
         sql === "BEGIN"
         || sql.startsWith("SET LOCAL")
@@ -769,17 +775,17 @@ test("successful login clears the target and every shared-account attempt bucket
     createRateLimitKey(
       RATE_LIMIT_POLICIES.loginAccountBurst.scope,
       "subject",
-      username,
+      "33333333-3333-4333-8333-333333333333",
     ),
     createRateLimitKey(
       RATE_LIMIT_POLICIES.loginAccountSustained.scope,
       "subject",
-      username,
+      "33333333-3333-4333-8333-333333333333",
     ),
     createRateLimitKey(
       RATE_LIMIT_POLICIES.loginAccountRecovery.scope,
       "subject",
-      username,
+      "33333333-3333-4333-8333-333333333333",
     ),
   ]));
 });

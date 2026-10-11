@@ -7,6 +7,7 @@ import {
 } from "./guestSession";
 import { getSessionUser, SESSION_COOKIE } from "./session";
 import type { AuthUser } from "./types";
+import { usesLegacyAccountContract } from "./clientContract";
 
 type IdentityResolvers = {
   getAccount: (token: string | undefined) => Promise<AuthUser | null>;
@@ -18,8 +19,14 @@ const defaultIdentityResolvers: IdentityResolvers = {
   getGuest: getGuestSessionIdentity,
 };
 
-export async function getRequestUser(request: NextRequest): Promise<AuthUser | null> {
-  return getSessionUser(request.cookies.get(SESSION_COOKIE)?.value);
+export function assertAccountEmailComplete(user: AuthUser): void {
+  if (user.emailRequired) throw new GameServiceError("Add your email address to continue.", 403, "email_required");
+}
+
+export async function getRequestUser(request: NextRequest, options: { allowIncomplete?: boolean } = {}): Promise<AuthUser | null> {
+  const user = await getSessionUser(request.cookies.get(SESSION_COOKIE)?.value);
+  if (user && !options.allowIncomplete && !usesLegacyAccountContract(request)) assertAccountEmailComplete(user);
+  return user;
 }
 
 export async function requireRequestUser(request: NextRequest): Promise<AuthUser> {
@@ -35,7 +42,10 @@ export async function resolvePlayerKey(
   const accountToken = request.cookies.get(SESSION_COOKIE)?.value;
   if (accountToken !== undefined) {
     const account = await resolvers.getAccount(accountToken);
-    if (account) return account.playerKey;
+    if (account) {
+      if (!usesLegacyAccountContract(request)) assertAccountEmailComplete(account);
+      return account.playerKey;
+    }
     throw new GameServiceError(
       "Your account session has expired. Please sign in again.",
       401,

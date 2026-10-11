@@ -122,7 +122,7 @@ const heading = {
     "GoStone의 개인정보 처리, 쿠키, 서비스 제공업체, 보관 기간 및 개인정보 권리에 관한 정보입니다.",
   ),
   updatedLabel: text("Last updated", "Stand", "Dernière mise à jour", "Última actualización", "更新日期", "最終更新日", "최종 업데이트"),
-  updated: text("October 7, 2026", "7. Oktober 2026", "7 octobre 2026", "7 de octubre de 2026", "2026年10月7日", "2026年10月7日", "2026년 10월 7일"),
+  updated: text("October 11, 2026", "11. Oktober 2026", "11 octobre 2026", "11 de octubre de 2026", "2026年10月11日", "2026年10月11日", "2026년 10월 11일"),
 };
 
 const controller = {
@@ -190,13 +190,13 @@ const sections: LocalizedSection[] = [
     title: text("Accounts and authentication", "Konten und Authentifizierung", "Comptes et authentification", "Cuentas y autenticación", "账户与身份验证", "アカウントと認証", "계정 및 인증"),
     paragraphs: [
       text(
-        "You can create an account with a username and password. We store a generated user ID, username, display name, password hash, creation and update times, and hashed session tokens. We never store the password in plain text, and an email address is not required for this method. The data is used to create and authenticate the account and to retain the profile, ratings, and game history. The legal basis is Article 6(1)(b) GDPR. Guest play remains available.",
-        "Du kannst ein Konto mit Benutzername und Passwort erstellen. Gespeichert werden eine erzeugte Nutzer-ID, Benutzername, Anzeigename, Passwort-Hash, Erstellungs- und Änderungszeitpunkte sowie gehashte Sitzungstokens. Das Passwort wird niemals im Klartext gespeichert; eine E-Mail-Adresse ist für diese Methode nicht erforderlich. Die Daten dienen der Kontoerstellung und Anmeldung sowie der Speicherung von Profil, Wertungen und Partieverlauf. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Das Spielen als Gast bleibt möglich.",
-        "Vous pouvez créer un compte avec un nom d’utilisateur et un mot de passe. Nous conservons un identifiant généré, le nom affiché, une empreinte du mot de passe, les dates de création et de mise à jour et des jetons de session hachés. Le mot de passe n’est jamais stocké en clair et cette méthode n’exige pas d’adresse e-mail. Ces données servent à créer et authentifier le compte et à conserver le profil, les classements et l’historique. La base juridique est l’article 6, paragraphe 1, point b) du RGPD. Le jeu en invité reste possible.",
-        "Puedes crear una cuenta con nombre de usuario y contraseña. Guardamos un identificador generado, nombre visible, hash de contraseña, fechas de creación y actualización y tokens de sesión con hash. Nunca guardamos la contraseña en texto claro y este método no exige correo electrónico. Los datos se usan para crear y autenticar la cuenta y conservar el perfil, las puntuaciones y el historial. La base jurídica es el artículo 6.1.b del RGPD. Puedes seguir jugando como invitado.",
-        "您可以使用用户名和密码创建账户。我们会保存生成的用户 ID、用户名、显示名称、密码哈希、创建与更新时间以及经过哈希处理的会话令牌。密码绝不会以明文保存，此方式也不要求电子邮箱。上述数据用于创建和验证账户并保存个人资料、等级分和对局历史。法律依据为 GDPR 第6条第1款(b)项。您仍可作为访客游戏。",
-        "ユーザー名とパスワードでアカウントを作成できます。生成されたユーザー ID、ユーザー名、表示名、パスワードのハッシュ、作成・更新日時、ハッシュ化されたセッショントークンを保存します。パスワードを平文で保存することはなく、この方法ではメールアドレスは必須ではありません。アカウントの作成・認証、プロフィール、レーティング、対局履歴の保持に利用します。法的根拠は GDPR 第6条1項(b)です。ゲストとしても利用できます。",
-        "사용자 이름과 비밀번호로 계정을 만들 수 있습니다. 생성된 사용자 ID, 사용자 이름, 표시 이름, 비밀번호 해시, 생성·수정 시각 및 해시된 세션 토큰을 저장합니다. 비밀번호는 평문으로 저장하지 않으며 이 방식에는 이메일 주소가 필요하지 않습니다. 계정 생성과 인증, 프로필, 레이팅 및 대국 기록 보존에 사용합니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다. 게스트 플레이도 가능합니다.",
+        "On the website and updated apps, password accounts require an email address, username, and password. Existing accounts without an email must add one after signing in or log out. Previously published apps remain usable without this new screen until updated. Login accepts email or username. We store the account ID, email, names, password hash, timestamps, and hashed session tokens for authentication, password recovery, profiles, ratings, and game history. Passwords are never stored in plain text. The legal basis is Article 6(1)(b) GDPR. Guest play remains available.",
+        "Auf der Website und in aktualisierten Apps benötigen Passwort-Konten E-Mail-Adresse, Benutzername und Passwort. Bestehende Konten ohne E-Mail müssen nach der Anmeldung eine Adresse ergänzen oder sich abmelden. Bereits veröffentlichte Apps bleiben bis zum Update ohne diesen neuen Bildschirm benutzbar. Die Anmeldung ist mit E-Mail oder Benutzername möglich. Wir speichern Konto-ID, E-Mail-Adresse, Namen, Passwort-Hash, Zeitpunkte und gehashte Sitzungstokens für Anmeldung, Passwort-Wiederherstellung, Profil, Wertungen und Partieverlauf. Passwörter werden niemals im Klartext gespeichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Gastspiel bleibt möglich.",
+        "Sur le site et les applications mises à jour, les comptes avec mot de passe nécessitent une adresse e-mail, un nom d’utilisateur et un mot de passe. Les comptes existants sans e-mail doivent en ajouter un après connexion ou se déconnecter. Les applications déjà publiées restent utilisables sans ce nouvel écran jusqu’à leur mise à jour. La connexion accepte l’e-mail ou le nom d’utilisateur. Nous conservons l’identifiant, l’e-mail, les noms, l’empreinte du mot de passe, les dates et les jetons de session hachés pour l’authentification, la récupération, les profils, classements et historiques. Les mots de passe ne sont jamais stockés en clair. La base juridique est l’article 6(1)(b) du RGPD. Le jeu en invité reste disponible.",
+        "En la web y las aplicaciones actualizadas, las cuentas con contraseña requieren correo, nombre de usuario y contraseña. Las cuentas existentes sin correo deben añadirlo tras iniciar sesión o cerrar sesión. Las aplicaciones ya publicadas siguen funcionando sin esta nueva pantalla hasta actualizarse. Puedes entrar con correo o nombre de usuario. Guardamos el identificador, correo, nombres, hash de contraseña, fechas y tokens de sesión con hash para autenticación, recuperación, perfiles, puntuaciones e historial. Las contraseñas nunca se guardan en texto claro. La base jurídica es el artículo 6.1.b del RGPD. Puedes jugar como invitado.",
+        "网站和更新后的应用中的密码账户需要邮箱、用户名和密码。没有邮箱的现有账户登录后须添加邮箱或退出。已发布的旧应用在更新前仍可正常使用，无需此新界面。登录可使用邮箱或用户名。我们保存账户 ID、邮箱、名字、密码哈希、时间和哈希会话令牌，用于登录、密码恢复、资料、等级分和对局历史。密码绝不以明文保存。法律依据是 GDPR 第6条第1款(b)项。仍可使用访客模式。",
+        "ウェブサイトと更新済みアプリでは、パスワードアカウントにメールアドレス、ユーザー名、パスワードが必要です。メールがない既存のアカウントはログイン後に追加するかログアウトしてください。公開済みの旧アプリは更新されるまで新しい画面なしで引き続き利用できます。メールまたはユーザー名でログインできます。認証、復旧、プロフィール、レーティング、対局履歴のために ID、メール、名前、パスワードのハッシュ、日時、ハッシュ化セッショントークンを保存します。パスワードを平文で保存しません。法的根拠は GDPR 第6条1項(b)です。ゲストプレイも可能です。",
+        "웹사이트와 업데이트된 앱의 비밀번호 계정에는 이메일, 사용자 이름과 비밀번호가 필요합니다. 이메일이 없는 기존 계정은 로그인 후 이메일을 추가하거나 로그아웃해야 합니다. 이미 출시된 이전 앱은 업데이트 전까지 이 새 화면 없이 계속 사용할 수 있습니다. 이메일 또는 사용자 이름으로 로그인할 수 있습니다. 인증, 복구, 프로필, 레이팅 및 대국 기록을 위해 ID, 이메일, 이름, 비밀번호 해시, 시각 및 해시된 세션 토큰을 저장합니다. 비밀번호는 평문으로 저장하지 않습니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다. 게스트 플레이도 가능합니다.",
       ),
       text(
         "Alternatively, you can choose Google or Apple sign-in. You are redirected to that provider, which processes the authentication request under its own privacy terms. GoStone receives the provider-specific account identifier, verified email address, and—when supplied—your name. We store the identifier mapping, email and verification status to recognize the account; we do not store provider access or refresh tokens. The legal basis is Article 6(1)(b) GDPR because this processing performs the sign-in method you request.",
@@ -508,10 +508,24 @@ function localize(locale: Locale, value: LocalizedText): string {
   return value[locale] ?? value.en;
 }
 
+const recoveryPurpose: LocalizedText = {
+  en: "Password recovery through Resend processes the recipient address and code email (Article 6(1)(b) GDPR). Codes expire after 10 minutes; only salted hashes are stored in GoStone, deleted after use or during later expiry cleanup. Resend retains email content and delivery logs for 30 days and may process data in the United States. Open and click tracking are disabled.",
+  de: "Zur Passwort-Wiederherstellung verarbeitet Resend die Empfängeradresse und Code-E-Mail (Art. 6 Abs. 1 lit. b DSGVO). Codes laufen nach 10 Minuten ab; GoStone speichert nur gesalzene Hashes, die nach Nutzung oder bei späterer Bereinigung abgelaufener Codes gelöscht werden. Resend speichert E-Mail-Inhalte und Zustellprotokolle 30 Tage und kann Daten in den USA verarbeiten. Öffnungs- und Klicktracking sind deaktiviert.",
+  fr: "Pour récupérer le mot de passe, Resend traite l’adresse et l’e-mail du code (article 6(1)(b) RGPD). Les codes expirent après 10 minutes ; GoStone ne conserve que des empreintes salées, supprimées après usage ou lors du nettoyage ultérieur. Resend conserve les messages et journaux 30 jours et peut traiter aux États-Unis. Le suivi des ouvertures et clics est désactivé.",
+  es: "Resend procesa la dirección y el correo del código para recuperar la contraseña (artículo 6.1.b RGPD). Los códigos caducan en 10 minutos; GoStone guarda solo hashes con sal, eliminados tras usarse o en la limpieza posterior. Resend conserva mensajes y registros 30 días y puede tratar datos en Estados Unidos. El seguimiento de aperturas y clics está desactivado.",
+  zh: "Resend 为密码恢复处理收件地址和验证码邮件（GDPR 第6(1)(b)条）。验证码10分钟后失效；GoStone仅保存加盐哈希，在使用后或之后清理过期记录时删除。Resend保留邮件内容和投递日志30天，可能在美国处理数据。打开和点击跟踪已关闭。",
+  ja: "パスワード復旧のため Resend が宛先とコードメールを処理します（GDPR 第6条1項(b)）。コードは10分で失効し、GoStone はソルト付きハッシュのみを保存して使用後または後の期限切れ整理で削除します。Resend は本文と配信ログを30日保存し、米国で処理する場合があります。開封・クリック追跡は無効です。",
+  ko: "비밀번호 복구를 위해 Resend가 수신 주소와 코드 이메일을 처리합니다(GDPR 제6조 제1항 (b)). 코드는 10분 후 만료되며 GoStone은 솔트 해시만 저장하고 사용 후 또는 이후 만료 정리 시 삭제합니다. Resend는 이메일과 전송 로그를 30일 보관하고 미국에서 처리할 수 있습니다. 열람 및 클릭 추적은 비활성화됩니다.",
+  ky: "Сырсөздү калыбына келтирүү үчүн Resend алуучунун дарегин жана код катын иштетет (GDPR 6(1)(b)). Код 10 мүнөттө бүтөт; GoStone туздалган хэштерди гана сактап, колдонгондон кийин же кийинки тазалоодо өчүрөт. Resend каттар менен жеткирүү журналдарын 30 күн сактайт жана АКШда иштетиши мүмкүн. Ачуу жана басуу көзөмөлү өчүрүлгөн.",
+};
+
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
   if (locale === "ky") return {
     ...kyPrivacy,
-    updated: "7-октябрь, 2026-жыл",
+    updated: "11-октябрь, 2026-жыл",
+    processors: { ...kyPrivacy.processors, entries: [...kyPrivacy.processors.entries, {
+      name: "Resend", purpose: recoveryPurpose.ky!, privacyUrl: "https://resend.com/legal/privacy-policy",
+    }] },
     sections: kyPrivacy.sections.map((section, index) => index === 2 ? {
       ...section,
       paragraphs: [...section.paragraphs, "Ошондой эле баракча көрүнүп турган убакыт өлчөнөт. Ар 30 секундда, баракча алмашканда же жашырылганда GoStone тазаланган жолду, көрүнгөн миллисекунддарды жана ачылыш санын алат. Маалымат базасында баракча боюнча сааттык суммалар гана сакталат; эсеп, келүүчү, сеанс же IP идентификаторлору сакталбайт. Кукилер жана браузер сактагычы колдонулбайт. Жашырылган өтмөктөр эсептелбейт; Do Not Track кошумча өлчөөнү өчүрөт. Максат — мазмунду жана колдонууга ыңгайлуулукту жакшыртуу; укуктук негиз — GDPR 6(1)(f). Анонимдүү суммалар тенденцияларды талдоо үчүн сакталат."],
@@ -534,7 +548,10 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
     },
     sections: sections.map((section) => ({
       title: localize(locale, section.title),
-      paragraphs: section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? [],
+      paragraphs: [
+        ...(section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? []),
+        ...(section === sections[3] ? [localize(locale, recoveryPurpose)] : []),
+      ],
       items: section.items?.map((item) => localize(locale, item)) ?? [],
     })),
     cookies: {
@@ -553,7 +570,7 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
     processors: {
       title: localize(locale, processors.title),
       intro: localize(locale, processors.intro),
-      entries: processors.entries.map((entry) => ({
+      entries: [...processors.entries, { name: "Resend", purpose: recoveryPurpose, privacyUrl: "https://resend.com/legal/privacy-policy" }].map((entry) => ({
         name: entry.name,
         purpose: localize(locale, entry.purpose),
         privacyUrl: entry.privacyUrl,

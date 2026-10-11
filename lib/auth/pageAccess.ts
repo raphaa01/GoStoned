@@ -14,4 +14,7 @@ export async function requireAccountPage(returnTo: string, locale: Locale): Prom
   if (!user) {
     redirect(localizeHref(accountRegistrationPath(safeReturnTo), locale));
   }
+  if (user.emailRequired) {
+    redirect(localizeHref(`/login?returnTo=${encodeURIComponent(safeReturnTo)}`, locale));
+  }
 }

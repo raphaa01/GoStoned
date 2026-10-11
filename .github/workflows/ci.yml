@@ -151,6 +151,9 @@ jobs:
       - name: Verify database statement timeout and backend recovery
         run: npm run test:statement-timeout
 
+      - name: Verify account email and password recovery
+        run: npx tsx scripts/smoke-account-security.ts
+
       - name: Verify board-design persistence and earned unlocks
         run: npx tsx scripts/smoke-board-designs.ts
 

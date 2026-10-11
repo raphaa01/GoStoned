@@ -14,6 +14,7 @@ import { readApi } from "@/lib/client/api";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import type { AuthUser } from "@/lib/auth/types";
+import { AccountEmailGate } from "./AccountEmailGate";
 import type { CurrentRatingIdentity } from "@/lib/stats/statsService";
 
 type AuthContextValue = {
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [dictionary]);
 
   const refreshRating = useCallback(async (options?: { invalidate?: boolean }) => {
-    const playerKey = user?.playerKey;
+    const playerKey = user?.emailRequired ? undefined : user?.playerKey;
     const generation = ratingRequestGeneration.current + 1;
     ratingRequestGeneration.current = generation;
     if (!playerKey) {
@@ -94,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRatingLoading(false);
       }
     }
-  }, [user?.playerKey]);
+  }, [user?.playerKey, user?.emailRequired]);
 
   const logout = useCallback(async () => {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -150,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, loading, error, rating, ratingLoading, refresh, refreshRating, logout],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{user?.emailRequired ? <AccountEmailGate /> : children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

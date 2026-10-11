@@ -3931,3 +3931,40 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_beta_enabled BOOLEAN NOT NULL D
 
 -- Explicitly invited beta account; every other account remains opt-in.
 UPDATE users SET coach_beta_enabled = true WHERE lower(username) = 'rapha';
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+
+-- Provider email stays on auth_identities; never link accounts by email.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT
+  CHECK (email IS NULL OR (email = lower(btrim(email)) AND char_length(email) BETWEEN 3 AND 254));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (lower(email)) WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  delivered BOOLEAN NOT NULL DEFAULT false,
+  CHECK (expires_at > created_at)
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_codes_expires ON password_reset_codes (expires_at);
+ALTER TABLE password_reset_codes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON password_reset_codes FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON password_reset_codes FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON password_reset_codes FROM authenticated;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_codes TO gostone_app;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'password_reset_codes' AND policyname = 'gostone_app_password_reset_access') THEN
+      CREATE POLICY gostone_app_password_reset_access ON password_reset_codes
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END
+$$;

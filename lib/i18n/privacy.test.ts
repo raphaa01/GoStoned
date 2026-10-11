@@ -32,7 +32,7 @@ test("privacy copy is complete for every supported locale", () => {
     );
     assert.deepEqual(
       copy.processors.entries.map(({ name }) => name),
-      ["Vercel Inc.", "Supabase", "Modal Labs, Inc."],
+      ["Vercel Inc.", "Supabase", "Modal Labs, Inc.", "Resend"],
       locale,
     );
     assert.equal(copy.rights.items.length, 8, locale);

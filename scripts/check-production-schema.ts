@@ -41,6 +41,16 @@ async function checkProductionSchema(): Promise<void> {
     throw new Error("Production schema check refuses a local DATABASE_URL.");
   }
 
+  const authSchema = await query<{ ready: boolean }>(`
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email') AND
+      EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass('public.password_reset_codes') AND relrowsecurity) AND
+      EXISTS (SELECT 1 FROM pg_index WHERE indexrelid = to_regclass('public.idx_users_email_lower') AND indisvalid AND indisunique)
+      AS ready`);
+  if (!authSchema.rows[0]?.ready) {
+    throw new Error("Production database schema is stale: run migration 054 for account email and password recovery.");
+  }
+
   const result = await query<SchemaRow>(
     `SELECT
        (SELECT column_default FROM information_schema.columns
