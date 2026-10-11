@@ -103,12 +103,10 @@ test("a played stone is rendered optimistically while the server confirms it", (
   const board = source("components/game/GoBoard.tsx");
   const optimisticGame = source("lib/client/optimisticGame.ts");
   const move = section(room, "async function makeMove", "async function resign");
-  assert.ok(
-    move.indexOf("setPendingMove({ x: move.x, y: move.y, color: game.turn })")
-      < move.indexOf("await fetch"),
-  );
+  const previewStart = move.indexOf("setPendingMove({ x: move.x, y: move.y, color: game.turn,");
+  assert.ok(previewStart >= 0 && previewStart < move.indexOf("await fetch"));
   assert.match(move, /setPendingMove\(null\)[\s\S]+setBusy\(false\)/);
-  assert.match(room, /pendingMove=\{pendingMove\}/);
+  assert.match(room, /pendingMove=\{pendingMovePreview\?\.applied \? pendingMove : null\}/);
   assert.match(room, /: pendingMovePreview\?\.board \?\? game\.board\}/);
   assert.match(room, /game\.moveCount \+ \(pendingMovePreview\?\.applied \? 1 : 0\)/);
   assert.match(board, /const stone = serverStone \?\? pendingStone/);

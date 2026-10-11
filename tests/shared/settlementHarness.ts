@@ -1,22 +1,38 @@
 import { expect, test } from "@playwright/test";
 import { countedTerritoryPoints, scoreJapaneseTerritory } from "../../lib/game/japaneseScoring";
-import { createEmptyBoard } from "../../lib/game/goEngine";
+import { boardHash, replayMoves } from "../../lib/game/goEngine";
+import type { StoredMove } from "../../lib/game/types";
 import { GOSTONE_BOT_MODEL } from "../../lib/bot/modelV1";
 import { gameFor, GAME_ID, installHarness, USER } from "./boardDesignHarness";
+
+function settlementPosition() {
+  // A dead group still needs a liberty in the stopped position; zero-liberty
+  // stones would already have been captured during normal play.
+  const black = [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]];
+  const white = [[8, 8], [7, 6], [6, 7], [8, 7], [7, 8], [1, 1]];
+  const moves: StoredMove[] = [];
+  for (let index = 0; index < black.length; index++) {
+    for (const color of ["black", "white"] as const) {
+      const point = (color === "black" ? black : white)[index];
+      moves.push({ moveNumber: moves.length + 1, color, x: point?.[0] ?? null,
+        y: point?.[1] ?? null, isPass: !point, createdAt: "" });
+    }
+  }
+  moves.push({ moveNumber: moves.length + 1, color: "black", x: null, y: null, isPass: true, createdAt: "" });
+  return { board: replayMoves(9, moves), moves, moveCount: moves.length, version: moves.length };
+}
 
 export function registerSettlementTests() {
   test("two passes show provisional territory before confirmations and dead groups remain editable", async ({ page }) => {
     const state = await installHarness(page);
     await page.addInitScript((playerKey) => localStorage.setItem(`gostone:scoring-help:v1:hidden:${playerKey}`, "true"), USER.playerKey);
-    const board = createEmptyBoard(9);
-    for (const [x, y] of [[0, 0], [1, 0], [0, 1], [2, 1], [1, 2]]) board[y][x] = "black";
-    for (const [x, y] of [[8, 8], [7, 6], [6, 7], [8, 7], [7, 8]]) board[y][x] = "white";
-    board[1][1] = "white";
+    const position = settlementPosition();
+    const { board } = position;
     const deadStones = [{ x: 1, y: 1 }];
     const game = gameFor(9, "friendly");
-    state.game = { ...game, board, phase: "scoring", turn: null, consecutivePasses: 2,
+    state.game = { ...game, ...position, phase: "scoring", turn: null, consecutivePasses: 2,
       ruleset: "japanese", rulesProfile: "japanese-1989-gostone-v1", scoringMethod: "territory",
-      scoring: { revision: 1, boardHash: "stopped", stoppedMoveNumber: 2, deadStones,
+      scoring: { revision: 1, boardHash: boardHash(board), stoppedMoveNumber: position.moveCount, deadStones,
         blackConfirmed: false, whiteConfirmed: false, finalizedAt: null, expiresAt: null,
         territory: countedTerritoryPoints(board, deadStones),
         preview: { black: 2, white: 8.5, livingBlackStones: 5, livingWhiteStones: 5, blackPrisoners: 1, whitePrisoners: 0,
@@ -52,18 +68,16 @@ export function registerSettlementTests() {
         localStorage.setItem("gostone.mobile.theme.v1", theme);
         localStorage.setItem("gostone.theme.v1", theme);
       }, theme);
-      const board = createEmptyBoard(9);
-      for (const [x, y] of [[0, 0], [1, 0], [0, 1], [2, 1], [1, 2]]) board[y][x] = "black";
-      for (const [x, y] of [[8, 8], [7, 6], [6, 7], [8, 7], [7, 8]]) board[y][x] = "white";
-      board[1][1] = "white";
+      const position = settlementPosition();
+      const { board } = position;
       const deadStones = [{ x: 1, y: 1 }];
       const score = scoreJapaneseTerritory({ board, deadStones, agreedNeutralRegionSeeds: [],
         prisoners: { capturedBlackByWhite: 0, capturedWhiteByBlack: 0 }, komi: 6.5 });
       const time = new Date().toISOString();
-      state.game = { ...gameFor(9, "friendly"), board, status: "finished", phase: "scoring", turn: null,
+      state.game = { ...gameFor(9, "friendly"), ...position, status: "finished", phase: "scoring", turn: null,
         ruleset: "japanese", rulesProfile: "japanese-1989-gostone-v1", scoringMethod: "territory", finishReason: "score",
         winnerKey: gameFor(9, "friendly").whitePlayerKey,
-        finishedAt: time, result: "W+5.5", scoring: { revision: 1, boardHash: "test", stoppedMoveNumber: 2, deadStones,
+        finishedAt: time, result: score.outcome.kind === "points" ? `W+${score.outcome.margin}` : "Draw", scoring: { revision: 1, boardHash: boardHash(board), stoppedMoveNumber: position.moveCount, deadStones,
           blackConfirmed: true, whiteConfirmed: true, finalizedAt: time, expiresAt: null,
           territory: countedTerritoryPoints(board, deadStones),
           preview: { black: score.blackTotal, white: score.whiteTotal, livingBlackStones: score.livingBlackStones,

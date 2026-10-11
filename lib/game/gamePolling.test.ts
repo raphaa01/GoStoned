@@ -11,6 +11,8 @@ import {
   parseKnownGameVersion,
 } from "./gamePolling";
 import type { GameClockState, GameState } from "./types";
+import { replayMoves } from "./goEngine";
+import { captureIncidentMoves } from "./fixtures/captureIncident9x9";
 
 function clock(overrides: Partial<GameClockState> = {}): GameClockState {
   return {
@@ -252,4 +254,22 @@ test("route payloads keep the legacy full shape and add a distinct heartbeat", (
     clock: game.clock,
   };
   assert.deepEqual(gamePollResponseBody(heartbeat), { ok: true, ...heartbeat });
+});
+
+test("an inconsistent newer board is ignored and a subsequent valid snapshot recovers without losing stones", () => {
+  const moves = captureIncidentMoves.slice(0, 37);
+  const current = { ...gameState(), moves, moveCount: moves.length, board: replayMoves(9, moves), version: 37 };
+  const nextMoves = captureIncidentMoves.slice(0, 38);
+  const next = { ...current, version: 38, moves: nextMoves, moveCount: 38,
+    board: replayMoves(9, nextMoves), clock: clock({ serverNow: "2026-07-28T10:01:00.000Z" }) };
+  const badBoard = next.board.map(row => [...row]);
+  badBoard[4][6] = null;
+  assert.equal(gameStateFromPoll(current, { game: { ...next, board: badBoard } }), null);
+  assert.equal(current.board[4][6], "white");
+  const recovered = gameStateFromPoll(current, { game: next });
+  assert.ok(recovered);
+  assert.equal(recovered.board[4][6], "white");
+  assert.equal(recovered.board[0][3], null, "the legitimate capture is accepted");
+  const takenBack = { ...current, version: 39, clock: next.clock };
+  assert.ok(gameStateFromPoll(recovered, { game: takenBack }), "a versioned takeback may restore the captured stone");
 });

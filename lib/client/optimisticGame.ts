@@ -1,7 +1,24 @@
 import { applyMove } from "@/lib/game/goEngine";
-import type { Board, Position, Stone } from "@/lib/game/types";
+import type { Board, GameState, Position, Stone } from "@/lib/game/types";
 
 export type PendingMovePreview = Position & { color: Stone };
+export type PendingGameMovePreview = PendingMovePreview & {
+  gameId: string;
+  baseVersion: number;
+};
+
+export function previewPendingGameMove(
+  game: Pick<GameState, "id" | "version" | "status" | "phase" | "turn" | "board">,
+  pendingMove: PendingGameMovePreview | null,
+): OptimisticBoardPreview {
+  if (!pendingMove || pendingMove.gameId !== game.id
+    || pendingMove.baseVersion !== game.version
+    || game.status !== "active" || game.phase !== "play"
+    || pendingMove.color !== game.turn) {
+    return { board: game.board, applied: false };
+  }
+  return previewPendingMove(game.board, pendingMove);
+}
 
 export type OptimisticBoardPreview = {
   board: Board;
