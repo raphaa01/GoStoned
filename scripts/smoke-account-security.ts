@@ -73,7 +73,12 @@ async function run() {
     await assert.rejects(resetAccountPassword(email, sentCode, password), { code: "invalid_reset_code" });
     console.log("Account email, provider exemption, reset expiry, attempts, concurrency, and session revocation passed.");
   } finally {
-    await query("DELETE FROM users WHERE id = ANY($1::uuid[])", [[id, socialId]]);
+    await query("DELETE FROM password_reset_codes WHERE user_id = $1", [id]);
+    await query("DELETE FROM user_sessions WHERE user_id = $1", [id]);
+    // Registered fixtures have append-only initial rating claims and cannot be
+    // deleted by the app role. Keep that fixture in this disposable local smoke
+    // database, as the auth/chat smoke does, without weakening the rating guards.
+    await query("DELETE FROM users WHERE id = $1", [socialId]);
   }
 }
 
