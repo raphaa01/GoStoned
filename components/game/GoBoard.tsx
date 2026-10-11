@@ -437,10 +437,10 @@ export function GoBoard({
                   ? pendingMove.color
                   : null;
               const stone = serverStone ?? pendingStone;
-              const territoryOwner = stone ? null : blackTerritory.has(`${x}:${y}`) ? "black"
+              const markedDead = deadStoneKeys.has(`${x}:${y}`);
+              const territoryOwner = stone && !markedDead ? null : blackTerritory.has(`${x}:${y}`) ? "black"
                 : whiteTerritory.has(`${x}:${y}`) ? "white" : null;
               const isPendingMove = pendingStone !== null;
-              const markedDead = deadStoneKeys.has(`${x}:${y}`);
               const disputeSelected = selectedDeadStoneKeys.has(`${x}:${y}`);
               const stoneLabel = stone === "black" ? copy.blackStone : copy.whiteStone;
               const groupLabel = stone === "black" ? copy.blackGroup : copy.whiteGroup;
@@ -459,10 +459,7 @@ export function GoBoard({
                   aria-colindex={x + 1}
                   aria-disabled={!actionable}
                   aria-label={
-                    territoryOwner
-                      ? joinBoardLabels(formatBoardLabel(copy.emptyIntersectionLabel, { coordinate }),
-                          `${territoryOwner === "black" ? copy.black : copy.white} · ${copy.territory}`)
-                      : interactionMode === "mark-dead" && stone
+                    interactionMode === "mark-dead" && stone
                       ? joinBoardLabels(
                           formatBoardLabel(markedDead ? copy.restoreGroupLabel : copy.markGroupLabel, {
                             group: groupLabel,
@@ -471,6 +468,9 @@ export function GoBoard({
                           markedDead && copy.deadStoneState,
                           isLastMove && copy.lastMoveState,
                         )
+                      : territoryOwner
+                      ? joinBoardLabels(formatBoardLabel(copy.emptyIntersectionLabel, { coordinate }),
+                          `${territoryOwner === "black" ? copy.black : copy.white} · ${copy.territory}`)
                       : interactionMode === "mark-dead"
                       ? formatBoardLabel(copy.emptyIntersectionLabel, { coordinate })
                       : stone

@@ -2698,6 +2698,11 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
   border: 1px solid rgba(25, 30, 27, 0.42);
 }
 
+.intersection.is-dead .territory-mark {
+  right: 9%;
+  bottom: 9%;
+}
+
 .scoring-uncertain-groups { display: grid; gap: 10px; padding-block: 12px; }
 .scoring-uncertain-group { display: flex; align-items: center; gap: 8px; }
 .scoring-uncertain-group > span { flex: 1; min-width: 0; }

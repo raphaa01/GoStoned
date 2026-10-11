@@ -58,7 +58,11 @@ async function nativeReview(page: Page, platform: "android" | "ios", timeout: fa
 for (const platform of ["android", "ios"] as const) {
   test(`${platform}: review survives session refresh, cancels on back and can immediately restart`, async ({ page }) => {
     const serverRequests = await nativeReview(page, platform);
-    await page.goto(`/de/review/${GAME_ID}`);
+    await page.goto("/de/review");
+    await page.evaluate((gameId) => {
+      window.history.pushState({}, "", `/de/review/${gameId}`);
+      window.dispatchEvent(new Event("gostone:navigation"));
+    }, GAME_ID);
     const start = page.getByRole("button", { name: "Mit KataGo analysieren", exact: true });
     await expect(start).toBeVisible();
     await start.click();
@@ -67,17 +71,17 @@ for (const platform of ["android", "ios"] as const) {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.getByRole("heading", { name: "KataGo analysiert jede Stellung…" })).toBeVisible();
     expect((await calls()).filter(call => call.method === "cancel")).toHaveLength(0);
-    await page.getByRole("link", { name: "Alle Analysen", exact: true }).click();
+    await page.locator(".review-workspace header").getByRole("button", { name: "Zurück", exact: true }).click();
     await expect.poll(async () => (await calls()).filter(call => call.method === "cancel").length).toBe(1);
     const first = await calls();
     expect(first.find(call => call.method === "cancel")?.id).toBe(first.find(call => call.method === "analyze")?.id);
-    await page.goBack();
+    await page.goForward();
     await expect(start).toBeVisible();
     await start.click();
-    await expect(page.getByRole("slider", { name: "Zug", exact: true })).toHaveAttribute("max", "2");
+    await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
     await expect(page.getByRole("alert")).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole("slider", { name: "Zug", exact: true })).toHaveAttribute("max", "2");
+    await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
     expect((await calls()).filter(call => call.method === "analyze")).toHaveLength(0);
     expect(serverRequests()).toBe(0);
   });
@@ -86,7 +90,7 @@ for (const platform of ["android", "ios"] as const) {
     const serverRequests = await nativeReview(page, platform, timeout);
     await page.goto(`/de/review/${GAME_ID}`);
     await page.getByRole("button", { name: "Mit KataGo analysieren", exact: true }).click();
-    await expect(page.getByRole("slider", { name: "Zug", exact: true })).toHaveAttribute("max", "2");
+    await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { reviewCalls: { method: string }[] }).reviewCalls.filter(call => call.method === "cancel").length)).toBe(1);
     expect(serverRequests()).toBe(0);

@@ -68,6 +68,13 @@ Wertung mit `lib/game/japaneseScoring.ts` serverseitig neu berechnen. Niemals
 Ownership-Werte oder den Modellscore als Endergebnis speichern. Die Spieler
 müssen den resultierenden Vorschlag akzeptieren oder die Partie fortsetzen.
 
+Nach zwei Pässen enthält die serverseitige Wertungsvorschau bereits die aktuell
+gezählten Gebietspunkte für schwarze und weiße Quadratmarkierungen. Sie werden
+vor beiden Bestätigungen angezeigt und bei Änderungen an toten Gruppen oder
+neutralen Regionen neu berechnet. Tote Steine bleiben bis zur Einigung sichtbar
+und wieder als lebend markierbar; eine Markierung an ihrer Stelle liegt daneben.
+Diese Vorschau setzt weder das Endergebnis noch die Bestätigungen der Spieler.
+
 ## Training und Rating
 
 Die Zugauswahl in `lib/bot/browserMovePolicy.ts` wird vom gemeinsamen Worker

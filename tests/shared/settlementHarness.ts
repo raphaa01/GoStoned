@@ -5,6 +5,46 @@ import { GOSTONE_BOT_MODEL } from "../../lib/bot/modelV1";
 import { gameFor, GAME_ID, installHarness, USER } from "./boardDesignHarness";
 
 export function registerSettlementTests() {
+  test("two passes show provisional territory before confirmations and dead groups remain editable", async ({ page }) => {
+    const state = await installHarness(page);
+    await page.addInitScript((playerKey) => localStorage.setItem(`gostone:scoring-help:v1:hidden:${playerKey}`, "true"), USER.playerKey);
+    const board = createEmptyBoard(9);
+    for (const [x, y] of [[0, 0], [1, 0], [0, 1], [2, 1], [1, 2]]) board[y][x] = "black";
+    for (const [x, y] of [[8, 8], [7, 6], [6, 7], [8, 7], [7, 8]]) board[y][x] = "white";
+    board[1][1] = "white";
+    const deadStones = [{ x: 1, y: 1 }];
+    const game = gameFor(9, "friendly");
+    state.game = { ...game, board, phase: "scoring", turn: null, consecutivePasses: 2,
+      ruleset: "japanese", rulesProfile: "japanese-1989-gostone-v1", scoringMethod: "territory",
+      scoring: { revision: 1, boardHash: "stopped", stoppedMoveNumber: 2, deadStones,
+        blackConfirmed: false, whiteConfirmed: false, finalizedAt: null, expiresAt: null,
+        territory: countedTerritoryPoints(board, deadStones),
+        preview: { black: 2, white: 8.5, livingBlackStones: 5, livingWhiteStones: 5, blackPrisoners: 1, whitePrisoners: 0,
+          blackTerritory: 1, whiteTerritory: 1, neutralPoints: 69, winner: "white", margin: 6.5, result: "W+6.5" } } };
+    await page.route(`**/api/games/${GAME_ID}/scoring/dead-stones`, async route => {
+      expect(route.request().postDataJSON()).toMatchObject({ x: 1, y: 1, dead: false, expectedRevision: 1 });
+      state.game.scoring!.deadStones = [];
+      state.game.scoring!.territory = countedTerritoryPoints(board, []);
+      state.game.scoring!.revision++;
+      state.game.version++;
+      await route.fulfill({ json: { ok: true, actor: USER.playerKey, game: state.game } });
+    });
+    await page.goto(`/de/game/${GAME_ID}`);
+    const dead = page.locator(".intersection").nth(10);
+    await expect(dead.locator('.stone--white')).toBeVisible();
+    await expect(dead.locator('[data-territory="black"]')).toBeVisible();
+    await expect(page.locator('[data-territory="white"]')).toHaveCount(1);
+    await expect(page.locator(".intersection").nth(40).locator(".territory-mark")).toHaveCount(0);
+    await expect(dead).toBeEnabled();
+    await expect(dead).toHaveAttribute("aria-label", /lebend/i);
+    await dead.click();
+    await expect(dead.locator('.stone--white')).toBeVisible();
+    await expect(page.locator('[data-territory="black"]')).toHaveCount(0);
+    expect(state.game.scoring!.blackConfirmed).toBe(false);
+    expect(state.game.scoring!.whiteConfirmed).toBe(false);
+    expect(state.game.result).toBeNull();
+  });
+
   for (const theme of ["light", "dark"]) {
     test(`final territory squares show counted eyes, removed dead stones and no dame (${theme})`, async ({ page }, info) => {
       const state = await installHarness(page);
