@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     await Promise.all([targetRateLimitKey, ...accountRateLimitKeys].map(
       (key) => clearRateLimit(key),
     ));
-    const token = await createSession(user.id);
+    const token = await createSession(user.id, credentials.password);
     const response = noStoreJson({ ok: true, user });
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,

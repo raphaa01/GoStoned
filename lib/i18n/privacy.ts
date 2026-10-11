@@ -508,10 +508,24 @@ function localize(locale: Locale, value: LocalizedText): string {
   return value[locale] ?? value.en;
 }
 
+const recoveryPurpose: LocalizedText = {
+  en: "Password recovery through Resend processes the recipient address and code email (Article 6(1)(b) GDPR). Codes expire after 10 minutes; only salted hashes are stored in GoStone, deleted after use or during later expiry cleanup. Resend retains email content and delivery logs for 30 days and may process data in the United States. Open and click tracking are disabled.",
+  de: "Zur Passwort-Wiederherstellung verarbeitet Resend die Empfängeradresse und Code-E-Mail (Art. 6 Abs. 1 lit. b DSGVO). Codes laufen nach 10 Minuten ab; GoStone speichert nur gesalzene Hashes, die nach Nutzung oder bei späterer Bereinigung abgelaufener Codes gelöscht werden. Resend speichert E-Mail-Inhalte und Zustellprotokolle 30 Tage und kann Daten in den USA verarbeiten. Öffnungs- und Klicktracking sind deaktiviert.",
+  fr: "Pour récupérer le mot de passe, Resend traite l’adresse et l’e-mail du code (article 6(1)(b) RGPD). Les codes expirent après 10 minutes ; GoStone ne conserve que des empreintes salées, supprimées après usage ou lors du nettoyage ultérieur. Resend conserve les messages et journaux 30 jours et peut traiter aux États-Unis. Le suivi des ouvertures et clics est désactivé.",
+  es: "Resend procesa la dirección y el correo del código para recuperar la contraseña (artículo 6.1.b RGPD). Los códigos caducan en 10 minutos; GoStone guarda solo hashes con sal, eliminados tras usarse o en la limpieza posterior. Resend conserva mensajes y registros 30 días y puede tratar datos en Estados Unidos. El seguimiento de aperturas y clics está desactivado.",
+  zh: "Resend 为密码恢复处理收件地址和验证码邮件（GDPR 第6(1)(b)条）。验证码10分钟后失效；GoStone仅保存加盐哈希，在使用后或之后清理过期记录时删除。Resend保留邮件内容和投递日志30天，可能在美国处理数据。打开和点击跟踪已关闭。",
+  ja: "パスワード復旧のため Resend が宛先とコードメールを処理します（GDPR 第6条1項(b)）。コードは10分で失効し、GoStone はソルト付きハッシュのみを保存して使用後または後の期限切れ整理で削除します。Resend は本文と配信ログを30日保存し、米国で処理する場合があります。開封・クリック追跡は無効です。",
+  ko: "비밀번호 복구를 위해 Resend가 수신 주소와 코드 이메일을 처리합니다(GDPR 제6조 제1항 (b)). 코드는 10분 후 만료되며 GoStone은 솔트 해시만 저장하고 사용 후 또는 이후 만료 정리 시 삭제합니다. Resend는 이메일과 전송 로그를 30일 보관하고 미국에서 처리할 수 있습니다. 열람 및 클릭 추적은 비활성화됩니다.",
+  ky: "Сырсөздү калыбына келтирүү үчүн Resend алуучунун дарегин жана код катын иштетет (GDPR 6(1)(b)). Код 10 мүнөттө бүтөт; GoStone туздалган хэштерди гана сактап, колдонгондон кийин же кийинки тазалоодо өчүрөт. Resend каттар менен жеткирүү журналдарын 30 күн сактайт жана АКШда иштетиши мүмкүн. Ачуу жана басуу көзөмөлү өчүрүлгөн.",
+};
+
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
   if (locale === "ky") return {
     ...kyPrivacy,
     updated: "11-октябрь, 2026-жыл",
+    processors: { ...kyPrivacy.processors, entries: [...kyPrivacy.processors.entries, {
+      name: "Resend", purpose: recoveryPurpose.ky!, privacyUrl: "https://resend.com/legal/privacy-policy",
+    }] },
     sections: kyPrivacy.sections.map((section, index) => index === 2 ? {
       ...section,
       paragraphs: [...section.paragraphs, "Ошондой эле баракча көрүнүп турган убакыт өлчөнөт. Ар 30 секундда, баракча алмашканда же жашырылганда GoStone тазаланган жолду, көрүнгөн миллисекунддарды жана ачылыш санын алат. Маалымат базасында баракча боюнча сааттык суммалар гана сакталат; эсеп, келүүчү, сеанс же IP идентификаторлору сакталбайт. Кукилер жана браузер сактагычы колдонулбайт. Жашырылган өтмөктөр эсептелбейт; Do Not Track кошумча өлчөөнү өчүрөт. Максат — мазмунду жана колдонууга ыңгайлуулукту жакшыртуу; укуктук негиз — GDPR 6(1)(f). Анонимдүү суммалар тенденцияларды талдоо үчүн сакталат."],
@@ -534,7 +548,10 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
     },
     sections: sections.map((section) => ({
       title: localize(locale, section.title),
-      paragraphs: section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? [],
+      paragraphs: [
+        ...(section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? []),
+        ...(section === sections[3] ? [localize(locale, recoveryPurpose)] : []),
+      ],
       items: section.items?.map((item) => localize(locale, item)) ?? [],
     })),
     cookies: {
@@ -553,7 +570,7 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
     processors: {
       title: localize(locale, processors.title),
       intro: localize(locale, processors.intro),
-      entries: processors.entries.map((entry) => ({
+      entries: [...processors.entries, { name: "Resend", purpose: recoveryPurpose, privacyUrl: "https://resend.com/legal/privacy-policy" }].map((entry) => ({
         name: entry.name,
         purpose: localize(locale, entry.purpose),
         privacyUrl: entry.privacyUrl,

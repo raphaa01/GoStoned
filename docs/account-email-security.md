@@ -16,19 +16,24 @@ addresses stay on `auth_identities`. No account is linked by matching email, and
 no social account is required to add a local address. Apple private relay
 addresses and callbacks without an email keep their existing behavior.
 
-## Implementation status
+## Password recovery
 
-Account email and the legacy-account gate are implemented. Password recovery has
-a shared client form and database service, but **the password-reset HTTP route
-and real email sender still need to be added after provisioning Resend**.
-Do not merge or release this draft until that remaining boundary is implemented.
+`POST /api/auth/password-reset` accepts `{action: "request", email}` or
+`{action: "reset", email, code, password}`. Both mutations enforce origin and
+bounded JSON bodies. Requests are limited by IP and normalized email, even for
+unknown addresses. Issuance and delivery run through Next.js `after` so account
+lookup and provider latency do not affect the public request response.
 
-The intended flow sends an eight-digit random code valid for ten minutes, stores
+The flow sends an eight-digit random code valid for ten minutes, stores
 only a salted scrypt hash, allows five wrong attempts, and replaces a code at most
 once per minute. A successful reset consumes the code and revokes all account
 sessions in one transaction. OAuth-only accounts do not receive local reset
 codes. Public request responses must remain identical for known and unknown
 addresses, including delivery failures.
+Session issuance rechecks the password under the same user lock as recovery,
+preventing an in-flight login with the old password from surviving a reset.
+Expired hashes are removed in bounded batches during subsequent issuance;
+expiry is enforced even before cleanup.
 
 ## Deployment and validation
 
@@ -44,13 +49,17 @@ new gate or submit the new email field. The shared client build has been checked
 device testing, signing, and App Store/Play Store distribution are separate release
 steps and have not been performed in this draft.
 
-Resend provisioning for the existing Vercel project is blocked by the owner's
-acceptance of the marketplace/provider terms. Planned resource: free plan,
-`gostone.app`, `eu-west-1`. After acceptance, install the resource, verify the
-sending domain, configure a monitored sender, and implement the HTTP sender from
-the provisioned provider instructions. Keep credentials server-side and untracked.
-Update the privacy policy with the actual processor and recovery retention
-details when the sender is integrated.
+Resend is provisioned through Vercel Marketplace on the free plan for
+`gostone.app` in `eu-west-1`. Its DKIM and SPF records are verified. The integration
+supplies server-only `RESEND_API_KEY` and `RESEND_EMAIL_DOMAIN` in production,
+preview, and development. The sender is `GoStone <security@gostone.app>`; this is
+a transactional sending address, not a support inbox. No SDK is required.
+Provider failures never expose recipient addresses, codes, or response payloads.
+The sender has a 15-second timeout and an idempotency key. Open/click tracking is
+disabled. The privacy policy discloses Resend, its 30-day content/log retention,
+and possible US processing. See https://resend.com/security/gdpr.
+Real-provider validation uses `delivered@resend.dev`, Resend's simulated test
+recipient, so no unrelated person receives test email.
 
 Validation:
 

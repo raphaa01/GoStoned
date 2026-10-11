@@ -3,6 +3,8 @@ import { query, withTransaction } from "@/lib/db";
 import type { PoolClient } from "pg";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
+import { AuthError } from "./accountService";
+import { verifyPassword } from "./password";
 
 export const SESSION_COOKIE = "gostoned_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -71,8 +73,21 @@ export async function createSessionInTransaction(
   return token;
 }
 
-export function createSession(userId: string): Promise<string> {
-  return withTransaction((client) => createSessionInTransaction(client, userId));
+export function createSession(userId: string, password?: string): Promise<string> {
+  return withTransaction(async (client) => {
+    if (password !== undefined) {
+      // Serialize issuance with password recovery. A login verified before a
+      // reset must not create a surviving session using the old password.
+      const result = await client.query<{ password_hash: string | null }>(
+        "SELECT password_hash FROM users WHERE id = $1 FOR UPDATE", [userId],
+      );
+      const hash = result.rows[0]?.password_hash;
+      if (!hash || !await verifyPassword(password, hash)) {
+        throw new AuthError("Username or password is incorrect.", 401, "invalid_credentials");
+      }
+    }
+    return createSessionInTransaction(client, userId);
+  });
 }
 
 export async function getSessionUser(

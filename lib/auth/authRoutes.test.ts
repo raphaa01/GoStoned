@@ -397,6 +397,7 @@ test("session issuance failure after authentication rolls back and sets no login
   const client = {
     async query(sql: string) {
       transactionStatements.push(sql);
+      if (sql.startsWith("SELECT password_hash FROM users")) return { rows: [{ password_hash: passwordHash }] };
       if (sql.includes("WITH expired_sessions AS MATERIALIZED")) {
         throw new Error("cleanup unavailable");
       }
@@ -702,6 +703,7 @@ test("successful login clears the target and every shared-account attempt bucket
   const client = {
     async query(sql: string, values: readonly unknown[] = []) {
       statements.push({ sql, values });
+      if (sql.startsWith("SELECT password_hash FROM users")) return { rows: [{ password_hash: passwordHash }] };
       if (
         sql === "BEGIN"
         || sql.startsWith("SET LOCAL")
