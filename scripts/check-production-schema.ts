@@ -25,6 +25,8 @@ type SchemaRow = {
   analysis_progress_data_type: string | null;
   analysis_progress_constraint: string | null;
   takeback_rls: boolean;
+  game_share_rls: boolean;
+  game_share_accessible: boolean;
   learn_progress_rls: boolean;
   learn_progress_writable: boolean;
   analysis_price_vote_constraint: string | null;
@@ -167,7 +169,18 @@ async function checkProductionSchema(): Promise<void> {
          AND has_table_privilege(current_user, to_regclass('public.analysis_price_votes'), 'INSERT')
          AND has_table_privilege(current_user, to_regclass('public.analysis_price_votes'), 'UPDATE'),
          false
-       ) AS analysis_price_vote_writable`,
+       ) AS analysis_price_vote_writable,
+       EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass('public.game_share_links') AND relrowsecurity) AS game_share_rls,
+       COALESCE(
+         has_table_privilege(current_user, to_regclass('public.game_share_links'), 'SELECT')
+         AND has_table_privilege(current_user, to_regclass('public.game_share_links'), 'INSERT')
+         AND has_table_privilege(current_user, to_regclass('public.game_share_links'), 'UPDATE')
+         AND (EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls))
+           OR EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass('public.game_share_links') AND relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user))
+           OR EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'game_share_links'
+             AND policyname = 'gostone_app_server_access' AND pg_has_role(current_user, (SELECT oid FROM pg_roles WHERE rolname = 'gostone_app'), 'USAGE'))),
+         false
+       ) AS game_share_accessible`,
   );
 
   const row = result.rows[0];
@@ -195,6 +208,8 @@ async function checkProductionSchema(): Promise<void> {
     analysisProgressDataType: row.analysis_progress_data_type,
     analysisProgressConstraint: row.analysis_progress_constraint,
     takebackRls: row.takeback_rls,
+    gameShareRls: row.game_share_rls,
+    gameShareAccessible: row.game_share_accessible,
     learnProgressRls: row.learn_progress_rls,
     learnProgressWritable: row.learn_progress_writable,
     analysisPriceVoteConstraint: row.analysis_price_vote_constraint,

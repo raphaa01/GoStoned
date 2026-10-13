@@ -44,7 +44,7 @@ export function registerBetaGameTests(mobile: boolean) {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("heading", { name: "Sieg", exact: true })).toBeVisible();
     await dialog.getByRole("button", { name: "Partie teilen", exact: true }).click();
-    await expect(dialog.getByRole("textbox", { name: "Partie teilen" })).toHaveValue(/^https:\/\/gostone\.app\/shared-game\//);
+    await expect(dialog.getByRole("textbox", { name: "Partie teilen" })).toHaveValue(/^https:\/\/gostone\.app\/de\/shared-game\//);
     await expect(dialog.getByRole("alert")).toHaveCount(0);
     await assertNoOverflow(page);
   });

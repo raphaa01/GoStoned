@@ -5,6 +5,8 @@ import { isUnambiguousLocalDatabase } from "../lib/env";
 import { RATE_LIMIT_POLICIES } from "../lib/auth/rateLimit";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
+import type { SharedFinishedGame } from "../lib/game/sharedGameService";
+import { finishedGamePosition } from "../lib/game/finishedGameReplay";
 
 const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
 const databaseUrl = process.env.DATABASE_URL;
@@ -129,6 +131,10 @@ async function run() {
   assert.equal(second.matchmaking.status, "matched");
   assert.ok(second.matchmaking.gameId);
   const gameId = second.matchmaking.gameId;
+  const activeShare = await fetch(`${baseUrl}/api/games/${gameId}/share`, {
+    method: "POST", headers: { Cookie: black.cookie, [EXPECTED_PLAYER_HEADER]: black.playerKey },
+  });
+  assert.equal(activeShare.status, 409, "Active games must not be shared");
 
   const firstStatus = await request<{
     actor: string;
@@ -548,6 +554,29 @@ async function run() {
   assert.equal(finished.game.moveCount, 10);
   assert.ok(finished.game.result);
   assert.equal(finished.game.rated, false);
+
+  const share = await request<{ token: string; path: string; url: string }>(
+    `/api/games/${gameId}/share`, { method: "POST" }, black.cookie, black.playerKey,
+  );
+  const sharedAgain = await request<{ token: string }>(
+    `/api/games/${gameId}/share`, { method: "POST" }, white.cookie, white.playerKey,
+  );
+  assert.equal(sharedAgain.token, share.token, "Both participants reuse the same permanent link");
+  assert.equal(share.path, `/shared-game/${share.token}`);
+  const publicGame = await request<{ game: SharedFinishedGame }>(`/api/shared-games/${share.token}`);
+  assert.equal(publicGame.game.result, finished.game.result);
+  assert.equal(publicGame.game.moves.length, 10);
+  assert.deepEqual(finishedGamePosition(9, publicGame.game.moves, 10).board, publicGame.game.board);
+  assert.ok(publicGame.game.territory, "Agreed final territory is included");
+  assert.deepEqual(publicGame.game.deadStones, [{ x: 3, y: 2 }, { x: 3, y: 3 }]);
+  assert.ok(publicGame.game.moves.at(-1)?.isPass);
+  for (const privateField of ["blackPlayerKey", "whitePlayerKey", "winnerKey", "messages", "gameId", "id"]) {
+    assert.equal(privateField in publicGame.game, false, `${privateField} must remain private`);
+  }
+  const outsiderShare = await fetch(`${baseUrl}/api/games/${gameId}/share`, {
+    method: "POST", headers: { Cookie: outsider.cookie, [EXPECTED_PLAYER_HEADER]: outsider.playerKey },
+  });
+  assert.equal(outsiderShare.status, 404, "An outsider cannot publish a game");
 
   const retry = await post<{ game: { status: string; result: string; rated: boolean } }>(
     `/api/games/${gameId}/scoring/confirm`,

@@ -38,6 +38,8 @@ const currentSnapshot: ProductionSchemaSnapshot = {
   analysisProgressConstraint:
     "CHECK (status = 'running' AND (result IS NULL OR progress IS NOT NULL))",
   takebackRls: true,
+  gameShareRls: true,
+  gameShareAccessible: true,
   learnProgressRls: true,
   learnProgressWritable: true,
   analysisPriceVoteConstraint:
@@ -49,6 +51,11 @@ const currentSnapshot: ProductionSchemaSnapshot = {
 
 test("accepts the current Japanese matchmaking schema", () => {
   assert.doesNotThrow(() => validateProductionSchemaContract(currentSnapshot));
+});
+
+test("rejects missing or inaccessible game share storage before deployment", () => {
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, gameShareRls: false }), /game sharing access/);
+  assert.throws(() => validateProductionSchemaContract({ ...currentSnapshot, gameShareAccessible: false }), /migration 055/);
 });
 
 test("rejects missing board-design storage before deployment", () => {

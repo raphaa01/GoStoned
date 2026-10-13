@@ -4,6 +4,7 @@ import { replayMovesWithPrisoners } from "./goEngine";
 import { countedTerritoryPoints } from "./japaneseScoring";
 import { GameServiceError } from "./gameServiceError";
 import type { Board, BoardSize, Position, Stone, StoredMove, TimeControlId } from "./types";
+import type { FinishedGameMove } from "./finishedGameReplay";
 
 type SharedGameRow = QueryResultRow & {
   board_size: BoardSize;
@@ -35,6 +36,7 @@ export type SharedFinishedGame = Readonly<{
   finishReason: SharedGameRow["finish_reason"];
   timeControl: TimeControlId;
   moveCount: number;
+  moves: FinishedGameMove[];
   lastMove: Position | null;
   deadStones: Position[];
   territory?: { black: Position[]; white: Position[] };
@@ -134,6 +136,7 @@ export async function getSharedFinishedGame(token: string): Promise<SharedFinish
       finishReason: row.finish_reason,
       timeControl: row.time_control,
       moveCount: moves.length,
+      moves: moves.map(({ moveNumber, color, x, y, isPass }) => ({ moveNumber, color, x, y, isPass })),
       lastMove: lastPlayed?.x === null || lastPlayed?.x === undefined || lastPlayed.y === null
         ? null
         : { x: lastPlayed.x, y: lastPlayed.y },

@@ -3,6 +3,7 @@ import { apiError, noStoreJson } from "@/lib/api/responses";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { resolvePlayerKey } from "@/lib/auth/requestAuth";
 import { createFinishedGameShare } from "@/lib/game/sharedGameService";
+import { sharedGameUrl } from "@/lib/game/sharedGameUrl";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ga
     assertExpectedPlayer(request, playerKey);
     const token = await createFinishedGameShare(gameId, playerKey);
     const path = `/shared-game/${token}`;
-    return noStoreJson({ ok: true, token, path, url: new URL(path, request.nextUrl.origin).toString() });
+    return noStoreJson({ ok: true, token, path, url: sharedGameUrl(token, request.nextUrl.origin) });
   } catch (error) {
     return apiError(error);
   }

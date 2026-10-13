@@ -138,6 +138,23 @@ CREATE TABLE IF NOT EXISTS game_share_links (
 
 CREATE INDEX IF NOT EXISTS idx_game_share_links_token ON game_share_links(token);
 
+REVOKE ALL ON game_share_links FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gostone_app') THEN
+    GRANT SELECT, INSERT, UPDATE ON game_share_links TO gostone_app;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+       WHERE schemaname = 'public' AND tablename = 'game_share_links'
+         AND policyname = 'gostone_app_server_access'
+    ) THEN
+      CREATE POLICY gostone_app_server_access ON game_share_links
+        FOR ALL TO gostone_app USING (true) WITH CHECK (true);
+    END IF;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS game_scoring_state (
   game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
   board_hash TEXT NOT NULL,

@@ -58,6 +58,7 @@ import { goStoneBotModelForIdentity, type GoStoneJapaneseSettlementProposal } fr
 import { GamePanel } from "./GamePanel";
 import { GamePassNotice } from "./GamePassNotice";
 import { GameResultModal } from "./GameResultModal";
+import { FinishedGameBoard } from "./FinishedGameBoard";
 import { GoBoard } from "./GoBoard";
 import { ScoringHelpDialog } from "./ScoringHelpDialog";
 
@@ -1411,11 +1412,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
           </div>
           <GamePassNotice game={game} />
           <div className="focused-board-wrap">
-            <GoBoard
+            {game.status === "finished" ? <FinishedGameBoard
+              key={identityKey}
+              gameId={game.id}
               boardSize={game.boardSize}
-              boardState={game.status === "finished" && game.scoring?.finalizedAt
-                ? removeDeadStones(game.board, game.scoring.deadStones)
-                : pendingMovePreview?.board ?? game.board}
+              board={game.scoring?.finalizedAt ? removeDeadStones(game.board, game.scoring.deadStones) : game.board}
+              moves={game.moves}
+              deadStones={game.scoring?.finalizedAt ? game.scoring.deadStones : undefined}
+              territory={game.finishReason === "score" && game.scoring?.finalizedAt ? game.scoring.territory : undefined}
+            /> : <GoBoard
+              boardSize={game.boardSize}
+              boardState={pendingMovePreview?.board ?? game.board}
               deadStones={game.status === "active" ? scoringDeadStones ?? undefined : undefined}
               territory={game.phase === "scoring" && !pendingDeadStones
                 && (game.status === "active" || game.finishReason === "score")
@@ -1461,7 +1468,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 connectionState.kind,
                 busy ? "busy" : "idle",
               ])}
-            />
+            />}
           </div>
           {game.status === "active" && (game.phase === "scoring" || game.boardSize > 9) ? (
             <p className="scoring-board-hint">
