@@ -1884,6 +1884,9 @@ a {
 .finished-game-share { display: grid; gap: 6px; }
 .finished-game-share button { align-items: center; display: flex; justify-content: center; gap: 8px; width: 100%; }
 .finished-game-share > span { color: var(--color-danger, #9d3e35); font-size: .78rem; text-align: center; }
+.finished-game-link { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.finished-game-link input { flex: 1; min-width: 0; width: 0; height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-deep); color: var(--text); font-size: 12px; }
+.finished-game-link button, .finished-game-link a { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
 
 .chat-panel {
   display: grid;

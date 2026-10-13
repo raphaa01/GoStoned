@@ -4,8 +4,12 @@ const NativeShare = registerPlugin<{ share(options: { title: string; text: strin
 
 export async function shareGameLink(options: { title: string; text: string; url: string }): Promise<"shared" | "copied" | "link"> {
   if (Capacitor.isNativePlatform()) {
-    await NativeShare.share(options);
-    return "shared";
+    try {
+      await NativeShare.share(options);
+      return "shared";
+    } catch {
+      // A missing or unavailable share sheet must not hide the created link.
+    }
   }
   if (navigator.share) {
     try {

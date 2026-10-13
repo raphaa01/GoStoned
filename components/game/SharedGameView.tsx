@@ -5,11 +5,15 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { readApi } from "@/lib/client/api";
 import type { SharedFinishedGame } from "@/lib/game/sharedGameService";
 import { getSharedGameCopy } from "@/lib/i18n/sharedGame";
-import { removeDeadStones } from "@/lib/game/scoring";
-import { GoBoard } from "./GoBoard";
+import { localizedGameResult } from "@/lib/game/gameAccessibility";
+import { FinishedGameBoard } from "./FinishedGameBoard";
 import styles from "./SharedGameView.module.css";
 
 export function SharedGameView({ token }: { token: string }) {
+  return <SharedGameLoader key={token} token={token} />;
+}
+
+function SharedGameLoader({ token }: { token: string }) {
   const { dictionary, locale } = useI18n();
   const [game, setGame] = useState<SharedFinishedGame | null>(null);
   const [failed, setFailed] = useState(false);
@@ -33,24 +37,21 @@ export function SharedGameView({ token }: { token: string }) {
       <article className={styles.shell}>
         <header className={styles.header}>
           <span className={styles.eyebrow}>{copy.brand} · {copy.eyebrow}</span>
-          <h1>{game.result}</h1>
+          <h1>{localizedGameResult(game.result, dictionary.game)}</h1>
           <div className={styles.players}>
-            <span className={styles.stone} aria-hidden="true" /> {game.blackPlayerName}
-            <span>—</span>
-            <span className={`${styles.stone} ${styles.stoneWhite}`} aria-hidden="true" /> {game.whitePlayerName}
+            <span className={styles.player}><span className={styles.stone} aria-hidden="true" /><span className={styles.name} title={game.blackPlayerName}>{game.blackPlayerName}</span></span>
+            <span aria-hidden="true">—</span>
+            <span className={styles.player}><span className={`${styles.stone} ${styles.stoneWhite}`} aria-hidden="true" /><span className={styles.name} title={game.whitePlayerName}>{game.whitePlayerName}</span></span>
           </div>
-          <p>{copy.staticNote}</p>
         </header>
         <div className={styles.board}>
-          <GoBoard
+          <FinishedGameBoard
+            gameId={`shared:${token}`}
             boardSize={game.boardSize}
-            boardState={game.territory ? removeDeadStones(game.board, game.deadStones) : game.board}
-            deadStones={game.territory ? undefined : game.deadStones}
+            board={game.board}
+            moves={game.moves}
+            deadStones={game.deadStones}
             territory={game.territory}
-            disabled
-            lastMove={game.lastMove}
-            onIntersectionClick={() => undefined}
-            precisionRevision={`shared:${token}`}
           />
         </div>
         <footer className={styles.meta}>

@@ -20,6 +20,8 @@ export type ProductionSchemaSnapshot = Readonly<{
   analysisProgressDataType: string | null;
   analysisProgressConstraint: string | null;
   takebackRls: boolean;
+  gameShareRls: boolean;
+  gameShareAccessible: boolean;
   learnProgressRls: boolean;
   learnProgressWritable: boolean;
   analysisPriceVoteConstraint: string | null;
@@ -41,6 +43,9 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (!snapshot.gameShareRls || !snapshot.gameShareAccessible) {
+    throw new Error("Production database schema is stale: game sharing access; run migration 055.");
+  }
   if (snapshot.boardDesignDataType !== "text" || snapshot.boardDesignNullable !== "NO") {
     throw new Error("Production database schema is stale: board-design preference column.");
   }

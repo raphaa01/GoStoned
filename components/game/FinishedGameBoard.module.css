@@ -1,0 +1,11 @@
+.replay { display: grid; gap: 14px; width: 100%; min-width: 0; }
+.controls { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--text); }
+.controls button { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: inherit; cursor: pointer; touch-action: manipulation; }
+.controls button:hover:not(:disabled) { background: var(--panel-soft); border-color: var(--muted); }
+.controls button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.controls button:disabled { opacity: .35; cursor: default; }
+.progress { display: grid; gap: 3px; min-width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
+.progress strong { font-size: .82rem; font-weight: 600; }
+.progress strong span, .progress small { color: var(--muted); }
+.progress small { font-size: .7rem; line-height: 1.2; }
+@media (max-width: 360px) { .controls { gap: 4px; } .controls button { flex-basis: 36px; width: 36px; } .progress { min-width: 82px; } }
