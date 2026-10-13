@@ -30,6 +30,8 @@ import { MobileShell } from "./MobileShell";
 import { MobileSessionRefresh } from "./MobileSessionRefresh";
 import { MobileSplash } from "./MobileSplash";
 import { MobileCoachEntry, MobileCoachGate } from "./MobileCoachAccess";
+import { LocalPlay, LocalPlayEntry } from "./LocalPlay";
+import { GoClock } from "./GoClock";
 import { updateNativeChrome } from "./nativeChrome";
 import { usePathname, useRouter, useSearchParams } from "./next-navigation";
 import { MobileThemeProvider } from "./theme";
@@ -74,6 +76,8 @@ function MobileRoute() {
   const size = Number(search.get("size"));
 
   if (game) return <NativeChromeHidden><GameRoom gameId={game[1]} /></NativeChromeHidden>;
+  if (route === "/play/local") return <NativeChromeHidden><LocalPlay /></NativeChromeHidden>;
+  if (route === "/play/clock") return <NativeChromeHidden><GoClock /></NativeChromeHidden>;
   if (sharedGame) return <NativeChromeHidden><SharedGameView token={sharedGame[1]} /></NativeChromeHidden>;
   if (route === "/login" || route === "/register") {
     return <NativeChromeHidden><MobileAuthScreen mode={route === "/login" ? "login" : "register"} returnTo={search.get("returnTo")} oauthError={search.get("oauthError")} /></NativeChromeHidden>;
@@ -92,7 +96,7 @@ function MobileRoute() {
       content = <MobileHome />;
       showPlayAction = true;
       break;
-    case "/play": content = <PushedScreen><MobileCoachEntry /><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /></PushedScreen>; break;
+    case "/play": content = <PushedScreen><MobileCoachEntry /><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /><LocalPlayEntry /></PushedScreen>; break;
     case "/play/coach": content = <PushedScreen><MobileCoachGate /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
     case "/profile/settings": content = <PushedScreen><MobileAccountGate returnTo="/profile/settings" title={getSettingsCopy(locale).title}><MobileSettings /></MobileAccountGate></PushedScreen>; break;
