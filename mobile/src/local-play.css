@@ -1,0 +1,121 @@
+.local-play-entry {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 70px;
+  margin: 8px 0 26px;
+  padding: 18px 16px;
+  border: 1px solid var(--mobile-border);
+  border-radius: 13px;
+  background: var(--mobile-surface);
+}
+.local-play-entry > svg { margin-left: auto; color: var(--mobile-muted); }
+.local-play-entry strong { font-size: 15px; font-weight: 600; }
+.local-two-stones { display: flex; width: 39px; align-items: center; }
+.local-two-stones i { width: 25px; height: 25px; border-radius: 50%; background: #242723; border: 1px solid #10120f; }
+.local-two-stones i + i { background: #fffdf7; border-color: #c7c9bf; margin-left: -9px; }
+.local-play-screen {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 14px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - var(--mobile-safe-top));
+  color: var(--mobile-text);
+}
+.local-back { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; color: var(--mobile-text-secondary); }
+.local-play-screen > header h1 { margin: 21px 0 7px; font-size: clamp(24px, 6vw, 30px); font-weight: 650; letter-spacing: -.7px; }
+.local-play-screen > header p { color: var(--mobile-muted); font-size: 13px; margin: 0 0 26px; }
+.local-play-setup > .play-board-preview { max-width: 200px; margin: 10px auto 22px; }
+.local-play-screen > section { margin-top: 24px; }
+.local-play-screen h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+.local-play-screen .size-selector { display: grid; grid-template-columns: repeat(3, 1fr); }
+.local-play-screen .size-selector button { min-height: 48px; }
+.local-play-screen .time-selector { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.local-play-screen .time-selector button { display: flex; justify-content: space-between; align-items: center; padding: 16px; min-height: 64px; border-radius: 10px; }
+.local-play-screen .time-selector-copy { display: flex; align-items: baseline; gap: 15px; }
+.local-play-screen .time-selector-copy > span { color: var(--mobile-muted); font-size: 13px; }
+.local-play-screen .time-selector strong { font-size: 15px; }
+html[data-mobile-app="true"] .local-play-screen .time-selector button { background: var(--mobile-surface); border: 1px solid var(--mobile-border); box-shadow: none; color: var(--mobile-text); }
+html[data-mobile-app="true"] .local-play-screen .time-selector button.is-selected { background: var(--mobile-selected); border-color: var(--mobile-accent); color: var(--mobile-text); }
+.local-start { width: 100%; min-height: 50px; margin-top: 24px; }
+.local-clock-entry { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 26px; border-top: 1px solid var(--mobile-border); padding: 22px 0 6px; font-size: 15px; font-weight: 550; }
+.local-clock-entry > svg:last-child { margin-left: auto; }
+.local-clock-entry > svg:first-child { margin-right: auto; }
+.local-clock-setup > header { margin-bottom: 32px; }
+.local-game-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.local-game-header > span { font-weight: 600; font-size: 14px; }
+.local-game-header > small { margin-left: auto; font-size: 11px; color: var(--mobile-muted); }
+.local-icon-button { display: grid; place-items: center; border: 0; background: none; min-width: 44px; min-height: 44px; margin-left: -10px; }
+.local-player-clocks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.local-player-clocks > div { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 4px 8px; padding: 14px; background: var(--mobile-surface); border: 1px solid var(--mobile-border); border-radius: 11px; }
+.local-player-clocks > .is-active { border-color: var(--mobile-accent); background: var(--mobile-selected); }
+.local-player-clocks .player-stone { width: 19px; height: 19px; }
+.local-player-clocks > div > span:nth-child(2) { font-size: 13px; }
+.local-player-clocks strong { grid-column: 1 / -1; font-size: 29px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.local-player-clocks small { grid-column: 1 / -1; color: var(--mobile-muted); font-size: 11px; }
+.local-turn { text-align: center; font-size: 13px; font-weight: 550; margin: 17px 0; min-height: 18px; }
+.local-game-board { width: 100%; }
+.local-game-actions { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 14px; margin-top: 22px; }
+.local-game-actions > button { min-height: 48px; }
+.local-resign, .local-text-button { display: flex; align-items: center; justify-content: center; gap: 8px; background: none; border: none; color: var(--mobile-text-secondary); min-height: 44px; font-size: 14px; }
+.local-error { font-size: 13px; color: var(--mobile-danger); }
+.local-scoring > p { font-size: 13px; color: var(--mobile-text-secondary); text-align: center; }
+.local-mark-options { display: flex; gap: 8px; justify-content: center; }
+.local-mark-options > button { background: var(--mobile-surface); border: 1px solid var(--mobile-border); border-radius: 9px; font-size: 13px; padding: 10px 14px; min-height: 44px; }
+.local-mark-options > button[aria-pressed="true"] { background: var(--mobile-selected); border-color: var(--mobile-accent); }
+.local-score { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+.local-score > span { display: flex; justify-content: space-between; align-items: center; background: var(--mobile-surface-secondary); padding: 12px 15px; border-radius: 9px; font-size: 13px; }
+.local-score strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.local-confirmations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.local-confirmations .button { font-size: 12px; padding: 12px 8px; gap: 7px; min-height: 48px; }
+.local-confirmations .player-stone { width: 16px; height: 16px; }
+.local-scoring > .local-text-button { width: 100%; margin-top: 12px; }
+.local-result-modal .result-player-list > div > strong { flex: 1; }
+.local-result-modal .local-start { margin-top: 10px; }
+.local-result-modal .result-modal-header { grid-template-columns: 1fr; padding: 25px 20px 18px; background: none; }
+.local-result-modal .result-modal-header::after { display: none; }
+.local-result-modal .result-modal-header h2 { font-size: 30px; }
+.local-result-modal .local-score { margin: 16px 20px; }
+.local-result-modal .local-start { margin: 8px 20px 0; width: calc(100% - 40px); }
+.go-clock-face {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100dvw;
+  height: 100dvh;
+  background: #20231f;
+  color: #f8f6ef;
+  overflow: hidden;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.go-clock-face--white { background: #f3f0e7; color: #20231f; }
+.go-clock-tap { position: absolute; inset: 0; width: 100%; height: 100%; padding: max(18px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) max(70px, env(safe-area-inset-bottom)) max(32px, env(safe-area-inset-left)); display: flex; flex-direction: column; border: 0; border-radius: 0; background: none; color: inherit; cursor: pointer; text-align: center; }
+.go-clock-tap:disabled { opacity: 1; cursor: default; }
+.go-clock-totals { display: flex; justify-content: space-between; width: 100%; text-align: left; }
+.go-clock-totals > div { display: grid; grid-template-columns: 20px auto auto; gap: 4px 9px; align-items: center; opacity: .55; }
+.go-clock-totals > div.is-active { opacity: 1; }
+.go-clock-totals .player-stone { width: 18px; height: 18px; }
+.go-clock-totals > div > span:nth-child(2) { font-size: 14px; }
+.go-clock-totals strong { font-size: 28px; font-variant-numeric: tabular-nums; letter-spacing: -.8px; margin-left: 8px; }
+.go-clock-totals small { grid-column: 2 / -1; opacity: .65; font-size: 11px; }
+.go-clock-current { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
+.go-clock-color { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 500; }
+.go-clock-color .player-stone { width: 23px; height: 23px; }
+.go-clock-current > strong { font-size: clamp(80px, 23vh, 180px); line-height: 1.08; font-weight: 600; letter-spacing: -.055em; font-variant-numeric: tabular-nums; }
+.go-clock-instruction { font-size: 13px; opacity: .55; margin-top: 7px; }
+.go-clock-controls { position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: max(25px, env(safe-area-inset-left)); right: max(25px, env(safe-area-inset-right)); display: flex; justify-content: space-between; gap: 12px; }
+.go-clock-controls > button { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 8px 12px; border: 0; background: none; color: inherit; font-size: 13px; opacity: .7; border-radius: 9px; }
+.go-clock-controls > button:disabled { opacity: .3; }
+.go-clock-face.is-paused .go-clock-current > strong { opacity: .5; }
+.local-play-screen button:focus-visible, .local-play-screen a:focus-visible, .go-clock-face button:focus-visible { outline: 2px solid var(--mobile-accent); outline-offset: 3px; }
+@media (orientation: portrait) {
+  .go-clock-face { inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100dvw; transform: translate(-50%, -50%) rotate(90deg); }
+  .go-clock-tap { padding: max(16px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(64px, env(safe-area-inset-left)) max(28px, env(safe-area-inset-top)); }
+  .go-clock-current > strong { font-size: clamp(70px, 23vw, 150px); }
+  .go-clock-controls { bottom: max(8px, env(safe-area-inset-left)); left: max(24px, env(safe-area-inset-top)); right: max(24px, env(safe-area-inset-bottom)); }
+  html[data-go-clock="true"] .modal-backdrop { top: 50%; left: 50%; right: auto; bottom: auto; width: 100dvh; height: 100dvw; transform: translate(-50%, -50%) rotate(90deg); align-items: center; padding: 16px; }
+}
+@media (max-height: 450px) and (orientation: landscape) {
+  .go-clock-current > strong { font-size: 25vh; }
+}

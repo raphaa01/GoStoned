@@ -30,7 +30,30 @@ final class GoStoneSharePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+@objc(GoStoneClockPlugin)
+final class GoStoneClockPlugin: CAPPlugin, CAPBridgedPlugin {
+    let identifier = "GoStoneClockPlugin"
+    let jsName = "GoStoneClock"
+    let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "setActive", returnType: CAPPluginReturnPromise)]
+
+    @objc func setActive(_ call: CAPPluginCall) {
+        let active = call.getBool("active") ?? false
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = active
+            if let controller = self.bridge?.viewController as? GoStoneBridgeViewController {
+                controller.goClockActive = active
+                controller.setNeedsStatusBarAppearanceUpdate()
+                controller.setNeedsUpdateOfHomeIndicatorAutoHidden()
+            }
+            call.resolve()
+        }
+    }
+}
+
 final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelegate, WKScriptMessageHandler, UIGestureRecognizerDelegate {
+    var goClockActive = false
+    override var prefersStatusBarHidden: Bool { goClockActive || super.prefersStatusBarHidden }
+    override var prefersHomeIndicatorAutoHidden: Bool { goClockActive || super.prefersHomeIndicatorAutoHidden }
     private let nativeTabBar = UITabBar()
     private var destinations: [Int: String] = [:]
     private let symbols = ["house", "puzzlepiece", "graduationcap", "chart.bar", "trophy"]
@@ -39,6 +62,7 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(GoStoneSharePlugin())
+        bridge?.registerPluginInstance(GoStoneClockPlugin())
     }
 
     override func viewDidLoad() {
