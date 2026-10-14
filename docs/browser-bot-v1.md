@@ -72,7 +72,8 @@ Nach zwei Pässen enthält die serverseitige Wertungsvorschau bereits die aktuel
 gezählten Gebietspunkte für schwarze und weiße Quadratmarkierungen. Sie werden
 vor beiden Bestätigungen angezeigt und bei Änderungen an toten Gruppen oder
 neutralen Regionen neu berechnet. Tote Steine bleiben bis zur Einigung sichtbar
-und wieder als lebend markierbar; eine Markierung an ihrer Stelle liegt daneben.
+und wieder als lebend markierbar; das Gebietsquadrat liegt mittig auf dem Stein
+über seinem roten Kreuz.
 Diese Vorschau setzt weder das Endergebnis noch die Bestätigungen der Spieler.
 
 ## Training und Rating

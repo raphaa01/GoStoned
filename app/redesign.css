@@ -10189,7 +10189,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 /* Scoring and connection states read like tools, not promotional cards. */
 .scoring-heading > div > strong { font-size: 20px; line-height: 1.2; }
 .scoring-heading > span { font-size: 12px; }
-.scoring-help-header h3 {
+.scoring-help-header h2 {
   font-family: inherit;
   font-size: clamp(27px, 4vw, 36px);
   font-weight: 620;

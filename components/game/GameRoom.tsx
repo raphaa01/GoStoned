@@ -1470,11 +1470,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
               ])}
             />}
           </div>
-          {game.status === "active" && (game.phase === "scoring" || game.boardSize > 9) ? (
+          {game.status === "active" && game.phase === "play" && game.boardSize > 9 ? (
             <p className="scoring-board-hint">
-              {game.phase === "scoring"
-                ? copy.scoringBoardHint
-                : copy.boardHint}
+              {copy.boardHint}
             </p>
           ) : null}
           {error ? <p className="play-error" role="alert">{error}</p> : null}

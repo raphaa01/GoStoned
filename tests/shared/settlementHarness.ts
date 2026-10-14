@@ -23,9 +23,8 @@ function settlementPosition() {
 }
 
 export function registerSettlementTests() {
-  test("two passes show provisional territory before confirmations and dead groups remain editable", async ({ page }) => {
+  test("two passes show provisional territory before confirmations and dead groups remain editable", async ({ page }, info) => {
     const state = await installHarness(page);
-    await page.addInitScript((playerKey) => localStorage.setItem(`gostone:scoring-help:v1:hidden:${playerKey}`, "true"), USER.playerKey);
     const position = settlementPosition();
     const { board } = position;
     const deadStones = [{ x: 1, y: 1 }];
@@ -46,13 +45,36 @@ export function registerSettlementTests() {
       await route.fulfill({ json: { ok: true, actor: USER.playerKey, game: state.game } });
     });
     await page.goto(`/de/game/${GAME_ID}`);
+    const help = page.getByRole("dialog", { name: "Wenn du mit der Wertung einverstanden bist, bestätige sie" });
+    await expect(help.getByRole("heading", { level: 2 })).toBeVisible();
+    await expect(help.getByText("Die Partie endet, sobald ihr beide bestätigt habt.")).toBeVisible();
+    await expect(help.getByText(/Nicht einverstanden\?/)).toBeVisible();
+    if (await page.locator(".mobile-splash").count()) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+    await page.screenshot({ path: `.cache/scoring-help-${info.project.name}.png`, animations: "disabled" });
+    await help.getByRole("button", { name: "Verstanden", exact: true }).click();
+    await expect(page.locator(".scoring-board-hint")).toHaveCount(0);
+    await expect(page.locator(".game-player-detail").filter({ hasText: /Du ·|Gegner ·/ })).toHaveCount(0);
+    await expect(page.getByText("Prüfe die markierten Gruppen und die Wertung. Wenn alles stimmt, bestätige unten.")).toHaveCount(0);
     const dead = page.locator(".intersection").nth(10);
     await expect(dead.locator('.stone--white')).toBeVisible();
     await expect(dead.locator('[data-territory="black"]')).toBeVisible();
+    const placement = await dead.evaluate(point => {
+      const square = point.querySelector<HTMLElement>(".territory-mark")!;
+      const cross = point.querySelector<HTMLElement>(".dead-stone-mark")!;
+      const stone = point.querySelector<HTMLElement>(".stone")!.getBoundingClientRect();
+      const marker = square.getBoundingClientRect();
+      return { x: (marker.left + marker.width / 2) - (stone.left + stone.width / 2),
+        y: (marker.top + marker.height / 2) - (stone.top + stone.height / 2),
+        squareLayer: Number(getComputedStyle(square).zIndex), crossLayer: Number(getComputedStyle(cross).zIndex) };
+    });
+    expect(Math.abs(placement.x)).toBeLessThan(1);
+    expect(Math.abs(placement.y)).toBeLessThan(1);
+    expect(placement.squareLayer).toBeGreaterThan(placement.crossLayer);
     await expect(page.locator('[data-territory="white"]')).toHaveCount(1);
     await expect(page.locator(".intersection").nth(40).locator(".territory-mark")).toHaveCount(0);
     await expect(dead).toBeEnabled();
     await expect(dead).toHaveAttribute("aria-label", /lebend/i);
+    await page.screenshot({ path: `.cache/scoring-confirm-${info.project.name}.png`, animations: "disabled" });
     await dead.click();
     await expect(dead.locator('.stone--white')).toBeVisible();
     await expect(page.locator('[data-territory="black"]')).toHaveCount(0);
