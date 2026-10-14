@@ -1,7 +1,12 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { verifyPuzzle, preparePuzzle } from './generator.mjs';
+import { fileURLToPath } from 'node:url';
+import { verifyPuzzle, preparePuzzle, PRESENTATION_VERSION } from './generator.mjs';
 import { continuationKeys } from './diversity.mjs';
+
+export const defaultDataRoot = () => process.platform === 'win32' && process.env.LOCALAPPDATA
+  ? join(process.env.LOCALAPPDATA, 'GoStone', 'PuzzleLab')
+  : fileURLToPath(new URL('../../.cache/puzzle-lab/', import.meta.url));
 
 export function atomicJson(path, value) {
   writeFileSync(`${path}.tmp`, JSON.stringify(value));
@@ -21,7 +26,7 @@ export class Store {
     const entry = this.catalog.find((e) => e.number === number);
     if (!entry) throw new Error('Puzzle nicht gefunden.');
     const puzzle = JSON.parse(readFileSync(join(this.directory, `puzzle-${number}.json`), 'utf8'));
-    return { ...(puzzle.exportVersion ? puzzle : preparePuzzle(puzzle)), review: entry.review };
+    return { ...(puzzle.exportVersion === PRESENTATION_VERSION ? puzzle : preparePuzzle(puzzle)), review: entry.review };
   }
   add(puzzle) {
     verifyPuzzle(puzzle);
@@ -31,7 +36,7 @@ export class Store {
     const full = { ...preparePuzzle(puzzle), cores: continuationKeys(puzzle), number, createdAt: new Date().toISOString() };
     atomicJson(join(this.directory, `puzzle-${number}.json`), full);
     this.catalog.push({ number, kyu: full.difficulty.kyu, toPlay: full.toPlay, ownMoves: full.ownMoves, category: full.category, review: 'pending', createdAt: full.createdAt,
-      fingerprints: full.fingerprints, cells: full.cells, initial: full.initial, verification: full.verification, quality: full.quality, cores: full.cores });
+      fingerprints: full.fingerprints, cells: full.cells, layout: full.layout, presentationQuality: full.presentationQuality, initial: full.initial, solution: full.solution, target: full.target, verification: full.verification, quality: full.quality, cores: full.cores });
     atomicJson(this.path, this.catalog);
     return full;
   }

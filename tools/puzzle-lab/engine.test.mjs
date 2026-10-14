@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import { BLACK, WHITE, bit, indices, Chamber, Solver, BudgetExceeded, principalLine, verifyTree, positionKey, bestDefense } from './engine.mjs';
-import { analyze, candidate, random, fingerprints, materialize, toSgf, verifyPuzzle, preparePuzzle, shortAlternatives } from './generator.mjs';
-import { DiversityIndex, solutionPattern } from './diversity.mjs';
+import { analyze, candidate, mutate, random, fingerprints, materialize, toSgf, verifyPuzzle, preparePuzzle, shortAlternatives, assessPresentation, originalSearchBases } from './generator.mjs';
+import { DiversityIndex, solutionPattern, targetViews } from './diversity.mjs';
 import { Store } from './store.mjs';
 import { Jobs, validateConfig } from './jobs.mjs';
 import { createLab } from './server.mjs';
@@ -27,6 +27,14 @@ function puzzle() {
   }
   return structuredClone(five);
 }
+let compact;
+function modernPuzzle() {
+  if(!compact) {
+    const base=originalSearchBases()[0];
+    compact=analyze({chamber:new Chamber(base.cells,base.layout),state:base.initial,target:base.target},{ownMoves:4,maxNodes:1000000,maxMs:5000}).puzzle;
+  }
+  return structuredClone(compact);
+}
 
 test('capture, suicide, immutable living wall and simple ko obey Go rules', () => {
   assert.throws(() => new Chamber(rectangle(3, 3).filter(([x, y]) => x !== 1 || y !== 1)), /enclosed hole/);
@@ -41,6 +49,77 @@ test('capture, suicide, immutable living wall and simple ko obey Go rules', () =
   assert.equal(taken.ko, 12);
   assert.equal(big.play(taken, BLACK, 12), null);
   assert.equal(big.play(taken, BLACK, -1).ko, -1);
+});
+
+test('real corner edges allow edge eyes and do not grant imaginary Black wall immunity', () => {
+  const cells = rectangle(4, 3), chamber = new Chamber(cells, { boardSize: 9, offset: [0, 0] });
+  const state = { black: 0, white: (chamber.mask & ~bit(0) & ~bit(2)) >>> 0, ko: -1, passes: 0 };
+  assert.equal(chamber.alive(state, 1), true, 'Two real eyes touch the top board edge');
+  assert.equal(new Chamber(cells).alive(state, 1), false, 'The old all-sided enclosure is a different game');
+  assert.equal(chamber.play(state, BLACK, 0), null, 'A corner suicide cannot inherit immunity from an imaginary wall');
+});
+
+test('original search seeds are small independently proved four-turn tasks, not unverified imported templates', () => {
+  for(const base of originalSearchBases()) {
+    const result=analyze({chamber:new Chamber(base.cells,base.layout),state:base.initial,target:base.target},{ownMoves:4,maxNodes:2000000,maxMs:10000});
+    assert.ok(result.puzzle,result.reason); auditPuzzle(result.puzzle);
+    assert.ok(result.puzzle.presentationQuality.totalStones<=28);
+  }
+});
+
+test('mutation changes actual White boundary stones instead of freezing the same target outline', () => {
+  const base=originalSearchBases()[2], chamber=new Chamber(base.cells,base.layout), rng=random(725);
+  let changedBoundary=false;
+  for(let attempt=0;attempt<150;attempt++) {
+    const item=mutate(rng,4,base);
+    if(item && (base.initial.white & chamber.rim & ~item.state.white)) {changedBoundary=true;break;}
+  }
+  assert.ok(changedBoundary,'White stones adjacent to the fight at the chamber boundary must be mutable');
+});
+
+test('compact corner and edge tasks replay independently and reject oversized dense diagrams', () => {
+  const cases = [
+    { cells: [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[0,3],[1,3]], initial: {black:65,white:3746,ko:-1,passes:0}, target:1, kind:'corner' },
+    { cells: [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[0,3],[1,3],[2,3]], initial: {black:1024,white:31161,ko:-1,passes:0}, target:0, kind:'edge' },
+  ];
+  for (const raw of cases) for (const layout of [
+    ...['top-right','bottom-left'].map((support)=>({version:'compact-edge-v1',kind:raw.kind,boardSize:9,offset:raw.kind==='corner'?[0,0]:[1,0],support})),
+    ...(raw.kind==='corner' ? ['top-right','bottom-left'] : ['left-corner']).map((support)=>({version:'compact-edge-v2',kind:raw.kind,boardSize:9,offset:raw.kind==='corner'?[0,0]:[2,0],support})),
+  ]) {
+    const result = analyze({ chamber:new Chamber(raw.cells,layout),state:raw.initial,target:raw.target },{ownMoves:4,maxNodes:1000000,maxMs:5000});
+    assert.ok(result.puzzle,result.reason);
+    const p = result.puzzle; verifyPuzzle(p); auditPuzzle(p,{reSolve:true});
+    assert.ok(p.presentationQuality.totalStones<=36);
+    assert.ok(p.presentationQuality.supportStones<=24);
+    if (layout.version==='compact-edge-v2') assert.ok(p.presentationQuality.totalStones<=28, 'Minimal living support keeps a real four-turn task small');
+    for (const alternative of p.alternatives) assert.ok(alternative.line.every((ply)=>ply.color!==BLACK || ply.move>=0), 'Every own error move can be placed in the UI');
+    const white=preparePuzzle(p,'W'); verifyPuzzle(white); auditPuzzle(white);
+    assert.deepEqual(p.startingPosition.playablePoints[0],layout.offset);
+    const invalid=structuredClone(p); invalid.presentationQuality.totalStones=100;
+    assert.throws(()=>verifyPuzzle(invalid),/visual quality/);
+  }
+  const old=puzzle(); assert.equal(assessPresentation(old).accepted,false,'The old giant rectangle must fail the new diagram gate');
+});
+
+test('target shape comparison rejects the same small group despite different surrounding stones', () => {
+  const p=puzzle(), index=new DiversityIndex([p]);
+  const different=puzzle(); different.solution=undefined;
+  const empty=indices((2**p.cells.length-1)&~(p.initial.black|p.initial.white))[0];
+  different.initial.black=(different.initial.black|bit(empty))>>>0;
+  different.fingerprints=fingerprints({cells:different.cells,mask:2**different.cells.length-1},different.initial);
+  // Remove stronger earlier checks to isolate the group-shape rejection.
+  index.exact.clear(); index.families.clear(); index.cores.clear(); index.patterns.clear(); index.moveShapes=[];
+  assert.equal(index.duplicate(different),'same-target-shape');
+  assert.deepEqual(targetViews(different),targetViews(p));
+});
+
+test('adding an outer target stone cannot hide the same core by moving its bounding-box origin', () => {
+  const cells=rectangle(4,4), c=new Chamber(cells);
+  const white=[[0,1],[1,1],[0,2],[0,3],[1,3],[2,3]].reduce((mask,[x,y])=>mask|bit(y*4+x),0);
+  const p={cells,initial:{black:0,white,ko:-1,passes:0},target:4,ownMoves:4};
+  p.fingerprints=fingerprints(c,p.initial);
+  const added=structuredClone(p); added.initial.white|=bit(0); added.fingerprints=fingerprints(c,added.initial);
+  assert.equal(new DiversityIndex([p]).duplicate(added),'similar-target-shape');
 });
 
 test('two-eye certificate is conservative; deadline is unknown, never a false refutation', () => {
@@ -181,6 +260,7 @@ test('tampering, missing defences, extra branches and incorrect lengths fail ver
   const legacy = puzzle(); delete legacy.quality; delete legacy.activeDefenseProof;
   verifyPuzzle(legacy);
   assert.throws(() => verifyPuzzle(legacy, { requireCurrentQuality: true }), /Verteidigungstiefe/);
+  assert.throws(() => verifyPuzzle(puzzle(), { requireCurrentQuality: true }), /kompaktes Brettformat/, 'Mathematically proved giant wall diagrams cannot be exported');
 });
 
 test('diversity rejects all symmetries, shifts and the same motif in another enclosure', () => {
@@ -296,15 +376,19 @@ test('played stone patterns ignore surroundings, move order, translation, rotati
 
 test('store persists review states and jobs recover as paused without changing global numbering', () => {
   const root = mkdtempSync(join(tmpdir(), 'gostone-puzzle-lab-'));
+  const seed=modernPuzzle();
   try {
-    const store = new Store(root); assert.equal(store.add(puzzle()).number, 1);
+    const store = new Store(root); assert.equal(store.add(seed).number, 1);
     store.review(1, 'approved'); assert.equal(new Store(root).load(1).review, 'approved');
     writeFileSync(join(root, 'job.json'), JSON.stringify({ status: 'running', config: validateConfig({}), accepted: 1, elapsedMs: 100, resumedAt: Date.now() - 100000, attempts: 2, nextAttempt: 3, numbers: [1], reasons: {} }));
     const jobs = new Jobs(store); assert.equal(jobs.snapshot().status, 'paused'); assert.equal(jobs.snapshot().elapsedMs, 100);
-    assert.equal(jobs.diversity.duplicate(puzzle()), 'duplicate'); jobs.control('stop'); jobs.close();
+    assert.equal(jobs.diversity.duplicate(seed), 'duplicate'); jobs.control('stop'); jobs.close();
+    const changed=structuredClone(seed); changed.initial.black=bit(3); changed.initial.white=bit(0);
+    changed.fingerprints=fingerprints({cells:changed.cells,mask:2**changed.cells.length-1},changed.initial);
+    assert.equal(new Jobs(new Store(root)).diversity.duplicate(changed),'same-solution-pattern','Solution-move filters must survive a server restart');
     assert.equal(JSON.parse(readFileSync(join(root, 'job.json'))).status, 'stopped');
-    writeFileSync(join(root, 'puzzles/puzzle-2.json'), JSON.stringify({ ...puzzle(), number: 2 }));
-    assert.equal(store.add(puzzle()).number, 3, 'An orphaned file must never be overwritten');
+    writeFileSync(join(root, 'puzzles/puzzle-2.json'), JSON.stringify({ ...seed, number: 2 }));
+    assert.equal(store.add(seed).number, 3, 'An orphaned file must never be overwritten');
     assert.equal(JSON.parse(readFileSync(join(root, 'puzzles/puzzle-2.json'))).number, 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -320,17 +404,35 @@ test('one writer per data directory; releasing a lock does not remove a newer ow
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('HTTP shutdown releases the data lock even when the client keeps its connection pooled', async () => {
+  const root=mkdtempSync(join(tmpdir(),'gostone-shutdown-')), lab=createLab({root});
+  lab.server.listen(0,'127.0.0.1'); await once(lab.server,'listening');
+  const url=`http://127.0.0.1:${lab.server.address().port}`;
+  try {
+    const {token}=await (await fetch(`${url}/api/bootstrap`)).json();
+    const closed=once(lab.server,'close');
+    const response=await fetch(`${url}/api/shutdown`,{method:'POST',headers:{'Content-Type':'application/json','X-Lab-Token':token},body:'{}'});
+    assert.deepEqual(await response.json(),{ok:true});
+    await closed;
+    const release=acquireLock(root); release();
+  } finally {lab.jobs.close(); if(lab.server.listening) await new Promise(resolve=>lab.server.close(resolve)); rmSync(root,{recursive:true,force:true});}
+});
+
 test('local HTTP flow protects mutation, survives worker completion and exports approved puzzles only', async () => {
   const root = mkdtempSync(join(tmpdir(), 'gostone-puzzle-http-'));
   const lab = createLab({ root });
   lab.server.listen(0, '127.0.0.1'); await once(lab.server, 'listening');
   const url = `http://127.0.0.1:${lab.server.address().port}`;
   try {
+    lab.store.add(modernPuzzle());
     lab.store.add(puzzle());
     const bootstrap = await (await fetch(`${url}/api/bootstrap`)).json();
+    assert.equal((await (await fetch(`${url}/api/status`)).json()).instanceId, bootstrap.instanceId);
+    assert.equal((await fetch(`${url}/api/puzzles/2/json`)).status,400,'Giant legacy diagrams cannot be downloaded');
+    assert.equal((await fetch(`${url}/api/puzzles/2/sgf`)).status,400);
     assert.equal((await fetch(`${url}/api/start`, { method: 'POST', body: '{}' })).status, 403);
     const headers = { 'Content-Type': 'application/json', 'X-Lab-Token': bootstrap.token };
-    const start = await fetch(`${url}/api/start`, { method: 'POST', headers, body: JSON.stringify({ count: 1, maxAttempts: 4, workers: 1, maxMs: 50, maxNodes: 1000 }) });
+    const start = await fetch(`${url}/api/start`, { method: 'POST', headers, body: JSON.stringify({ count: 5, maxAttempts: 4, workers: 1, maxMs: 50, maxNodes: 1000 }) });
     assert.equal(start.status, 200);
     await new Promise((resolve, reject) => { const deadline = Date.now() + 10000; const check = () => { if (!['running', 'pausing'].includes(lab.jobs.job.status)) resolve(); else if (Date.now() > deadline) reject(new Error('Worker never settled')); else setTimeout(check, 30); }; check(); });
     assert.equal(lab.jobs.job.status, 'exhausted'); assert.equal(lab.jobs.job.attempts, 4);

@@ -37,7 +37,7 @@ await Promise.all(cases.map((c) => new Promise((done, reject) => {
   const worker = new Worker(pathToFileURL(join(source, 'worker.mjs')));
   if (seeds.length) {
     worker.postMessage({ type: 'exclude', families: seeds.map((p) => p.fingerprints.family) });
-    worker.postMessage({ type: 'seed', puzzles: seeds.map(({ cells, initial, ownMoves, fingerprints }) => ({ cells, initial, ownMoves, fingerprints })) });
+    worker.postMessage({ type: 'seed', puzzles: seeds.map(({ cells, layout, initial, ownMoves, fingerprints }) => ({ cells, layout, initial, ownMoves, fingerprints })) });
   }
   workers.push(worker);
   let dispatched;

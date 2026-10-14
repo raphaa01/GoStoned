@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { BLACK, WHITE, Chamber, Solver, BudgetExceeded, bit, indices, popcount, principalLine, verifyTree, positionKey } from './engine.mjs';
+import { BLACK, WHITE, Chamber, Solver, BudgetExceeded, bit, indices, popcount, principalLine, bestDefense, verifyTree, positionKey } from './engine.mjs';
 
 export const VERSION = 'gostone-local-puzzle-lab/1';
+export const PRESENTATION_VERSION = 'gostone-puzzle-presentation/3';
 export function random(seed) {
   let state = seed >>> 0;
   return () => {
@@ -13,34 +14,53 @@ export function random(seed) {
 }
 const pick = (rng, array) => array[Math.floor(rng() * array.length)];
 const chambers = new Map();
-function chamberFor(cells) {
-  const key = cells.map((point) => point.join(',')).join(';');
+// Original positions found by this lab's procedural search, also covered by
+// independent full-board regression tests. They seed SEARCH only; they are
+// never copied into a job's output or counted as newly generated tasks.
+export function originalSearchBases() {
+  return [
+    { cells:[[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[0,3],[1,3]], initial:{black:65,white:3746,ko:-1,passes:0}, target:1, kind:'corner' },
+    { cells:[[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[0,3],[1,3],[2,3]], initial:{black:1024,white:31161,ko:-1,passes:0}, target:0, kind:'edge' },
+    { cells:Array.from({length:19},(_,i)=>[i%4,Math.floor(i/4)]),initial:{black:16392,white:494835,ko:-1,passes:0},target:0,kind:'corner',support:'bottom-left' },
+  ].map(({kind,support,...base})=>{
+    const layout={version:'compact-edge-v2',kind,boardSize:9,offset:kind==='corner'?[0,0]:[2,0],support:support??(kind==='corner'?'top-right':'left-corner')};
+    return {...base,layout,ownMoves:4,fingerprints:fingerprints(chamberFor(base.cells,layout),base.initial)};
+  });
+}
+function chamberFor(cells, layout) {
+  const key = `${JSON.stringify(layout ?? {})}:${cells.map((point) => point.join(',')).join(';')}`;
   let chamber = chambers.get(key);
-  if (!chamber) { chamber = new Chamber(cells); if (chambers.size < 512) chambers.set(key, chamber); }
+  if (!chamber) { chamber = new Chamber(cells, layout); if (chambers.size < 512) chambers.set(key, chamber); }
   return chamber;
 }
-export function candidate(rng, ownMoves, bases = []) {
+export function candidate(rng, ownMoves, bases = [], layoutKind = null) {
+  bases = bases.filter((base) => ['compact-edge-v1', 'compact-edge-v2'].includes(base.layout?.version) && (!layoutKind || base.layout.kind === layoutKind));
   if (bases.length && rng() < 0.6) {
     const matching = bases.filter((base) => base.ownMoves === ownMoves);
     return mutate(rng, ownMoves, pick(rng, matching.length && rng() < .75 ? matching : bases));
   }
   // Fresh random polyomino eye spaces, connected white shapes and sacrifice
   // stones. No downloaded shapes or copied solutions.
-  const [width, height] = ownMoves >= 3 && rng() < (ownMoves === 3 ? 0.1 : 0.3)
-    ? pick(rng, [[5, 5], [6, 5], [5, 6], [7, 4], [4, 7]])
-    : (() => { const w = pick(rng, ownMoves >= 4 ? [4, 5, 5] : [3, 4, 4, 5]); return [w, w === 5 ? pick(rng, [4, 5, 5]) : pick(rng, [3, 4, 5])]; })();
+  const [width, height] = pick(rng, ownMoves >= 4 ? [[3, 4], [4, 3], [4, 4], [4, 5], [5, 4], [5, 5]] : [[3, 3], [3, 4], [4, 3], [4, 4], [4, 5]]);
+  const layout = { version: 'compact-edge-v2', kind: layoutKind ?? (rng() < .5 ? 'corner' : 'edge'), boardSize: 9,
+    support: rng() < .5 ? 'top-right' : 'bottom-left' };
+  layout.offset = layout.kind === 'corner' ? [0, 0] : [2, 0];
+  if (layout.kind === 'edge') layout.support = 'left-corner';
   let cells = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) cells.push([x, y]);
-  if (rng() < 0.45) cells = cells.filter(([x, y]) => !((x === 0 || x === width - 1) && (y === 0 || y === height - 1) && rng() < 0.5));
+  // Open real top/left board edges and stepped outer contours. Keep edge
+  // cells intact; varying upper/right and lower corners changes the problem.
+  if (rng() < .55) cells = cells.filter(([x, y]) => !(x === width - 1 && y === height - 1 && rng() < .8));
+  if (width >= 4 && height >= 4 && rng() < .3) cells = cells.filter(([x, y]) => !(x >= width - 2 && y >= height - 2));
   let chamber;
   try {
-    chamber = chamberFor(cells);
+    chamber = chamberFor(cells, layout);
   } catch { return null; }
   let white = 0, black = 0;
   if (rng() < 0.75) {
     // Grow an interior eye space; the surrounding white chain can have cuts,
     // short liberties and internal black sacrifice stones.
-    const internal = cells.map(([x, y], i) => ({ x, y, i })).filter(({ x, y }) => x > 0 && y > 0 && x < width - 1 && y < height - 1);
+    const internal = cells.map(([x, y], i) => ({ x, y, i })).filter(({ x, y }) => x < width - 1 && y < height - 1);
     if (!internal.length) return null;
     let eye = bit(pick(rng, internal).i);
     const desired = Math.min(internal.length + 2, pick(rng, ownMoves >= 5 ? [6, 7, 8, 9, 10, 11] : ownMoves >= 4 ? [5, 6, 7, 8, 9, 10] : [2, 3, 4, 5, 6, 7]));
@@ -81,12 +101,17 @@ export function candidate(rng, ownMoves, bases = []) {
 // active intersections, never just orientation, location or enclosure size.
 // Novelty and proof filters still run on the resulting problem from scratch.
 export function mutate(rng, ownMoves, base) {
-  const chamber = chamberFor(base.cells);
+  const layout = base.layout ? { ...base.layout, version:'compact-edge-v2', offset:base.layout.kind==='corner'?[0,0]:[2,0],
+    support:base.layout.kind==='edge'?'left-corner':rng()<.5?'top-right':'bottom-left' } : undefined;
+  const chamber = chamberFor(base.cells, layout);
   let { black, white } = base.initial;
   const active = (chamber.mask & ~white) >>> 0;
-  const area = (active | (chamber.adjacent(active) & ~chamber.rim)) >>> 0;
+  // Include White stones along the actual fighting boundary. Preserving
+  // those stones froze the target outline and repeatedly produced the same
+  // small core, even when internal Black stones changed.
+  const area = (active | chamber.adjacent(active)) >>> 0;
   const choices = indices(area), shuffled = [...choices];
-  const changes = Math.min(choices.length, pick(rng, [2, 3, 3, 4, 4, 5]));
+  const changes = Math.min(choices.length, pick(rng, [3, 4, 4, 5, 5, 6]));
   for (let j = 0; j < changes; j++) {
     const k = j + Math.floor(rng() * (shuffled.length - j));
     [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]];
@@ -102,6 +127,7 @@ export function mutate(rng, ownMoves, base) {
 
 function validateCandidate(chamber, state, ownMoves) {
   if (!chamber.valid(state)) return null;
+  if (chamber.geometry.version?.startsWith('compact-edge-') && (popcount(state.white) > 16 || popcount(state.black) > 4)) return null;
   let rest = state.white, targetGroup = 0, target = 0;
   while (rest) {
     const first = indices(rest)[0], group = chamber.group(state.white, first);
@@ -111,6 +137,12 @@ function validateCandidate(chamber, state, ownMoves) {
   if (chamber.alive(state, target)) return null;
   const liberties = popcount(chamber.liberties(state, targetGroup));
   if (liberties < (ownMoves === 1 ? 1 : 2) || liberties > 9 || popcount(targetGroup) < 4) return null;
+  if (chamber.geometry.version?.startsWith('compact-edge-')) {
+    const presentation = assessPresentation({ cells: chamber.cells, initial: state, target, layout: chamber.geometry, toPlay: 'B' });
+    // Reject visual clutter BEFORE spending the proof budget. Four-turn
+    // tasks should remain small; additional depth may need more context.
+    if (!presentation.accepted || presentation.totalStones > (ownMoves <= 4 ? 28 : 32)) return null;
+  }
   return { chamber, state, target };
 }
 
@@ -210,8 +242,14 @@ export function analyze(item, options) {
     if (requested >= 3 && decisionTurns < 2) return { reason: 'forced-cleanup' };
     const branches = countBranches(proof);
     const difficulty = assessDifficulty({ ownMoves: actualMoves, proofNodes: checked.nodes, branches, refutations: wrongPaths.length, sacrifices });
+    const layout = chamber.geometry.version?.startsWith('compact-edge-') ? chamber.geometry : undefined;
+    if (layout && (hasLocalKo(chamber, state, proof) || hasLocalKo(chamber, state, activeDefenseProof) || hasLocalKo(chamber, state, passRefutation) ||
+      wrongPaths.some((wrong) => hasLocalKo(chamber, chamber.play(state, BLACK, wrong.firstMove), wrong.proof)))) return { reason: 'ko-dependent' };
     const category = sacrifices >= 2 ? 'Mehrfaches Opfer & Rückfang' : sacrifices ? 'Opfer & Rückfang' : earlyCaptures ? 'Abtrennen & Fangen' : actualMoves >= 4 ? 'Mehrzügige Augenform' : 'Vitalpunkt & Augen';
+    const presentationQuality = layout ? assessPresentation({ cells: chamber.cells, initial: state, target, layout, toPlay: 'B' }) : undefined;
+    if (layout && !presentationQuality.accepted) return { reason: 'visual-format' };
     return { puzzle: preparePuzzle({ schemaVersion: VERSION, cells: chamber.cells, initial: state, target, goal: 'capture', toPlay: 'B', ownMoves: actualMoves,
+      ...(layout ? { layout, presentationQuality } : {}),
       category, difficulty, fingerprints: fingerprints(chamber, state), solution, proof, wrongPaths, passRefutation, activeDefenseProof, quality,
       verification: { status: 'proven', rules: 'local capture; positional superko; passes allowed', enclosure: 'unconditionally alive attacker wall; chamber-only play', minimumAttackerTurns: minimum, uniqueFirstMove: winners[0].move,
         allInitialMovesResolved: true, proofNodes: checked.nodes, defensiveBranches: branches, defendingMoves, defenderPasses, sacrifices, searchNodes: solver.nodes + activeSolver.nodes, cacheHits: solver.hits + activeSolver.hits, elapsedMs: Math.round(performance.now() - started), engine: VERSION },
@@ -242,11 +280,16 @@ export function assessQuality(chamber, state, target, solution, activeDepth = nu
 function countBranches(tree) {
   return tree.branches ? Math.max(0, tree.branches.length - 1) + tree.branches.reduce((sum, b) => sum + countBranches(b.next), 0) : 0;
 }
+function hasLocalKo(chamber, state, tree) {
+  if (state.ko >= 0) return true;
+  return tree.branches?.some((branch) => hasLocalKo(chamber, chamber.play(state, tree.color, branch.move), branch.next)) ?? false;
+}
 
 // A genuine Go board with a two-eye outer black group. The lab highlights the
 // playable chamber; the two eyes make the solver's immutable wall assumption
 // independently checkable rather than hiding a capturable border in an SGF.
 export function materialize(puzzle) {
+  if (puzzle.layout?.version?.startsWith('compact-edge-')) return compactBoard(puzzle);
   const maxX = Math.max(...puzzle.cells.map(([x]) => x));
   const maxY = Math.max(...puzzle.cells.map(([, y]) => y));
   const size = Math.max(maxX + 7, maxY + 7) <= 9 ? 9 : 13;
@@ -265,12 +308,86 @@ export function materialize(puzzle) {
   return { size, board, offset: [2, 2], target: puzzle.cells[puzzle.target].map((n) => n + 2), wallEyes: [[eyeX, 1], [eyeX, 3]] };
 }
 
+function compactBoard(puzzle) {
+  const { boardSize: size, offset } = puzzle.layout;
+  const board = Array.from({ length: size }, () => Array(size).fill(0));
+  const points = new Set(puzzle.cells.map(([x, y]) => `${x + offset[0]},${y + offset[1]}`));
+  // Only the one-stone contour is present. Off-board sides are real edges.
+  for (const [x, y] of puzzle.cells) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const px = x + offset[0] + dx, py = y + offset[1] + dy;
+    if (px >= 0 && py >= 0 && px < size && py < size && !points.has(`${px},${py}`)) board[py][px] = BLACK;
+  }
+  // A small, connected two-eye continuation makes the surrounding chain
+  // independently alive. It replaces the old 100-stone filled rectangle.
+  const wallX = Math.max(...puzzle.cells.map(([x]) => x)) + offset[0] + 1;
+  const wallY = Math.max(...puzzle.cells.map(([, y]) => y)) + offset[1] + 1;
+  const bottom = puzzle.layout.support === 'bottom-left';
+  const left = puzzle.layout.support === 'left-corner';
+  let wallEyes;
+  if (puzzle.layout.version === 'compact-edge-v2') {
+    if (!left && (bottom ? wallY : wallX) + 3 >= size) throw new Error('Minimal support exceeds board.');
+    if (left) {
+      // The real upper-left board corner needs only TWO additional stones
+      // alongside the existing left contour to form two unconditional eyes.
+      board[1][0] = BLACK; board[3][0] = BLACK;
+      wallEyes = [[0, 0], [0, 2]];
+    } else if (bottom) {
+      const end = Math.min(size - 1, wallY + 4);
+      for (let y = wallY; y <= end; y++) for (let x = 0; x <= 1; x++) board[y][x] = BLACK;
+      wallEyes = [[0, wallY + 1], [0, wallY + 3]];
+    } else {
+      const end = Math.min(size - 1, wallX + 4);
+      for (let x = wallX; x <= end; x++) for (let y = 0; y <= 1; y++) board[y][x] = BLACK;
+      wallEyes = [[wallX + 1, 0], [wallX + 3, 0]];
+    }
+  } else {
+    if ((bottom ? wallY : wallX) + 2 >= size) throw new Error('Compact support exceeds board.');
+    if (bottom) for (let y = wallY; y <= wallY + 2; y++) for (let x = 0; x <= 3; x++) board[y][x] = BLACK;
+    else for (let y = 0; y <= 3; y++) for (let x = wallX; x <= wallX + 2; x++) board[y][x] = BLACK;
+    wallEyes = bottom ? [[0, wallY + 1], [2, wallY + 1]] : [[wallX + 1, 0], [wallX + 1, 2]];
+  }
+  for (const [x, y] of wallEyes) board[y][x] = 0;
+  for (const [i, [x, y]] of puzzle.cells.entries()) board[y + offset[1]][x + offset[0]] = puzzle.initial.black & bit(i) ? BLACK : puzzle.initial.white & bit(i) ? WHITE : 0;
+  if (puzzle.toPlay === 'W') for (const row of board) for (let x = 0; x < size; x++) if (row[x]) row[x] = 3 - row[x];
+  return { size, board, offset, target: puzzle.cells[puzzle.target].map((n, axis) => n + offset[axis]), wallEyes,
+    wallAnchor: left ? [1, 0] : bottom ? [0, wallY] : [wallX, 0], kind: puzzle.layout.kind };
+}
+
+export function assessPresentation(puzzle) {
+  const { board } = materialize(puzzle);
+  const totalStones = board.flat().filter(Boolean).length;
+  const supportStones = totalStones - popcount(puzzle.initial.black | puzzle.initial.white);
+  const targetStones = popcount(new Chamber(puzzle.cells, puzzle.layout).group(puzzle.initial.white, puzzle.target));
+  const maxSameColorSquare = [BLACK, WHITE].reduce((maximum, color) => {
+    for (let y = 0; y < board.length - 2; y++) for (let x = 0; x < board.length - 2; x++) {
+      if ([0, 1, 2].every((dy) => [0, 1, 2].every((dx) => board[y + dy][x + dx] === color))) maximum = Math.max(maximum, 3);
+    }
+    return maximum;
+  }, 0);
+  return { version: 'compact-diagram-v1', accepted: totalStones <= 36 && supportStones <= 24 && targetStones <= 16 && maxSameColorSquare < 3,
+    totalStones, supportStones, targetStones, maxSameColorSquare };
+}
+
 // Certificates use role-normalized bitboards: BLACK is always the attacker.
 // Public boards and sequences use the actual stone colors, including White start.
 export const physicalColor = (puzzle, color) => puzzle.toPlay === 'W' ? 3 - color : color;
+function playableErrorLine(wrong) {
+  const line = [{ color: BLACK, move: wrong.firstMove }];
+  let tree = wrong.proof;
+  while (!tree.outcome && line.length < 4) {
+    const branch = tree.color === WHITE ? bestDefense(tree) : tree.branches.filter((b) => b.move >= 0)
+      .sort((a, b) => principalLine(b.next).length - principalLine(a.next).length || a.move - b.move)[0];
+    // A forced-life position with no legal stone placement is already a
+    // meaningful refutation. Do not pad its demonstration with a Black pass.
+    if (!branch) break;
+    line.push({ color: tree.color, move: branch.move }); tree = branch.next;
+  }
+  return line;
+}
 export function shortAlternatives(puzzle) {
-  return puzzle.wrongPaths.slice().sort((a, b) => Math.min(4, b.line.length) - Math.min(4, a.line.length) || a.firstMove - b.firstMove).slice(0, 2).map((wrong, i) => {
-    const line = wrong.line.slice(0, 4);
+  return puzzle.wrongPaths.map((wrong) => ({ ...wrong, preview: playableErrorLine(wrong) }))
+    .sort((a, b) => b.preview.length - a.preview.length || a.firstMove - b.firstMove).slice(0, 2).map((wrong, i) => {
+    const line = wrong.preview;
     let remaining = wrong.proof;
     for (const ply of line.slice(1)) remaining = remaining.branches.find((branch) => branch.move === ply.move).next;
     return { id: `error-${i + 1}`, firstMove: wrong.firstMove, status: 'incorrect', line,
@@ -283,12 +400,12 @@ export function preparePuzzle(puzzle, toPlay = puzzle.toPlay ?? 'B') {
   const result = { ...puzzle, toPlay };
   const physical = materialize(result);
   const sequence = (line) => line.map((ply, i) => ({ ply: i + 1, color: physicalColor(result, ply.color) === BLACK ? 'B' : 'W',
-    point: ply.move < 0 ? null : result.cells[ply.move].map((n) => n + 2), pass: ply.move < 0 }));
+    point: ply.move < 0 ? null : result.cells[ply.move].map((n, axis) => n + physical.offset[axis]), pass: ply.move < 0 }));
   result.alternatives = shortAlternatives(result);
-  result.exportVersion = 'gostone-puzzle-presentation/2';
+  result.exportVersion = PRESENTATION_VERSION;
   result.solverEncoding = { attacker: 'B', defender: 'W', colors: 'role-normalized', actualAttacker: toPlay };
   result.startingPosition = { size: physical.size, board: physical.board, target: physical.target,
-    playablePoints: result.cells.map((point) => point.map((n) => n + 2)), toPlay };
+    playablePoints: result.cells.map((point) => point.map((n, axis) => n + physical.offset[axis])), toPlay };
   result.kyu = result.difficulty.kyu;
   result.solutionSequence = { status: 'correct', moves: sequence(result.solution), ownMoves: result.ownMoves };
   result.alternativeSequences = result.alternatives.map(({ line, ...alternative }) => ({ ...alternative, moves: sequence(line), maximumPlies: 4 }));
@@ -296,21 +413,31 @@ export function preparePuzzle(puzzle, toPlay = puzzle.toPlay ?? 'B') {
 }
 
 export function toSgf(puzzle) {
-  const { size, board } = materialize(puzzle);
+  const { size, board, offset, target } = materialize(puzzle);
   const point = ([x, y]) => String.fromCharCode(97 + x, 97 + y);
-  const move = (index) => index < 0 ? '' : point(puzzle.cells[index].map((n) => n + 2));
+  const move = (index) => index < 0 ? '' : point(puzzle.cells[index].map((n, axis) => n + offset[axis]));
   const setup = (color) => board.flatMap((row, y) => row.flatMap((stone, x) => stone === color ? [`[${point([x, y])}]`] : [])).join('');
   const color = (role) => physicalColor(puzzle, role) === BLACK ? 'B' : 'W';
   const encode = (tree) => tree.outcome ? 'C[CORRECT: marked group captured.]' : tree.branches.map((b) => `(;${color(tree.color)}[${move(b.move)}]${encode(b.next)})`).join('');
   const alternatives = shortAlternatives(puzzle).map((alternative) => `(${alternative.line.map((ply) => `;${color(ply.color)}[${move(ply.move)}]`).join('')}C[INCORRECT: ${alternative.endpoint.outcome === 'alive' ? 'marked group has two unconditional eyes.' : 'opponent can force two unconditional eyes against every continuation.'} Feedback after ply ${alternative.feedbackAfterPly}; maximum 4 plies.])`).join('');
-  return `(;GM[1]FF[4]CA[UTF-8]SZ[${size}]PL[${puzzle.toPlay}]GN[GoStone Lab Puzzle ${puzzle.number ?? ''}]AB${setup(BLACK)}AW${setup(WHITE)}MA[${point(puzzle.cells[puzzle.target].map((n) => n + 2))}]C[${puzzle.toPlay === 'W' ? 'White' : 'Black'} to capture the marked group. Play only in the chamber. ${puzzle.ownMoves} own turns in the longest defense. Estimated ${puzzle.difficulty.kyu} kyu, uncalibrated. Outer attacker wall has two eyes.]${encode(puzzle.proof)}${alternatives})\n`;
+  return `(;GM[1]FF[4]CA[UTF-8]SZ[${size}]PL[${puzzle.toPlay}]GN[GoStone Lab Puzzle ${puzzle.number ?? ''}]AB${setup(BLACK)}AW${setup(WHITE)}MA[${point(target)}]C[${puzzle.toPlay === 'W' ? 'White' : 'Black'} to capture the marked group. Play only in the marked local region. ${puzzle.ownMoves} own turns in the longest defense. Estimated ${puzzle.difficulty.kyu} kyu, uncalibrated. Surrounding attacker chain has two eyes.]${encode(puzzle.proof)}${alternatives})\n`;
 }
 
 export function verifyPuzzle(puzzle, { requireCurrentQuality = false } = {}) {
   if (puzzle.schemaVersion !== VERSION || puzzle.goal !== 'capture' || !['B', 'W'].includes(puzzle.toPlay)) throw new Error('Unsupported puzzle format.');
   if (requireCurrentQuality && (puzzle.quality?.version !== 'active-defense-v3' || !puzzle.activeDefenseProof)) throw new Error('Diese Aufgabe hat keinen aktuellen Nachweis der aktiven Verteidigungstiefe.');
+  if (requireCurrentQuality && (puzzle.layout?.version !== 'compact-edge-v2' || !puzzle.presentationQuality?.accepted ||
+    puzzle.presentationQuality.totalStones > (puzzle.ownMoves <= 4 ? 28 : 32))) throw new Error('Diese Aufgabe hat kein aktuelles kompaktes Brettformat und kann nicht freigegeben oder exportiert werden.');
   if (!Array.isArray(puzzle.cells) || puzzle.cells.some((point) => !Array.isArray(point) || point.length !== 2 || point.some((n) => !Number.isInteger(n) || n < 0 || n > 6))) throw new Error('Invalid physical chamber coordinates.');
-  const chamber = new Chamber(puzzle.cells);
+  const chamber = new Chamber(puzzle.cells, puzzle.layout);
+  if (puzzle.layout) {
+    const modern = puzzle.layout.version === 'compact-edge-v2';
+    if (!['compact-edge-v1','compact-edge-v2'].includes(puzzle.layout.version) || !['corner', 'edge'].includes(puzzle.layout.kind) ||
+      (puzzle.layout.kind === 'edge' && modern ? puzzle.layout.support !== 'left-corner' : puzzle.layout.support && !['top-right','bottom-left'].includes(puzzle.layout.support)) ||
+      puzzle.layout.boardSize !== 9 || JSON.stringify(puzzle.layout.offset) !== JSON.stringify(puzzle.layout.kind === 'corner' ? [0, 0] : [modern ? 2 : 1, 0])) throw new Error('Invalid compact layout.');
+    const presentation = assessPresentation(puzzle);
+    if (!presentation.accepted || JSON.stringify(presentation) !== JSON.stringify(puzzle.presentationQuality)) throw new Error('Invalid compact visual quality.');
+  }
   if (!Number.isInteger(puzzle.target) || puzzle.target < 0 || puzzle.target >= puzzle.cells.length) throw new Error('Invalid target.');
   if (!Number.isInteger(puzzle.initial.black) || !Number.isInteger(puzzle.initial.white) || puzzle.initial.black < 0 || puzzle.initial.white < 0 || puzzle.initial.black > chamber.mask || puzzle.initial.white > chamber.mask || puzzle.initial.ko !== -1 || puzzle.initial.passes !== 0) throw new Error('Invalid initial bitboards.');
   if (!chamber.valid(puzzle.initial) || !(puzzle.initial.white & bit(puzzle.target))) throw new Error('Invalid initial position.');
@@ -352,5 +479,7 @@ export function verifyPuzzle(puzzle, { requireCurrentQuality = false } = {}) {
       if (JSON.stringify(puzzle[field]) !== JSON.stringify(expected[field])) throw new Error(`Invalid exported ${field}.`);
     }
   }
+  if (puzzle.layout && (hasLocalKo(chamber, puzzle.initial, puzzle.proof) || hasLocalKo(chamber, puzzle.initial, puzzle.activeDefenseProof) || hasLocalKo(chamber, puzzle.initial, puzzle.passRefutation) ||
+    puzzle.wrongPaths.some((wrong) => hasLocalKo(chamber, chamber.play(puzzle.initial, BLACK, wrong.firstMove), wrong.proof)))) throw new Error('Compact task contains a local ko.');
   return checked;
 }

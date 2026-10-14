@@ -21,9 +21,12 @@ export function indices(mask) {
 // Points outside the chamber are a connected, unconditionally living black
 // enclosure. This explicit local model is also materialised in every export.
 export class Chamber {
-  constructor(cells) {
+  constructor(cells, geometry = {}) {
     if (cells.length < 3 || cells.length > 30) throw new Error('A chamber needs 3–30 intersections.');
     this.cells = cells.map(([x, y]) => [x, y]);
+    this.geometry = geometry;
+    const { boardSize, offset = [0, 0] } = geometry;
+    if (boardSize && cells.some(([x, y]) => x + offset[0] < 0 || y + offset[1] < 0 || x + offset[0] >= boardSize || y + offset[1] >= boardSize)) throw new Error('Chamber point outside physical board.');
     this.index = new Map(cells.map(([x, y], i) => [`${x},${y}`, i]));
     if (this.index.size !== cells.length) throw new Error('Duplicate chamber point.');
     this.mask = (2 ** cells.length - 1) >>> 0;
@@ -34,7 +37,12 @@ export class Chamber {
       let neighbors = 0;
       for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
         const adjacent = this.index.get(`${x + dx},${y + dy}`);
-        if (adjacent === undefined) this.rim |= bit(i);
+        if (adjacent === undefined) {
+          // A real board edge is NOT an immortal surrounding stone. It also
+          // permits eyes touching that edge, unlike the old enclosed chamber.
+          const px = x + dx + offset[0], py = y + dy + offset[1];
+          if (!boardSize || (px >= 0 && py >= 0 && px < boardSize && py < boardSize)) this.rim |= bit(i);
+        }
         else neighbors |= bit(adjacent);
       }
       this.neighbors.push(neighbors >>> 0);

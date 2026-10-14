@@ -4,19 +4,20 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { Store } from './store.mjs';
+import { Store, defaultDataRoot } from './store.mjs';
 import { Jobs, defaults, maxWorkers } from './jobs.mjs';
 import { VERSION, materialize, toSgf, verifyPuzzle } from './generator.mjs';
 import { Chamber, Solver, BudgetExceeded, positionKey, BLACK } from './engine.mjs';
 import { acquireLock } from './lock.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
-export const LAB_REVISION = 'short-alternatives-colors-v4';
-export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab'), port = 4184 } = {}) {
+export const LAB_REVISION = 'minimal-visual-reviewed-v7';
+export function createLab({ root = defaultDataRoot(), port = 4184 } = {}) {
   const release = acquireLock(root);
   let store, jobs;
   try { store = new Store(root); jobs = new Jobs(store); } catch (error) { release(); throw error; }
   const token = randomBytes(24).toString('hex');
+  const instanceId = randomBytes(12).toString('hex');
   const json = (response, value, status = 200) => {
     response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     response.end(JSON.stringify(value));
@@ -31,12 +32,13 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
     const url = new URL(request.url, `http://${host}`);
     try {
       if (request.method === 'GET') {
-        if (url.pathname === '/api/status') return json(response, jobs.snapshot());
-        if (url.pathname === '/api/bootstrap') return json(response, { token, defaults, maxWorkers, root, version: VERSION, revision: LAB_REVISION, implementationDirectory: directory });
+        if (url.pathname === '/api/status') return json(response, { ...jobs.snapshot(), instanceId });
+        if (url.pathname === '/api/bootstrap') return json(response, { token, instanceId, defaults, maxWorkers, root, version: VERSION, revision: LAB_REVISION, implementationDirectory: directory });
         if (url.pathname === '/api/puzzles') return json(response, store.list().map(({ cells, initial, ...entry }) => ({ ...entry, intersections: cells.length, initialStoneCount: initial.white.toString(2).replaceAll('0', '').length })));
         const puzzleMatch = url.pathname.match(/^\/api\/puzzles\/(\d+)(?:\/(sgf|json))?$/);
         if (puzzleMatch) {
           const puzzle = store.load(Number(puzzleMatch[1]));
+          if (puzzleMatch[2]) verifyPuzzle(puzzle, { requireCurrentQuality: true });
           if (puzzleMatch[2] === 'sgf') {
             response.writeHead(200, { 'Content-Type': 'application/x-go-sgf; charset=utf-8', 'Content-Disposition': `attachment; filename="gostone-puzzle-${puzzle.number}.sgf"` });
             return response.end(toSgf(puzzle));
@@ -65,7 +67,8 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
       for await (const chunk of request) { body += chunk; if (body.length > 8192) return json(response, { error: 'Anfrage zu groß.' }, 413); }
       const value = JSON.parse(body || '{}');
       if (url.pathname === '/api/shutdown') {
-        json(response, { ok: true }); jobs.close(); server.close(); return;
+        response.once('finish', () => { server.close(); server.closeAllConnections(); });
+        jobs.close(); json(response, { ok: true }); return;
       }
       if (url.pathname === '/api/start') return json(response, jobs.start(value));
       if (['/api/pause', '/api/resume', '/api/stop'].includes(url.pathname)) return json(response, jobs.control(url.pathname.slice(5)));
@@ -75,7 +78,7 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
       }
       if (url.pathname === '/api/try') {
         if (!Number.isInteger(value.number) || !Array.isArray(value.moves) || value.moves.length > 30 || value.moves.some((move) => !Number.isInteger(move))) throw new Error('Ungültige Zugfolge.');
-        const puzzle = store.load(value.number), chamber = new Chamber(puzzle.cells);
+        const puzzle = store.load(value.number), chamber = new Chamber(puzzle.cells, puzzle.layout);
         let state = puzzle.initial, color = BLACK, history = [positionKey(state)];
         for (const move of value.moves) {
           const next = chamber.play(state, color, move);

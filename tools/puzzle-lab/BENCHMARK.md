@@ -1,5 +1,12 @@
 # Laptop-Messungen und Qualitätsprüfung
 
+**Historische Messungen:** Die folgenden Ausbeuten stammen aus dem alten,
+inzwischen verworfenen Kammerformat mit großen gefüllten Einfassungen. Sie
+belegen Suchleistung, keine brauchbare visuelle Puzzle-Qualität, und dürfen
+nicht als Zeitprognose des neuen kompakten Generators verwendet werden.
+Die aktuelle bildbasierte Prüfung und ihre Befunde stehen in
+[VISUAL_REVIEW.md](VISUAL_REVIEW.md).
+
 Gemessen am 14.10.2026 auf diesem Laptop: Windows, Intel Core 5 120U,
 12 logische Kerne, rund 16 GB RAM, Node 24.13.0. Keine GPU, kein KataGo,
 kein Cloud-Worker. Suchbudget: 750.000 Knoten und 1.500 ms je Kandidat.
@@ -21,8 +28,8 @@ Die Ausgangsversion behielt 8/1/1 geometrisch verschiedene Aufgaben. Mehrere
 enthielten Pass-Verzögerungen. Die beiden ursprünglich als vier- bzw.
 fünfzügig präsentierten Beispiele waren ohne weiße Pässe bereits in drei bzw.
 vier Zügen lösbar. Eine schöne angezeigte Variante war kein ausreichender
-Beleg für die behauptete taktische Tiefe. Beide alten Beispiele sind im
-Laptop-Bestand als aussortiert markiert, ihre Dateien wurden erhalten.
+Beleg für die behauptete taktische Tiefe. Beide alten Beispiele wurden damals
+als aussortiert markiert; inzwischen wurden die alten Dateien gelöscht.
 
 ## Optimierter Generator mit strengeren Qualitätsfiltern
 
@@ -59,7 +66,7 @@ zwei Worker, 300.000 Knoten und 250 ms pro Kandidat.
 
 ## Ergebnis und Grenzen
 
-Der lokale Bestand enthält **54 aktuell geprüfte Aufgaben**:
+Der damalige lokale Bestand enthielt **54 mathematisch geprüfte Aufgaben**:
 45 dreizügige, sieben vierzügige, zwei fünfzügige. Die komplette Sammlung
 bestand die erneute Tiefenprüfung, Dubletten-/Kernstellungsprüfung sowie
 **9.008 unabhängige Vollbrett-Prüfknoten**, einschließlich aller Widerlegungen
@@ -81,9 +88,11 @@ Go-Themen. Gerade vier/fünf Züge bleiben wesentlich seltener. Die anfängliche
 Ausbeute darf wegen zunehmender Duplikate nicht linear auf große Bestände
 hochgerechnet werden. **Kyu-Werte bleiben unkalibrierte Schätzungen.**
 
-Rohberichte und Kandidaten dieses Tests liegen im isolierten Lab-Checkout
+Rohberichte dieser historischen Tests liegen im isolierten Lab-Checkout
 unter `.cache/benchmark-before`, `.cache/benchmark-cache`,
-`.cache/benchmark-final` und `.cache/benchmark-hard`; der Kontaktbogen liegt
+`.cache/benchmark-final` und `.cache/benchmark-hard`. Die 91 alten generierten
+Puzzle-Dateien dieser Benchmarks wurden wegen des verworfenen Diagrammformats
+gelöscht; die Berichte bleiben als Diagnose erhalten. Der alte Kontaktbogen liegt
 unter `.cache/visual-sample.html`/`.png`. Der Windows-Bestand liegt unter
 `%LOCALAPPDATA%/GoStone/PuzzleLab`. Generierte Sammlungen werden nicht in Git
 oder automatisch in die Produktions-App übernommen.

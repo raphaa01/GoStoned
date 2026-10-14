@@ -64,7 +64,8 @@
     "puzzles:lab:generate": "node tools/puzzle-lab/cli.mjs generate",
     "puzzles:lab:verify": "node tools/puzzle-lab/cli.mjs verify",
     "puzzles:lab:benchmark": "node tools/puzzle-lab/benchmark.mjs",
-    "puzzles:lab:audit": "tsx tools/puzzle-lab/audit.mjs"
+    "puzzles:lab:audit": "tsx tools/puzzle-lab/audit.mjs",
+    "puzzles:lab:visual": "node tools/puzzle-lab/visual-review.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

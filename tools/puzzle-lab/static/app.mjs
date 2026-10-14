@@ -7,9 +7,11 @@ let token, catalog = [], selected = null, chamber, boardState, currentTree, move
 const attackerName = () => selected.toPlay === 'W' ? 'Weiß' : 'Schwarz';
 const defenderName = () => selected.toPlay === 'W' ? 'Schwarz' : 'Weiß';
 const displayedColor = (role) => selected.toPlay === 'W' ? 3 - role : role;
+let failureLimit = 4;
+let instanceId;
 const statuses = { idle: 'Bereit', running: 'Sucht & prüft', pausing: 'Pausiert gleich', paused: 'Pausiert', stopping: 'Stoppt gleich', stopped: 'Gestoppt', completed: 'Abgeschlossen', exhausted: 'Limit erreicht', failed: 'Fehler' };
 const reviews = { pending: 'Noch zu prüfen', approved: 'Freigegeben', rejected: 'Aussortiert' };
-const reasons = { 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', 'pass-inflated-depth': 'Künstliche Zugtiefe', 'forced-cleanup': 'Zu wenig Entscheidungen', 'known-motif': 'Bekanntes Motiv', 'seen-candidate': 'Schon geprüft', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'same-continuation': 'Gleiche Kernaufgabe', 'same-solution-pattern': 'Gleiches Zugmuster', 'similar-solution-pattern': 'Zu ähnliches Zugmuster', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
+const reasons = { 'same-target-shape': 'Gleiche Zielgruppe', 'similar-target-shape': 'Zu ähnliche Zielgruppe', 'layout-mix': 'Eck-/Rand-Auswahl', 'visual-format': 'Ungeeignetes Brettbild', 'ko-dependent': 'Ko-Abhängigkeit', 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', 'pass-inflated-depth': 'Künstliche Zugtiefe', 'forced-cleanup': 'Zu wenig Entscheidungen', 'known-motif': 'Bekanntes Motiv', 'seen-candidate': 'Schon geprüft', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'same-continuation': 'Gleiche Kernaufgabe', 'same-solution-pattern': 'Gleiches Zugmuster', 'similar-solution-pattern': 'Zu ähnliches Zugmuster', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
 
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Lab-Token': token }, body: JSON.stringify(body) });
@@ -45,7 +47,7 @@ function renderCatalog() {
 }
 async function select(number) {
   if (busy) return;
-  selected = await api(`/api/puzzles/${number}`); chamber = new Chamber(selected.cells);
+  selected = await api(`/api/puzzles/${number}`); chamber = new Chamber(selected.cells, selected.layout);
   $('empty-state').hidden = true; $('puzzle-view').hidden = false;
   $('puzzle-title').textContent = `Puzzle ${number}`; $('puzzle-rank').textContent = `≈ ${selected.difficulty.kyu} Kyu`;
   $('goal').textContent = `${attackerName()} beginnt: Fange die markierte ${selected.toPlay === 'W' ? 'schwarze' : 'weiße'} Gruppe. Die längste geprüfte Verteidigung benötigt ${selected.ownMoves} eigene Züge.`;
@@ -59,24 +61,25 @@ async function select(number) {
 function coordinate(move) {
   if (move === -1) return 'Pass';
   const [x, y] = selected.cells[move];
-  return `${'ABCDEFGHJKLMNOPQRST'[x + 2]}${selected.materialized.size - y - 2}`;
+  const [offsetX, offsetY] = selected.materialized.offset;
+  return `${'ABCDEFGHJKLMNOPQRST'[x + offsetX]}${selected.materialized.size - y - offsetY}`;
 }
 function reset() {
-  boardState = { ...selected.initial }; currentTree = selected.proof; moves = []; history = [positionKey(boardState)]; lastMove = null; replayLine = []; replayIndex = 0; playable = true; delayedFailure = false;
+  boardState = { ...selected.initial }; currentTree = selected.proof; moves = []; history = [positionKey(boardState)]; lastMove = null; replayLine = []; replayIndex = 0; playable = true; delayedFailure = false; failureLimit = 4;
   $('feedback').textContent = `${attackerName()} beginnt. Wähle deinen Zug im markierten Bereich.`;
   $('variation').value = 'solution';
   $('next-ply').disabled = true; $('previous-ply').disabled = true;
   renderBoard();
 }
 function renderBoard() {
-  const { size, board, target } = selected.materialized;
+  const { size, board, target, offset: [offsetX, offsetY] } = selected.materialized;
   const displayed = board.map((row) => [...row]);
   for (let i = 0; i < selected.cells.length; i++) {
-    const [x, y] = selected.cells[i]; displayed[y + 2][x + 2] = boardState.black & bit(i) ? displayedColor(BLACK) : boardState.white & bit(i) ? displayedColor(WHITE) : 0;
+    const [x, y] = selected.cells[i]; displayed[y + offsetY][x + offsetX] = boardState.black & bit(i) ? displayedColor(BLACK) : boardState.white & bit(i) ? displayedColor(WHITE) : 0;
   }
   const svg = svgElement('svg', { viewBox: `0 0 ${size * 40 + 40} ${size * 40 + 40}`, 'aria-label': 'Go-Brett mit markierter Zielgruppe' });
   const spacing = 40, margin = 40;
-  for (const [x, y] of selected.cells) svg.append(svgElement('rect', { x: margin + (x + 2) * spacing - 20, y: margin + (y + 2) * spacing - 20, width: 40, height: 40, fill: '#efce935a' }));
+  for (const [x, y] of selected.cells) svg.append(svgElement('rect', { x: margin + (x + offsetX) * spacing - 20, y: margin + (y + offsetY) * spacing - 20, width: 40, height: 40, fill: '#efce935a' }));
   for (let i = 0; i < size; i++) {
     svg.append(svgElement('line', { x1: margin, y1: margin + i * spacing, x2: margin + (size - 1) * spacing, y2: margin + i * spacing, stroke: '#6d5737', 'stroke-width': 1 }));
     svg.append(svgElement('line', { x1: margin + i * spacing, y1: margin, x2: margin + i * spacing, y2: margin + (size - 1) * spacing, stroke: '#6d5737', 'stroke-width': 1 }));
@@ -90,10 +93,10 @@ function renderBoard() {
     svg.append(svgElement('circle', { cx: margin + x * spacing, cy: margin + y * spacing, r: 17, fill: dark ? '#18201e' : '#f4f3e7', stroke: dark ? '#101512' : '#d0cbb7', 'stroke-width': 1.3 }));
     if (x === target[0] && y === target[1] && displayed[y][x] === displayedColor(WHITE)) svg.append(svgElement('rect', { x: margin + x * spacing - 5, y: margin + y * spacing - 5, width: 10, height: 10, fill: 'none', stroke: '#548b44', 'stroke-width': 2 }));
   }
-  if (lastMove !== null && lastMove >= 0) { const [x, y] = selected.cells[lastMove]; svg.append(svgElement('circle', { cx: margin + (x + 2) * spacing, cy: margin + (y + 2) * spacing, r: 4, fill: '#c7ec8e', stroke: '#37512c' })); }
+  if (lastMove !== null && lastMove >= 0) { const [x, y] = selected.cells[lastMove]; svg.append(svgElement('circle', { cx: margin + (x + offsetX) * spacing, cy: margin + (y + offsetY) * spacing, r: 4, fill: '#c7ec8e', stroke: '#37512c' })); }
   for (const i of indices((chamber.mask & ~(boardState.black | boardState.white)) >>> 0)) {
     const [x, y] = selected.cells[i];
-    const hit = svgElement('circle', { cx: margin + (x + 2) * spacing, cy: margin + (y + 2) * spacing, r: 19, class: 'intersection', role: 'button', tabindex: busy || !playable || replayLine.length || currentTree?.outcome ? -1 : 0, 'aria-label': `${attackerName()} auf ${coordinate(i)}` });
+    const hit = svgElement('circle', { cx: margin + (x + offsetX) * spacing, cy: margin + (y + offsetY) * spacing, r: 19, class: 'intersection', role: 'button', tabindex: busy || !playable || replayLine.length || currentTree?.outcome ? -1 : 0, 'aria-label': `${attackerName()} auf ${coordinate(i)}` });
     hit.addEventListener('click', () => play(i)); hit.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void play(i); } }); svg.append(hit);
   }
   $('board').replaceChildren(svg);
@@ -116,7 +119,8 @@ async function play(move) {
     if (choice) currentTree = choice.next;
     else if (wrong) {
       currentTree = wrong.proof;
-      delayedFailure = selected.alternatives.some((path) => path.firstMove === move);
+      const alternative = selected.alternatives.find((path) => path.firstMove === move);
+      delayedFailure = Boolean(alternative); failureLimit = alternative?.feedbackAfterPly ?? 4;
       if (!delayedFailure) {
         const reply = bestDefense(currentTree);
         if (reply) { advance(reply.move, WHITE); currentTree = reply.next; }
@@ -139,7 +143,7 @@ async function play(move) {
     if (currentTree.color === WHITE) {
       const reply = bestDefense(currentTree);
       advance(reply.move, WHITE); currentTree = reply.next;
-      if (delayedFailure && (currentTree.outcome === 'alive' || moves.length >= 4)) { finishFailure(); return; }
+      if (delayedFailure && (currentTree.outcome === 'alive' || moves.length >= failureLimit)) { finishFailure(); return; }
       $('feedback').textContent = `${defenderName()} antwortet ${coordinate(reply.move)}. ${attackerName()} ist wieder am Zug (${Math.floor(moves.length / 2)} eigene Züge gespielt).`;
     }
   } catch (e) { error(e.message); playable = false; } finally { busy = false; renderBoard(); }
@@ -182,6 +186,8 @@ async function poll() {
   try {
     const status = await api('/api/status');
     if (closed) return;
+    if (instanceId && status.instanceId && status.instanceId !== instanceId) { location.reload(); return; }
+    if ($('error').textContent.startsWith('Lab nicht erreichbar:')) error('');
     renderStatus(status);
     const next = await api('/api/puzzles');
     if (closed) return;
@@ -200,7 +206,7 @@ $('shutdown').addEventListener('click', async () => {
   } catch (e) { error(e.message); }
 });
 try {
-  const bootstrap = await api('/api/bootstrap'); token = bootstrap.token;
+  const bootstrap = await api('/api/bootstrap'); token = bootstrap.token; instanceId = bootstrap.instanceId;
   $('data-path').textContent = `Speicherort: ${bootstrap.root}`;
   $('worker-count').replaceChildren(...Array.from({ length: bootstrap.maxWorkers }, (_, i) => { const option = document.createElement('option'); option.value = i + 1; option.textContent = `${i + 1} ${i === 0 ? 'Worker' : 'Worker'}`; option.selected = i + 1 === bootstrap.defaults.workers; return option; }));
   await poll(); setInterval(poll, 1500);

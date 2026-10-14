@@ -5,6 +5,53 @@ genügt: keine zusätzlichen Pakete, Python-Umgebung, Modelle, GPU, Datenbank,
 API-Schlüssel oder Cloud-Abrechnung. Es verändert weder GoStone-Puzzle noch Bot,
 Spieler-Ränge oder die Produktionsdatenbank.
 
+## Aktuelles Aufgabenformat und visuelle Prüfung
+
+Neue Aufgaben sind kompakte Eck-/Rand-Fangstellungen auf einem 9×9-Brett.
+Die alten Diagramme mit fast vollständig gefülltem Rechteck werden nicht mehr
+erzeugt. Echte Brettkanten ersetzen zwei bzw. eine Seite der Einfassung und
+werden auch im Solver als Brettkanten behandelt. Eine dünne verbundene
+Angreiferkette mit zwei kleinen echten Augen sichert die lokale Umgebung ab;
+sie kann rechts oder unten fortgesetzt werden. Das ist weiterhin ein lokales
+Fangformat, kein Generator beliebiger Ganzbrettprobleme.
+
+Die aktuelle Randumgebung nutzt zwei zusätzliche Steine an der echten
+Brettecke, die Eckumgebung eine schmale zweireihige Fortsetzung. Neue Aufgaben
+mit bis zu vier eigenen Zügen haben höchstens **28 Steine insgesamt**, tiefere
+Aufgaben höchstens 32. Diese Grenze wird vor der kostspieligen Beweissuche
+geprüft. Zusätzlich gelten höchstens 24 Umgebungssteine, höchstens 16 Zielsteine
+und kein vollständig gefüllter 3×3-Block. Neue bewiesene Aufgaben wechseln zwischen Eck- und
+Randstellungen, mit beiden tatsächlichen Startfarben. Wiederkehrende oder
+kaum veränderte **Zielgruppenformen** werden zusätzlich zu taktischen Kernen
+und Lösungszugmustern verworfen. Die Indizes überleben einen Neustart.
+Der Formvergleich richtet Gruppen auch an verschiedenen inneren Punkten aus:
+ein angefügter Randstein darf die gleiche Kernform nicht durch eine verschobene
+Begrenzungsbox verstecken. Bei Mutationen dürfen nun auch weiße Randsteine
+direkt neben dem Kampf verändert werden, deren alte Sperre die Zielgruppen
+praktisch eingefroren hatte. Drei unabhängig geprüfte, selbst prozedural
+gefundene Stellungen liefern zusätzliche Suchansätze; sie werden nie als neue
+Ausgabeaufgaben kopiert oder gezählt.
+Aufgaben mit Ko in ihren Beweisvarianten werden im neuen Format ausgeschlossen.
+
+Diese Grenzen und mathematische Korrektheit reichen als Qualitätsurteil nicht
+aus. Vor einem großen Lauf eine kleine Serie tatsächlich ansehen und spielen:
+
+```powershell
+npm run puzzles:lab:visual -- --count 12 --output .cache/puzzle-lab-visual
+npm run puzzles:lab:audit -- --root "$env:LOCALAPPDATA/GoStone/PuzzleLab" --re-solve
+```
+
+Die visuelle Prüfung verwendet den tatsächlichen Browser und die Lab-Oberfläche.
+Sie spielt die Lösung und beide kurzen Fehlerwege aus und speichert Start- und
+End-Screenshots, `contact-sheet.html`, `contact-sheet.png` und `report.json`.
+`--numbers 1,4,6` wählt konkrete Aufgaben. Die Bildserie muss anschließend
+angesehen werden: Sind Gruppen und Ziel klar, sind die Diagramme kompakt,
+sind die entscheidenden Formen verschieden, zeigt die Gegenwehr etwas
+Lehrreiches? `--count` ist auf 40 begrenzt, damit eine Stichprobe lesbar bleibt.
+Das Werkzeug vergibt keine automatische didaktische Freigabe. Playwright ist
+eine bereits vorhandene Entwicklungsabhängigkeit; der Lab-Server selbst bleibt
+ohne zusätzliche Laufzeitpakete.
+
 ## Start
 
 ```powershell
@@ -18,6 +65,7 @@ Lab-Prozess erneut. Der Windows-Launcher speichert standardmäßig in
 `%LOCALAPPDATA%/GoStone/PuzzleLab`, unabhängig vom Projekt-Branch. Mit
 `-DataDirectory "C:/path/to/data"` lässt sich das ändern. Zum Testen:
 `npm run puzzles:lab -- --no-browser --port 4185 --root "C:/path/to/data"`.
+Für Wartung ohne weitere Browser-Tabs: `tools/puzzle-lab/start-lab.ps1 -NoBrowser`.
 
 ## Benutzung
 
@@ -55,10 +103,11 @@ Angreifer, „Weiß“ die Zielgruppe. Bei weiß beginnenden Aufgaben tauschen B
 Anzeige und öffentliche Export-Zugfolgen alle tatsächlichen Farben. Die
 folgenden technischen Beweisbegriffe beziehen sich auf diese internen Rollen.
 
-- Ausschließlich **abgeschlossene Fangaufgaben**, Schwarz fängt eine markierte
-  weiße Gruppe. Die äußere schwarze Einfassung ist als unconditionally living
-  Gruppe mit zwei getrennten Augen auf einem echten 9×9/13×13-Brett dargestellt.
-  Gespielt wird ausschließlich in der hervorgehobenen Kammer (bis 30 Punkte).
+- Ausschließlich **lokale Fangaufgaben**, Schwarz fängt eine markierte weiße
+  Gruppe. Bei neuen Aufgaben ist die kompakte umgebende Kette mit zwei
+  getrennten echten Augen dargestellt. Gespielt wird im markierten lokalen
+  Bereich, mit echten Eck-/Randgrenzen. Der Leser unterstützt alte Diagramme
+  nur noch für Regressionstests und vorhandene Daten.
 - Legale Züge, Schlagen, Selbstmordverbot, Ko und positionelles Superko. Passen
   ist berücksichtigt; zwei aufeinanderfolgende Pässe liefern **ungeklärt**, nicht
   einen erfundenen Lebensbeweis. Außen-Kodrohungen werden nicht modelliert.
@@ -90,7 +139,9 @@ folgenden technischen Beweisbegriffe beziehen sich auf diese internen Rollen.
   Züge müssen nachweisbar zu Leben führen.
 - Beweiszertifikate werden beim Speichern und Export unabhängig nachgespielt.
   Die Tests spielen Zertifikate zusätzlich mit GoStones bestehender Vollbrett-
-  Regelengine nach. Das belegt die implementierten lokalen Regeln, nicht die
+  Regelengine nach, vergleichen jede Zwischenstellung und prüfen, dass alle
+  Umgebungssteine zur tatsächlich lebenden Kette gehören. Das belegt die
+  implementierten lokalen Regeln, nicht die
   universelle Fehlerfreiheit einer Go-Engine oder offene Ganzbrettaufgaben.
 
 ## Vielfalt
@@ -152,14 +203,15 @@ Einstufungen sind nicht Teil dieses Formats.
 
 ## Daten, Export und Prüfung
 
-Beim direkten Node-/npm-Start liegt alles unter `.cache/puzzle-lab/` (von Git
-ignoriert), beim Windows-Launcher unter `%LOCALAPPDATA%/GoStone/PuzzleLab`:
+Unter Windows verwenden Launcher, Server, CLI und Audit standardmäßig denselben
+Speicherort `%LOCALAPPDATA%/GoStone/PuzzleLab`. Auf anderen Plattformen liegt
+alles unter `.cache/puzzle-lab/` (von Git ignoriert):
 `catalog.json`,
 `job.json`, `puzzles/puzzle-N.json`. Keine erzeugten Bestände werden automatisch
 in die App importiert. Der JSON-Export verwendet `gostone.local-puzzle-bundle/1`
 und enthält Startstellung, Vollbrett, Ziel, Kategorie, Kyu-Schätzung, Zugzahl,
 Lösung, vollständige Beweise, Widerlegungen und Erzeugungsherkunft. Jedes Puzzle
-hat die öffentliche Präsentation `gostone-puzzle-presentation/2`:
+hat die öffentliche Präsentation `gostone-puzzle-presentation/3`:
 
 - `startingPosition`: Brettgröße, tatsächliche Farben (`0` leer, `1` schwarz,
   `2` weiß), Zielgruppe, erlaubte Punkte und `toPlay` (`B` oder `W`). Alle Punkte
@@ -175,6 +227,9 @@ hat die öffentliche Präsentation `gostone-puzzle-presentation/2`:
   dass Leben gegen jede weitere Fortsetzung bewiesen ist. Die kurze Folge
   darf einen vollständigen längeren Beweis nach dem entscheidenden Gegenzug
   abkürzen, behauptet aber dann keine bereits vorhandenen Augen.
+  Eigene Demonstrationszüge sind tatsächliche Steinsetzungen, keine künstlich
+  verlängerten Passfolgen. Wenn es keine legale Steinsetzung mehr gibt, endet
+  der kurze Fehlerweg früher mit seinem bewiesenen Ergebnis.
 - `solverEncoding`: kennzeichnet die normalisierten internen Bitboards,
   Zertifikate, `solution`, `wrongPaths` und `alternatives`. Diese internen
   Beweise können länger als vier Züge sein; die spielbaren Export-Fehlerfolgen
@@ -186,6 +241,9 @@ Nur am Fehlerzweig-Ende steht `INCORRECT`, mit bereits lebend/erzwungenem Leben
 unterschieden. Die Kammerbeschränkung steht ausdrücklich im Kommentar.
 Alte lokale Aufgaben erhalten diese Präsentation beim Lesen; neu gespeicherte
 Aufgaben enthalten sie direkt. Nummern und Freigaben bleiben erhalten.
+Alte große Kammerdiagramme können für Regression/Diagnose gelesen werden,
+aber nicht mehr freigegeben oder heruntergeladen werden. Freigabe und Export
+verlangen das aktuelle minimale Brettformat und seine Diagramm-Grenzen.
 
 ```powershell
 npm run puzzles:lab:test

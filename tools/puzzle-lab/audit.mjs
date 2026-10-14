@@ -2,10 +2,10 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { applyMove, getNeighbors, getGroup, boardHash } from '../../lib/game/goEngine.ts';
-import { BLACK, WHITE, Chamber } from './engine.mjs';
+import { BLACK, WHITE, Chamber, bit } from './engine.mjs';
 import { analyze, materialize, verifyPuzzle, physicalColor } from './generator.mjs';
 import { DiversityIndex } from './diversity.mjs';
-import { Store } from './store.mjs';
+import { Store, defaultDataRoot } from './store.mjs';
 
 const pointKey = ({ x, y }) => `${x},${y}`;
 function whiteHasTwoEyes(board, target, defender = 'white') {
@@ -37,21 +37,32 @@ function whiteHasTwoEyes(board, target, defender = 'white') {
 export function auditPuzzle(puzzle, { reSolve = false } = {}) {
   verifyPuzzle(puzzle);
   const physical = materialize(puzzle);
+  const chamber = new Chamber(puzzle.cells, puzzle.layout);
   const base = physical.board.map((row) => row.map((s) => s === BLACK ? 'black' : s === WHITE ? 'white' : null));
   const target = { x: physical.target[0], y: physical.target[1] };
   const defender = puzzle.toPlay === 'W' ? 'black' : 'white';
-  const wall = new Set(getGroup(base, { x: 0, y: 0 }).map(pointKey));
+  const [anchorX, anchorY] = physical.wallAnchor ?? [0, 0];
+  const wall = new Set(getGroup(base, { x: anchorX, y: anchorY }).map(pointKey));
+  const playable = new Set(puzzle.cells.map(([x, y]) => `${x + physical.offset[0]},${y + physical.offset[1]}`));
+  const attacker = puzzle.toPlay === 'W' ? 'white' : 'black';
+  for (let y = 0; y < base.length; y++) for (let x = 0; x < base.length; x++) {
+    if (base[y][x] === attacker && !playable.has(`${x},${y}`) && !wall.has(`${x},${y}`)) throw new Error('A support stone is disconnected from the living outer chain.');
+  }
   for (const [x, y] of physical.wallEyes) if (base[y][x] !== null || !getNeighbors(base, { x, y }).every((p) => wall.has(pointKey(p)))) throw new Error('Outer group has no certified physical eyes.');
   let nodes = 0, lifeLeaves = 0, captureLeaves = 0;
   const moveBoard = (board, color, move) => {
     if (move === -1) return board;
     const [x, y] = puzzle.cells[move];
-    const result = applyMove(board, physicalColor(puzzle, color) === BLACK ? 'black' : 'white', x + 2, y + 2);
+    const result = applyMove(board, physicalColor(puzzle, color) === BLACK ? 'black' : 'white', x + physical.offset[0], y + physical.offset[1]);
     if (!result.ok) throw new Error(`Independent engine rejects move ${move}: ${result.error}`);
     return result.board;
   };
-  const walk = (tree, board, history) => {
+  const walk = (tree, board, history, state) => {
     nodes++;
+    for (const [i, [x, y]] of puzzle.cells.entries()) {
+      const expected = state.black & bit(i) ? attacker : state.white & bit(i) ? defender : null;
+      if (board[y + physical.offset[1]][x + physical.offset[0]] !== expected) throw new Error('Independent engine disagrees with a local intermediate position.');
+    }
     if (tree.outcome === 'captured') {
       if (board[target.y][target.x] === defender) throw new Error('Independent engine rejects capture terminal.');
       captureLeaves++; return;
@@ -63,19 +74,19 @@ export function auditPuzzle(puzzle, { reSolve = false } = {}) {
     for (const branch of tree.branches) {
       const next = moveBoard(board, tree.color, branch.move), key = boardHash(next);
       if (branch.move !== -1 && history.includes(key)) throw new Error('Physical superko violation.');
-      walk(branch.next, next, branch.move === -1 ? history : [...history, key]);
+      walk(branch.next, next, branch.move === -1 ? history : [...history, key], chamber.play(state, tree.color, branch.move));
     }
   };
   const history = [boardHash(base)];
-  walk(puzzle.proof, base, history);
-  if (puzzle.activeDefenseProof) walk(puzzle.activeDefenseProof, base, history);
-  walk(puzzle.passRefutation, base, history);
+  walk(puzzle.proof, base, history, puzzle.initial);
+  if (puzzle.activeDefenseProof) walk(puzzle.activeDefenseProof, base, history, puzzle.initial);
+  walk(puzzle.passRefutation, base, history, chamber.play(puzzle.initial, BLACK, -1));
   for (const wrong of puzzle.wrongPaths) {
     const next = moveBoard(base, BLACK, wrong.firstMove);
-    walk(wrong.proof, next, [...history, boardHash(next)]);
+    walk(wrong.proof, next, [...history, boardHash(next)], chamber.play(puzzle.initial, BLACK, wrong.firstMove));
   }
   if (reSolve) {
-    const fresh = analyze({ chamber: new Chamber(puzzle.cells), state: puzzle.initial, target: puzzle.target }, { ownMoves: puzzle.ownMoves, maxNodes: 2000000, maxMs: 10000 });
+    const fresh = analyze({ chamber: new Chamber(puzzle.cells, puzzle.layout), state: puzzle.initial, target: puzzle.target }, { ownMoves: puzzle.ownMoves, maxNodes: 2000000, maxMs: 10000 });
     if (!fresh.puzzle) throw new Error(`Fresh quality search rejects task: ${fresh.reason}`);
   }
   return { nodes, captureLeaves, lifeLeaves };
@@ -88,7 +99,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   let puzzles;
   if (directory) puzzles = readdirSync(directory).filter((file) => /puzzle.*\.json$/.test(file)).map((file) => JSON.parse(readFileSync(join(directory, file), 'utf8')));
   else {
-    const root = resolve(option('root', '.cache/puzzle-lab'));
+    const root = resolve(option('root', defaultDataRoot()));
     if (!existsSync(join(root, 'catalog.json'))) throw new Error('No catalog to audit.');
     const store = new Store(root); puzzles = store.list().filter((p) => p.review !== 'rejected').map((p) => store.load(p.number));
   }

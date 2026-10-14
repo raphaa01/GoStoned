@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { Store } from './store.mjs';
+import { Store, defaultDataRoot } from './store.mjs';
 import { Jobs, validateConfig } from './jobs.mjs';
 import { verifyPuzzle } from './generator.mjs';
 import { acquireLock } from './lock.mjs';
 
 const [command, ...args] = process.argv.slice(2);
 const rootIndex = args.indexOf('--root');
-const root = resolve(rootIndex >= 0 ? args[rootIndex + 1] : '.cache/puzzle-lab');
+const root = resolve(rootIndex >= 0 ? args[rootIndex + 1] : defaultDataRoot());
 if (command === 'verify') {
   const fileIndex = args.indexOf('--file');
   const store = fileIndex < 0 ? new Store(root) : null;
