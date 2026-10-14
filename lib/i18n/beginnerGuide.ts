@@ -120,10 +120,10 @@ const en: BeginnerGuideCopy = {
     scoreBody: "Black and White show the current point totals. Open “Score breakdown” to see territory, prisoners and komi.",
     deadTitle: "Mark dead groups",
     deadBody: "Tap one stone in every group that cannot escape. The whole connected group is marked. Tap it again to restore it.",
-    confirmTitle: "If the position looks right, confirm it",
-    confirmBody: "Choose “Confirm final score”. The game ends when both players confirm the same position.",
-    disputeTitle: "If you disagree with the score",
-    disputeBody: "First correct an incorrect mark on the board. If you still disagree with the score, select the group below and continue play; settle it, then both pass again.",
+    confirmTitle: "If you agree with the score, confirm it",
+    confirmBody: "The game ends when both players confirm.",
+    disputeTitle: "Disagree?",
+    disputeBody: "Tap a group to change its marking. If you still disagree, select the group below and continue playing.",
     understood: "Understood",
     hideNextTime: "Do not show automatically again",
     reopen: "How scoring works",
@@ -197,10 +197,10 @@ const de: BeginnerGuideCopy = {
     scoreBody: "Schwarz und Weiß zeigen die aktuellen Punktzahlen. Unter „Wertungsdetails“ siehst du Gebiet, Gefangene und Komi.",
     deadTitle: "Tote Gruppen markieren",
     deadBody: "Tippe in jeder Gruppe, die nicht mehr entkommen kann, einen Stein an. Die ganze verbundene Gruppe wird markiert. Erneutes Tippen macht das rückgängig.",
-    confirmTitle: "Wenn die Position stimmt, bestätige sie",
-    confirmBody: "Klicke auf „Endwertung bestätigen“. Die Partie endet, sobald beide dieselbe Position bestätigt haben.",
-    disputeTitle: "Falls du nicht mit der Wertung einverstanden bist",
-    disputeBody: "Korrigiere zuerst eine falsche Markierung auf dem Brett. Bist du danach noch nicht mit der Wertung einverstanden, wähle die Gruppe unten aus, spielt sie aus und passt anschließend erneut beide.",
+    confirmTitle: "Wenn du mit der Wertung einverstanden bist, bestätige sie",
+    confirmBody: "Die Partie endet, sobald ihr beide bestätigt habt.",
+    disputeTitle: "Nicht einverstanden?",
+    disputeBody: "Tippe auf eine Gruppe, um ihre Markierung zu ändern. Bei Uneinigkeit wähle unten die Gruppe aus und spielt weiter.",
     understood: "Verstanden",
     hideNextTime: "Nicht erneut automatisch anzeigen",
     reopen: "Wertung verstehen",
@@ -220,7 +220,7 @@ const fr: BeginnerGuideCopy = {
     { title: "Vérifiez ensemble la position finale", body: "Le territoire et les pierres capturées ou mortes donnent les points ; Blanc reçoit aussi le komi. Marquez les groupes morts, puis confirmez la même position.", note: "En cas de désaccord, reprenez le jeu. Les leçons permettent de tout pratiquer sur un goban." },
   ],
   scoring: {
-    kicker: "Après deux passes", title: "Vérifiez ensemble le score final", intro: "Les nombres restent provisoires jusqu’à ce que vous acceptiez la même position finale.", scoreTitle: "Lire les nombres", scoreBody: "Noir et Blanc indiquent les scores actuels. Ouvrez « Détail du score » pour voir territoire, prisonniers et komi.", deadTitle: "Marquer les groupes morts", deadBody: "Touchez une pierre de chaque groupe qui ne peut plus s’échapper. Tout le groupe est marqué. Touchez-le encore pour l’annuler.", confirmTitle: "Si tout est correct", confirmBody: "Choisissez « Confirmer le score final ». La partie se termine quand les deux joueurs confirment la même position.", disputeTitle: "En cas de désaccord", disputeBody: "Sélectionnez le groupe marqué dans la section de contestation et reprenez le jeu. Réglez la situation, puis passez à nouveau tous les deux.", understood: "Compris", hideNextTime: "Ne plus afficher automatiquement", reopen: "Comprendre le comptage",
+    kicker: "Après deux passes", title: "Vérifiez ensemble le score final", intro: "Les nombres restent provisoires jusqu’à ce que vous acceptiez la même position finale.", scoreTitle: "Lire les nombres", scoreBody: "Noir et Blanc indiquent les scores actuels. Ouvrez « Détail du score » pour voir territoire, prisonniers et komi.", deadTitle: "Marquer les groupes morts", deadBody: "Touchez une pierre de chaque groupe qui ne peut plus s’échapper. Tout le groupe est marqué. Touchez-le encore pour l’annuler.", confirmTitle: "Si vous acceptez le score, confirmez-le", confirmBody: "La partie se termine quand les deux joueurs confirment.", disputeTitle: "Pas d’accord ?", disputeBody: "Touchez un groupe pour modifier son marquage. Si le désaccord persiste, sélectionnez le groupe ci-dessous et reprenez le jeu.", understood: "Compris", hideNextTime: "Ne plus afficher automatiquement", reopen: "Comprendre le comptage",
   },
 };
 
@@ -237,7 +237,7 @@ const es: BeginnerGuideCopy = {
     { title: "Revisad juntos la posición final", body: "El territorio y las piedras capturadas o muertas dan los puntos; Blanco recibe además komi. Marcad los grupos muertos y confirmad la misma posición.", note: "Si no estáis de acuerdo, seguid jugando. Las lecciones permiten practicarlo en el tablero." },
   ],
   scoring: {
-    kicker: "Tras dos pases", title: "Revisad juntos la puntuación final", intro: "Los números son provisionales hasta que ambos aceptéis la misma posición final.", scoreTitle: "Leer los números", scoreBody: "Negro y Blanco muestran los puntos actuales. Abre «Detalles de puntuación» para ver territorio, prisioneros y komi.", deadTitle: "Marcar grupos muertos", deadBody: "Toca una piedra de cada grupo que ya no pueda escapar. Se marca todo el grupo conectado. Tócalo otra vez para restaurarlo.", confirmTitle: "Si todo está bien", confirmBody: "Pulsa «Confirmar puntuación final». La partida termina cuando ambos confirman la misma posición.", disputeTitle: "Si no estáis de acuerdo", disputeBody: "Selecciona el grupo marcado en la sección de disputa y continuad jugando. Resolvelo en el tablero y volved a pasar los dos.", understood: "Entendido", hideNextTime: "No volver a mostrar automáticamente", reopen: "Entender la puntuación",
+    kicker: "Tras dos pases", title: "Revisad juntos la puntuación final", intro: "Los números son provisionales hasta que ambos aceptéis la misma posición final.", scoreTitle: "Leer los números", scoreBody: "Negro y Blanco muestran los puntos actuales. Abre «Detalles de puntuación» para ver territorio, prisioneros y komi.", deadTitle: "Marcar grupos muertos", deadBody: "Toca una piedra de cada grupo que ya no pueda escapar. Se marca todo el grupo conectado. Tócalo otra vez para restaurarlo.", confirmTitle: "Si estás de acuerdo con la puntuación, confírmala", confirmBody: "La partida termina cuando ambos confirmáis.", disputeTitle: "¿No estás de acuerdo?", disputeBody: "Toca un grupo para cambiar su marca. Si sigue el desacuerdo, selecciona el grupo abajo y seguid jugando.", understood: "Entendido", hideNextTime: "No volver a mostrar automáticamente", reopen: "Entender la puntuación",
   },
 };
 
@@ -254,7 +254,7 @@ const ja: BeginnerGuideCopy = {
     { title: "終局図を二人で確認", body: "地と取った石・死んだ石で得点を数え、白にはコミが加わります。死んだグループを印し、同じ終局図を二人で承認します。", note: "意見が違えば対局を再開します。レッスンでは盤上で練習できます。" },
   ],
   scoring: {
-    kicker: "二人がパスした後", title: "最終得点を一緒に確認", intro: "二人が同じ終局図に同意するまでは仮の得点です。", scoreTitle: "数字の見方", scoreBody: "黒と白の現在の得点です。「得点内訳」で地、アゲハマ、コミを確認できます。", deadTitle: "死んだグループを印す", deadBody: "逃げられない各グループの石を一つ押します。つながった全体が印され、もう一度押すと戻ります。", confirmTitle: "正しければ", confirmBody: "「最終得点を確認」を押します。二人が同じ局面を確認すると対局が終了します。", disputeTitle: "意見が違う場合", disputeBody: "印されたグループを選んで対局を再開します。盤上で決着をつけ、再び二人がパスしてください。", understood: "分かりました", hideNextTime: "次回から自動表示しない", reopen: "得点方法を見る",
+    kicker: "二人がパスした後", title: "最終得点を一緒に確認", intro: "二人が同じ終局図に同意するまでは仮の得点です。", scoreTitle: "数字の見方", scoreBody: "黒と白の現在の得点です。「得点内訳」で地、アゲハマ、コミを確認できます。", deadTitle: "死んだグループを印す", deadBody: "逃げられない各グループの石を一つ押します。つながった全体が印され、もう一度押すと戻ります。", confirmTitle: "得点に同意したら、確認してください", confirmBody: "二人が確認すると対局が終了します。", disputeTitle: "同意できませんか？", disputeBody: "グループを押すと印を変更できます。それでも意見が違う場合は、下でグループを選んで対局を再開してください。", understood: "分かりました", hideNextTime: "次回から自動表示しない", reopen: "得点方法を見る",
   },
 };
 
@@ -271,7 +271,7 @@ const ko: BeginnerGuideCopy = {
     { title: "마지막 모양을 함께 확인하세요", body: "집과 잡은 돌 또는 죽은 돌로 점수를 내며 백은 덤을 받습니다. 죽은 무리를 표시한 뒤 두 사람이 같은 모양을 확인합니다.", note: "의견이 다르면 다시 둡니다. 레슨에서 판 위로 연습할 수 있습니다." },
   ],
   scoring: {
-    kicker: "두 번의 패스 후", title: "최종 점수를 함께 확인하세요", intro: "두 사람이 같은 마지막 모양에 동의할 때까지 숫자는 임시 점수입니다.", scoreTitle: "숫자 읽기", scoreBody: "흑과 백의 현재 점수입니다. ‘점수 내역’을 열어 집, 잡은 돌, 덤을 확인하세요.", deadTitle: "죽은 무리 표시", deadBody: "살아날 수 없는 각 무리의 돌 하나를 누르세요. 연결된 무리 전체가 표시되며 다시 누르면 되돌아옵니다.", confirmTitle: "모두 맞다면", confirmBody: "‘최종 점수 확인’을 누르세요. 두 사람이 같은 모양을 확인해야 대국이 끝납니다.", disputeTitle: "의견이 다르다면", disputeBody: "표시된 무리를 선택하고 대국을 재개하세요. 판 위에서 해결한 뒤 다시 두 사람 모두 패스합니다.", understood: "알겠습니다", hideNextTime: "다시 자동으로 표시하지 않기", reopen: "계가 방법 보기",
+    kicker: "두 번의 패스 후", title: "최종 점수를 함께 확인하세요", intro: "두 사람이 같은 마지막 모양에 동의할 때까지 숫자는 임시 점수입니다.", scoreTitle: "숫자 읽기", scoreBody: "흑과 백의 현재 점수입니다. ‘점수 내역’을 열어 집, 잡은 돌, 덤을 확인하세요.", deadTitle: "죽은 무리 표시", deadBody: "살아날 수 없는 각 무리의 돌 하나를 누르세요. 연결된 무리 전체가 표시되며 다시 누르면 되돌아옵니다.", confirmTitle: "점수에 동의하면 확인하세요", confirmBody: "두 사람이 확인하면 대국이 끝납니다.", disputeTitle: "동의하지 않나요?", disputeBody: "무리를 누르면 표시를 바꿀 수 있습니다. 그래도 의견이 다르면 아래에서 무리를 선택하고 대국을 계속하세요.", understood: "알겠습니다", hideNextTime: "다시 자동으로 표시하지 않기", reopen: "계가 방법 보기",
   },
 };
 
@@ -288,7 +288,7 @@ const zh: BeginnerGuideCopy = {
     { title: "共同确认终局", body: "地盘以及被提或死亡的棋子决定得分，白棋还会获得贴目。标记死棋后，双方确认同一个终局。", note: "如有分歧就继续下。你可以在课程中直接在棋盘上练习。" },
   ],
   scoring: {
-    kicker: "双方停一手后", title: "共同检查最终得分", intro: "在双方同意同一个终局前，这些数字只是临时得分。", scoreTitle: "查看数字", scoreBody: "黑白数字是当前得分。打开“得分明细”可查看地盘、提子和贴目。", deadTitle: "标记死棋", deadBody: "在每个无法逃脱的棋块中点一颗棋，整个相连棋块都会被标记。再次点击可以恢复。", confirmTitle: "如果一切正确", confirmBody: "点击“确认最终得分”。只有双方确认同一局面后，对局才会结束。", disputeTitle: "如果意见不同", disputeBody: "在争议区域选择被标记的棋块并继续下棋。在棋盘上解决后，双方再次停一手。", understood: "明白了", hideNextTime: "以后不再自动显示", reopen: "了解计分",
+    kicker: "双方停一手后", title: "共同检查最终得分", intro: "在双方同意同一个终局前，这些数字只是临时得分。", scoreTitle: "查看数字", scoreBody: "黑白数字是当前得分。打开“得分明细”可查看地盘、提子和贴目。", deadTitle: "标记死棋", deadBody: "在每个无法逃脱的棋块中点一颗棋，整个相连棋块都会被标记。再次点击可以恢复。", confirmTitle: "如果同意得分，请确认", confirmBody: "双方确认后，对局结束。", disputeTitle: "不同意？", disputeBody: "点击棋块可更改标记。如仍有分歧，在下方选择棋块并继续下棋。", understood: "明白了", hideNextTime: "以后不再自动显示", reopen: "了解计分",
   },
 };
 
@@ -305,7 +305,7 @@ const ky: BeginnerGuideCopy = {
     { title: "Акыркы абалды чогуу текшериңиз", body: "Аймак жана алынган же өлгөн таштар упай берет; Акка коми кошулат. Өлгөн топторду белгилеп, бирдей абалды экөөңүз тең ырастаңыз.", note: "Келишпесеңиз, ойноону улантыңыз. Сабактарда муну тактада машыксаңыз болот." },
   ],
   scoring: {
-    kicker: "Эки пастан кийин", title: "Акыркы эсепти чогуу текшериңиз", intro: "Экөөңүз тең бирдей акыркы абалга макул болгонго чейин сандар убактылуу.", scoreTitle: "Сандарды окуу", scoreBody: "Кара менен Актын учурдагы упайлары көрсөтүлөт. Аймакты, туткундарды жана комини эсеп бөлүгүндө көрүңүз.", deadTitle: "Өлгөн топторду белгилөө", deadBody: "Кутула албаган ар бир топтогу бир ташты басыңыз. Бүт байланышкан топ белгиленет; кайра бассаңыз калыбына келет.", confirmTitle: "Баары туура болсо", confirmBody: "Акыркы эсепти ырастоо баскычын басыңыз. Экөөңүз бирдей абалды ырастаганда оюн бүтөт.", disputeTitle: "Макул болбосоңуз", disputeBody: "Белгиленген топту тандап, ойноону улантыңыз. Тактада чечип, анан экөөңүз кайра пас бериңиз.", understood: "Түшүндүм", hideNextTime: "Мындан ары автоматтык көрсөтпөө", reopen: "Эсептөөнү түшүнүү",
+    kicker: "Эки пастан кийин", title: "Акыркы эсепти чогуу текшериңиз", intro: "Экөөңүз тең бирдей акыркы абалга макул болгонго чейин сандар убактылуу.", scoreTitle: "Сандарды окуу", scoreBody: "Кара менен Актын учурдагы упайлары көрсөтүлөт. Аймакты, туткундарды жана комини эсеп бөлүгүндө көрүңүз.", deadTitle: "Өлгөн топторду белгилөө", deadBody: "Кутула албаган ар бир топтогу бир ташты басыңыз. Бүт байланышкан топ белгиленет; кайра бассаңыз калыбына келет.", confirmTitle: "Эсепке макул болсоңуз, ырастаңыз", confirmBody: "Экөөңүз тең ырастаганда оюн бүтөт.", disputeTitle: "Макул эмессизби?", disputeBody: "Топтун белгисин өзгөртүү үчүн аны басыңыз. Дагы эле келишпесеңиз, төмөндөн топту тандап, ойноону улантыңыз.", understood: "Түшүндүм", hideNextTime: "Мындан ары автоматтык көрсөтпөө", reopen: "Эсептөөнү түшүнүү",
   },
 };
 

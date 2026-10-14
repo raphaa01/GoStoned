@@ -37,19 +37,12 @@ export function ScoringHelpDialog({
       titleId={titleId}
     >
       <header className="scoring-help-header">
-        <span>{copy.kicker}</span>
-        <h2 className="sr-only" id={titleId}>{copy.title}</h2>
-        <h3>{copy.confirmTitle}</h3>
+        <h2 id={titleId}>{copy.confirmTitle}</h2>
         <p id={descriptionId}>{copy.confirmBody}</p>
       </header>
       <div className="scoring-help-steps">
-        <section>
-          <strong>{copy.scoreTitle}</strong>
-          <p>{copy.scoreBody}</p>
-        </section>
         <aside>
-          <strong>{copy.disputeTitle}</strong>
-          <p>{copy.deadBody} {copy.disputeBody}</p>
+          <p>{copy.disputeTitle} {copy.disputeBody}</p>
         </aside>
       </div>
       <div className="scoring-help-actions">

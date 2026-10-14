@@ -110,8 +110,6 @@ export function GamePanel({
           : `${copy.draw} · ${game.result}`
         : interactionDisabled
         ? copy.controlsPaused
-        : activeScoring
-        ? copy.agreeFinalPosition
         : yourTurn
         ? copy.yourTurn
         : copy.opponentTurn;
@@ -125,7 +123,6 @@ export function GamePanel({
             {game.whitePlayerIsDeveloper ? <DeveloperTag /> : null}
             {game.whiteRating != null ? <span className="game-player-rank">{presentRating(game.whiteRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
           </div>
-          <span className="game-player-detail">{yourColor === "white" ? copy.youWhite : copy.opponentWhite}</span>
           <span className="game-player-detail">{copy.prisoners}: {prisoners.capturedBlackByWhite}</span>
           {game.whiteRating !== null && game.whiteRating !== undefined
             ? <RatingLabel rating={game.whiteRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
@@ -146,7 +143,7 @@ export function GamePanel({
         <span>{game.phase === "scoring" ? copy.scoring : `${copy.move} ${game.moveCount}`}</span>
       </div>
 
-      <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
+      {!activeScoring || interactionDisabled ? <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
         <span className={`player-stone player-stone--${game.turn ?? yourColor ?? "black"}`} />
         <div>
           <strong>{resultText}</strong>
@@ -155,8 +152,6 @@ export function GamePanel({
               ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
               : interactionDisabled
                 ? copy.lastVerifiedState
-              : activeScoring
-                ? copy.scoringInstructions
               : game.lastResume?.claim === "deadline"
                 ? copy.scoringExpired
               : game.lastResume
@@ -168,7 +163,7 @@ export function GamePanel({
             ? <span>{dictionary.profile.ratingChange}: {game.viewerRatingChange > 0 ? "+" : ""}{Math.round(game.viewerRatingChange)}</span>
             : null}
         </div>
-      </div>
+      </div> : null}
 
       <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--black" />
@@ -177,7 +172,6 @@ export function GamePanel({
             {game.blackPlayerIsDeveloper ? <DeveloperTag /> : null}
             {game.blackRating != null ? <span className="game-player-rank">{presentRating(game.blackRating, "rank-primary", locale === "de" ? "de" : "en").rankLabel}</span> : null}
           </div>
-          <span className="game-player-detail">{yourColor === "black" ? copy.youBlack : copy.opponentBlack}</span>
           <span className="game-player-detail">{copy.prisoners}: {prisoners.capturedWhiteByBlack}</span>
           {game.blackRating !== null && game.blackRating !== undefined
             ? <RatingLabel rating={game.blackRating} preference={game.ratingDisplayPreference ?? "both"} locale={locale} />
@@ -198,7 +192,6 @@ export function GamePanel({
               <strong>{copy.confirmScore}</strong>
               <ScoringHelpButton onClick={onShowScoringHelp} />
             </div>
-            <span>{copy.scoringInstructions}</span>
           </div>
           <div className="scoring-preview" aria-label={copy.provisionalScore}>
             <span><small>{copy.black}</small><strong>{activeScoring.preview.black}</strong></span>

@@ -2687,7 +2687,10 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
   height: 28%;
   border-radius: 1px;
   position: absolute;
-  z-index: 3;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
   pointer-events: none;
 }
 
@@ -2699,11 +2702,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 .territory-mark--white {
   background: #faf9f4;
   border: 1px solid rgba(25, 30, 27, 0.42);
-}
-
-.intersection.is-dead .territory-mark {
-  right: 9%;
-  bottom: 9%;
 }
 
 .scoring-uncertain-groups { display: grid; gap: 10px; padding-block: 12px; }
