@@ -116,12 +116,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
     }
   }, [dictionary, supportPrice, supportPriceSaved, supportPriceSaving, playerKey]);
 
-  const load = useCallback(async (method: "GET" | "POST" = "GET") => {
+  const load = useCallback(async (method: "GET" | "POST" | "OPEN" = "GET") => {
     if (!playerKey) return;
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
     const isCurrent = () => !controller.signal.aborted && requestController.current === controller;
+    let starting = method === "POST";
     if (method === "POST") {
       setRequesting(true);
       setError(null);
@@ -137,7 +138,11 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         assertResponseActor(body.actor, playerKey);
         if (!isCurrent()) return;
         setGame(body.game);
-        if (method === "POST") {
+        const saved = method === "POST" ? null : await readNativeKataGoAnalysis(body.game);
+        if (!isCurrent()) return;
+        if (method === "POST" || (method === "OPEN" && !saved)) {
+          starting = true;
+          setRequesting(true);
           const pendingAt = new Date().toISOString();
           setAnalysis({
             id: `local:pending:${body.game.id}:${body.game.version}`,
@@ -157,29 +162,38 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
           if (!isCurrent()) return;
           setAnalysis(next);
         } else {
-          const next = await readNativeKataGoAnalysis(body.game);
-          if (!isCurrent()) return;
-          setAnalysis(next);
+          setAnalysis(saved);
         }
         setError(null);
         return;
       }
-      const response = await fetch(`/api/games/${gameId}/analysis`, {
-        method,
-        cache: "no-store",
-        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-        signal: controller.signal,
-      });
-      const body = await readApi<ResponseBody>(response);
-      assertResponseActor(body.actor, playerKey);
+      const requestAnalysis = async (requestMethod: "GET" | "POST") => {
+        const response = await fetch(`/api/games/${gameId}/analysis`, {
+          method: requestMethod,
+          cache: "no-store",
+          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+          signal: controller.signal,
+        });
+        const body = await readApi<ResponseBody>(response);
+        assertResponseActor(body.actor, playerKey);
+        return body;
+      };
+      let body = await requestAnalysis(method === "POST" ? "POST" : "GET");
       if (!isCurrent()) return;
       setGame(body.game);
+      if (method === "OPEN" && !body.analysis) {
+        starting = true;
+        setRequesting(true);
+        body = await requestAnalysis("POST");
+        if (!isCurrent()) return;
+        setGame(body.game);
+      }
       setAnalysis(body.analysis);
       setError(null);
     } catch (requestError) {
       if (!isCurrent()) return;
       if (
-        method === "POST"
+        starting
         && requestError instanceof ApiRequestError
         && requestError.code === "analysis_weekly_limit"
       ) {
@@ -196,7 +210,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, playerKey]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
+    const timer = window.setTimeout(() => void load("OPEN"), 0);
     return () => {
       window.clearTimeout(timer);
       requestController.current?.abort();
@@ -267,7 +281,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       {loading || !user ? (
         <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
       ) : error && !game ? (
-        <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load()} type="button">{copy.retry}</button></div>
+        <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load("OPEN")} type="button">{copy.retry}</button></div>
       ) : !game || !board ? (
         <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
       ) : error ? (
@@ -315,12 +329,8 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         </section>
       ) : !analysis ? (
         <section className={styles.reviewStatus}>
-          <h1>{copy.readyTitle}</h1>
-          <p>{copy.readyDetails.replaceAll("{moves}", String(game.moveCount))}</p>
-          <p className={styles.analysisNote}>{nativeAnalysis ? progressiveCopy.startNote : copy.startNote}</p>
-          <button className="button button--primary button--lg" disabled={requesting} onClick={() => void load("POST")} type="button">
-            {requesting ? <LoaderCircle className={styles.spin} size={18} /> : null}{copy.start}
-          </button>
+          <LoaderCircle className={styles.spin} size={38} />
+          <h1>{copy.running}</h1>
         </section>
       ) : (analysis.status === "queued" || analysis.status === "running") && !result ? (
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p className={styles.analysisNote}>{copy.runningNote}</p></section>

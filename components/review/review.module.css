@@ -38,12 +38,12 @@
 .whiteMetricStone { background: #faf9f4; border: 1px solid #8c9088; }
 .winrateBar { height: 10px; background: #faf9f4; border: 1px solid #8c9088; border-radius: 3px; overflow: hidden; }
 .winrateBar > span { display: block; height: 100%; background: #202321; transition: width 160ms ease; }
-.moveAssessment { min-width: 0; padding: 4px 0; }
-.moveAssessment > div { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; font-size: clamp(13px, 3.3vw, 16px); }
+.moveAssessment { display: grid; grid-template-rows: 2.5em 2.9em; gap: 5px; min-width: 0; padding: 4px 0; font-size: clamp(13px, 3.3vw, 16px); }
+.moveAssessment > div { display: flex; align-items: center; align-content: start; flex-wrap: wrap; gap: 5px 10px; min-height: 0; overflow-y: auto; line-height: 1.25; }
 .moveAssessment > div > span { font-weight: 780; }
 .moveAssessment strong { margin-left: auto; }
 .moveAssessment small { color: var(--color-text-muted); font-size: 10px; }
-.moveAssessment p { margin: 5px 0 0; color: var(--color-ink-soft); font-size: clamp(11px, 2.9vw, 14px); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.moveAssessment p { margin: 0; color: var(--color-ink-soft); font-size: clamp(11px, 2.9vw, 14px); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .boardPanel { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; overflow: hidden; }
 .board { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .moveStrip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-inline: contain; }
