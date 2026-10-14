@@ -3,7 +3,7 @@ import { availableParallelism } from 'node:os';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { random } from './generator.mjs';
-import { DiversityIndex } from './diversity.mjs';
+import { DiversityIndex, continuationKeys } from './diversity.mjs';
 import { atomicJson } from './store.mjs';
 
 const ACTIVE = ['running', 'pausing', 'stopping'];
@@ -24,7 +24,7 @@ export class Jobs {
     this.path = join(store.root, 'job.json');
     this.job = existsSync(this.path) ? JSON.parse(readFileSync(this.path, 'utf8')) : { status: 'idle' };
     if (ACTIVE.includes(this.job.status)) { this.job.resumedAt = null; this.job.status = 'paused'; this.job.message = 'Lauf nach Neustart pausiert. Fortsetzen ist möglich.'; this.save(); }
-    this.diversity = new DiversityIndex(store.list());
+    this.diversity = new DiversityIndex(store.list().map((p) => p.ownMoves >= 3 && !p.cores ? { ...p, cores: continuationKeys(store.load(p.number)) } : p));
   }
   save() {
     if (this.job.resumedAt) { this.job.elapsedMs += Date.now() - this.job.resumedAt; this.job.resumedAt = Date.now(); }
@@ -45,6 +45,8 @@ export class Jobs {
   launch() {
     for (let i = this.workers.size; i < this.job.config.workers; i++) {
       const worker = new Worker(new URL('./worker.mjs', import.meta.url));
+      worker.postMessage({ type: 'exclude', families: [...this.diversity.families] });
+      worker.postMessage({ type: 'seed', puzzles: this.store.list().filter((p) => p.review !== 'rejected' && p.verification.defenderPasses === 0).slice(-128).map(({ cells, initial, ownMoves, fingerprints }) => ({ cells, initial, ownMoves, fingerprints })) });
       const record = { busy: false, worker, id: null, job: this.job };
       this.workers.set(worker, record);
       worker.on('message', (result) => this.receive(record, result));
@@ -77,6 +79,10 @@ export class Jobs {
         else reason = this.diversity.duplicate(puzzle);
         if (!reason && this.job.accepted < this.job.config.count) {
           const full = this.store.add(puzzle); this.diversity.add(full);
+          for (const worker of this.workers.keys()) {
+            worker.postMessage({ type: 'exclude', families: [full.fingerprints.family] });
+            worker.postMessage({ type: 'seed', puzzles: [{ cells: full.cells, initial: full.initial, ownMoves: full.ownMoves, fingerprints: full.fingerprints }] });
+          }
           this.job.accepted++; this.job.numbers.push(full.number);
         }
       }

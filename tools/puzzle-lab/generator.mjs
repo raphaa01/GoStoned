@@ -12,16 +12,30 @@ export function random(seed) {
   };
 }
 const pick = (rng, array) => array[Math.floor(rng() * array.length)];
-export function candidate(rng, ownMoves) {
+const chambers = new Map();
+function chamberFor(cells) {
+  const key = cells.map((point) => point.join(',')).join(';');
+  let chamber = chambers.get(key);
+  if (!chamber) { chamber = new Chamber(cells); if (chambers.size < 512) chambers.set(key, chamber); }
+  return chamber;
+}
+export function candidate(rng, ownMoves, bases = []) {
+  if (bases.length && rng() < 0.6) {
+    const matching = bases.filter((base) => base.ownMoves === ownMoves);
+    return mutate(rng, ownMoves, pick(rng, matching.length && rng() < .75 ? matching : bases));
+  }
   // Fresh random polyomino eye spaces, connected white shapes and sacrifice
-  // stones. No downloaded shapes, position templates or copied solutions.
-  const width = pick(rng, ownMoves >= 4 ? [4, 5, 5] : [3, 4, 4, 5]);
-  const height = width === 5 ? pick(rng, [4, 5, 5]) : pick(rng, [3, 4, 5]);
+  // stones. No downloaded shapes or copied solutions.
+  const [width, height] = ownMoves >= 3 && rng() < (ownMoves === 3 ? 0.1 : 0.3)
+    ? pick(rng, [[5, 5], [6, 5], [5, 6], [7, 4], [4, 7]])
+    : (() => { const w = pick(rng, ownMoves >= 4 ? [4, 5, 5] : [3, 4, 4, 5]); return [w, w === 5 ? pick(rng, [4, 5, 5]) : pick(rng, [3, 4, 5])]; })();
   let cells = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) cells.push([x, y]);
   if (rng() < 0.45) cells = cells.filter(([x, y]) => !((x === 0 || x === width - 1) && (y === 0 || y === height - 1) && rng() < 0.5));
   let chamber;
-  try { chamber = new Chamber(cells); } catch { return null; }
+  try {
+    chamber = chamberFor(cells);
+  } catch { return null; }
   let white = 0, black = 0;
   if (rng() < 0.75) {
     // Grow an interior eye space; the surrounding white chain can have cuts,
@@ -29,11 +43,13 @@ export function candidate(rng, ownMoves) {
     const internal = cells.map(([x, y], i) => ({ x, y, i })).filter(({ x, y }) => x > 0 && y > 0 && x < width - 1 && y < height - 1);
     if (!internal.length) return null;
     let eye = bit(pick(rng, internal).i);
-    const desired = Math.min(internal.length + 2, pick(rng, ownMoves >= 4 ? [5, 6, 7, 8, 9] : [2, 3, 4, 5, 6]));
+    const desired = Math.min(internal.length + 2, pick(rng, ownMoves >= 5 ? [6, 7, 8, 9, 10, 11] : ownMoves >= 4 ? [5, 6, 7, 8, 9, 10] : [2, 3, 4, 5, 6, 7]));
+    const splitEyes = rng() < 0.2;
     for (let j = 1; j < desired; j++) {
       const options = indices((chamber.adjacent(eye) & ~eye) >>> 0);
       const interiorOptions = options.filter((i) => !(bit(i) & chamber.rim));
-      eye |= bit(pick(rng, interiorOptions.length && rng() < 0.82 ? interiorOptions : options));
+      const separated = internal.filter(({ i }) => !(eye & bit(i)) && !(chamber.adjacent(eye) & bit(i)));
+      eye |= bit(splitEyes && j === 2 && separated.length ? pick(rng, separated).i : pick(rng, interiorOptions.length && rng() < 0.82 ? interiorOptions : options));
     }
     white = (chamber.mask & ~eye) >>> 0;
     if (rng() < 0.75 && popcount(eye) > 3) {
@@ -58,6 +74,33 @@ export function candidate(rng, ownMoves) {
     }
   }
   const state = { black: black >>> 0, white: white >>> 0, ko: -1, passes: 0 };
+  return validateCandidate(chamber, state, ownMoves);
+}
+
+// Search around independently generated, proven positions. Change several
+// active intersections, never just orientation, location or enclosure size.
+// Novelty and proof filters still run on the resulting problem from scratch.
+export function mutate(rng, ownMoves, base) {
+  const chamber = chamberFor(base.cells);
+  let { black, white } = base.initial;
+  const active = (chamber.mask & ~white) >>> 0;
+  const area = (active | (chamber.adjacent(active) & ~chamber.rim)) >>> 0;
+  const choices = indices(area), shuffled = [...choices];
+  const changes = Math.min(choices.length, pick(rng, [2, 3, 3, 4, 4, 5]));
+  for (let j = 0; j < changes; j++) {
+    const k = j + Math.floor(rng() * (shuffled.length - j));
+    [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]];
+    const point = bit(shuffled[j]);
+    const previous = white & point ? WHITE : black & point ? BLACK : 0;
+    const replacement = pick(rng, [0, BLACK, WHITE].filter((color) => color !== previous));
+    black = (black & ~point) >>> 0; white = (white & ~point) >>> 0;
+    if (replacement === BLACK) black |= point;
+    if (replacement === WHITE) white |= point;
+  }
+  return validateCandidate(chamber, { black: black >>> 0, white: white >>> 0, ko: -1, passes: 0 }, ownMoves);
+}
+
+function validateCandidate(chamber, state, ownMoves) {
   if (!chamber.valid(state)) return null;
   let rest = state.white, targetGroup = 0, target = 0;
   while (rest) {
@@ -117,23 +160,37 @@ export function analyze(item, options) {
       if (result.value === 1) { firstWin = result; minimum = moves; break; }
     }
     if (!firstWin || minimum !== requested) return { reason: firstWin ? 'depth' : 'unresolved' };
+    // A weaker Black continuation can make a diagram look deeper. Prove that
+    // White really forces this depth even when passing is removed from the
+    // quality-control game. The normal certificate still includes ALL passes.
+    const activeSolver = new Solver(chamber, target, { ...options, allowWhitePass: false });
+    activeSolver.deadline = solver.deadline;
+    const nodeBudget = options.maxNodes ?? 250_000;
+    activeSolver.maxNodes = Math.max(0, nodeBudget - solver.nodes);
+    activeSolver.moveCache = solver.moveCache; activeSolver.lifeCache = solver.lifeCache;
+    let activeDepth = 0;
+    for (let moves = 1; moves <= requested; moves++) {
+      if (activeSolver.solve(state, BLACK, moves * 2 - 1).value === 1) { activeDepth = moves; break; }
+    }
+    if (activeDepth !== requested) return { reason: 'pass-inflated-depth' };
+    solver.maxNodes = Math.max(0, nodeBudget - activeSolver.nodes);
     // An incorrect move must have a proof of life, not just exceed a move
     // deadline. All initial choices, including pass, must be resolved.
-    const auditPlies = requested * 2 + 5;
-    const choices = solver.classify(state, auditPlies);
-    if (choices.some((c) => c.value === 0)) return { reason: 'unresolved' };
-    const winners = choices.filter((c) => c.value === 1);
-    if (winners.length !== 1 || winners[0].move < 0) return { reason: 'ambiguous' };
     const proof = solver.tree(state, BLACK, requested * 2 - 1);
     const checked = verifyTree(chamber, state, target, proof);
     const solution = principalLine(proof);
     const actualMoves = solution.filter((ply) => ply.color === BLACK).length;
     if (actualMoves !== requested || solution.some((ply) => ply.move === -1 && ply.color === BLACK)) return { reason: 'depth' };
-    // Long cleanup sequences against a passing defender are not deep reading
-    // problems. A single tactical pass is allowed only with real resistance.
+    // The advertised depth must consist of actual fighting. Passing to make
+    // Black fill already dead spaces is mathematically valid but not useful.
     const defendingMoves = solution.filter((ply) => ply.color === WHITE && ply.move >= 0).length;
     const defenderPasses = solution.filter((ply) => ply.color === WHITE && ply.move < 0).length;
-    if (requested > 1 && (defendingMoves < Math.max(1, requested - 2) || defenderPasses > 1)) return { reason: 'cleanup' };
+    if (requested > 1 && (defendingMoves !== requested - 1 || defenderPasses !== 0)) return { reason: 'cleanup' };
+    const auditPlies = requested * 2 + 5;
+    const choices = solver.classify(state, auditPlies, { stopOnFailure: true });
+    if (choices.some((c) => c.value === 0)) return { reason: 'unresolved' };
+    const winners = choices.filter((c) => c.value === 1);
+    if (winners.length !== 1 || winners[0].move < 0) return { reason: 'ambiguous' };
     const wrongPaths = [];
     let passRefutation;
     for (const choice of choices.filter((c) => c.value === -1)) {
@@ -145,24 +202,42 @@ export function analyze(item, options) {
       wrongPaths.push({ firstMove: choice.move, proof: refutation, line: [{ color: BLACK, move: choice.move }, ...principalLine(refutation)], explanation: 'Weiß kann nach diesem Zug zwei sichere Augen erzwingen.' });
     }
     if (wrongPaths.length < 2) return { reason: 'quality' };
-    let replay = state, sacrifices = 0;
-    for (const ply of solution) {
-      const next = chamber.play(replay, ply.color, ply.move);
-      if (ply.color === WHITE && popcount(next.black) < popcount(replay.black)) sacrifices++;
-      replay = next;
-    }
+    activeSolver.maxNodes = Math.max(0, nodeBudget - solver.nodes);
+    const activeDefenseProof = activeSolver.tree(state, BLACK, requested * 2 - 1);
+    verifyTree(chamber, state, target, activeDefenseProof, BLACK, [positionKey(state)], { allowWhitePass: false });
+    const quality = assessQuality(chamber, state, target, solution, activeDepth);
+    const { sacrifices, decisionTurns, earlyCaptures } = quality;
+    if (requested >= 3 && decisionTurns < 2) return { reason: 'forced-cleanup' };
     const branches = countBranches(proof);
     const difficulty = assessDifficulty({ ownMoves: actualMoves, proofNodes: checked.nodes, branches, refutations: wrongPaths.length, sacrifices });
-    const category = sacrifices ? 'Opfer & Rückfang' : actualMoves >= 4 ? 'Mehrzügiges Leben & Tod' : 'Vitalpunkt & Augen';
+    const category = sacrifices >= 2 ? 'Mehrfaches Opfer & Rückfang' : sacrifices ? 'Opfer & Rückfang' : earlyCaptures ? 'Abtrennen & Fangen' : actualMoves >= 4 ? 'Mehrzügige Augenform' : 'Vitalpunkt & Augen';
     return { puzzle: { schemaVersion: VERSION, cells: chamber.cells, initial: state, target, goal: 'capture', toPlay: 'B', ownMoves: actualMoves,
-      category, difficulty, fingerprints: fingerprints(chamber, state), solution, proof, wrongPaths, passRefutation,
+      category, difficulty, fingerprints: fingerprints(chamber, state), solution, proof, wrongPaths, passRefutation, activeDefenseProof, quality,
       verification: { status: 'proven', rules: 'local capture; positional superko; passes allowed', enclosure: 'unconditionally alive attacker wall; chamber-only play', minimumAttackerTurns: minimum, uniqueFirstMove: winners[0].move,
-        allInitialMovesResolved: true, proofNodes: checked.nodes, defensiveBranches: branches, defendingMoves, defenderPasses, sacrifices, searchNodes: solver.nodes, cacheHits: solver.hits, elapsedMs: Math.round(performance.now() - started), engine: VERSION },
+        allInitialMovesResolved: true, proofNodes: checked.nodes, defensiveBranches: branches, defendingMoves, defenderPasses, sacrifices, searchNodes: solver.nodes + activeSolver.nodes, cacheHits: solver.hits + activeSolver.hits, elapsedMs: Math.round(performance.now() - started), engine: VERSION },
       provenance: { source: 'original-procedural-generation', foreignPuzzleData: false } } };
   } catch (error) {
     if (error instanceof BudgetExceeded) return { reason: 'budget' };
     throw error;
   }
+}
+
+export function assessQuality(chamber, state, target, solution, activeDepth = null) {
+    let replay = state, sacrifices = 0, decisionTurns = 0, earlyCaptures = 0;
+    const blackPoints = new Set();
+    for (const ply of solution) {
+      if (ply.color === BLACK) {
+        blackPoints.add(ply.move);
+        const legal = indices((chamber.mask & ~(replay.black | replay.white)) >>> 0).filter((i) => chamber.play(replay, BLACK, i));
+        if (legal.length >= 2) decisionTurns++;
+      }
+      const next = chamber.play(replay, ply.color, ply.move);
+      if (ply.color === WHITE && popcount(next.black) < popcount(replay.black)) sacrifices++;
+      if (ply.color === BLACK && popcount(next.white) < popcount(replay.white) && (next.white & bit(target))) earlyCaptures++;
+      replay = next;
+    }
+    return { version: activeDepth === null ? 'actual-resistance-v2' : 'active-defense-v3', ...(activeDepth === null ? {} : { activeDefenseDepth: activeDepth }), decisionTurns, distinctBlackPoints: blackPoints.size, defendingMoves: solution.filter((p) => p.color === WHITE && p.move >= 0).length,
+      defenderPasses: solution.filter((p) => p.color === WHITE && p.move < 0).length, sacrifices, earlyCaptures };
 }
 function countBranches(tree) {
   return tree.branches ? Math.max(0, tree.branches.length - 1) + tree.branches.reduce((sum, b) => sum + countBranches(b.next), 0) : 0;
@@ -198,8 +273,9 @@ export function toSgf(puzzle) {
   return `(;GM[1]FF[4]CA[UTF-8]SZ[${size}]PL[B]GN[GoStone Lab Puzzle ${puzzle.number ?? ''}]AB${setup(BLACK)}AW${setup(WHITE)}MA[${point(puzzle.cells[puzzle.target].map((n) => n + 2))}]C[Black to capture the marked group. Play only in the chamber. ${puzzle.ownMoves} black turns in the longest defense. Estimated ${puzzle.difficulty.kyu} kyu, uncalibrated. Outer black wall has two eyes.]${encode(puzzle.proof)}${puzzle.wrongPaths.map((wrong) => `(;B[${move(wrong.firstMove)}]${encode(wrong.proof)})`).join('')})\n`;
 }
 
-export function verifyPuzzle(puzzle) {
+export function verifyPuzzle(puzzle, { requireCurrentQuality = false } = {}) {
   if (puzzle.schemaVersion !== VERSION || puzzle.goal !== 'capture' || puzzle.toPlay !== 'B') throw new Error('Unsupported puzzle format.');
+  if (requireCurrentQuality && (puzzle.quality?.version !== 'active-defense-v3' || !puzzle.activeDefenseProof)) throw new Error('Diese Aufgabe hat keinen aktuellen Nachweis der aktiven Verteidigungstiefe.');
   if (!Array.isArray(puzzle.cells) || puzzle.cells.some((point) => !Array.isArray(point) || point.length !== 2 || point.some((n) => !Number.isInteger(n) || n < 0 || n > 6))) throw new Error('Invalid physical chamber coordinates.');
   const chamber = new Chamber(puzzle.cells);
   if (!Number.isInteger(puzzle.target) || puzzle.target < 0 || puzzle.target >= puzzle.cells.length) throw new Error('Invalid target.');
@@ -211,7 +287,15 @@ export function verifyPuzzle(puzzle) {
   const line = principalLine(puzzle.proof);
   if (JSON.stringify(line) !== JSON.stringify(puzzle.solution)) throw new Error('Solution line differs from certificate.');
   if (line.filter((p) => p.color === BLACK).length !== puzzle.ownMoves) throw new Error('Incorrect own-move count.');
-  if (puzzle.ownMoves > 1 && (line.filter((p) => p.color === WHITE && p.move >= 0).length < Math.max(1, puzzle.ownMoves - 2) || line.filter((p) => p.color === WHITE && p.move < 0).length > 1)) throw new Error('Only cleanup, not a tactical reading puzzle.');
+  const active = puzzle.quality?.version === 'active-defense-v3';
+  const strict = active || puzzle.quality?.version === 'actual-resistance-v2';
+  if (strict && (JSON.stringify(assessQuality(chamber, puzzle.initial, puzzle.target, line, active ? puzzle.quality.activeDefenseDepth : null)) !== JSON.stringify(puzzle.quality) || (puzzle.ownMoves >= 3 && puzzle.quality.decisionTurns < 2))) throw new Error('Incorrect tactical quality assessment.');
+  if (active) {
+    if (puzzle.quality.activeDefenseDepth !== puzzle.ownMoves || !puzzle.activeDefenseProof || outcome(puzzle.activeDefenseProof) !== 'captured') throw new Error('Missing active-defense depth certificate.');
+    verifyTree(chamber, puzzle.initial, puzzle.target, puzzle.activeDefenseProof, BLACK, [positionKey(puzzle.initial)], { allowWhitePass: false });
+    if (principalLine(puzzle.activeDefenseProof).filter((p) => p.color === BLACK).length !== puzzle.ownMoves) throw new Error('Incorrect active-defense depth.');
+  }
+  if (puzzle.ownMoves > 1 && (line.filter((p) => p.color === WHITE && p.move >= 0).length < (strict ? puzzle.ownMoves - 1 : Math.max(1, puzzle.ownMoves - 2)) || line.filter((p) => p.color === WHITE && p.move < 0).length > (strict ? 0 : 1))) throw new Error('Only cleanup, not a tactical reading puzzle.');
   if (JSON.stringify(fingerprints(chamber, puzzle.initial)) !== JSON.stringify(puzzle.fingerprints)) throw new Error('Fingerprint mismatch.');
   if (!Number.isInteger(puzzle.difficulty.kyu) || puzzle.difficulty.kyu < 1 || puzzle.difficulty.kyu > 30 || puzzle.difficulty.status !== 'estimated') throw new Error('Invalid rank.');
   const firstMoves = new Set([puzzle.proof.branches[0].move]);

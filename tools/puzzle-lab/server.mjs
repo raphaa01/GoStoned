@@ -11,6 +11,7 @@ import { Chamber, Solver, BudgetExceeded, positionKey, BLACK } from './engine.mj
 import { acquireLock } from './lock.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
+export const LAB_REVISION = 'active-defense-v3';
 export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab'), port = 4184 } = {}) {
   const release = acquireLock(root);
   let store, jobs;
@@ -31,7 +32,7 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
     try {
       if (request.method === 'GET') {
         if (url.pathname === '/api/status') return json(response, jobs.snapshot());
-        if (url.pathname === '/api/bootstrap') return json(response, { token, defaults, maxWorkers, root, version: VERSION });
+        if (url.pathname === '/api/bootstrap') return json(response, { token, defaults, maxWorkers, root, version: VERSION, revision: LAB_REVISION, implementationDirectory: directory });
         if (url.pathname === '/api/puzzles') return json(response, store.list().map(({ cells, initial, ...entry }) => ({ ...entry, intersections: cells.length, initialStoneCount: initial.white.toString(2).replaceAll('0', '').length })));
         const puzzleMatch = url.pathname.match(/^\/api\/puzzles\/(\d+)(?:\/(sgf|json))?$/);
         if (puzzleMatch) {
@@ -46,7 +47,7 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
         if (url.pathname === '/api/export') {
           const selected = store.list().filter((entry) => entry.review === 'approved').map((entry) => store.load(entry.number));
           if (!selected.length) return json(response, { error: 'Zuerst mindestens eine Aufgabe im Lab freigeben.' }, 400);
-          for (const puzzle of selected) verifyPuzzle(puzzle);
+          for (const puzzle of selected) verifyPuzzle(puzzle, { requireCurrentQuality: true });
           const sgf = url.searchParams.get('format') === 'sgf';
           response.writeHead(200, { 'Content-Type': sgf ? 'application/x-go-sgf; charset=utf-8' : 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="gostone-lab-approved.${sgf ? 'sgf' : 'json'}"`, 'Cache-Control': 'no-store' });
           return response.end(sgf ? selected.map(toSgf).join('\n') : JSON.stringify({ schemaVersion: 'gostone.local-puzzle-bundle/1', exportedAt: new Date().toISOString(), rankStatus: 'estimated-uncalibrated', provenance: 'original-procedural-generation', puzzles: selected.map((puzzle) => ({ ...puzzle, materialized: materialize(puzzle) })) }, null, 2));
@@ -104,9 +105,10 @@ export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab')
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
   const portIndex = args.indexOf('--port');
+  const rootIndex = args.indexOf('--root');
   const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 4184;
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Port muss zwischen 1024 und 65535 liegen.');
-  const { server, jobs } = createLab({ port });
+  const { server, jobs } = createLab({ port, ...(rootIndex < 0 ? {} : { root: resolve(args[rootIndex + 1]) }) });
   server.on('error', (error) => { console.error(`Puzzle Lab: ${error.message}`); process.exitCode = 1; });
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}`;

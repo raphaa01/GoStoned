@@ -4,20 +4,21 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
-import { BLACK, WHITE, bit, Chamber, Solver, BudgetExceeded, principalLine, verifyTree } from './engine.mjs';
+import { BLACK, WHITE, bit, indices, Chamber, Solver, BudgetExceeded, principalLine, verifyTree, positionKey, bestDefense } from './engine.mjs';
 import { analyze, candidate, random, fingerprints, materialize, toSgf, verifyPuzzle } from './generator.mjs';
 import { DiversityIndex } from './diversity.mjs';
 import { Store } from './store.mjs';
 import { Jobs, validateConfig } from './jobs.mjs';
 import { createLab } from './server.mjs';
 import { acquireLock } from './lock.mjs';
+import { auditPuzzle } from './audit.mjs';
 import { applyMove, getGroup, getNeighbors } from '../../lib/game/goEngine.ts';
 
 const rectangle = (w, h) => Array.from({ length: w * h }, (_, i) => [i % w, Math.floor(i / w)]);
 // Original lab output from a procedural search during development; no external
 // collection. Two sacrifices, four real White defences, five Black turns.
-const originalFive = () => ({ chamber: new Chamber(rectangle(5, 5)), state: { black: 9280, white: 24822463, ko: -1, passes: 0 }, target: 0 });
-const originalFour = () => ({ chamber: new Chamber([[1,0],[2,0],[3,0],[4,0],[0,1],[1,1],[2,1],[3,1],[4,1],[0,2],[1,2],[2,2],[3,2],[4,2],[0,3],[1,3],[2,3],[3,3]]), state: { black: 8192, white: 246719, ko: -1, passes: 0 }, target: 0 });
+const originalFive = () => ({ chamber: new Chamber(rectangle(5, 5)), state: { black: 132160, white: 24695487, ko: -1, passes: 0 }, target: 0 });
+const originalFour = () => ({ chamber: new Chamber(rectangle(5, 5)), state: { black: 394240, white: 33145791, ko: -1, passes: 0 }, target: 0 });
 let five;
 function puzzle() {
   if (!five) {
@@ -28,6 +29,7 @@ function puzzle() {
 }
 
 test('capture, suicide, immutable living wall and simple ko obey Go rules', () => {
+  assert.throws(() => new Chamber(rectangle(3, 3).filter(([x, y]) => x !== 1 || y !== 1)), /enclosed hole/);
   const c = new Chamber(rectangle(3, 3));
   const state = { black: bit(1) | bit(3) | bit(5), white: bit(4), ko: -1, passes: 0 };
   assert.equal(c.play(state, BLACK, 7).white, 0);
@@ -53,6 +55,26 @@ test('two-eye certificate is conservative; deadline is unknown, never a false re
   assert.throws(() => new Solver(c, 0, { maxNodes: 0 }).solve(dead, BLACK, 5), BudgetExceeded);
 });
 
+test('cached proofs respect horizons, ko, superko histories, and 30-point board precision', () => {
+  const c = new Chamber(rectangle(5, 3));
+  const state = { black: 0, white: c.mask & ~bit(6), ko: -1, passes: 0 };
+  const solver = new Solver(c, 0);
+  assert.equal(solver.solve(state, BLACK, 1).value, 1);
+  const hits = solver.hits;
+  assert.equal(solver.solve(state, BLACK, 5).value, 1);
+  assert.ok(solver.hits > hits, 'A proved shorter horizon is reusable');
+  assert.equal(solver.solve(state, BLACK, 0).value, 0);
+  const forbidden = positionKey(c.play(state, BLACK, 6));
+  assert.equal(solver.solve(state, BLACK, 1, [positionKey(state), forbidden]).value, 0, 'Repetition history cannot inherit a cached win');
+  assert.equal(solver.solve({ ...state, ko: 6 }, BLACK, 1).value, 0, 'Move cache must respect a changed ko');
+  const large = new Chamber(rectangle(6, 5)), largeSolver = new Solver(large, 25);
+  // These boards collide if packed as two 25-bit numbers after extending the
+  // chamber. Each cached legal move must preserve the correct complete board.
+  for (const board of [{ black: 0, white: bit(25), ko: -1, passes: 0 }, { black: 1, white: 0, ko: -1, passes: 0 }]) {
+    for (const color of [BLACK, WHITE]) for (const choice of largeSolver.moves(board, color)) assert.deepEqual(choice.next, large.play(board, color, choice.move));
+  }
+});
+
 test('five-turn puzzle has actual resistance, two sacrifices, and certified wrong moves', () => {
   const p = puzzle();
   assert.equal(p.ownMoves, 5); assert.equal(p.verification.minimumAttackerTurns, 5);
@@ -61,7 +83,8 @@ test('five-turn puzzle has actual resistance, two sacrifices, and certified wron
   assert.ok(p.difficulty.kyu <= 10);
   const c = new Chamber(p.cells);
   assert.notEqual(new Solver(c, p.target, { maxMs: 5000 }).solve(p.initial, BLACK, 7).value, 1);
-  assert.equal(verifyPuzzle(p).nodes, 204);
+  assert.equal(verifyPuzzle(p).nodes, p.verification.proofNodes);
+  assert.equal(p.quality.activeDefenseDepth, 5);
   assert.ok(p.wrongPaths.length >= 2);
 });
 
@@ -71,6 +94,39 @@ test('four-turn puzzle is a different motif and has no artificial cleanup passes
   assert.equal(result.puzzle.ownMoves, 4); assert.equal(result.puzzle.verification.defendingMoves, 3);
   assert.equal(result.puzzle.verification.defenderPasses, 0); verifyPuzzle(result.puzzle);
   assert.equal(new DiversityIndex([puzzle()]).duplicate(result.puzzle), null);
+});
+
+test('automatic White response is a strongest defence; no opponent blunder enables the solution', () => {
+  const p = puzzle(), chamber = new Chamber(p.cells);
+  const first = p.proof.branches[0];
+  const afterBlack = chamber.play(p.initial, BLACK, first.move);
+  const history = [positionKey(p.initial), positionKey(afterBlack)];
+  const chosen = bestDefense(first.next);
+  const depths = new Map();
+  for (const choice of new Solver(chamber, p.target).moves(afterBlack, WHITE)) {
+    const key = positionKey(choice.next);
+    if (choice.move !== -1 && history.includes(key)) continue;
+    const solver = new Solver(chamber, p.target, { maxNodes: 2000000, maxMs: 10000 });
+    let depth = 0;
+    for (let n = 1; n < p.ownMoves; n++) if (solver.solve(choice.next, BLACK, n * 2 - 1, choice.move === -1 ? history : [...history, key]).value === 1) { depth = n; break; }
+    assert.ok(depth > 0, `Black must beat White reply ${choice.move}, not merely the displayed reply`);
+    depths.set(choice.move, depth);
+  }
+  assert.equal(depths.get(chosen.move), Math.max(...depths.values()));
+  for (const wrong of p.wrongPaths) {
+    const reply = bestDefense(wrong.proof);
+    assert.ok(reply || wrong.proof.outcome === 'alive');
+    const afterWrong = chamber.play(p.initial, BLACK, wrong.firstMove);
+    // The certificate has every Black continuation after the chosen White
+    // strategy, so Black cannot rely on White making a later error either.
+    verifyTree(chamber, afterWrong, p.target, wrong.proof, WHITE, [positionKey(p.initial), positionKey(afterWrong)]);
+  }
+});
+
+test('depth cannot be inflated by passive defence or a suboptimal Black continuation', () => {
+  const oldFour = { chamber: new Chamber([[1,0],[2,0],[3,0],[4,0],[0,1],[1,1],[2,1],[3,1],[4,1],[0,2],[1,2],[2,2],[3,2],[4,2],[0,3],[1,3],[2,3],[3,3]]), state: { black: 8192, white: 246719, ko: -1, passes: 0 }, target: 0 };
+  const oldFive = { chamber: new Chamber(rectangle(5, 5)), state: { black: 9280, white: 24822463, ko: -1, passes: 0 }, target: 0 };
+  for (const [item, ownMoves] of [[oldFour, 4], [oldFive, 5]]) assert.equal(analyze(item, { ownMoves, maxNodes: 500000, maxMs: 5000 }).reason, 'pass-inflated-depth');
 });
 
 test('independent main-app engine replays every certificate on the full physical Go board', () => {
@@ -97,10 +153,13 @@ test('independent main-app engine replays every certificate on the full physical
     }
   };
   walk(p.initial, p.proof, base);
+  walk(p.initial, p.activeDefenseProof, base);
   for (const wrong of p.wrongPaths) {
     const [x, y] = p.cells[wrong.firstMove];
     walk(c.play(p.initial, BLACK, wrong.firstMove), wrong.proof, applyMove(base, 'black', x + 2, y + 2).board);
   }
+  const audited = auditPuzzle(p, { reSolve: true });
+  assert.ok(audited.lifeLeaves > 0 && audited.captureLeaves > 0);
 });
 
 test('tampering, missing defences, extra branches and incorrect lengths fail verification', () => {
@@ -115,6 +174,13 @@ test('tampering, missing defences, extra branches and incorrect lengths fail ver
   assert.throws(() => verifyPuzzle(missingPass), /pass refutation/);
   const missingWrong = puzzle(); missingWrong.wrongPaths.pop();
   assert.throws(() => verifyPuzzle(missingWrong), /not certified/);
+  const missingActive = puzzle(); delete missingActive.activeDefenseProof;
+  assert.throws(() => verifyPuzzle(missingActive), /active-defense/);
+  const falseQuality = puzzle(); falseQuality.quality.decisionTurns++;
+  assert.throws(() => verifyPuzzle(falseQuality), /quality assessment/);
+  const legacy = puzzle(); delete legacy.quality; delete legacy.activeDefenseProof;
+  verifyPuzzle(legacy);
+  assert.throws(() => verifyPuzzle(legacy, { requireCurrentQuality: true }), /Verteidigungstiefe/);
 });
 
 test('diversity rejects all symmetries, shifts and the same motif in another enclosure', () => {
@@ -133,6 +199,11 @@ test('diversity rejects all symmetries, shifts and the same motif in another enc
   const different = puzzle(); different.initial.white = bit(0); different.initial.black = bit(3) | bit(11) | bit(19);
   different.fingerprints = fingerprints({ cells: different.cells }, different.initial);
   assert.equal(index.duplicate(different), null);
+  const convergence = puzzle(), first = convergence.solution[0].move, replaced = indices(convergence.initial.black)[0];
+  convergence.initial.black = ((convergence.initial.black & ~bit(replaced)) | bit(first)) >>> 0;
+  convergence.solution[0].move = replaced;
+  convergence.fingerprints = fingerprints({ cells: convergence.cells }, convergence.initial);
+  assert.equal(index.duplicate(convergence), 'same-continuation', 'Different setup must not hide the same problem after the first move');
 });
 
 test('candidate seeds are reproducible and unknown results stay out of the catalog', () => {

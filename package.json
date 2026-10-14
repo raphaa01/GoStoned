@@ -62,7 +62,9 @@
     "puzzles:lab": "node tools/puzzle-lab/server.mjs",
     "puzzles:lab:test": "tsx --test tools/puzzle-lab/*.test.mjs",
     "puzzles:lab:generate": "node tools/puzzle-lab/cli.mjs generate",
-    "puzzles:lab:verify": "node tools/puzzle-lab/cli.mjs verify"
+    "puzzles:lab:verify": "node tools/puzzle-lab/cli.mjs verify",
+    "puzzles:lab:benchmark": "node tools/puzzle-lab/benchmark.mjs",
+    "puzzles:lab:audit": "tsx tools/puzzle-lab/audit.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

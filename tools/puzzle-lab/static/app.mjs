@@ -1,4 +1,4 @@
-import { Chamber, BLACK, WHITE, bit, positionKey, indices } from '/engine.mjs';
+import { Chamber, BLACK, WHITE, bit, positionKey, indices, bestDefense } from '/engine.mjs';
 
 const $ = (id) => document.getElementById(id);
 const ns = 'http://www.w3.org/2000/svg';
@@ -6,7 +6,7 @@ const svgElement = (name, attributes) => { const node = document.createElementNS
 let token, catalog = [], selected = null, chamber, boardState, currentTree, moves = [], history = [], replayLine = [], replayIndex = 0, lastMove = null, busy = false, playable = true, polling = false, closed = false;
 const statuses = { idle: 'Bereit', running: 'Sucht & prüft', pausing: 'Pausiert gleich', paused: 'Pausiert', stopping: 'Stoppt gleich', stopped: 'Gestoppt', completed: 'Abgeschlossen', exhausted: 'Limit erreicht', failed: 'Fehler' };
 const reviews = { pending: 'Noch zu prüfen', approved: 'Freigegeben', rejected: 'Aussortiert' };
-const reasons = { 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
+const reasons = { 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', 'pass-inflated-depth': 'Künstliche Zugtiefe', 'forced-cleanup': 'Zu wenig Entscheidungen', 'known-motif': 'Bekanntes Motiv', 'seen-candidate': 'Schon geprüft', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'same-continuation': 'Gleiche Kernaufgabe', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
 
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Lab-Token': token }, body: JSON.stringify(body) });
@@ -65,11 +65,6 @@ function reset() {
   $('next-ply').disabled = true; $('previous-ply').disabled = true;
   renderBoard();
 }
-function longestLine(tree) {
-  if (!tree.branches) return [];
-  const candidates = tree.branches.map(({ move, next }) => [{ color: tree.color, move }, ...longestLine(next)]);
-  return candidates.reduce((a, b) => b.length > a.length ? b : a, []);
-}
 function renderBoard() {
   const { size, board, target } = selected.materialized;
   const displayed = board.map((row) => [...row]);
@@ -116,17 +111,29 @@ async function play(move) {
     const wrong = moves.length === 0 ? selected.wrongPaths.find((path) => path.firstMove === move) : null;
     advance(move, BLACK);
     if (choice) currentTree = choice.next;
-    else if (wrong) { currentTree = wrong.proof; $('variation').value = String(selected.wrongPaths.indexOf(wrong)); $('feedback').textContent = 'Dieser Zug lässt Weiß leben. Spiele den geprüften Fehlerweg über „Zug →“ durch.'; replayLine = wrong.line; replayIndex = 1; $('next-ply').disabled = false; $('previous-ply').disabled = false; renderBoard(); return; }
+    else if (wrong) {
+      currentTree = wrong.proof; replayLine = wrong.line; replayIndex = 1;
+      const reply = bestDefense(currentTree);
+      if (reply) { advance(reply.move, WHITE); currentTree = reply.next; replayIndex++; }
+      $('variation').value = String(selected.wrongPaths.indexOf(wrong));
+      $('feedback').textContent = `Dieser Zug lässt Weiß leben.${reply ? ` Weiß antwortet ${coordinate(reply.move)}.` : ''} Spiele die bewiesene Widerlegung über „Zug →“ durch.`;
+      $('next-ply').disabled = replayIndex >= replayLine.length; $('previous-ply').disabled = false; renderBoard(); return;
+    }
     else {
       $('feedback').textContent = 'Deine andere Fortsetzung wird lokal geprüft …'; renderBoard();
       const result = await api('/api/try', { number: selected.number, moves });
       if (result.outcome === 'unknown') { $('feedback').textContent = result.message; currentTree = null; playable = false; return; }
       currentTree = result.proof;
-      if (result.outcome === 'alive') { $('feedback').textContent = 'Weiß kann nach dieser Fortsetzung zwei sichere Augen erzwingen. Wähle „Neu versuchen“ oder einen Fehlerweg.'; playable = false; return; }
+      if (result.outcome === 'alive') {
+        const reply = bestDefense(currentTree);
+        if (reply) { advance(reply.move, WHITE); currentTree = reply.next; }
+        $('feedback').textContent = `${reply ? `Weiß antwortet ${coordinate(reply.move)}. ` : ''}Weiß kann nach dieser Fortsetzung zwei sichere Augen erzwingen. Wähle „Neu versuchen“ oder einen Fehlerweg.`;
+        playable = false; return;
+      }
     }
     if (currentTree.outcome === 'captured') { $('feedback').textContent = `Richtig gelöst! ${Math.ceil(moves.length / 2)} eigene Züge.`; playable = false; return; }
     if (currentTree.color === WHITE) {
-      const reply = currentTree.branches.reduce((a, b) => longestLine(b.next).length > longestLine(a.next).length ? b : a);
+      const reply = bestDefense(currentTree);
       advance(reply.move, WHITE); currentTree = reply.next;
       $('feedback').textContent = `Weiß antwortet ${coordinate(reply.move)}. Schwarz ist wieder am Zug (${Math.floor(moves.length / 2)} eigene Züge gespielt).`;
     }
@@ -169,7 +176,11 @@ async function poll() {
     renderStatus(status);
     const next = await api('/api/puzzles');
     if (closed) return;
-    if (JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; renderCatalog(); if (!selected && catalog.length) await select(catalog[0].number); }
+    if (JSON.stringify(next) !== JSON.stringify(catalog)) {
+      catalog = next; renderCatalog();
+      const first = catalog.find((p) => p.review !== 'rejected');
+      if (!selected && first) await select(first.number);
+    }
   } catch (e) { if (!closed) error(`Lab nicht erreichbar: ${e.message}`); } finally { polling = false; }
 }
 $('shutdown').addEventListener('click', async () => {
