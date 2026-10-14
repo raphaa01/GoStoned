@@ -63,9 +63,6 @@ for (const platform of ["android", "ios"] as const) {
       window.history.pushState({}, "", `/de/review/${gameId}`);
       window.dispatchEvent(new Event("gostone:navigation"));
     }, GAME_ID);
-    const start = page.getByRole("button", { name: "Mit KataGo analysieren", exact: true });
-    await expect(start).toBeVisible();
-    await start.click();
     const calls = () => page.evaluate(() => (window as unknown as { reviewCalls: { method: string; id?: string }[] }).reviewCalls);
     await expect.poll(async () => (await calls()).filter(call => call.method === "analyze").length).toBe(1);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -76,8 +73,6 @@ for (const platform of ["android", "ios"] as const) {
     const first = await calls();
     expect(first.find(call => call.method === "cancel")?.id).toBe(first.find(call => call.method === "analyze")?.id);
     await page.goForward();
-    await expect(start).toBeVisible();
-    await start.click();
     await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
     await expect(page.getByRole("alert")).toHaveCount(0);
     await page.reload();
@@ -89,7 +84,6 @@ for (const platform of ["android", "ios"] as const) {
   for (const timeout of ["reject", "partial"] as const) test(`${platform}: native ${timeout} time limit retains the playable preview instead of Try again`, async ({ page }) => {
     const serverRequests = await nativeReview(page, platform, timeout);
     await page.goto(`/de/review/${GAME_ID}`);
-    await page.getByRole("button", { name: "Mit KataGo analysieren", exact: true }).click();
     await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { reviewCalls: { method: string }[] }).reviewCalls.filter(call => call.method === "cancel").length)).toBe(1);

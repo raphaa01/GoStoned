@@ -5,7 +5,7 @@ import { replayMoves } from "../../lib/game/goEngine";
 import { captureIncidentMoves } from "../../lib/game/fixtures/captureIncident9x9";
 import { toGtpCoordinate } from "../../lib/analysis/coordinates";
 
-async function reviewHarness(page: Page) {
+async function reviewHarness(page: Page, options: { missing?: boolean; quota?: boolean; failRead?: boolean } = {}) {
   const state = await installHarness(page);
   const time = new Date().toISOString();
   const columns = "ABCDEFGHJKLMNOPQRST";
@@ -36,8 +36,20 @@ async function reviewHarness(page: Page) {
     summary: { brilliant: 1, great: 0, best: 0, excellent: 0, good: 58, inaccuracy: 0, mistake: 0, blunder: 1 } };
   const fixture: { job: AnalysisJobView } = { job: { id: "review-test", gameId: GAME_ID, gameVersion: game.version,
     status: "completed", attempts: 1, result, createdAt: time, startedAt: time, completedAt: time, errorCode: null } };
-  await page.route(`**/api/games/${GAME_ID}/analysis`, route => route.fulfill({ json: { ok: true, actor: USER.playerKey, game, analysis: fixture.job } }));
-  return { fixture, result, game };
+  const requests: string[] = [];
+  await page.route(`**/api/games/${GAME_ID}/analysis`, route => {
+    const method = route.request().method();
+    requests.push(method);
+    if (method === "GET" && options.failRead) return route.fulfill({ status: 503,
+      json: { ok: false, code: "internal_error", error: "Read failed" } });
+    if (method === "POST") {
+      if (options.quota) return route.fulfill({ status: 429,
+        json: { ok: false, code: "analysis_weekly_limit", error: "Weekly limit", retryAfterSeconds: 86400 } });
+      options.missing = false;
+    }
+    return route.fulfill({ json: { ok: true, actor: USER.playerKey, game, analysis: options.missing ? null : fixture.job } });
+  });
+  return { fixture, result, game, requests };
 }
 
 async function fitsViewport(page: Page) {
@@ -64,6 +76,37 @@ export function registerReviewTests(authenticatedServer = false) {
       startingStrength: "unspecified", knownRank: null, boardPlacement: "direct",
     } });
     expect(registered.status()).toBe(201);
+  });
+  test("opening a new analysis starts once and reopening reuses the saved result", async ({ page }) => {
+    const { requests } = await reviewHarness(page, { missing: true });
+    await page.goto(`/de/review/${GAME_ID}`);
+    await expect(page.locator("[data-review-player]")).toBeVisible();
+    expect(requests).toEqual(["GET", "POST"]);
+    await expect(page.getByRole("button", { name: "Mit KataGo analysieren", exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Die Analyse kann einige Minuten dauern/)).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("[data-review-player]")).toBeVisible();
+    expect(requests).toEqual(["GET", "POST", "GET"]);
+  });
+  test("automatic start respects the weekly limit without repeated requests", async ({ page }) => {
+    const { requests } = await reviewHarness(page, { missing: true, quota: true });
+    await page.goto(`/de/review/${GAME_ID}`);
+    await expect(page.getByRole("heading", { name: "Deine Analyse für diese Woche läuft bereits" })).toBeVisible();
+    await expect(page.locator("[data-review-player]")).toHaveCount(0);
+    expect(requests).toEqual(["GET", "POST"]);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    expect(requests).toEqual(["GET", "POST"]);
+  });
+  test("a failed initial read starts no analysis until an explicit retry succeeds", async ({ page }) => {
+    const options = { missing: true, failRead: true };
+    const { requests } = await reviewHarness(page, options);
+    await page.goto(`/de/review/${GAME_ID}`);
+    await expect.poll(() => requests).toEqual(["GET"]);
+    await expect(page.locator(".review-workspace").getByRole("alert")).toBeVisible();
+    options.failRead = false;
+    await page.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await expect(page.locator("[data-review-player]")).toBeVisible();
+    expect(requests).toEqual(["GET", "GET", "POST"]);
   });
   test("review preserves the incident's real stones and distinguishes an unplayed recommendation", async ({ page }) => {
     const { fixture, result, game } = await reviewHarness(page);
@@ -158,6 +201,36 @@ export function registerReviewTests(authenticatedServer = false) {
     await expect(page).toHaveURL(/\/de\/profile$/);
     await expect(summary).toHaveCount(0);
     expect(errors).toEqual([]);
+  });
+
+  test("the board stays fixed for absent, single-line and wrapped move comments", async ({ page }) => {
+    const { fixture, result, game } = await reviewHarness(page);
+    Object.assign(game, { boardSize: 9, moveCount: 48, moves: captureIncidentMoves,
+      board: replayMoves(9, captureIncidentMoves) });
+    fixture.job.result = { ...result, boardSize: 9, moves: captureIncidentMoves.map((move, index) => ({
+      ...result.moves[index], playedMove: toGtpCoordinate(9, move), bestMove: toGtpCoordinate(9, move),
+    })) };
+    await page.goto(`/de/review/${GAME_ID}`);
+    const player = page.locator("[data-review-player]");
+    const board = player.locator("svg[role=img]");
+    const assessment = player.locator('section[aria-live="polite"]');
+    await expect(board).toBeVisible();
+    await player.getByRole("button", { name: "Zum Anfang", exact: true }).click();
+    for (const viewport of [page.viewportSize()!, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+      await page.setViewportSize(viewport);
+      await expect(assessment.locator("p")).toHaveCount(0);
+      const initial = await board.boundingBox();
+      await player.getByRole("navigation").getByRole("button").nth(37).click();
+      await expect(assessment.locator("p")).toHaveText("C9 schlägt einen Stein.");
+      expect(await board.boundingBox()).toEqual(initial);
+      await assessment.locator("p").evaluate(element => {
+        element.textContent = "Dieser Zug verbindet getrennte Gruppen und rettet die angegriffenen Steine am Rand des Bretts.";
+      });
+      expect(await board.boundingBox()).toEqual(initial);
+      await player.getByRole("button", { name: "Zum Anfang", exact: true }).click();
+      expect(await board.boundingBox()).toEqual(initial);
+      await fitsViewport(page);
+    }
   });
 
   test("a ten-move preview remains navigable while later results arrive, with a preliminary summary", async ({ page }) => {
