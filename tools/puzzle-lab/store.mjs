@@ -1,6 +1,6 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { verifyPuzzle } from './generator.mjs';
+import { verifyPuzzle, preparePuzzle } from './generator.mjs';
 import { continuationKeys } from './diversity.mjs';
 
 export function atomicJson(path, value) {
@@ -20,16 +20,17 @@ export class Store {
   load(number) {
     const entry = this.catalog.find((e) => e.number === number);
     if (!entry) throw new Error('Puzzle nicht gefunden.');
-    return { ...JSON.parse(readFileSync(join(this.directory, `puzzle-${number}.json`), 'utf8')), review: entry.review };
+    const puzzle = JSON.parse(readFileSync(join(this.directory, `puzzle-${number}.json`), 'utf8'));
+    return { ...(puzzle.exportVersion ? puzzle : preparePuzzle(puzzle)), review: entry.review };
   }
   add(puzzle) {
     verifyPuzzle(puzzle);
     // Never overwrite an orphan left by a crash before the catalog write.
     const highestFile = readdirSync(this.directory).reduce((max, file) => Math.max(max, Number(file.match(/^puzzle-(\d+)\.json$/)?.[1] ?? 0)), 0);
     const number = Math.max(highestFile, this.catalog.reduce((max, entry) => Math.max(max, entry.number), 0)) + 1;
-    const full = { ...puzzle, cores: continuationKeys(puzzle), number, createdAt: new Date().toISOString() };
+    const full = { ...preparePuzzle(puzzle), cores: continuationKeys(puzzle), number, createdAt: new Date().toISOString() };
     atomicJson(join(this.directory, `puzzle-${number}.json`), full);
-    this.catalog.push({ number, kyu: full.difficulty.kyu, ownMoves: full.ownMoves, category: full.category, review: 'pending', createdAt: full.createdAt,
+    this.catalog.push({ number, kyu: full.difficulty.kyu, toPlay: full.toPlay, ownMoves: full.ownMoves, category: full.category, review: 'pending', createdAt: full.createdAt,
       fingerprints: full.fingerprints, cells: full.cells, initial: full.initial, verification: full.verification, quality: full.quality, cores: full.cores });
     atomicJson(this.path, this.catalog);
     return full;

@@ -2,7 +2,7 @@ import { Worker } from 'node:worker_threads';
 import { availableParallelism } from 'node:os';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { random } from './generator.mjs';
+import { random, preparePuzzle } from './generator.mjs';
 import { DiversityIndex, continuationKeys } from './diversity.mjs';
 import { atomicJson } from './store.mjs';
 
@@ -78,7 +78,9 @@ export class Jobs {
         if (puzzle.difficulty.kyu < this.job.config.kyuMin || puzzle.difficulty.kyu > this.job.config.kyuMax) reason = 'rank';
         else reason = this.diversity.duplicate(puzzle);
         if (!reason && this.job.accepted < this.job.config.count) {
-          const full = this.store.add(puzzle); this.diversity.add(full);
+          // Alternate accepted tasks, not search attempts: a 200-task run has
+          // 100 Black and 100 White starts. Color swaps never bypass diversity.
+          const full = this.store.add(preparePuzzle(puzzle, this.job.accepted % 2 === 0 ? 'B' : 'W')); this.diversity.add(full);
           for (const worker of this.workers.keys()) {
             worker.postMessage({ type: 'exclude', families: [full.fingerprints.family] });
             worker.postMessage({ type: 'seed', puzzles: [{ cells: full.cells, initial: full.initial, ownMoves: full.ownMoves, fingerprints: full.fingerprints }] });

@@ -211,11 +211,11 @@ export function analyze(item, options) {
     const branches = countBranches(proof);
     const difficulty = assessDifficulty({ ownMoves: actualMoves, proofNodes: checked.nodes, branches, refutations: wrongPaths.length, sacrifices });
     const category = sacrifices >= 2 ? 'Mehrfaches Opfer & Rückfang' : sacrifices ? 'Opfer & Rückfang' : earlyCaptures ? 'Abtrennen & Fangen' : actualMoves >= 4 ? 'Mehrzügige Augenform' : 'Vitalpunkt & Augen';
-    return { puzzle: { schemaVersion: VERSION, cells: chamber.cells, initial: state, target, goal: 'capture', toPlay: 'B', ownMoves: actualMoves,
+    return { puzzle: preparePuzzle({ schemaVersion: VERSION, cells: chamber.cells, initial: state, target, goal: 'capture', toPlay: 'B', ownMoves: actualMoves,
       category, difficulty, fingerprints: fingerprints(chamber, state), solution, proof, wrongPaths, passRefutation, activeDefenseProof, quality,
       verification: { status: 'proven', rules: 'local capture; positional superko; passes allowed', enclosure: 'unconditionally alive attacker wall; chamber-only play', minimumAttackerTurns: minimum, uniqueFirstMove: winners[0].move,
         allInitialMovesResolved: true, proofNodes: checked.nodes, defensiveBranches: branches, defendingMoves, defenderPasses, sacrifices, searchNodes: solver.nodes + activeSolver.nodes, cacheHits: solver.hits + activeSolver.hits, elapsedMs: Math.round(performance.now() - started), engine: VERSION },
-      provenance: { source: 'original-procedural-generation', foreignPuzzleData: false } } };
+      provenance: { source: 'original-procedural-generation', foreignPuzzleData: false } }) };
   } catch (error) {
     if (error instanceof BudgetExceeded) return { reason: 'budget' };
     throw error;
@@ -261,7 +261,38 @@ export function materialize(puzzle) {
     const [x, y] = puzzle.cells[i];
     board[y + 2][x + 2] = puzzle.initial.black & bit(i) ? BLACK : puzzle.initial.white & bit(i) ? WHITE : 0;
   }
+  if (puzzle.toPlay === 'W') for (const row of board) for (let x = 0; x < row.length; x++) if (row[x]) row[x] = 3 - row[x];
   return { size, board, offset: [2, 2], target: puzzle.cells[puzzle.target].map((n) => n + 2), wallEyes: [[eyeX, 1], [eyeX, 3]] };
+}
+
+// Certificates use role-normalized bitboards: BLACK is always the attacker.
+// Public boards and sequences use the actual stone colors, including White start.
+export const physicalColor = (puzzle, color) => puzzle.toPlay === 'W' ? 3 - color : color;
+export function shortAlternatives(puzzle) {
+  return puzzle.wrongPaths.slice().sort((a, b) => Math.min(4, b.line.length) - Math.min(4, a.line.length) || a.firstMove - b.firstMove).slice(0, 2).map((wrong, i) => {
+    const line = wrong.line.slice(0, 4);
+    let remaining = wrong.proof;
+    for (const ply of line.slice(1)) remaining = remaining.branches.find((branch) => branch.move === ply.move).next;
+    return { id: `error-${i + 1}`, firstMove: wrong.firstMove, status: 'incorrect', line,
+      feedbackAfterPly: line.length, endpoint: { outcome: remaining.outcome === 'alive' ? 'alive' : 'life-forced',
+        reason: remaining.outcome === 'alive' ? 'Die markierte Gruppe hat zwei sichere Augen.' : 'Der Gegner kann jetzt gegen jede Fortsetzung zwei sichere Augen erzwingen.',
+        certificate: { firstMove: wrong.firstMove, path: line.slice(1).map((ply) => ply.move) } } };
+  });
+}
+export function preparePuzzle(puzzle, toPlay = puzzle.toPlay ?? 'B') {
+  const result = { ...puzzle, toPlay };
+  const physical = materialize(result);
+  const sequence = (line) => line.map((ply, i) => ({ ply: i + 1, color: physicalColor(result, ply.color) === BLACK ? 'B' : 'W',
+    point: ply.move < 0 ? null : result.cells[ply.move].map((n) => n + 2), pass: ply.move < 0 }));
+  result.alternatives = shortAlternatives(result);
+  result.exportVersion = 'gostone-puzzle-presentation/2';
+  result.solverEncoding = { attacker: 'B', defender: 'W', colors: 'role-normalized', actualAttacker: toPlay };
+  result.startingPosition = { size: physical.size, board: physical.board, target: physical.target,
+    playablePoints: result.cells.map((point) => point.map((n) => n + 2)), toPlay };
+  result.kyu = result.difficulty.kyu;
+  result.solutionSequence = { status: 'correct', moves: sequence(result.solution), ownMoves: result.ownMoves };
+  result.alternativeSequences = result.alternatives.map(({ line, ...alternative }) => ({ ...alternative, moves: sequence(line), maximumPlies: 4 }));
+  return result;
 }
 
 export function toSgf(puzzle) {
@@ -269,12 +300,14 @@ export function toSgf(puzzle) {
   const point = ([x, y]) => String.fromCharCode(97 + x, 97 + y);
   const move = (index) => index < 0 ? '' : point(puzzle.cells[index].map((n) => n + 2));
   const setup = (color) => board.flatMap((row, y) => row.flatMap((stone, x) => stone === color ? [`[${point([x, y])}]`] : [])).join('');
-  const encode = (tree) => tree.outcome ? `C[${tree.outcome === 'captured' ? 'CORRECT: marked group captured.' : 'INCORRECT: White has two unconditional eyes.'}]` : tree.branches.map((b) => `(;${tree.color === BLACK ? 'B' : 'W'}[${move(b.move)}]${encode(b.next)})`).join('');
-  return `(;GM[1]FF[4]CA[UTF-8]SZ[${size}]PL[B]GN[GoStone Lab Puzzle ${puzzle.number ?? ''}]AB${setup(BLACK)}AW${setup(WHITE)}MA[${point(puzzle.cells[puzzle.target].map((n) => n + 2))}]C[Black to capture the marked group. Play only in the chamber. ${puzzle.ownMoves} black turns in the longest defense. Estimated ${puzzle.difficulty.kyu} kyu, uncalibrated. Outer black wall has two eyes.]${encode(puzzle.proof)}${puzzle.wrongPaths.map((wrong) => `(;B[${move(wrong.firstMove)}]${encode(wrong.proof)})`).join('')})\n`;
+  const color = (role) => physicalColor(puzzle, role) === BLACK ? 'B' : 'W';
+  const encode = (tree) => tree.outcome ? 'C[CORRECT: marked group captured.]' : tree.branches.map((b) => `(;${color(tree.color)}[${move(b.move)}]${encode(b.next)})`).join('');
+  const alternatives = shortAlternatives(puzzle).map((alternative) => `(${alternative.line.map((ply) => `;${color(ply.color)}[${move(ply.move)}]`).join('')}C[INCORRECT: ${alternative.endpoint.outcome === 'alive' ? 'marked group has two unconditional eyes.' : 'opponent can force two unconditional eyes against every continuation.'} Feedback after ply ${alternative.feedbackAfterPly}; maximum 4 plies.])`).join('');
+  return `(;GM[1]FF[4]CA[UTF-8]SZ[${size}]PL[${puzzle.toPlay}]GN[GoStone Lab Puzzle ${puzzle.number ?? ''}]AB${setup(BLACK)}AW${setup(WHITE)}MA[${point(puzzle.cells[puzzle.target].map((n) => n + 2))}]C[${puzzle.toPlay === 'W' ? 'White' : 'Black'} to capture the marked group. Play only in the chamber. ${puzzle.ownMoves} own turns in the longest defense. Estimated ${puzzle.difficulty.kyu} kyu, uncalibrated. Outer attacker wall has two eyes.]${encode(puzzle.proof)}${alternatives})\n`;
 }
 
 export function verifyPuzzle(puzzle, { requireCurrentQuality = false } = {}) {
-  if (puzzle.schemaVersion !== VERSION || puzzle.goal !== 'capture' || puzzle.toPlay !== 'B') throw new Error('Unsupported puzzle format.');
+  if (puzzle.schemaVersion !== VERSION || puzzle.goal !== 'capture' || !['B', 'W'].includes(puzzle.toPlay)) throw new Error('Unsupported puzzle format.');
   if (requireCurrentQuality && (puzzle.quality?.version !== 'active-defense-v3' || !puzzle.activeDefenseProof)) throw new Error('Diese Aufgabe hat keinen aktuellen Nachweis der aktiven Verteidigungstiefe.');
   if (!Array.isArray(puzzle.cells) || puzzle.cells.some((point) => !Array.isArray(point) || point.length !== 2 || point.some((n) => !Number.isInteger(n) || n < 0 || n > 6))) throw new Error('Invalid physical chamber coordinates.');
   const chamber = new Chamber(puzzle.cells);
@@ -312,5 +345,12 @@ export function verifyPuzzle(puzzle, { requireCurrentQuality = false } = {}) {
   // Every non-pass legal first move must have either a winning proof or a
   // losing certificate. This independently verifies the unique first move.
   for (const i of indices((chamber.mask & ~(puzzle.initial.black | puzzle.initial.white)) >>> 0)) if (chamber.play(puzzle.initial, BLACK, i) && !firstMoves.has(i)) throw new Error('An initial move is not certified.');
+  if (puzzle.exportVersion) {
+    if (puzzle.wrongPaths.length < 2) throw new Error('Two alternative paths are required.');
+    const expected = preparePuzzle(puzzle);
+    for (const field of ['exportVersion', 'solverEncoding', 'startingPosition', 'kyu', 'solutionSequence', 'alternatives', 'alternativeSequences']) {
+      if (JSON.stringify(puzzle[field]) !== JSON.stringify(expected[field])) throw new Error(`Invalid exported ${field}.`);
+    }
+  }
   return checked;
 }

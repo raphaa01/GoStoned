@@ -3,10 +3,13 @@ import { Chamber, BLACK, WHITE, bit, positionKey, indices, bestDefense } from '/
 const $ = (id) => document.getElementById(id);
 const ns = 'http://www.w3.org/2000/svg';
 const svgElement = (name, attributes) => { const node = document.createElementNS(ns, name); for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value); return node; };
-let token, catalog = [], selected = null, chamber, boardState, currentTree, moves = [], history = [], replayLine = [], replayIndex = 0, lastMove = null, busy = false, playable = true, polling = false, closed = false;
+let token, catalog = [], selected = null, chamber, boardState, currentTree, moves = [], history = [], replayLine = [], replayIndex = 0, lastMove = null, busy = false, playable = true, polling = false, closed = false, delayedFailure = false;
+const attackerName = () => selected.toPlay === 'W' ? 'Weiß' : 'Schwarz';
+const defenderName = () => selected.toPlay === 'W' ? 'Schwarz' : 'Weiß';
+const displayedColor = (role) => selected.toPlay === 'W' ? 3 - role : role;
 const statuses = { idle: 'Bereit', running: 'Sucht & prüft', pausing: 'Pausiert gleich', paused: 'Pausiert', stopping: 'Stoppt gleich', stopped: 'Gestoppt', completed: 'Abgeschlossen', exhausted: 'Limit erreicht', failed: 'Fehler' };
 const reviews = { pending: 'Noch zu prüfen', approved: 'Freigegeben', rejected: 'Aussortiert' };
-const reasons = { 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', 'pass-inflated-depth': 'Künstliche Zugtiefe', 'forced-cleanup': 'Zu wenig Entscheidungen', 'known-motif': 'Bekanntes Motiv', 'seen-candidate': 'Schon geprüft', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'same-continuation': 'Gleiche Kernaufgabe', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
+const reasons = { 'invalid-shape': 'Ungeeignete Stellung', alive: 'Bereits lebend', depth: 'Andere Zugzahl', unresolved: 'Nicht eindeutig', budget: 'Prüfbudget', ambiguous: 'Mehrere Lösungen', cleanup: 'Nur Auffüllen / Passen', 'pass-inflated-depth': 'Künstliche Zugtiefe', 'forced-cleanup': 'Zu wenig Entscheidungen', 'known-motif': 'Bekanntes Motiv', 'seen-candidate': 'Schon geprüft', quality: 'Zu wenig Fehlerwege', duplicate: 'Doppelt', 'same-motif': 'Gleiches Motiv', 'same-continuation': 'Gleiche Kernaufgabe', 'same-solution-pattern': 'Gleiches Zugmuster', 'similar-solution-pattern': 'Zu ähnliches Zugmuster', 'near-duplicate': 'Zu ähnlich', rank: 'Anderer Rang', error: 'Fehler' };
 
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Lab-Token': token }, body: JSON.stringify(body) });
@@ -35,7 +38,7 @@ function renderCatalog() {
   $('catalog-list').replaceChildren(...filtered.slice().reverse().map((p) => {
     const button = document.createElement('button'); button.className = `catalog-item${selected?.number === p.number ? ' selected' : ''}`;
     const title = document.createElement('strong'); title.textContent = `Puzzle ${p.number}`;
-    const info = document.createElement('span'); info.textContent = `${p.kyu} Kyu ≈ · ${p.ownMoves} eigene Züge`;
+    const info = document.createElement('span'); info.textContent = `${p.kyu} Kyu ≈ · ${p.ownMoves} eigene Züge · ${p.toPlay === 'W' ? 'Weiß' : 'Schwarz'}`;
     const review = document.createElement('span'); review.className = p.review; review.textContent = reviews[p.review];
     button.append(title, info, review); button.addEventListener('click', () => select(p.number).catch((e) => error(e.message))); return button;
   }));
@@ -45,12 +48,12 @@ async function select(number) {
   selected = await api(`/api/puzzles/${number}`); chamber = new Chamber(selected.cells);
   $('empty-state').hidden = true; $('puzzle-view').hidden = false;
   $('puzzle-title').textContent = `Puzzle ${number}`; $('puzzle-rank').textContent = `≈ ${selected.difficulty.kyu} Kyu`;
-  $('goal').textContent = `Schwarz beginnt: Fange die markierte weiße Gruppe. Die längste geprüfte Verteidigung benötigt ${selected.ownMoves} schwarze Züge.`;
+  $('goal').textContent = `${attackerName()} beginnt: Fange die markierte ${selected.toPlay === 'W' ? 'schwarze' : 'weiße'} Gruppe. Die längste geprüfte Verteidigung benötigt ${selected.ownMoves} eigene Züge.`;
   $('category').textContent = selected.category;
   $('proof-stats').textContent = `${selected.verification.proofNodes} Beweisknoten · ${selected.wrongPaths.length} widerlegte erste Züge`;
   $('rank-explanation').textContent = `${selected.difficulty.factors.ownMoves} eigene Züge, ${selected.difficulty.factors.defensiveBranches} zusätzliche Verteidigungszweige, ${selected.difficulty.factors.sacrifices} Opferzüge. Einstufung: unkalibriert.`;
   $('single-sgf').href = `/api/puzzles/${number}/sgf`; $('single-json').href = `/api/puzzles/${number}/json`;
-  $('variation').replaceChildren(...[{ value: 'solution', label: 'Geprüfte Lösung' }, ...selected.wrongPaths.map((wrong, i) => ({ value: String(i), label: `Fehlerweg: ${coordinate(wrong.firstMove)} · Weiß lebt` }))].map(({ value, label }) => { const option = document.createElement('option'); option.value = value; option.textContent = label; return option; }));
+  $('variation').replaceChildren(...[{ value: 'solution', label: 'Geprüfte Lösung' }, ...selected.alternatives.map((wrong, i) => ({ value: String(i), label: `Fehlerweg ${i + 1}: ${coordinate(wrong.firstMove)} · ${wrong.line.length} Züge` }))].map(({ value, label }) => { const option = document.createElement('option'); option.value = value; option.textContent = label; return option; }));
   reset(); renderCatalog(); renderReview();
 }
 function coordinate(move) {
@@ -59,8 +62,8 @@ function coordinate(move) {
   return `${'ABCDEFGHJKLMNOPQRST'[x + 2]}${selected.materialized.size - y - 2}`;
 }
 function reset() {
-  boardState = { ...selected.initial }; currentTree = selected.proof; moves = []; history = [positionKey(boardState)]; lastMove = null; replayLine = []; replayIndex = 0; playable = true;
-  $('feedback').textContent = 'Schwarz beginnt. Wähle deinen Zug im markierten Bereich.';
+  boardState = { ...selected.initial }; currentTree = selected.proof; moves = []; history = [positionKey(boardState)]; lastMove = null; replayLine = []; replayIndex = 0; playable = true; delayedFailure = false;
+  $('feedback').textContent = `${attackerName()} beginnt. Wähle deinen Zug im markierten Bereich.`;
   $('variation').value = 'solution';
   $('next-ply').disabled = true; $('previous-ply').disabled = true;
   renderBoard();
@@ -69,7 +72,7 @@ function renderBoard() {
   const { size, board, target } = selected.materialized;
   const displayed = board.map((row) => [...row]);
   for (let i = 0; i < selected.cells.length; i++) {
-    const [x, y] = selected.cells[i]; displayed[y + 2][x + 2] = boardState.black & bit(i) ? BLACK : boardState.white & bit(i) ? WHITE : 0;
+    const [x, y] = selected.cells[i]; displayed[y + 2][x + 2] = boardState.black & bit(i) ? displayedColor(BLACK) : boardState.white & bit(i) ? displayedColor(WHITE) : 0;
   }
   const svg = svgElement('svg', { viewBox: `0 0 ${size * 40 + 40} ${size * 40 + 40}`, 'aria-label': 'Go-Brett mit markierter Zielgruppe' });
   const spacing = 40, margin = 40;
@@ -85,12 +88,12 @@ function renderBoard() {
     const dark = displayed[y][x] === BLACK;
     svg.append(svgElement('circle', { cx: margin + x * spacing + 1, cy: margin + y * spacing + 2, r: 17, fill: '#4b3a253d' }));
     svg.append(svgElement('circle', { cx: margin + x * spacing, cy: margin + y * spacing, r: 17, fill: dark ? '#18201e' : '#f4f3e7', stroke: dark ? '#101512' : '#d0cbb7', 'stroke-width': 1.3 }));
-    if (x === target[0] && y === target[1] && displayed[y][x] === WHITE) svg.append(svgElement('rect', { x: margin + x * spacing - 5, y: margin + y * spacing - 5, width: 10, height: 10, fill: 'none', stroke: '#548b44', 'stroke-width': 2 }));
+    if (x === target[0] && y === target[1] && displayed[y][x] === displayedColor(WHITE)) svg.append(svgElement('rect', { x: margin + x * spacing - 5, y: margin + y * spacing - 5, width: 10, height: 10, fill: 'none', stroke: '#548b44', 'stroke-width': 2 }));
   }
   if (lastMove !== null && lastMove >= 0) { const [x, y] = selected.cells[lastMove]; svg.append(svgElement('circle', { cx: margin + (x + 2) * spacing, cy: margin + (y + 2) * spacing, r: 4, fill: '#c7ec8e', stroke: '#37512c' })); }
   for (const i of indices((chamber.mask & ~(boardState.black | boardState.white)) >>> 0)) {
     const [x, y] = selected.cells[i];
-    const hit = svgElement('circle', { cx: margin + (x + 2) * spacing, cy: margin + (y + 2) * spacing, r: 19, class: 'intersection', role: 'button', tabindex: busy || !playable || replayLine.length || currentTree?.outcome ? -1 : 0, 'aria-label': `Schwarz auf ${coordinate(i)}` });
+    const hit = svgElement('circle', { cx: margin + (x + 2) * spacing, cy: margin + (y + 2) * spacing, r: 19, class: 'intersection', role: 'button', tabindex: busy || !playable || replayLine.length || currentTree?.outcome ? -1 : 0, 'aria-label': `${attackerName()} auf ${coordinate(i)}` });
     hit.addEventListener('click', () => play(i)); hit.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void play(i); } }); svg.append(hit);
   }
   $('board').replaceChildren(svg);
@@ -112,12 +115,13 @@ async function play(move) {
     advance(move, BLACK);
     if (choice) currentTree = choice.next;
     else if (wrong) {
-      currentTree = wrong.proof; replayLine = wrong.line; replayIndex = 1;
-      const reply = bestDefense(currentTree);
-      if (reply) { advance(reply.move, WHITE); currentTree = reply.next; replayIndex++; }
-      $('variation').value = String(selected.wrongPaths.indexOf(wrong));
-      $('feedback').textContent = `Dieser Zug lässt Weiß leben.${reply ? ` Weiß antwortet ${coordinate(reply.move)}.` : ''} Spiele die bewiesene Widerlegung über „Zug →“ durch.`;
-      $('next-ply').disabled = replayIndex >= replayLine.length; $('previous-ply').disabled = false; renderBoard(); return;
+      currentTree = wrong.proof;
+      delayedFailure = selected.alternatives.some((path) => path.firstMove === move);
+      if (!delayedFailure) {
+        const reply = bestDefense(currentTree);
+        if (reply) { advance(reply.move, WHITE); currentTree = reply.next; }
+        finishFailure(); return;
+      }
     }
     else {
       $('feedback').textContent = 'Deine andere Fortsetzung wird lokal geprüft …'; renderBoard();
@@ -127,29 +131,34 @@ async function play(move) {
       if (result.outcome === 'alive') {
         const reply = bestDefense(currentTree);
         if (reply) { advance(reply.move, WHITE); currentTree = reply.next; }
-        $('feedback').textContent = `${reply ? `Weiß antwortet ${coordinate(reply.move)}. ` : ''}Weiß kann nach dieser Fortsetzung zwei sichere Augen erzwingen. Wähle „Neu versuchen“ oder einen Fehlerweg.`;
-        playable = false; return;
+        finishFailure(); return;
       }
     }
     if (currentTree.outcome === 'captured') { $('feedback').textContent = `Richtig gelöst! ${Math.ceil(moves.length / 2)} eigene Züge.`; playable = false; return; }
+    if (delayedFailure && currentTree.outcome === 'alive') { finishFailure(); return; }
     if (currentTree.color === WHITE) {
       const reply = bestDefense(currentTree);
       advance(reply.move, WHITE); currentTree = reply.next;
-      $('feedback').textContent = `Weiß antwortet ${coordinate(reply.move)}. Schwarz ist wieder am Zug (${Math.floor(moves.length / 2)} eigene Züge gespielt).`;
+      if (delayedFailure && (currentTree.outcome === 'alive' || moves.length >= 4)) { finishFailure(); return; }
+      $('feedback').textContent = `${defenderName()} antwortet ${coordinate(reply.move)}. ${attackerName()} ist wieder am Zug (${Math.floor(moves.length / 2)} eigene Züge gespielt).`;
     }
   } catch (e) { error(e.message); playable = false; } finally { busy = false; renderBoard(); }
+}
+function finishFailure() {
+  $('feedback').textContent = `Falsch – nach ${moves.length} Zügen widerlegt. ${defenderName()} ${currentTree?.outcome === 'alive' ? 'hat zwei sichere Augen.' : 'kann gegen jede Fortsetzung zwei sichere Augen erzwingen.'} Wähle „Neu versuchen“ oder einen Fehlerweg.`;
+  playable = false;
 }
 function replay() {
   boardState = { ...selected.initial }; history = [positionKey(boardState)]; moves = []; lastMove = null;
   for (const ply of replayLine.slice(0, replayIndex)) advance(ply.move, ply.color);
   $('previous-ply').disabled = replayIndex === 0; $('next-ply').disabled = replayIndex >= replayLine.length;
   const wrong = $('variation').value !== 'solution';
-  $('feedback').textContent = `${wrong ? 'Geprüfter Fehlerweg' : 'Geprüfte Lösung'} · Zug ${replayIndex} von ${replayLine.length}${replayIndex === replayLine.length ? wrong ? '\nWeiß hat zwei sichere Augen.' : '\nDie markierte Gruppe ist gefangen.' : ''}`;
+  $('feedback').textContent = `${wrong ? 'Geprüfter Fehlerweg' : 'Geprüfte Lösung'} · Zug ${replayIndex} von ${replayLine.length}${replayIndex === replayLine.length ? wrong ? `\nFalsch – ${selected.alternatives[Number($('variation').value)].endpoint.reason}` : '\nDie markierte Gruppe ist gefangen.' : ''}`;
   renderBoard();
 }
 function showVariation() {
   if (!selected || busy) return;
-  replayLine = $('variation').value === 'solution' ? selected.solution : selected.wrongPaths[Number($('variation').value)].line;
+  replayLine = $('variation').value === 'solution' ? selected.solution : selected.alternatives[Number($('variation').value)].line;
   replayIndex = 0; replay();
 }
 function renderReview() {
@@ -195,4 +204,6 @@ try {
   $('data-path').textContent = `Speicherort: ${bootstrap.root}`;
   $('worker-count').replaceChildren(...Array.from({ length: bootstrap.maxWorkers }, (_, i) => { const option = document.createElement('option'); option.value = i + 1; option.textContent = `${i + 1} ${i === 0 ? 'Worker' : 'Worker'}`; option.selected = i + 1 === bootstrap.defaults.workers; return option; }));
   await poll(); setInterval(poll, 1500);
+  const status = await api('/api/status');
+  if (status.config) for (const [name, value] of Object.entries(status.config)) { const input = $('settings').elements.namedItem(name); if (input) input.value = value; }
 } catch (e) { error(e.message); }

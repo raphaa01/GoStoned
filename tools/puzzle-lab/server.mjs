@@ -11,7 +11,7 @@ import { Chamber, Solver, BudgetExceeded, positionKey, BLACK } from './engine.mj
 import { acquireLock } from './lock.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
-export const LAB_REVISION = 'active-defense-v3';
+export const LAB_REVISION = 'short-alternatives-colors-v4';
 export function createLab({ root = resolve(directory, '../../.cache/puzzle-lab'), port = 4184 } = {}) {
   const release = acquireLock(root);
   let store, jobs;

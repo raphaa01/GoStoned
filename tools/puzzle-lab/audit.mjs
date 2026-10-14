@@ -3,13 +3,13 @@ import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { applyMove, getNeighbors, getGroup, boardHash } from '../../lib/game/goEngine.ts';
 import { BLACK, WHITE, Chamber } from './engine.mjs';
-import { analyze, materialize, verifyPuzzle } from './generator.mjs';
+import { analyze, materialize, verifyPuzzle, physicalColor } from './generator.mjs';
 import { DiversityIndex } from './diversity.mjs';
 import { Store } from './store.mjs';
 
 const pointKey = ({ x, y }) => `${x},${y}`;
-function whiteHasTwoEyes(board, target) {
-  if (board[target.y][target.x] !== 'white') return false;
+function whiteHasTwoEyes(board, target, defender = 'white') {
+  if (board[target.y][target.x] !== defender) return false;
   const block = new Set(getGroup(board, target).map(pointKey)), visited = new Set();
   let eyes = 0;
   for (let y = 0; y < board.length; y++) for (let x = 0; x < board.length; x++) {
@@ -39,24 +39,25 @@ export function auditPuzzle(puzzle, { reSolve = false } = {}) {
   const physical = materialize(puzzle);
   const base = physical.board.map((row) => row.map((s) => s === BLACK ? 'black' : s === WHITE ? 'white' : null));
   const target = { x: physical.target[0], y: physical.target[1] };
+  const defender = puzzle.toPlay === 'W' ? 'black' : 'white';
   const wall = new Set(getGroup(base, { x: 0, y: 0 }).map(pointKey));
   for (const [x, y] of physical.wallEyes) if (base[y][x] !== null || !getNeighbors(base, { x, y }).every((p) => wall.has(pointKey(p)))) throw new Error('Outer group has no certified physical eyes.');
   let nodes = 0, lifeLeaves = 0, captureLeaves = 0;
   const moveBoard = (board, color, move) => {
     if (move === -1) return board;
     const [x, y] = puzzle.cells[move];
-    const result = applyMove(board, color === BLACK ? 'black' : 'white', x + 2, y + 2);
+    const result = applyMove(board, physicalColor(puzzle, color) === BLACK ? 'black' : 'white', x + 2, y + 2);
     if (!result.ok) throw new Error(`Independent engine rejects move ${move}: ${result.error}`);
     return result.board;
   };
   const walk = (tree, board, history) => {
     nodes++;
     if (tree.outcome === 'captured') {
-      if (board[target.y][target.x] === 'white') throw new Error('Independent engine rejects capture terminal.');
+      if (board[target.y][target.x] === defender) throw new Error('Independent engine rejects capture terminal.');
       captureLeaves++; return;
     }
     if (tree.outcome === 'alive') {
-      if (!whiteHasTwoEyes(board, target)) throw new Error('Independent engine rejects two-eye terminal.');
+      if (!whiteHasTwoEyes(board, target, defender)) throw new Error('Independent engine rejects two-eye terminal.');
       lifeLeaves++; return;
     }
     for (const branch of tree.branches) {

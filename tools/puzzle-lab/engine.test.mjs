@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import { BLACK, WHITE, bit, indices, Chamber, Solver, BudgetExceeded, principalLine, verifyTree, positionKey, bestDefense } from './engine.mjs';
-import { analyze, candidate, random, fingerprints, materialize, toSgf, verifyPuzzle } from './generator.mjs';
-import { DiversityIndex } from './diversity.mjs';
+import { analyze, candidate, random, fingerprints, materialize, toSgf, verifyPuzzle, preparePuzzle, shortAlternatives } from './generator.mjs';
+import { DiversityIndex, solutionPattern } from './diversity.mjs';
 import { Store } from './store.mjs';
 import { Jobs, validateConfig } from './jobs.mjs';
 import { createLab } from './server.mjs';
@@ -198,7 +198,7 @@ test('diversity rejects all symmetries, shifts and the same motif in another enc
   assert.equal(index.duplicate(extended), 'same-motif');
   const different = puzzle(); different.initial.white = bit(0); different.initial.black = bit(3) | bit(11) | bit(19);
   different.fingerprints = fingerprints({ cells: different.cells }, different.initial);
-  assert.equal(index.duplicate(different), null);
+  assert.equal(index.duplicate(different), 'same-solution-pattern', 'Different setup with identical played moves is rejected');
   const convergence = puzzle(), first = convergence.solution[0].move, replaced = indices(convergence.initial.black)[0];
   convergence.initial.black = ((convergence.initial.black & ~bit(replaced)) | bit(first)) >>> 0;
   convergence.solution[0].move = replaced;
@@ -224,6 +224,74 @@ test('SGF includes physical living wall, player turns, full defences and refutat
   assert.match(sgf, /INCORRECT/); assert.match(sgf, /CORRECT/); assert.match(sgf, /uncalibrated/);
   const sequence = principalLine(p.proof);
   assert.equal(sequence.filter((ply) => ply.color === BLACK).length, 5);
+});
+
+test('two short error paths end at certified losing states, not invented eye terminals', () => {
+  const p = puzzle(), c = new Chamber(p.cells), alternatives = shortAlternatives(p);
+  assert.equal(alternatives.length, 2);
+  assert.equal(new Set(alternatives.map((a) => a.firstMove)).size, 2);
+  for (const alternative of alternatives) {
+    assert.equal(alternative.status, 'incorrect');
+    assert.ok(alternative.line.length <= 4);
+    assert.equal(alternative.feedbackAfterPly, alternative.line.length);
+    let state = p.initial, history = [positionKey(state)];
+    let tree = p.wrongPaths.find((w) => w.firstMove === alternative.firstMove).proof;
+    for (const [i, ply] of alternative.line.entries()) {
+      assert.equal(ply.color, i % 2 === 0 ? BLACK : WHITE);
+      if (i && ply.color === WHITE) assert.equal(ply.move, bestDefense(tree).move);
+      state = c.play(state, ply.color, ply.move); assert.ok(state);
+      if (ply.move >= 0) { assert.ok(!history.includes(positionKey(state))); history.push(positionKey(state)); }
+      if (i) tree = tree.branches.find((b) => b.move === ply.move).next;
+    }
+    assert.equal(alternative.endpoint.outcome, c.alive(state, p.target) ? 'alive' : 'life-forced');
+    verifyTree(c, state, p.target, tree, alternative.line.length % 2 ? WHITE : BLACK, history);
+  }
+  assert.equal((toSgf(p).match(/INCORRECT:/g) ?? []).length, 2);
+  const tampered = puzzle(); tampered.alternativeSequences[0].feedbackAfterPly = 5;
+  assert.throws(() => verifyPuzzle(tampered), /exported alternativeSequences/);
+});
+
+test('White starts have actual White setup and move colors in JSON and SGF and pass independent full-board audit', () => {
+  const black = puzzle(), white = preparePuzzle(black, 'W');
+  verifyPuzzle(white);
+  assert.deepEqual(auditPuzzle(white), auditPuzzle(black));
+  assert.equal(white.toPlay, 'W'); assert.equal(white.startingPosition.toPlay, 'W');
+  assert.equal(white.solutionSequence.moves[0].color, 'W');
+  assert.equal(white.alternativeSequences.length, 2);
+  assert.equal(white.kyu, white.difficulty.kyu);
+  for (let y = 0; y < black.startingPosition.size; y++) for (let x = 0; x < black.startingPosition.size; x++) {
+    const stone = black.startingPosition.board[y][x];
+    assert.equal(white.startingPosition.board[y][x], stone ? 3 - stone : 0);
+  }
+  for (const path of [white.solutionSequence, ...white.alternativeSequences]) {
+    let board = white.startingPosition.board.map((row) => row.map((stone) => stone === BLACK ? 'black' : stone === WHITE ? 'white' : null));
+    for (const move of path.moves) {
+      if (move.pass) continue;
+      const result = applyMove(board, move.color === 'B' ? 'black' : 'white', ...move.point);
+      assert.ok(result.ok); board = result.board;
+    }
+  }
+  assert.match(toSgf(white), /PL\[W\]/);
+  const tampered = structuredClone(white); tampered.startingPosition.toPlay = 'B';
+  assert.throws(() => verifyPuzzle(tampered), /exported startingPosition/);
+  assert.equal(new DiversityIndex([black]).duplicate(white), 'duplicate', 'Color swapping cannot create a new puzzle');
+});
+
+test('played stone patterns ignore surroundings, move order, translation, rotation, reflection and actual color', () => {
+  const p = puzzle(), pattern = solutionPattern(p);
+  for (let symmetry = 0; symmetry < 8; symmetry++) {
+    const changed = preparePuzzle(p, 'W');
+    changed.cells = changed.cells.map(([x, y]) => {
+      if (symmetry & 4) x = -x;
+      for (let r = 0; r < (symmetry & 3); r++) [x, y] = [-y, x];
+      return [x + 27, y + 18];
+    });
+    changed.initial.white = bit(0); changed.initial.black = bit(3);
+    changed.solution.reverse();
+    assert.equal(solutionPattern(changed), pattern);
+  }
+  const changed = puzzle(); changed.solution[0].move = 0;
+  assert.notEqual(solutionPattern(changed), pattern);
 });
 
 test('store persists review states and jobs recover as paused without changing global numbering', () => {

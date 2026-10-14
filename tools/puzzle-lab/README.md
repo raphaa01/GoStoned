@@ -21,7 +21,7 @@ Lab-Prozess erneut. Der Windows-Launcher speichert standardmäßig in
 
 ## Benutzung
 
-1. Zielanzahl, eigene schwarze Züge (Minimum/Maximum), geschätzten Kyu-Bereich,
+1. Zielanzahl, eigene Züge (Minimum/Maximum), geschätzten Kyu-Bereich,
    CPU-Worker und optional das Suchbudget einstellen. Für genau vier eigene Züge
    beide Zugfelder auf **4** setzen; entsprechend **5** für fünf Züge.
 2. **Aufgaben erzeugen**. Die Qualität wird nicht gesenkt, um die Zielanzahl zu
@@ -29,11 +29,14 @@ Lab-Prozess erneut. Der Windows-Launcher speichert standardmäßig in
    kleineren Bestand führen. Anspruchsvolle Tiefen und enge Rangfilter können
    lange suchen oder keinen Treffer liefern.
 3. Aufgaben über ihre **festen Nummern** öffnen, Probe-Spielen, Lösungen und
-   geprüfte Fehlerwege Schritt für Schritt ansehen. Weiß wählt die stärkste
-   geprüfte Verteidigung gegen optimale schwarze Fortsetzungen. Nach einem
-   falschen ersten Zug antwortet Weiß sofort mit seiner bewiesenen Lebens-
-   strategie. Andere schwarze Fortsetzungen werden bei Bedarf nachgeprüft;
-   ungeklärte Züge werden niemals fälschlich als Fehler bezeichnet.
+   geprüfte Fehlerwege Schritt für Schritt ansehen. Schwarz und Weiß starten
+   bei angenommenen Aufgaben abwechselnd. Der Gegner wählt die stärkste
+   geprüfte Verteidigung. Zwei ausgewählte Fehlerwege lassen sich interaktiv
+   weiterspielen: erst nach der entscheidenden Widerlegung, spätestens nach
+   vier Zügen insgesamt, erscheint „Falsch“. Auch abweichende eigene Züge
+   innerhalb dieser Fehlerwege erhalten bewiesene gegnerische Antworten.
+   Andere Fortsetzungen werden bei Bedarf nachgeprüft; ungeklärte Züge
+   werden niemals fälschlich als Fehler bezeichnet.
 4. Lehrreiche Aufgaben **freigeben**, ähnliche/unschöne Aufgaben **aussortieren**.
    Automatischer Beweis und redaktionelle Freigabe sind getrennt. Der gemeinsame
    JSON-/SGF-Export enthält nur manuell freigegebene Aufgaben. Einzeldateien sind
@@ -46,6 +49,11 @@ gesicherte Lauf ebenfalls pausiert wiederhergestellt. Einzelne zuletzt laufende
 Versuche können verloren gehen, bestätigte Puzzle-Dateien bleiben gespeichert.
 
 ## Was der Beweis tatsächlich garantiert
+
+Die Engine verwendet normalisierte Rollen: „Schwarz“ ist intern immer der
+Angreifer, „Weiß“ die Zielgruppe. Bei weiß beginnenden Aufgaben tauschen Brett,
+Anzeige und öffentliche Export-Zugfolgen alle tatsächlichen Farben. Die
+folgenden technischen Beweisbegriffe beziehen sich auf diese internen Rollen.
 
 - Ausschließlich **abgeschlossene Fangaufgaben**, Schwarz fängt eine markierte
   weiße Gruppe. Die äußere schwarze Einfassung ist als unconditionally living
@@ -102,7 +110,12 @@ weißen Antwortzug verglichen: dieselbe Kernaufgabe mit verändertem Einstieg
 wird ab drei eigenen Zügen ebenfalls verworfen. Worker teilen neu gefundene
 Motive und vermeiden bereits geprüfte identische Kandidaten vor der Suche.
 Auch aussortierte Aufgaben bleiben im Index, damit sie nicht erneut entstehen.
-Dies verhindert geometrische Varianten; inhaltlich ähnliche Lehrmotive müssen
+Zusätzlich wird die Form aller gesetzten Lösungssteine beider Seiten verglichen,
+ohne die umgebenden Steine. Translation, acht Symmetrien, tatsächliche Startfarbe
+und Reihenfolge gleicher gespielter Punkte ändern das Muster nicht. Gleiche
+und sehr ähnliche Muster ab drei eigenen Zügen werden konservativ verworfen.
+Das ist ein zusätzlicher Filter, kein Beweis didaktischer Verschiedenheit:
+inhaltlich ähnliche Lehrmotive müssen
 zusätzlich bei der Freigabe beurteilt werden. Der Bestand ist endlich, und die
 Suchstatistik macht sinkende Ausbeute und Duplikate sichtbar.
 
@@ -145,9 +158,34 @@ ignoriert), beim Windows-Launcher unter `%LOCALAPPDATA%/GoStone/PuzzleLab`:
 `job.json`, `puzzles/puzzle-N.json`. Keine erzeugten Bestände werden automatisch
 in die App importiert. Der JSON-Export verwendet `gostone.local-puzzle-bundle/1`
 und enthält Startstellung, Vollbrett, Ziel, Kategorie, Kyu-Schätzung, Zugzahl,
-Lösung, vollständige Beweise, Widerlegungen und Erzeugungsherkunft. Der SGF-Export
-enthält Aufstellung, markierte Gruppe und verzweigte Lösung/Fehlerwege; die
-Kammerbeschränkung steht ausdrücklich im Kommentar.
+Lösung, vollständige Beweise, Widerlegungen und Erzeugungsherkunft. Jedes Puzzle
+hat die öffentliche Präsentation `gostone-puzzle-presentation/2`:
+
+- `startingPosition`: Brettgröße, tatsächliche Farben (`0` leer, `1` schwarz,
+  `2` weiß), Zielgruppe, erlaubte Punkte und `toPlay` (`B` oder `W`). Alle Punkte
+  sind nullbasierte `[x,y]`-Koordinaten vom oberen linken Brettrand.
+- `toPlay`, `kyu`, `difficulty`: Startfarbe, Rang und Kennzeichnung der
+  unkalibrierten Schätzung.
+- `solutionSequence`: vollständige beste Lösung mit tatsächlichen Zugfarben,
+  Koordinaten, Pass-Markierung und Anzahl eigener Züge; `status: correct`.
+- `alternativeSequences`: exakt zwei unterschiedliche falsche erste Züge,
+  jeweils höchstens vier **Gesamtzüge** mit tatsächlichen Farben. `status:
+  incorrect`, `feedbackAfterPly` und `endpoint` bestimmen das Fehlerfeedback.
+  `alive` bedeutet zwei vorhandene sichere Augen, `life-forced` bedeutet,
+  dass Leben gegen jede weitere Fortsetzung bewiesen ist. Die kurze Folge
+  darf einen vollständigen längeren Beweis nach dem entscheidenden Gegenzug
+  abkürzen, behauptet aber dann keine bereits vorhandenen Augen.
+- `solverEncoding`: kennzeichnet die normalisierten internen Bitboards,
+  Zertifikate, `solution`, `wrongPaths` und `alternatives`. Diese internen
+  Beweise können länger als vier Züge sein; die spielbaren Export-Fehlerfolgen
+  haben stets die Vier-Züge-Grenze. Zertifikatverweise verbinden beide.
+
+Der SGF-Export enthält die tatsächliche Aufstellung, `PL[B]`/`PL[W]`, Kyu-
+Schätzung, Ziel, verzweigte geprüfte Lösung und exakt zwei kurze Fehlerzweige.
+Nur am Fehlerzweig-Ende steht `INCORRECT`, mit bereits lebend/erzwungenem Leben
+unterschieden. Die Kammerbeschränkung steht ausdrücklich im Kommentar.
+Alte lokale Aufgaben erhalten diese Präsentation beim Lesen; neu gespeicherte
+Aufgaben enthalten sie direkt. Nummern und Freigaben bleiben erhalten.
 
 ```powershell
 npm run puzzles:lab:test
