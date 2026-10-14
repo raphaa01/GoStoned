@@ -1,0 +1,291 @@
+# GoStone Local Puzzle Lab
+
+Ein eigenständiges Lab für diesen Laptop. Node.js (bereits Projektvoraussetzung)
+genügt: keine zusätzlichen Pakete, Python-Umgebung, Modelle, GPU, Datenbank,
+API-Schlüssel oder Cloud-Abrechnung. Es verändert weder GoStone-Puzzle noch Bot,
+Spieler-Ränge oder die Produktionsdatenbank.
+
+## Aktuelles Aufgabenformat und visuelle Prüfung
+
+Neue Aufgaben sind kompakte Eck-/Rand-Fangstellungen auf einem 9×9-Brett.
+Die alten Diagramme mit fast vollständig gefülltem Rechteck werden nicht mehr
+erzeugt. Echte Brettkanten ersetzen zwei bzw. eine Seite der Einfassung und
+werden auch im Solver als Brettkanten behandelt. Eine dünne verbundene
+Angreiferkette mit zwei kleinen echten Augen sichert die lokale Umgebung ab;
+sie kann rechts oder unten fortgesetzt werden. Das ist weiterhin ein lokales
+Fangformat, kein Generator beliebiger Ganzbrettprobleme.
+
+Die aktuelle Randumgebung nutzt zwei zusätzliche Steine an der echten
+Brettecke, die Eckumgebung eine schmale zweireihige Fortsetzung. Neue Aufgaben
+mit bis zu vier eigenen Zügen haben höchstens **28 Steine insgesamt**, tiefere
+Aufgaben höchstens 32. Diese Grenze wird vor der kostspieligen Beweissuche
+geprüft. Zusätzlich gelten höchstens 24 Umgebungssteine, höchstens 16 Zielsteine
+und kein vollständig gefüllter 3×3-Block. Die Suche wechselt zwischen Eck- und
+Randstellungen; angenommene Aufgaben starten abwechselnd mit Schwarz und Weiß. Wiederkehrende oder
+kaum veränderte **Zielgruppenformen** werden zusätzlich zu taktischen Kernen
+und Lösungszugmustern verworfen. Die Indizes überleben einen Neustart.
+Der Formvergleich richtet Gruppen auch an verschiedenen inneren Punkten aus:
+ein angefügter Randstein darf die gleiche Kernform nicht durch eine verschobene
+Begrenzungsbox verstecken. Bei Mutationen dürfen nun auch weiße Randsteine
+direkt neben dem Kampf verändert werden, deren alte Sperre die Zielgruppen
+praktisch eingefroren hatte. Drei unabhängig geprüfte, selbst prozedural
+gefundene Stellungen liefern zusätzliche Suchansätze; sie werden nie als neue
+Ausgabeaufgaben kopiert oder gezählt.
+Aufgaben mit Ko in ihren Beweisvarianten werden im neuen Format ausgeschlossen.
+
+Diese Grenzen und mathematische Korrektheit reichen als Qualitätsurteil nicht
+aus. Vor einem großen Lauf eine kleine Serie tatsächlich ansehen und spielen:
+
+```powershell
+npm run puzzles:lab:visual -- --count 12 --output .cache/puzzle-lab-visual
+npm run puzzles:lab:audit -- --root "$env:LOCALAPPDATA/GoStone/PuzzleLab" --re-solve
+```
+
+Die visuelle Prüfung verwendet den tatsächlichen Browser und die Lab-Oberfläche.
+Sie spielt die Lösung und beide kurzen Fehlerwege aus und speichert Start- und
+End-Screenshots, `contact-sheet.html`, `contact-sheet.png` und `report.json`.
+`--numbers 1,4,6` wählt konkrete Aufgaben. Die Bildserie muss anschließend
+angesehen werden: Sind Gruppen und Ziel klar, sind die Diagramme kompakt,
+sind die entscheidenden Formen verschieden, zeigt die Gegenwehr etwas
+Lehrreiches? `--count` ist auf 40 begrenzt, damit eine Stichprobe lesbar bleibt.
+Das Werkzeug vergibt keine automatische didaktische Freigabe. Playwright ist
+eine bereits vorhandene Entwicklungsabhängigkeit; der Lab-Server selbst bleibt
+ohne zusätzliche Laufzeitpakete.
+
+## Start
+
+```powershell
+npm run puzzles:lab
+```
+
+Der Browser öffnet `http://127.0.0.1:4184`. Der Server bindet ausschließlich an
+Loopback. Alternativ `tools/puzzle-lab/start-lab.ps1` starten; dieser Windows-
+Launcher startet den Server mit verborgenem Fenster und öffnet einen vorhandenen
+Lab-Prozess erneut. Der Windows-Launcher speichert standardmäßig in
+`%LOCALAPPDATA%/GoStone/PuzzleLab`, unabhängig vom Projekt-Branch. Mit
+`-DataDirectory "C:/path/to/data"` lässt sich das ändern. Zum Testen:
+`npm run puzzles:lab -- --no-browser --port 4185 --root "C:/path/to/data"`.
+Für Wartung ohne weitere Browser-Tabs: `tools/puzzle-lab/start-lab.ps1 -NoBrowser`.
+
+## Benutzung
+
+1. Zielanzahl, eigene Züge (Minimum/Maximum), geschätzten Kyu-Bereich,
+   CPU-Worker und optional das Suchbudget einstellen. Für genau vier eigene Züge
+   beide Zugfelder auf **4** setzen; entsprechend **5** für fünf Züge.
+2. **Aufgaben erzeugen**. Die Qualität wird nicht gesenkt, um die Zielanzahl zu
+   erreichen. Standardmäßig gibt es **kein Versuchslimit** (`maxAttempts: 0`):
+   der Lauf sucht bis zur Zielmenge oder bis Pause/Stop. Ein ausdrücklich gesetztes
+   positives Versuchslimit ist optional. Ein damit beendeter Lauf kann über
+   **Ohne Versuchslimit fortsetzen** weiterlaufen; Nummern, Treffer, Suchposition
+   und Zielmenge bleiben erhalten. Zeit-/Knotenbudgets gelten pro Stellung,
+   nicht für den ganzen Lauf. Anspruchsvolle Tiefen und enge Rangfilter können
+   lange suchen oder keinen Treffer liefern.
+   Eck- und Randformen wechseln bei den Suchversuchen, damit eine seltene
+   Form die gesamte Suche nicht bis zum nächsten Treffer blockiert.
+3. Aufgaben über ihre **festen Nummern** öffnen, Probe-Spielen, Lösungen und
+   geprüfte Fehlerwege Schritt für Schritt ansehen. Schwarz und Weiß starten
+   bei angenommenen Aufgaben abwechselnd. Der Gegner wählt die stärkste
+   geprüfte Verteidigung. Zwei ausgewählte Fehlerwege lassen sich interaktiv
+   weiterspielen: erst nach der entscheidenden Widerlegung, spätestens nach
+   vier Zügen insgesamt, erscheint „Falsch“. Auch abweichende eigene Züge
+   innerhalb dieser Fehlerwege erhalten bewiesene gegnerische Antworten.
+   Andere Fortsetzungen werden bei Bedarf nachgeprüft; ungeklärte Züge
+   werden niemals fälschlich als Fehler bezeichnet.
+4. Lehrreiche Aufgaben **freigeben**, ähnliche/unschöne Aufgaben **aussortieren**.
+   Automatischer Beweis und redaktionelle Freigabe sind getrennt. Der gemeinsame
+   JSON-/SGF-Export enthält nur manuell freigegebene Aufgaben. Einzeldateien sind
+   ausdrücklich auch für die Untersuchung ungeprüfter Kandidaten verfügbar.
+
+Pause/Stop schließen die aktuelle Stellung ab. Ein geschlossenes Browserfenster
+stoppt den Server nicht. Beim Beenden des Servers wird der Lauf pausiert; beim
+Neustart kann er fortgesetzt werden. Nach einem Prozessabbruch wird der zuletzt
+gesicherte Lauf ebenfalls pausiert wiederhergestellt. Einzelne zuletzt laufende
+Versuche können verloren gehen, bestätigte Puzzle-Dateien bleiben gespeichert.
+
+## Was der Beweis tatsächlich garantiert
+
+Die Engine verwendet normalisierte Rollen: „Schwarz“ ist intern immer der
+Angreifer, „Weiß“ die Zielgruppe. Bei weiß beginnenden Aufgaben tauschen Brett,
+Anzeige und öffentliche Export-Zugfolgen alle tatsächlichen Farben. Die
+folgenden technischen Beweisbegriffe beziehen sich auf diese internen Rollen.
+
+- Ausschließlich **lokale Fangaufgaben**, Schwarz fängt eine markierte weiße
+  Gruppe. Bei neuen Aufgaben ist die kompakte umgebende Kette mit zwei
+  getrennten echten Augen dargestellt. Gespielt wird im markierten lokalen
+  Bereich, mit echten Eck-/Randgrenzen. Der Leser unterstützt alte Diagramme
+  nur noch für Regressionstests und vorhandene Daten.
+- Legale Züge, Schlagen, Selbstmordverbot, Ko und positionelles Superko. Passen
+  ist berücksichtigt; zwei aufeinanderfolgende Pässe liefern **ungeklärt**, nicht
+  einen erfundenen Lebensbeweis. Außen-Kodrohungen werden nicht modelliert.
+- Ein Fangbeweis enthält eine schwarze Gewinnstrategie und **alle** legalen
+  weißen Antworten an jedem Verteidigungsknoten. Eine Widerlegung enthält eine
+  weiße Lebensstrategie und alle schwarzen Antworten, bis ein konservativer
+  Benson-Lebensnachweis (zwei vitale Augenregionen) erreicht ist.
+- Kein Puzzle darf auf einem weißen Fehler beruhen. Nach einem korrekten
+  schwarzen Zug wählt die Oberfläche aus sämtlichen Antworten diejenige mit
+  der größten verbleibenden minimalen schwarzen Lesetiefe. Bei Gleichstand
+  wird aktive Gegenwehr bevorzugt. Nach einem Fehler hat der erzwungene
+  Lebensnachweis Vorrang vor Verzögerung. Tests lösen jede mögliche erste
+  weiße Antwort frisch und vergleichen die gewählte Verteidigung damit.
+- Der einzige korrekte erste schwarze Zug muss bewiesen sein. Für jeden anderen
+  legalen ersten Zug, einschließlich Pass, ist ein Lebensbeweis nötig. Wenn nur
+  die Suchtiefe erschöpft ist, ist ein Zug **ungeklärt**, niemals „falsch“.
+- Die Zugzahl ist die minimale Anzahl schwarzer Züge, mit der Schwarz im
+  schlechtesten Verteidigungsfall fangen kann. Die Strategie minimiert schwarze
+  Züge auch in den Folgestellungen; sie darf keine künstlichen Umwege einfügen.
+- Zusätzlich wird die minimale Tiefe in einem separaten Kontrollspiel **ohne
+  weiße Pässe** bestimmt. Sie muss mit der angekündigten Tiefe übereinstimmen.
+  Dadurch können weder Pass-Verzögerungen noch schwache schwarze Fortsetzungen
+  eine kurze Aufgabe scheinbar länger machen. Ein zweites Zertifikat enthält
+  sämtliche aktiven weißen Antworten; das normale Zertifikat berücksichtigt
+  weiterhin alle legalen weißen Antworten einschließlich Pass.
+- In der gezeigten längsten Lösungslinie spielt Weiß jeden Verteidigungszug
+  tatsächlich. Ab drei eigenen Zügen sind mindestens zwei schwarze Positionen
+  mit mehreren legalen Zugmöglichkeiten nötig. Mindestens zwei falsche erste
+  Züge müssen nachweisbar zu Leben führen.
+- Beweiszertifikate werden beim Speichern und Export unabhängig nachgespielt.
+  Die Tests spielen Zertifikate zusätzlich mit GoStones bestehender Vollbrett-
+  Regelengine nach, vergleichen jede Zwischenstellung und prüfen, dass alle
+  Umgebungssteine zur tatsächlich lebenden Kette gehören. Das belegt die
+  implementierten lokalen Regeln, nicht die
+  universelle Fehlerfreiheit einer Go-Engine oder offene Ganzbrettaufgaben.
+
+## Vielfalt
+
+Der Generator erzeugt neue Zufallsformen, zusammenhängende und geteilte
+Augenräume, weiße Gruppen und schwarze Opfersteine. Zusätzlich verändert er
+mehrere innere Punkte bereits selbst erzeugter, bewiesener Stellungen. Die
+passende Zugtiefe wird bei der Auswahl dieser Ausgangspunkte bevorzugt. Er
+importiert keine fremden Puzzle-Daten. Jeder neue Kandidat wird neu bewiesen.
+Der dauerhafte Index vergleicht
+acht Symmetrien und normalisiert Positionen. Zusätzlich vergleicht er das innere
+Augen-/Opfermotiv ohne zusätzliche äußere weiße Steine. Dasselbe Motiv an einer
+anderen Stelle, in einer größeren Einfassung, gespiegelt oder gedreht wird
+verworfen. Ein strenger Ähnlichkeitsvergleich verwirft kleine Formänderungen.
+Außerdem wird die Kernstellung nach dem ersten schwarzen Zug und dem ersten
+weißen Antwortzug verglichen: dieselbe Kernaufgabe mit verändertem Einstieg
+wird ab drei eigenen Zügen ebenfalls verworfen. Worker teilen neu gefundene
+Motive und vermeiden bereits geprüfte identische Kandidaten vor der Suche.
+Auch aussortierte Aufgaben bleiben im Index, damit sie nicht erneut entstehen.
+Zusätzlich wird die Form aller gesetzten Lösungssteine beider Seiten verglichen,
+ohne die umgebenden Steine. Translation, acht Symmetrien, tatsächliche Startfarbe
+und Reihenfolge gleicher gespielter Punkte ändern das Muster nicht. Gleiche
+und sehr ähnliche Muster ab drei eigenen Zügen werden konservativ verworfen.
+Das ist ein zusätzlicher Filter, kein Beweis didaktischer Verschiedenheit:
+inhaltlich ähnliche Lehrmotive müssen
+zusätzlich bei der Freigabe beurteilt werden. Der Bestand ist endlich, und die
+Suchstatistik macht sinkende Ausbeute und Duplikate sichtbar.
+
+## Kyu-Bewertung
+
+Jede angenommene Aufgabe bekommt eine Kategorie und einen **geschätzten Rang
+zwischen 1 und 30 Kyu**. Die versionierte Heuristik verwendet minimale eigene
+Züge, Beweisgröße, Verteidigungsverzweigungen, Widerlegungen und Opferzüge.
+1 Kyu ist schwerer als 30 Kyu. Nicht jeder Suchlauf liefert jede Rangstufe.
+
+**Ein lokal erzeugtes „10 Kyu“ ist keine gemessene 10-Kyu-Aufgabe.** Für verlässliche
+Ränge brauchen wir später Lösungsquoten bekannter Spielerstärken. Die JSON-Daten
+und Oberfläche markieren deshalb alle Ränge als `estimated` / `uncalibrated`.
+Lösungsbeweis, menschliche Schwierigkeit und didaktische Qualität sind drei
+verschiedene Prüfungen. Im Lab wird keine vermeintlich exakte Ranggarantie gegeben.
+
+## Leistung und Grenzen
+
+Bitmasken, Tabellen für Nachbargruppen, gezielte Zugreihenfolge, iterative Suchtiefe, begrenzte Caches und
+Node-Worker halten die Suche lokal und parallel. Die Cache-Schlüssel enthalten
+die vollständige Wiederholungshistorie, damit Superko-Beweise nicht aus einer
+anderen Historie übernommen werden. Bewiesene kürzere Horizonte sind wiederverwendbar;
+Geometrie und Lebensprüfung werden getrennt von historischen Ergebnissen
+gespeichert. Über 25 Punkten verwenden Geometrie-Caches verlustfreie String-
+Schlüssel statt ungenauer Zahlenschlüssel. Standard: zwei Worker, höchstens die Hälfte
+der verfügbaren logischen CPU-Kerne (maximal sechs). Ein Suchbudget schützt den
+Laptop vor einzelnen unendlich schweren Stellungen. Größere Tiefen, unklare
+Verteidigungen und große Beweisbäume werden verworfen, nicht approximiert.
+
+Die Zahl angeforderter Aufgaben ist ein Ziel, keine garantierte Ausbeute. Der
+Generator ist ein erstes lokales Tsumego-Lab und keine allumfassende Go-Buch-
+Redaktion. Offene Gruppen, Außen-Kodrohungen, Joseki, globale Strategie und Dan-
+Einstufungen sind nicht Teil dieses Formats.
+
+## Daten, Export und Prüfung
+
+Unter Windows verwenden Launcher, Server, CLI und Audit standardmäßig denselben
+Speicherort `%LOCALAPPDATA%/GoStone/PuzzleLab`. Auf anderen Plattformen liegt
+alles unter `.cache/puzzle-lab/` (von Git ignoriert):
+`catalog.json`,
+`job.json`, `puzzles/puzzle-N.json`. Keine erzeugten Bestände werden automatisch
+in die App importiert. Der JSON-Export verwendet `gostone.local-puzzle-bundle/1`
+und enthält Startstellung, Vollbrett, Ziel, Kategorie, Kyu-Schätzung, Zugzahl,
+Lösung, vollständige Beweise, Widerlegungen und Erzeugungsherkunft. Jedes Puzzle
+hat die öffentliche Präsentation `gostone-puzzle-presentation/3`:
+
+- `startingPosition`: Brettgröße, tatsächliche Farben (`0` leer, `1` schwarz,
+  `2` weiß), Zielgruppe, erlaubte Punkte und `toPlay` (`B` oder `W`). Alle Punkte
+  sind nullbasierte `[x,y]`-Koordinaten vom oberen linken Brettrand.
+- `toPlay`, `kyu`, `difficulty`: Startfarbe, Rang und Kennzeichnung der
+  unkalibrierten Schätzung.
+- `solutionSequence`: vollständige beste Lösung mit tatsächlichen Zugfarben,
+  Koordinaten, Pass-Markierung und Anzahl eigener Züge; `status: correct`.
+- `alternativeSequences`: exakt zwei unterschiedliche falsche erste Züge,
+  jeweils höchstens vier **Gesamtzüge** mit tatsächlichen Farben. `status:
+  incorrect`, `feedbackAfterPly` und `endpoint` bestimmen das Fehlerfeedback.
+  `alive` bedeutet zwei vorhandene sichere Augen, `life-forced` bedeutet,
+  dass Leben gegen jede weitere Fortsetzung bewiesen ist. Die kurze Folge
+  darf einen vollständigen längeren Beweis nach dem entscheidenden Gegenzug
+  abkürzen, behauptet aber dann keine bereits vorhandenen Augen.
+  Eigene Demonstrationszüge sind tatsächliche Steinsetzungen, keine künstlich
+  verlängerten Passfolgen. Wenn es keine legale Steinsetzung mehr gibt, endet
+  der kurze Fehlerweg früher mit seinem bewiesenen Ergebnis.
+- `solverEncoding`: kennzeichnet die normalisierten internen Bitboards,
+  Zertifikate, `solution`, `wrongPaths` und `alternatives`. Diese internen
+  Beweise können länger als vier Züge sein; die spielbaren Export-Fehlerfolgen
+  haben stets die Vier-Züge-Grenze. Zertifikatverweise verbinden beide.
+
+Der SGF-Export enthält die tatsächliche Aufstellung, `PL[B]`/`PL[W]`, Kyu-
+Schätzung, Ziel, verzweigte geprüfte Lösung und exakt zwei kurze Fehlerzweige.
+Nur am Fehlerzweig-Ende steht `INCORRECT`, mit bereits lebend/erzwungenem Leben
+unterschieden. Die Kammerbeschränkung steht ausdrücklich im Kommentar.
+Alte lokale Aufgaben erhalten diese Präsentation beim Lesen; neu gespeicherte
+Aufgaben enthalten sie direkt. Nummern und Freigaben bleiben erhalten.
+Alte große Kammerdiagramme können für Regression/Diagnose gelesen werden,
+aber nicht mehr freigegeben oder heruntergeladen werden. Freigabe und Export
+verlangen das aktuelle minimale Brettformat und seine Diagramm-Grenzen.
+
+```powershell
+npm run puzzles:lab:test
+npm run puzzles:lab:verify
+npm run puzzles:lab:verify -- --file "path/to/gostone-lab-approved.json"
+npm run puzzles:lab:audit -- --root "C:/path/to/data" --re-solve
+npm run puzzles:lab:benchmark -- --seconds 120 --moves 3,4,5
+npm run puzzles:lab:generate -- --count 20 --ownMovesMin 4 --ownMovesMax 5
+```
+
+`generate` speichert in denselben lokalen Bestand, arbeitet mit denselben Filtern
+und beendet sich bei unerreichter Zielmenge mit Exit-Code 2. Der CLI-Generator
+darf nicht gleichzeitig mit einem GUI-Lauf auf dasselbe Datenverzeichnis
+schreiben. Ein gemeinsamer Prozess-Lock verhindert konkurrierende Schreiber.
+
+`audit` spielt alle Zertifikate mit GoStones unabhängiger Vollbrett-Regelengine
+nach und prüft jede Lebens-Endstellung zusätzlich mit einer eigenen Flächen-
+und Gruppenprüfung. Mit `--re-solve` wird die Tiefe frisch gelöst. Aussortierte
+Aufgaben werden beim Bestands-Audit ausgelassen. `--directory` prüft stattdessen
+die Puzzle-Dateien eines Benchmark-Verzeichnisses.
+
+`benchmark` startet einen Worker je gewünschter Zugtiefe (höchstens vier),
+begrenzt die Laufzeit und schreibt Messungen und angenommene Aufgaben unter
+`.cache/puzzle-lab-benchmark/`. Andere Verzeichnisse sind über `--output`
+möglich. `--seeds` nimmt eine JSON-Liste eigener bewiesener Aufgaben als
+Startbestand; diese zählen nicht als neu erzeugte Aufgaben. Ohne Startbestand
+beginnt die Suche vollständig zufällig. `--attempts`, `--maxNodes`, `--maxMs`
+und `--source` ermöglichen reproduzierbare Vergleichsläufe. Der Benchmark
+importiert nichts automatisch in die App. Messungen stehen in
+[BENCHMARK.md](./BENCHMARK.md).
+
+## Für die spätere App vorgemerkt
+
+Die vorhandenen 60 eigenen Aufgaben sollen 25–30 Kyu bekommen. Später nur eine
+kleine Anzeige „Puzzle 1300“, keine Zählung „200 von 1900“. Neue ungelöste Aufgaben
+nahe dem Spieler-Rang wählen, an Verbesserung anpassen, gelöste Aufgaben nicht
+normal erneut zeigen. Falsche Aufgaben nach ungefähr 10–20 weiteren Aufgaben
+wiederholen, bis sie richtig gelöst werden. Diese App-Änderungen sind ausdrücklich
+noch nicht implementiert.
