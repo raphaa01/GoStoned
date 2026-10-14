@@ -393,6 +393,38 @@ test('store persists review states and jobs recover as paused without changing g
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('unlimited search resumes a capped run without losing its goal, accepted tasks or search position', () => {
+  assert.equal(validateConfig({}).maxAttempts, 0);
+  assert.throws(() => validateConfig({maxAttempts:-1}), /maxAttempts/);
+  const root=mkdtempSync(join(tmpdir(),'gostone-unlimited-'));
+  let jobs;
+  try {
+    const store=new Store(root); store.add(modernPuzzle());
+    writeFileSync(join(root,'job.json'),JSON.stringify({status:'exhausted',config:validateConfig({count:150,ownMovesMin:3,ownMovesMax:3,kyuMin:10,kyuMax:20,maxAttempts:2000000}),accepted:1,numbers:[1],attempts:2000000,nextAttempt:2000000,elapsedMs:400000,resumedAt:null,reasons:{'invalid-shape':1000}}));
+    jobs=new Jobs(store); jobs.launch=()=>{};
+    jobs.control('resume');
+    assert.equal(jobs.job.config.maxAttempts,0);
+    assert.equal(jobs.job.config.count,150);
+    assert.equal(jobs.job.accepted,1); assert.deepEqual(jobs.job.numbers,[1]);
+    assert.equal(jobs.job.attempts,2000000); assert.equal(jobs.job.nextAttempt,2000000);
+    const dispatched=[], record={worker:{postMessage:(message)=>dispatched.push(message)}};
+    jobs.dispatch(record); jobs.dispatch(record);
+    assert.equal(jobs.job.status,'running');
+    assert.deepEqual(dispatched.map((message)=>message.id),[2000000,2000001]);
+    assert.deepEqual(dispatched.map((message)=>message.layoutKind),['corner','edge'],'An unchanged accepted count must not freeze the search in one layout');
+    assert.ok(dispatched.every((message)=>message.ownMoves===3));
+    jobs.close();
+    const recovered=new Jobs(new Store(root));
+    assert.equal(recovered.job.status,'paused'); assert.equal(recovered.job.config.maxAttempts,0);
+    assert.deepEqual(recovered.job.numbers,[1]); assert.equal(recovered.job.nextAttempt,2000002);
+    recovered.launch=()=>{}; recovered.control('resume');
+    recovered.settle(); assert.equal(recovered.job.status,'running','An idle unlimited run is not exhausted');
+    recovered.job.accepted=150; recovered.dispatch(record);
+    assert.equal(recovered.job.status,'completed','The requested target still ends unlimited search');
+    recovered.close();
+  } finally {jobs?.close(); rmSync(root,{recursive:true,force:true});}
+});
+
 test('one writer per data directory; releasing a lock does not remove a newer owner', () => {
   const root = mkdtempSync(join(tmpdir(), 'gostone-puzzle-lock-'));
   try {
@@ -436,6 +468,20 @@ test('local HTTP flow protects mutation, survives worker completion and exports 
     assert.equal(start.status, 200);
     await new Promise((resolve, reject) => { const deadline = Date.now() + 10000; const check = () => { if (!['running', 'pausing'].includes(lab.jobs.job.status)) resolve(); else if (Date.now() > deadline) reject(new Error('Worker never settled')); else setTimeout(check, 30); }; check(); });
     assert.equal(lab.jobs.job.status, 'exhausted'); assert.equal(lab.jobs.job.attempts, 4);
+    const previous=lab.jobs.snapshot();
+    const resumed=await fetch(`${url}/api/resume`,{method:'POST',headers,body:'{}'});
+    const continued=await resumed.json(); assert.equal(resumed.status,200);
+    assert.equal(continued.status,'running'); assert.equal(continued.config.maxAttempts,0);
+    assert.equal(continued.accepted,previous.accepted); assert.deepEqual(continued.numbers,previous.numbers);
+    const deadline=Date.now()+10000;
+    while(lab.jobs.job.attempts<=4 && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,30));
+    assert.ok(lab.jobs.job.attempts>4,'Real workers must advance beyond the old cap');
+    assert.ok(['running','completed'].includes(lab.jobs.job.status));
+    if(lab.jobs.job.status==='running') {
+      const paused=await fetch(`${url}/api/pause`,{method:'POST',headers,body:'{}'}); assert.equal(paused.status,200);
+      while(lab.jobs.job.status==='pausing' && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,30));
+      assert.equal(lab.jobs.job.status,'paused');
+    }
     assert.equal((await fetch(`${url}/api/export`)).status, 400);
     const reviewed = await fetch(`${url}/api/review`, { method: 'POST', headers, body: JSON.stringify({ number: 1, status: 'approved' }) }); assert.equal(reviewed.status, 200);
     const exported = await (await fetch(`${url}/api/export`)).json(); assert.equal(exported.puzzles.length, 1); verifyPuzzle(exported.puzzles[0]);

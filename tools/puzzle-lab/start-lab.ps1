@@ -8,7 +8,7 @@ $puzzleData = if ($DataDirectory) { [IO.Path]::GetFullPath($DataDirectory) } els
 New-Item -ItemType Directory -Path $puzzleData -Force | Out-Null
 try {
     $puzzleExisting = Invoke-RestMethod -Uri "$puzzleUrl/api/bootstrap" -TimeoutSec 2
-    if ($puzzleExisting.version -eq 'gostone-local-puzzle-lab/1' -and $puzzleExisting.revision -eq 'minimal-visual-reviewed-v7' -and $puzzleExisting.root -eq $puzzleData -and $puzzleExisting.implementationDirectory -eq $PSScriptRoot) {
+    if ($puzzleExisting.version -eq 'gostone-local-puzzle-lab/1' -and $puzzleExisting.revision -eq 'continuous-search-v8' -and $puzzleExisting.root -eq $puzzleData -and $puzzleExisting.implementationDirectory -eq $PSScriptRoot) {
         if (-not $NoBrowser) { Start-Process $puzzleUrl }
         exit 0
     }
@@ -21,7 +21,7 @@ for ($puzzleAttempt = 0; $puzzleAttempt -lt 30; $puzzleAttempt++) {
     Start-Sleep -Milliseconds 300
     try {
         $puzzleReady = Invoke-RestMethod -Uri "$puzzleUrl/api/bootstrap" -TimeoutSec 2
-        if ($puzzleReady.version -eq 'gostone-local-puzzle-lab/1' -and $puzzleReady.revision -eq 'minimal-visual-reviewed-v7' -and $puzzleReady.root -eq $puzzleData -and $puzzleReady.implementationDirectory -eq $PSScriptRoot) {
+        if ($puzzleReady.version -eq 'gostone-local-puzzle-lab/1' -and $puzzleReady.revision -eq 'continuous-search-v8' -and $puzzleReady.root -eq $puzzleData -and $puzzleReady.implementationDirectory -eq $PSScriptRoot) {
             if (-not $NoBrowser) { Start-Process $puzzleUrl }
             exit 0
         }

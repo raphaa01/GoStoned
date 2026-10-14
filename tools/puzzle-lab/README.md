@@ -20,8 +20,8 @@ Brettecke, die Eckumgebung eine schmale zweireihige Fortsetzung. Neue Aufgaben
 mit bis zu vier eigenen Zügen haben höchstens **28 Steine insgesamt**, tiefere
 Aufgaben höchstens 32. Diese Grenze wird vor der kostspieligen Beweissuche
 geprüft. Zusätzlich gelten höchstens 24 Umgebungssteine, höchstens 16 Zielsteine
-und kein vollständig gefüllter 3×3-Block. Neue bewiesene Aufgaben wechseln zwischen Eck- und
-Randstellungen, mit beiden tatsächlichen Startfarben. Wiederkehrende oder
+und kein vollständig gefüllter 3×3-Block. Die Suche wechselt zwischen Eck- und
+Randstellungen; angenommene Aufgaben starten abwechselnd mit Schwarz und Weiß. Wiederkehrende oder
 kaum veränderte **Zielgruppenformen** werden zusätzlich zu taktischen Kernen
 und Lösungszugmustern verworfen. Die Indizes überleben einen Neustart.
 Der Formvergleich richtet Gruppen auch an verschiedenen inneren Punkten aus:
@@ -73,9 +73,15 @@ Für Wartung ohne weitere Browser-Tabs: `tools/puzzle-lab/start-lab.ps1 -NoBrows
    CPU-Worker und optional das Suchbudget einstellen. Für genau vier eigene Züge
    beide Zugfelder auf **4** setzen; entsprechend **5** für fünf Züge.
 2. **Aufgaben erzeugen**. Die Qualität wird nicht gesenkt, um die Zielanzahl zu
-   erreichen. Versuchslimit oder Zeit-/Knotenbudget dürfen deshalb zu einem
-   kleineren Bestand führen. Anspruchsvolle Tiefen und enge Rangfilter können
+   erreichen. Standardmäßig gibt es **kein Versuchslimit** (`maxAttempts: 0`):
+   der Lauf sucht bis zur Zielmenge oder bis Pause/Stop. Ein ausdrücklich gesetztes
+   positives Versuchslimit ist optional. Ein damit beendeter Lauf kann über
+   **Ohne Versuchslimit fortsetzen** weiterlaufen; Nummern, Treffer, Suchposition
+   und Zielmenge bleiben erhalten. Zeit-/Knotenbudgets gelten pro Stellung,
+   nicht für den ganzen Lauf. Anspruchsvolle Tiefen und enge Rangfilter können
    lange suchen oder keinen Treffer liefern.
+   Eck- und Randformen wechseln bei den Suchversuchen, damit eine seltene
+   Form die gesamte Suche nicht bis zum nächsten Treffer blockiert.
 3. Aufgaben über ihre **festen Nummern** öffnen, Probe-Spielen, Lösungen und
    geprüfte Fehlerwege Schritt für Schritt ansehen. Schwarz und Weiß starten
    bei angenommenen Aufgaben abwechselnd. Der Gegner wählt die stärkste

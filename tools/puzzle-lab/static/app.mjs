@@ -30,7 +30,8 @@ function renderStatus(status) {
   $('progress').max = status.config?.count ?? 20; $('progress').value = status.accepted ?? 0;
   const active = ['running', 'pausing', 'paused', 'stopping'].includes(status.status);
   $('start').disabled = active;
-  $('pause').disabled = status.status !== 'running'; $('resume').disabled = status.status !== 'paused'; $('stop').disabled = !['running', 'pausing', 'paused'].includes(status.status);
+  $('pause').disabled = status.status !== 'running'; $('resume').disabled = !['paused', 'exhausted'].includes(status.status); $('stop').disabled = !['running', 'pausing', 'paused'].includes(status.status);
+  $('resume').textContent = status.status === 'exhausted' ? 'Ohne Versuchslimit fortsetzen' : 'Fortsetzen';
   $('rejections').replaceChildren(...Object.entries(status.reasons ?? {}).map(([reason, count]) => { const span = document.createElement('span'); span.textContent = `${reasons[reason] ?? reason} ${count}`; return span; }));
 }
 function renderCatalog() {
@@ -172,7 +173,7 @@ for (const [id, status] of [['approve', 'approved'], ['reject', 'rejected'], ['p
   try { await api('/api/review', { number: selected.number, status }); selected.review = status; catalog = await api('/api/puzzles'); renderReview(); renderCatalog(); } catch (e) { error(e.message); }
 });
 $('settings').addEventListener('submit', async (event) => { event.preventDefault(); error(''); const config = Object.fromEntries([...new FormData(event.currentTarget)].map(([key, value]) => [key, Number(value)])); try { renderStatus(await api('/api/start', config)); } catch (e) { error(e.message); } });
-for (const action of ['pause', 'resume', 'stop']) $(action).addEventListener('click', async () => { try { error(''); renderStatus(await api(`/api/${action}`, {})); } catch (e) { error(e.message); } });
+for (const action of ['pause', 'resume', 'stop']) $(action).addEventListener('click', async () => { try { error(''); const status = await api(`/api/${action}`, {}); renderStatus(status); $('settings').elements.namedItem('maxAttempts').value = status.config.maxAttempts; } catch (e) { error(e.message); } });
 $('reset').addEventListener('click', () => { if (!busy) reset(); });
 $('solution').addEventListener('click', () => { $('variation').value = 'solution'; showVariation(); });
 $('variation').addEventListener('change', showVariation);

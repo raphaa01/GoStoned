@@ -8,12 +8,12 @@ import { atomicJson } from './store.mjs';
 
 const ACTIVE = ['running', 'pausing', 'stopping'];
 export const maxWorkers = Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2)));
-export const defaults = { count: 20, ownMovesMin: 3, ownMovesMax: 5, kyuMin: 1, kyuMax: 30, workers: Math.min(2, maxWorkers), maxNodes: 750000, maxMs: 1500, maxAttempts: 20000, seed: 20261014 };
+export const defaults = { count: 20, ownMovesMin: 3, ownMovesMax: 5, kyuMin: 1, kyuMax: 30, workers: Math.min(2, maxWorkers), maxNodes: 750000, maxMs: 1500, maxAttempts: 0, seed: 20261014 };
 export function validateConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Ungültige Einstellungen.');
   if (Object.keys(value).some((key) => !Object.hasOwn(defaults, key))) throw new Error('Unbekannte Einstellung.');
   const config = { ...defaults, ...value };
-  const ranges = { count: [1, 5000], ownMovesMin: [1, 8], ownMovesMax: [1, 8], kyuMin: [1, 30], kyuMax: [1, 30], workers: [1, maxWorkers], maxNodes: [1000, 5000000], maxMs: [50, 10000], maxAttempts: [1, 2000000], seed: [0, 2147483647] };
+  const ranges = { count: [1, 5000], ownMovesMin: [1, 8], ownMovesMax: [1, 8], kyuMin: [1, 30], kyuMax: [1, 30], workers: [1, maxWorkers], maxNodes: [1000, 5000000], maxMs: [50, 10000], maxAttempts: [0, 2000000], seed: [0, 2147483647] };
   for (const [key, [min, max]] of Object.entries(ranges)) if (!Number.isInteger(config[key]) || config[key] < min || config[key] > max) throw new Error(`${key}: ganze Zahl zwischen ${min} und ${max} erforderlich.`);
   if (config.ownMovesMin > config.ownMovesMax || config.kyuMin > config.kyuMax) throw new Error('Minimum darf nicht größer als Maximum sein.');
   return config;
@@ -58,12 +58,14 @@ export class Jobs {
   dispatch(record) {
     if (this.job.status !== 'running') return this.settle();
     if (this.job.accepted >= this.job.config.count) return this.finish('completed');
-    if (this.job.nextAttempt >= this.job.config.maxAttempts) return this.settle();
+    if (this.job.config.maxAttempts > 0 && this.job.nextAttempt >= this.job.config.maxAttempts) return this.settle();
     const id = this.job.nextAttempt++;
     const rng = random((this.job.config.seed + Math.imul(id + 1, 2654435761)) >>> 0);
     const ownMoves = this.job.config.ownMovesMin + Math.floor(rng() * (this.job.config.ownMovesMax - this.job.config.ownMovesMin + 1));
     record.busy = true; record.id = id;
-    const layoutKind = ['corner', 'edge', 'edge', 'corner'][this.job.accepted % 4];
+    // Vary the search by attempts, not successes: a rare edge task must not
+    // prevent workers from searching fresh corner problems indefinitely.
+    const layoutKind = ['corner', 'edge', 'edge', 'corner'][id % 4];
     record.worker.postMessage({ id, seed: Math.floor(rng() * 4294967296), ownMoves, layoutKind, maxNodes: this.job.config.maxNodes, maxMs: this.job.config.maxMs });
   }
   receive(record, result) {
@@ -76,8 +78,7 @@ export class Jobs {
       if (result.error) { this.job.errors++; reason = 'error'; this.job.message = result.error; }
       if (result.puzzle) {
         const puzzle = result.puzzle;
-        if (puzzle.layout?.kind !== ['corner', 'edge', 'edge', 'corner'][this.job.accepted % 4]) reason = 'layout-mix';
-        else if (puzzle.difficulty.kyu < this.job.config.kyuMin || puzzle.difficulty.kyu > this.job.config.kyuMax) reason = 'rank';
+        if (puzzle.difficulty.kyu < this.job.config.kyuMin || puzzle.difficulty.kyu > this.job.config.kyuMax) reason = 'rank';
         else reason = this.diversity.duplicate(puzzle);
         if (!reason && this.job.accepted < this.job.config.count) {
           // Alternate accepted tasks, not search attempts: a 200-task run has
@@ -102,19 +103,20 @@ export class Jobs {
     if ([...this.workers.values()].some((w) => w.busy)) return;
     if (this.job.status === 'pausing') this.finish('paused');
     else if (this.job.status === 'stopping') this.finish('stopped');
-    else if (this.job.status === 'running' && this.job.nextAttempt >= this.job.config.maxAttempts) this.finish('exhausted');
+    else if (this.job.status === 'running' && this.job.config.maxAttempts > 0 && this.job.nextAttempt >= this.job.config.maxAttempts) this.finish('exhausted');
   }
   finish(status) {
     if (this.job.resumedAt) this.job.elapsedMs += Date.now() - this.job.resumedAt;
     this.job.resumedAt = null; this.job.status = status;
-    if (status !== 'failed') this.job.message = { completed: 'Zielmenge erreicht. Aufgaben sind bereit für die Qualitätsprüfung.', exhausted: 'Versuchslimit erreicht. Es wurden nur eindeutig geprüfte, unterschiedliche Aufgaben behalten.', paused: 'Lauf gespeichert und pausiert.', stopped: 'Lauf gestoppt. Erzeugte Aufgaben bleiben erhalten.' }[status] ?? this.job.message;
+    if (status !== 'failed') this.job.message = { completed: 'Zielmenge erreicht. Aufgaben sind bereit für die Qualitätsprüfung.', exhausted: 'Optionales Versuchslimit erreicht. Fortsetzen sucht ohne Versuchslimit weiter; bisherige Aufgaben bleiben erhalten.', paused: 'Lauf gespeichert und pausiert.', stopped: 'Lauf gestoppt. Erzeugte Aufgaben bleiben erhalten.' }[status] ?? this.job.message;
     for (const worker of this.workers.keys()) void worker.terminate();
     this.workers.clear(); this.save();
   }
   control(action) {
     if (action === 'resume') {
-      if (this.job.status !== 'paused') throw new Error('Nur einen pausierten Lauf fortsetzen.');
-      this.job.status = 'running'; this.job.resumedAt = Date.now(); this.job.message = 'Gespeicherten Lauf fortgesetzt.'; this.launch();
+      if (!['paused', 'exhausted'].includes(this.job.status)) throw new Error('Nur einen pausierten Lauf oder einen Lauf am Versuchslimit fortsetzen.');
+      if (this.job.status === 'exhausted') this.job.config.maxAttempts = 0;
+      this.job.status = 'running'; this.job.resumedAt = Date.now(); this.job.message = this.job.config.maxAttempts === 0 ? 'Lauf ohne Versuchslimit fortgesetzt. Suche bis zur Zielmenge oder bis Pause/Stop.' : 'Gespeicherten Lauf fortgesetzt.'; this.launch();
     } else if (action === 'pause') {
       if (this.job.status !== 'running') throw new Error('Kein aktiver Lauf.');
       this.job.status = 'pausing'; this.job.message = 'Aktuelle Prüfung wird noch abgeschlossen.'; this.settle();

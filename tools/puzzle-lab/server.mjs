@@ -11,7 +11,7 @@ import { Chamber, Solver, BudgetExceeded, positionKey, BLACK } from './engine.mj
 import { acquireLock } from './lock.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
-export const LAB_REVISION = 'minimal-visual-reviewed-v7';
+export const LAB_REVISION = 'continuous-search-v8';
 export function createLab({ root = defaultDataRoot(), port = 4184 } = {}) {
   const release = acquireLock(root);
   let store, jobs;
