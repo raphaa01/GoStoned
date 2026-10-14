@@ -101,8 +101,8 @@ export function registerReviewTests(authenticatedServer = false) {
     const options = { missing: true, failRead: true };
     const { requests } = await reviewHarness(page, options);
     await page.goto(`/de/review/${GAME_ID}`);
-    await expect(page.getByRole("alert")).toBeVisible();
-    expect(requests).toEqual(["GET"]);
+    await expect.poll(() => requests).toEqual(["GET"]);
+    await expect(page.locator(".review-workspace").getByRole("alert")).toBeVisible();
     options.failRead = false;
     await page.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
     await expect(page.locator("[data-review-player]")).toBeVisible();
