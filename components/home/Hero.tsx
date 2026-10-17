@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowRight, BookOpen, Gamepad2, Play, Puzzle, Search, Trophy } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { GoBoardScene } from "@/components/home/GoBoardScene";
+import { StoneArtwork } from "@/components/home/StoneArtwork";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
 type PublicActivityCount = number | "under_5";
@@ -91,14 +91,9 @@ export function Hero() {
         <div aria-hidden="true" className="hero-stone-stage">
           <span className="hero-ripple hero-ripple--one" />
           <span className="hero-ripple hero-ripple--two" />
-          <Image
-            alt=""
+          <StoneArtwork
             className="hero-stone-image"
-            height={1024}
-            priority
             sizes="(max-width: 620px) 94vw, 920px"
-            src="/images/gostone-hero-stone.webp"
-            width={1536}
           />
         </div>
 

@@ -40,10 +40,7 @@ export function AuthForm({
   const { user, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
-  const [password, setPassword] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
@@ -52,6 +49,8 @@ export function AuthForm({
   const usernameInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
   const emailInput = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const requestPending = useRef(false);
   const security = getAccountSecurityCopy(locale);
 
   function socialHref(provider: "google" | "apple") {
@@ -64,6 +63,14 @@ export function AuthForm({
     strength?: StartingStrength,
     boardPlacement: BoardPlacementPreference = "zoom",
   ): Promise<boolean> {
+    const form = formRef.current;
+    if (requestPending.current || !form || !form.reportValidity()) return false;
+    // Password managers may fill the DOM without firing React change events.
+    const fields = new FormData(form);
+    const username = String(fields.get("username") ?? "");
+    const email = String(fields.get("email") ?? "");
+    const password = String(fields.get("password") ?? "");
+    requestPending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -102,22 +109,22 @@ export function AuthForm({
         router.refresh();
       }
       return true;
-    } catch (requestError) {
+    } catch {
       setError({
-        message: requestError instanceof Error
-          ? requestError.message
-          : dictionary.auth.errors.request_failed,
+        message: dictionary.auth.errors.request_failed,
         fields: [],
       });
       setOnboardingOpen(false);
       return false;
     } finally {
+      requestPending.current = false;
       setBusy(false);
     }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (requestPending.current || onboardingOpen) return;
     if (mode === "register") {
       setError(null);
       setOnboardingOpen(true);
@@ -189,7 +196,7 @@ export function AuthForm({
         <h1>{registering ? dictionary.auth.createTitle : dictionary.auth.loginTitle}</h1>
       </header>
 
-      <form className="auth-form" onSubmit={submit}>
+      <form className="auth-form" onSubmit={submit} ref={formRef} method="post">
         <label>
           <span>{registering ? dictionary.auth.username : security.identifier}</span>
           <span className="input-wrap">
@@ -200,28 +207,30 @@ export function AuthForm({
               aria-invalid={error?.fields.includes("username") || undefined}
               aria-label={registering ? dictionary.auth.username : security.identifier}
               autoComplete="username"
+              autoCapitalize="none"
               autoFocus
               maxLength={registering ? 20 : 254}
               minLength={3}
-              onChange={(event) => {
-                setUsername(event.target.value);
+              name="username"
+              onChange={() => {
                 if (error) setError(null);
               }}
               pattern={registering ? "[A-Za-z0-9_]+" : undefined}
               placeholder={dictionary.auth.usernamePlaceholder}
               required
               ref={usernameInput}
-              value={username}
+              readOnly={busy}
+              spellCheck={false}
             />
           </span>
           {registering ? <small id={usernameHintId}>{dictionary.auth.usernameHint}</small> : null}
         </label>
         {registering ? <label>
           <span>{security.email}</span><span className="input-wrap">
-            <input type="email" autoComplete="email" aria-label={security.email} required maxLength={254} ref={emailInput}
+            <input type="email" name="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-label={security.email} required maxLength={254} ref={emailInput}
               aria-invalid={error?.fields.includes("email") || undefined}
               aria-describedby={error?.fields.includes("email") ? errorId : undefined}
-              value={email} onChange={(event) => { setEmail(event.target.value); if (error) setError(null); }} />
+              readOnly={busy} onChange={() => { if (error) setError(null); }} />
           </span><small>{security.emailHint}</small>
         </label> : null}
         <label>
@@ -234,21 +243,20 @@ export function AuthForm({
               autoComplete={registering ? "new-password" : "current-password"}
               maxLength={128}
               minLength={8}
-              onChange={(event) => {
-                setPassword(event.target.value);
+              name="password"
+              onChange={() => {
                 if (error) setError(null);
               }}
               placeholder={dictionary.auth.passwordPlaceholder}
               required
               ref={passwordInput}
               type="password"
-              value={password}
+              readOnly={busy}
             />
           </span>
         </label>
 
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
-        {!registering ? <button className="button" type="button" disabled={busy} onClick={() => setResetOpen(true)}>{security.forgot}</button> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}
           {busy
@@ -265,6 +273,8 @@ export function AuthForm({
         ) : null}
 
       </form>
+
+      {!registering ? <button className="auth-forgot" type="button" disabled={busy} onClick={() => setResetOpen(true)}>{security.forgot}</button> : null}
 
       {!registering && socialOptions ? (
         <>

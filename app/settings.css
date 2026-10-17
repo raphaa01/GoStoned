@@ -114,13 +114,38 @@ html[data-theme="dark"] .time-selector button:hover:not(:disabled):not(.is-selec
 html[data-theme="dark"] .auth-social-button:hover,
 html[data-theme="dark"] .game-actions button:hover:not(:disabled) { background: var(--color-surface-raised); }
 
-/* Match the water photograph and chapter surfaces to the dark palette. */
+/* Keep natural stone lighting instead of inverting shadows into a glow. */
+.stone-artwork--dark { display: none; }
+html[data-theme="dark"] .stone-artwork--light { display: none; }
+html[data-theme="dark"] .stone-artwork--dark { display: block; }
 html[data-theme="dark"] .hero-stone-image,
 html[data-theme="dark"] .auth-material img {
-  filter: invert(1) grayscale(1);
-  mix-blend-mode: screen;
-  opacity: .9;
+  mix-blend-mode: normal;
 }
+/* Fade all four photo edges, including the letterboxed edges of contain. */
+.auth-material img {
+  height: auto;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  -webkit-mask-image: radial-gradient(ellipse 65% 59% at 50% 54%, #000 28%, transparent 78%);
+  mask-image: radial-gradient(ellipse 65% 59% at 50% 54%, #000 28%, transparent 78%);
+}
+.auth-forgot {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-size: 14px;
+  margin: 4px 0 0 auto;
+  min-height: 44px;
+  padding: 8px 0 8px 12px;
+}
+.auth-forgot:hover { color: var(--color-moss-strong); }
+.auth-forgot:disabled { cursor: wait; opacity: .6; }
+.auth-forgot:focus-visible { outline: 2px solid var(--color-moss); outline-offset: 3px; }
 html[data-theme="dark"] .home-hero::after { background: linear-gradient(to bottom, transparent, var(--color-canvas)); }
 html[data-theme="dark"] .home-chapters {
   background: radial-gradient(ellipse at 12% 18%, rgb(138 180 159 / .06), transparent 50%), var(--color-canvas);
