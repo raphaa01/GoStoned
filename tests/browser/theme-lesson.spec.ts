@@ -22,8 +22,10 @@ test("dark landing page has a dark water scene and continuous chapter palette", 
   await page.addInitScript(() => localStorage.setItem("gostone.theme.v1", "dark"));
   await page.goto("/de");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator(".hero-stone-image")).toBeVisible();
-  await expect.poll(() => page.locator(".hero-stone-image").evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const image = page.locator(".hero-stone-image.stone-artwork--dark");
+  await expect(image).toBeVisible();
+  await expect(page.locator(".hero-stone-image.stone-artwork--light")).toBeHidden();
+  await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await expect.poll(() => page.locator(".hero-stone-stage").evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
   const colors = await page.locator(".home-chapters").evaluate((element) => ({
     background: getComputedStyle(element).backgroundColor,
