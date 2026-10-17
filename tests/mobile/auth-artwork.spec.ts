@@ -11,6 +11,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveAttribute("data-mobile-theme", theme);
       const stone = page.locator(path === "/de" ? ".mobile-home-stone span" : ".mobile-auth-mark span");
       await expect(stone).toBeVisible();
+      await expect(page.locator(".mobile-splash")).toBeHidden();
       const background = await stone.evaluate(node => getComputedStyle(node).backgroundImage);
       expect(background).toContain("radial-gradient");
       expect(background).not.toContain("rgb(255, 255, 255)");
