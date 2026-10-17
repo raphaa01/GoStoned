@@ -339,7 +339,9 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-auth-screen .auth-card__header h1 { font-size: 27px; font-weight: 690; letter-spacing: -.035em; }
 .mobile-auth-screen .auth-card__header p { font-size: 13px; line-height: 1.45; }
 .mobile-auth-screen .auth-form { gap: 15px; }
+.mobile-auth-screen .auth-card .input-wrap { background: var(--mobile-surface); border-color: var(--mobile-border-strong); }
 .mobile-auth-screen .input-wrap input { min-height: 50px; }
+.mobile-auth-screen .input-wrap input::placeholder { color: var(--mobile-muted); opacity: 1; }
 .mobile-auth-screen .auth-submit { min-height: 52px; }
 .mobile-screen-loading { align-items: center; display: flex; justify-content: center; min-height: 52dvh; }
 .mobile-screen-loading i, .mobile-account-gate__stone { background: radial-gradient(circle at 35% 28%, #373936, #111 56%, #030403); border: 1px solid rgb(255 255 255 / 9%); border-radius: 50%; box-shadow: 0 9px 20px rgb(0 0 0 / 13%); display: block; height: 38px; width: 38px; }

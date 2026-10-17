@@ -15,6 +15,17 @@ for (const theme of ["light", "dark"] as const) {
       const background = await stone.evaluate(node => getComputedStyle(node).backgroundImage);
       expect(background).toContain("radial-gradient");
       expect(background).not.toContain("rgb(255, 255, 255)");
+      if (path !== "/de") {
+        const field = page.locator(".auth-card .input-wrap").first();
+        expect(await field.evaluate(node => getComputedStyle(node).backgroundColor))
+          .toBe(theme === "dark" ? "rgb(24, 27, 23)" : "rgb(250, 248, 243)");
+        const placeholder = await field.locator("input").evaluate(node => ({
+          color: getComputedStyle(node, "::placeholder").color,
+          opacity: getComputedStyle(node, "::placeholder").opacity,
+        }));
+        expect(placeholder.color).toBe(theme === "dark" ? "rgb(169, 172, 164)" : "rgb(110, 113, 105)");
+        expect(placeholder.opacity).toBe("1");
+      }
       await page.screenshot({ path: `.cache/native-stone-${theme}-${path.replaceAll("/", "-")}-${info.project.name}.png` });
     }
   });
