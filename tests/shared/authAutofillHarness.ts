@@ -131,7 +131,11 @@ export function registerAuthAutofillTests(mobile: boolean) {
         await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
       }
     });
+    // requestSubmit is synthetic and bypasses React's user-event hydration
+    // replay. Wait for the provider effect before exercising duplicate submits.
+    const sessionReady = page.waitForResponse(response => new URL(response.url()).pathname === "/api/auth/session");
     await page.goto("/de/login?returnTo=/play");
+    await sessionReady;
     const form = page.locator(".auth-form");
     await autofill(form.locator('[name="username"]'), "saved_player");
     await autofill(form.locator('[name="password"]'), "saved-password-123");
