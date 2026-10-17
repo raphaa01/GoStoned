@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { StoneArtwork } from "@/components/home/StoneArtwork";
 import { AuthForm } from "@/components/auth/AuthForm";
 import { AppShell } from "@/components/layout/AppShell";
 import { configuredOAuthProviders } from "@/lib/auth/oauth";
@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <AppShell>
       <div className="auth-page">
         <div aria-hidden="true" className="auth-material">
-          <Image alt="" height={1024} priority sizes="(max-width: 760px) 100vw, 52vw" src="/images/gostone-hero-stone.webp" width={1536} />
+          <StoneArtwork sizes="(max-width: 760px) 100vw, 52vw" />
         </div>
         <AuthForm
           configuredOAuthProviders={configuredOAuthProviders()}

@@ -24,7 +24,7 @@ export function MobileAuthScreen({ mode, returnTo, oauthError }: {
   return (
     <main className="mobile-auth-screen" id="main-content">
       <div aria-hidden="true" className="mobile-auth-mark"><i /><i /><span /></div>
-      <AuthForm configuredOAuthProviders={providers} mode={mode} returnTo={destination} oauthError={oauthError}
+      <AuthForm key={mode} configuredOAuthProviders={providers} mode={mode} returnTo={destination} oauthError={oauthError}
         onOAuthStart={(_provider, href) => {
           void startNativeOAuth(href).catch(() => {
             const location = new URL(window.location.href);

@@ -16,18 +16,21 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
   const { user, refresh } = useAuth();
   const { dictionary, href } = useI18n();
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; username: boolean } | null>(null);
   const usernameHintId = useId();
   const errorId = useId();
   const usernameInput = useRef<HTMLInputElement>(null);
+  const requestPending = useRef(false);
 
   async function createAccount(
     strength: StartingStrength,
     boardPlacement: BoardPlacementPreference,
   ): Promise<boolean> {
+    if (requestPending.current || !usernameInput.current?.reportValidity()) return false;
+    const username = usernameInput.current.value;
+    requestPending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -65,6 +68,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
       setOnboardingOpen(false);
       return false;
     } finally {
+      requestPending.current = false;
       setBusy(false);
     }
   }
@@ -103,7 +107,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
         <p>{dictionary.auth.chooseUsernameDescription}</p>
       </header>
 
-      <form className="auth-form" onSubmit={submit}>
+      <form className="auth-form" onSubmit={submit} method="post">
         <label>
           <span>{dictionary.auth.username}</span>
           <span className="input-wrap">
@@ -112,18 +116,20 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
               aria-invalid={error?.username || undefined}
               aria-label={dictionary.auth.username}
               autoComplete="username"
+              autoCapitalize="none"
               autoFocus
               maxLength={20}
               minLength={3}
-              onChange={(event) => {
-                setUsername(event.target.value);
+              name="username"
+              onChange={() => {
                 if (error) setError(null);
               }}
               pattern="[A-Za-z0-9_]+"
               placeholder={dictionary.auth.usernamePlaceholder}
               required
               ref={usernameInput}
-              value={username}
+              readOnly={busy}
+              spellCheck={false}
             />
           </span>
           <small id={usernameHintId}>{dictionary.auth.usernameHint}</small>

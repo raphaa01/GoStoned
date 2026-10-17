@@ -785,6 +785,10 @@ html[data-mobile-theme="dark"] :is(.mobile-wordmark i, .mobile-home-stone span, 
   border-color: rgb(255 255 255 / 30%);
   box-shadow: inset -2px -3px 5px rgb(70 74 65 / 24%), 0 3px 10px rgb(0 0 0 / 15%);
 }
+html[data-mobile-theme="dark"] :is(.mobile-home-stone span, .mobile-auth-mark span) {
+  background: radial-gradient(circle at 35% 28%, #62655f, #272a26 56%, #0c0e0b);
+  box-shadow: inset -2px -3px 5px rgb(0 0 0 / 35%), 0 3px 10px rgb(0 0 0 / 20%);
+}
 .mobile-play-dock { bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap)); }
 .mobile-app-shell.has-play-action .mobile-app-content { padding-bottom: calc(var(--mobile-tab-height) + var(--mobile-play-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 22px); }
 
