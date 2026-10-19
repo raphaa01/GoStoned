@@ -5,7 +5,7 @@ const phaseLabels = {
   data: "KataGo generates teaching positions",
   training: "Student AI is learning",
   export: "ONNX export",
-  validation: "Final validation",
+  validation: "Locked tests & promotion arena",
 };
 const statusLabels = {
   idle: "Ready",
@@ -18,7 +18,7 @@ const statusLabels = {
   failed: "Failed",
 };
 let presets = [];
-let selectedPreset = "short";
+let selectedPreset = "serious";
 let lastArtifact = "";
 let arenaState = null;
 let arenaBusy = false;
@@ -192,7 +192,7 @@ async function loadArenaModels() {
   syncSettlementEvaluatorLabels();
   $("#arena-start").disabled = arenaModels.length === 0;
   $("#arena-model-note").textContent = arenaModels.length
-    ? `${arenaModels.length} completed AI model${arenaModels.length === 1 ? "" : "s"} found. The same version may play both colors for a control run.`
+    ? `${arenaModels.length} completed AI model${arenaModels.length === 1 ? "" : "s"} found, including linked comparison versions. The same version may play both colors for a control run.`
     : "No completed AI model yet. Wait for a training run to finish and export successfully.";
 }
 
