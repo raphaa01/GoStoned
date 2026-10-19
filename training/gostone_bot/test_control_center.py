@@ -12,6 +12,54 @@ from .runtime import RunJournal, atomic_json, load_json, process_is_alive
 
 
 class ControlCenterTests(unittest.TestCase):
+    def test_an_older_stopped_run_can_be_selected_after_a_smoke_test(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            serious = root / "runs" / "serious"
+            smoke = root / "runs" / "smoke"
+            serious.mkdir(parents=True)
+            smoke.mkdir(parents=True)
+            atomic_json(serious / "state.json", {"status": "stopped", "positions": 8465})
+            atomic_json(serious / "config.json", {"preset": {"id": "serious", "games": 72, "epochs": 30}})
+            atomic_json(smoke / "state.json", {"status": "completed"})
+            atomic_json(smoke / "config.json", {"preset": {"id": "smoke", "games": 3, "epochs": 1}})
+            atomic_json(root / "current.json", {"run_dir": str(smoke.resolve())})
+            manager = RunManager(root)
+
+            selected = manager.select("serious")
+
+            self.assertEqual(selected["status"], "stopped")
+            self.assertEqual(selected["positions"], 8465)
+            runs = {run["id"]: run for run in manager.runs()}
+            self.assertTrue(runs["serious"]["selected"])
+            self.assertTrue(runs["serious"]["resumable"])
+
+    def test_quality_rejected_run_adds_epochs_and_keeps_its_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = root / "runs" / "candidate"
+            run_dir.mkdir(parents=True)
+            atomic_json(
+                run_dir / "config.json",
+                {"preset": {"id": "serious", "epochs": 20}, "adaptive_loss_weights": {"survival": 0.6}},
+            )
+            atomic_json(run_dir / "state.json", {"status": "quality_rejected"})
+            atomic_json(root / "current.json", {"run_dir": str(run_dir.resolve())})
+            manager = RunManager(root)
+
+            def fake_launch(path: Path) -> int:
+                self.assertEqual(path, run_dir)
+                RunJournal(path).update(status="running", pid=os.getpid())
+                return os.getpid()
+
+            manager._launch = fake_launch  # type: ignore[method-assign]
+            resumed = manager.resume()
+
+            self.assertEqual(resumed["status"], "running")
+            config = load_json(run_dir / "config.json")
+            self.assertEqual(config["preset"]["epochs"], 25)
+            self.assertEqual(config["adaptive_loss_weights"]["survival"], 0.6)
+
     def test_start_pause_resume_and_stop_are_file_backed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manager = RunManager(Path(temporary))
