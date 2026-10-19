@@ -15,11 +15,11 @@ import torch
 
 from .board import BoardState, PASS_INDEX, padded_policy_index, point_to_gtp
 from .generate import JAPANESE_KOMI, STRENGTHS
-from .model import GoStoneStudent, StudentConfig
+from .model import load_checkpoint_model
 from .settlement import propose_settlement
 
 SUPPORTED_ELOS = tuple(profile.nominal_elo for profile in STRENGTHS)
-MAX_MODEL_BYTES = 8 * 1024 * 1024
+MAX_MODEL_BYTES = 15 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class ModelArtifact:
     created_at: float
     onnx_bytes: int
     model_version: int | None
+    architecture_version: int
     technical_test: bool
 
     def public(self) -> dict[str, object]:
@@ -43,6 +44,7 @@ class ModelArtifact:
             "onnx_bytes": self.onnx_bytes,
             "onnx_mib": round(self.onnx_bytes / 1024 / 1024, 2),
             "model_version": self.model_version,
+            "architecture_version": self.architecture_version,
             "technical_test": self.technical_test,
         }
 
@@ -58,6 +60,14 @@ class ModelCatalog:
         for run_dir in self.runs_dir.iterdir():
             if not run_dir.is_dir():
                 continue
+            state_path = run_dir / "state.json"
+            if state_path.is_file():
+                try:
+                    state = json.loads(state_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(state, dict) or state.get("status") != "completed":
+                    continue
             artifact_dir = run_dir / "artifact"
             checkpoint = artifact_dir / "gostone-japanese-v1.pt"
             onnx = artifact_dir / "gostone-japanese-v1.onnx"
@@ -74,6 +84,7 @@ class ModelCatalog:
                 config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
                 preset = config.get("preset", {}) if isinstance(config, dict) else {}
                 created_at = float(config.get("created_at", onnx.stat().st_mtime)) if isinstance(config, dict) else onnx.stat().st_mtime
+                architecture_version = int(metadata.get("architecture_version", 0))
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
             preset_id = str(preset.get("id", "")) if isinstance(preset, dict) else ""
@@ -89,6 +100,7 @@ class ModelCatalog:
                     "created_at": created_at,
                     "onnx_bytes": onnx.stat().st_size,
                     "model_version": version,
+                    "architecture_version": architecture_version,
                     "technical_test": preset_id == "smoke",
                 }
             )
@@ -145,29 +157,18 @@ class ArenaSession:
 class ArenaService:
     def __init__(self, runs_dir: Path):
         self.catalog = ModelCatalog(runs_dir)
-        self._models: dict[str, GoStoneStudent] = {}
+        self._models: dict[str, torch.nn.Module] = {}
         self._sessions: dict[str, ArenaSession] = {}
         self._lock = threading.RLock()
 
     def models(self) -> list[dict[str, object]]:
         return [artifact.public() for artifact in self.catalog.artifacts()]
 
-    def _load_model(self, artifact: ModelArtifact) -> GoStoneStudent:
+    def _load_model(self, artifact: ModelArtifact) -> torch.nn.Module:
         cached = self._models.get(artifact.id)
         if cached is not None:
             return cached
-        saved = torch.load(artifact.checkpoint, map_location="cpu", weights_only=True)
-        raw_config = saved.get("config")
-        state_dict = saved.get("state_dict")
-        if not isinstance(raw_config, dict) or not isinstance(state_dict, dict):
-            raise ValueError("The AI checkpoint is incomplete.")
-        allowed = {"channels", "blocks", "input_planes", "board_size"}
-        if set(raw_config) != allowed:
-            raise ValueError("The AI checkpoint uses an unknown architecture.")
-        config = StudentConfig(**{key: int(raw_config[key]) for key in allowed})
-        model = GoStoneStudent(config)
-        model.load_state_dict(state_dict, strict=True)
-        model.eval()
+        model = load_checkpoint_model(artifact.checkpoint)
         self._models[artifact.id] = model
         return model
 
@@ -202,8 +203,10 @@ class ArenaService:
         artifact = self.catalog.resolve(model_id or session.model_id)
         model = self._load_model(artifact)
         features = torch.from_numpy(session.board.features(session.strength, JAPANESE_KOMI)).unsqueeze(0)
+        input_planes = int(getattr(model, "config").input_planes)
         with torch.inference_mode():
-            policy, _, _, ownership, survival = model(features)
+            outputs = model(features[:, :input_planes])
+            policy, ownership, survival = outputs[0], outputs[3], outputs[4]
         return (
             policy[0].cpu().numpy(),
             ownership[0].cpu().numpy(),

@@ -97,7 +97,7 @@ class ControlCenterTests(unittest.TestCase):
             self.assertEqual(state["positions"], 42)
             self.assertEqual(state["message"], "weiter")
 
-    def test_real_run_gets_next_version_fresh_seed_and_latest_base(self) -> None:
+    def test_v5_is_fresh_and_uses_v4_only_as_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             prior = root / "runs" / "prior"
@@ -122,10 +122,29 @@ class ControlCenterTests(unittest.TestCase):
             started = manager.start("short", 4)
             config = load_json(Path(str(started["run_dir"])) / "config.json")
             self.assertEqual(config["model_version"], 5)
-            self.assertEqual(config["base_model_version"], 4)
-            self.assertEqual(config["base_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
+            self.assertIsNone(config["base_model_version"])
+            self.assertIsNone(config["base_model_checkpoint"])
+            self.assertEqual(config["comparison_model_version"], 4)
+            self.assertEqual(config["comparison_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
+            self.assertEqual(config["replay_data_dirs"], [])
             self.assertNotEqual(config["seed"], 20260801)
             self.assertEqual(started["preset_name"], "GoStone AI v5")
+
+    def test_v6_inherits_v5_checkpoint_and_replay_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); prior = root / "runs" / "v5"; artifact = prior / "artifact"; data = prior / "data"
+            artifact.mkdir(parents=True); data.mkdir()
+            (artifact / "gostone-japanese-v1.pt").write_bytes(b"checkpoint")
+            (artifact / "gostone-japanese-v1.onnx").write_bytes(b"onnx")
+            (artifact / "gostone-japanese-v1.json").write_text(json.dumps({"rules": "japanese", "komi": 6.5, "architecture_version": 5}), encoding="utf-8")
+            atomic_json(prior / "config.json", {"created_at": 1, "preset": {"id": "short"}, "model_version": 5})
+            manager = RunManager(root)
+            manager._launch = lambda run_dir: (RunJournal(run_dir).update(status="running", pid=os.getpid()) or os.getpid())  # type: ignore[method-assign]
+            started = manager.start("short", 4); config = load_json(Path(str(started["run_dir"])) / "config.json")
+            self.assertEqual(config["model_version"], 6)
+            self.assertEqual(config["base_model_version"], 5)
+            self.assertEqual(config["base_model_checkpoint"], str((artifact / "gostone-japanese-v1.pt").resolve()))
+            self.assertEqual(config["replay_data_dirs"], [str(data.resolve())])
 
 
 if __name__ == "__main__":
