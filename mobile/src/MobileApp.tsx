@@ -1,4 +1,5 @@
 import { ChevronLeft } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { OAuthUsernameForm } from "@/components/auth/OAuthUsernameForm";
@@ -33,7 +34,7 @@ import { MobileCoachEntry, MobileCoachGate } from "./MobileCoachAccess";
 import { LocalPlay, LocalPlayEntry } from "./LocalPlay";
 import { GoClock } from "./GoClock";
 import { updateNativeChrome } from "./nativeChrome";
-import { usePathname, useRouter, useSearchParams } from "./next-navigation";
+import { useHashScroll, usePathname, useRouter, useSearchParams } from "./next-navigation";
 import { MobileThemeProvider } from "./theme";
 
 function routeFor(pathname: string): { locale: Locale; route: string } {
@@ -68,7 +69,7 @@ function MobileRoute() {
   const pathname = usePathname();
   const search = useSearchParams();
   const { locale, route } = routeFor(pathname);
-  const { dictionary } = useI18n();
+  const { dictionary, href } = useI18n();
   const copy = getMobileCopy(locale);
   const game = route.match(/^\/game\/([0-9a-f-]+)$/i);
   const review = route.match(/^\/review\/([0-9a-f-]+)$/i);
@@ -109,13 +110,18 @@ function MobileRoute() {
     case "/privacy": content = <PushedScreen><MobileLegalPage pathname="/privacy" /></PushedScreen>; break;
     case "/impressum": content = <PushedScreen><MobileLegalPage pathname="/impressum" /></PushedScreen>; break;
     case "/delete-account": content = <PushedScreen><MobileLegalPage pathname="/delete-account" /></PushedScreen>; break;
-    default: content = <section className="mobile-not-found"><h1>GoStone</h1><p>404</p></section>;
+    default: content = <section className="mobile-not-found">
+      <h1>{dictionary.notFound.title}</h1>
+      <p>{dictionary.notFound.description}</p>
+      <Link className="button button--primary" href={href("/")}>{dictionary.notFound.action}</Link>
+    </section>;
   }
   return <MobileShell showPlayAction={showPlayAction}>{content}</MobileShell>;
 }
 
 function MobileRoot() {
   const pathname = usePathname();
+  useHashScroll();
   useEffect(() => {
     updateNativeChrome({ type: "navigation", canGoBack: allowsMobileBackGesture(pathname) });
   }, [pathname]);
@@ -125,6 +131,7 @@ function MobileRoot() {
 export function MobileApp() {
   const pathname = usePathname();
   const locale = useMemo(() => routeFor(pathname).locale, [pathname]);
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   return (
     <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>

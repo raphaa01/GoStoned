@@ -44,6 +44,14 @@ test("mobile capability preserves Request headers and init body and stays on GoS
   expect(requests[0].headers["x-gostone-player-key"]).toBe("preserved");
   expect(requests[0].body).toBe(JSON.stringify({ probe: true }));
   expect(requests[1].headers[ACCOUNT_SECURITY_HEADER]).toBeUndefined();
+  await page.evaluate(async () => {
+    await fetch(new Request(new URL("/api/profile/avatar", window.location.href), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ localRequest: true }),
+    }));
+  });
+  expect(requests[2].url).toBe(`${apiOrigin}/api/profile/avatar`);
+  expect(requests[2].headers[ACCOUNT_SECURITY_HEADER]).toBe("2");
+  expect(requests[2].body).toBe(JSON.stringify({ localRequest: true }));
 });
 
 test("legacy email gate survives navigation and Escape, can save email, and offers logout", async ({ page }) => {

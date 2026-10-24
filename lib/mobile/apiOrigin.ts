@@ -15,6 +15,16 @@ export function normalizeMobileApiOrigin(
   return parsed.origin;
 }
 
-export function resolveMobileRequestUrl(original: string, apiOrigin: string): string {
-  return original.startsWith("/api/") ? `${apiOrigin}${original}` : original;
+export function resolveMobileRequestUrl(original: string, apiOrigin: string, appUrl?: string): string {
+  if (original.startsWith("/api/")) return `${apiOrigin}${original}`;
+  if (appUrl) {
+    try {
+      const target = new URL(original);
+      const app = new URL(appUrl);
+      if (target.protocol === app.protocol && target.host === app.host && target.pathname.startsWith("/api/")) {
+        return `${apiOrigin}${target.pathname}${target.search}${target.hash}`;
+      }
+    } catch { /* Leave unrelated and relative asset URLs to the platform fetch. */ }
+  }
+  return original;
 }

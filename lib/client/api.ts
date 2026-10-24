@@ -1,12 +1,3 @@
-type ApiResponse<T> =
-  | ({ ok: true } & T)
-  | {
-      ok: false;
-      error: string;
-      code?: string;
-      retryAfterSeconds?: number;
-    };
-
 export class ApiRequestError extends Error {
   readonly status: number;
   readonly code: string | null;
@@ -32,16 +23,23 @@ function retryAfterSeconds(response: Response, bodyValue?: number): number | und
 }
 
 export async function readApi<T>(response: Response): Promise<T> {
-  const body = (await response.json()) as ApiResponse<T>;
-  if (!response.ok || !body.ok) {
-    throw new ApiRequestError("error" in body ? body.error : "Request failed.", {
+  const payload: unknown = await response.json().catch((error: unknown) => {
+    // Proxies can return HTML or an empty body. Preserve HTTP recovery and
+    // backoff metadata, while letting cancellation and transport errors through.
+    if (error instanceof SyntaxError) return null;
+    throw error;
+  });
+  const body = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown> : null;
+  if (!response.ok || body?.ok !== true) {
+    throw new ApiRequestError(typeof body?.error === "string" ? body.error : "Request failed.", {
       status: response.status,
-      code: "code" in body ? body.code : undefined,
+      code: typeof body?.code === "string" ? body.code : undefined,
       retryAfterSeconds: retryAfterSeconds(
         response,
-        "retryAfterSeconds" in body ? body.retryAfterSeconds : undefined,
+        typeof body?.retryAfterSeconds === "number" ? body.retryAfterSeconds : undefined,
       ),
     });
   }
-  return body;
+  return body as T;
 }

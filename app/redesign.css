@@ -10361,7 +10361,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
   padding: 0;
   position: relative;
   text-align: center;
-  width: min(100%, 230px);
+  width: min(66.6667%, 230px);
 }
 .learn-route-node:hover:not(:disabled) .learn-route-node__copy strong,
 .learn-route-node:focus-visible .learn-route-node__copy strong { color: var(--color-moss-strong); }
@@ -10380,7 +10380,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
   width: 64px;
   z-index: 1;
 }
-.learn-route-node__copy { background: var(--color-canvas); display: grid; gap: 4px; padding: 2px 7px; }
+.learn-route-node__copy { background: var(--color-canvas); display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; padding: 2px 7px; }
 .learn-route-node__copy strong { font-size: 15px; font-weight: 610; transition: color 130ms ease; }
 .learn-route-node__copy small { color: var(--color-text-subtle); font-size: 10px; }
 .learn-route-node > svg { color: var(--color-text-subtle); }

@@ -17,10 +17,11 @@ export function installMobileFetchBridge(): void {
   const platformFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const original = input instanceof Request ? input.url : String(input);
-    const resolved = resolveMobileRequestUrl(original, apiOrigin);
-    const options: RequestInit = { ...init, credentials: init?.credentials ?? "include" };
-    const target = new URL(resolved, window.location.origin);
+    const resolved = resolveMobileRequestUrl(original, apiOrigin, window.location.href);
+    const options: RequestInit = { ...init };
+    const target = new URL(resolved, window.location.href);
     if (target.origin === apiOrigin && target.pathname.startsWith("/api/")) {
+      options.credentials = init?.credentials ?? (input instanceof Request && input.credentials === "omit" ? "omit" : "include");
       const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
       headers.set(ACCOUNT_SECURITY_HEADER, ACCOUNT_SECURITY_VERSION);
       options.headers = headers;

@@ -429,7 +429,13 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-review-screen [class*="gameRow"] { grid-template-columns: 34px minmax(0, 1fr) !important; }
 .mobile-review-screen [class*="gameRow"] > :last-child { display: none; }
 
-.mobile-not-found { margin: auto; max-width: 34rem; padding: 4rem 1.5rem; text-align: center; }
+.mobile-not-found { display: grid; gap: 16px; margin: auto; max-width: 34rem; padding: 4rem 1.5rem; text-align: center; }
+.mobile-not-found h1 { font-size: clamp(26px, 7vw, 36px); line-height: 1.15; overflow-wrap: anywhere; }
+.mobile-not-found p { color: var(--mobile-text-secondary); line-height: 1.6; }
+.mobile-not-found .button { justify-self: center; white-space: normal; }
+.mobile-legal-page { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.mobile-legal-page h1 { font-size: clamp(24px, 6vw, 32px); line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+.mobile-legal-page .button { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 
 @media (min-width: 760px) {
   :root { --mobile-content-max: 1040px; --mobile-page-inline: 28px; }

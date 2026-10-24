@@ -28,3 +28,25 @@ test("returns successful API payloads unchanged", async () => {
   );
   assert.equal(payload.value, 42);
 });
+
+for (const [name, response] of [
+  ["HTML gateway error", new Response("<html>Bad gateway</html>", { status: 502 })],
+  ["empty unauthorized response", new Response(null, { status: 401 })],
+  ["null JSON payload", Response.json(null)],
+  ["invalid success flag", Response.json({ ok: "true" })],
+] as const) test(`preserves API error handling for ${name}`, async () => {
+  await assert.rejects(readApi(response), (error) => {
+    assert.ok(error instanceof ApiRequestError);
+    assert.equal(error.status, response.status);
+    assert.equal(error.message, "Request failed.");
+    return true;
+  });
+});
+
+test("rate limiting keeps Retry-After even when the proxy returns HTML", async () => {
+  await assert.rejects(readApi(new Response("Too many requests", { status: 429, headers: { "Retry-After": "15" } })), error => {
+    assert.ok(error instanceof ApiRequestError);
+    assert.equal(error.retryAfterSeconds, 15);
+    return true;
+  });
+});

@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 const NAVIGATION_EVENT = "gostone:navigation";
 
@@ -45,6 +45,30 @@ export function useSearchParams() {
     () => new URLSearchParams(new URL(location, window.location.origin).search),
     [location],
   );
+}
+
+// Hash targets can appear after an account check or asynchronous route data.
+export function useHashScroll() {
+  const location = useSyncExternalStore(subscribe, currentLocation, serverLocation);
+  useEffect(() => {
+    const hash = new URL(location, window.location.origin).hash.slice(1);
+    if (!hash) return;
+    let id: string;
+    try { id = decodeURIComponent(hash); } catch { return; }
+    const scroll = () => {
+      const target = document.getElementById(id);
+      if (!target) return false;
+      target.scrollIntoView({ block: "start", behavior: "instant" });
+      return true;
+    };
+    if (scroll()) return;
+    const observer = new MutationObserver(() => {
+      if (scroll()) { observer.disconnect(); window.clearTimeout(timeout); }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    const timeout = window.setTimeout(() => observer.disconnect(), 20_000);
+    return () => { observer.disconnect(); window.clearTimeout(timeout); };
+  }, [location]);
 }
 
 export function useRouter() {

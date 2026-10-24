@@ -1,6 +1,7 @@
 import type { Locale } from "./config";
 import { getDictionary } from "./dictionary";
 import { localizePathname } from "./routing";
+import { THEME_BOOTSTRAP } from "@/lib/theme";
 
 export function localizedNotFoundResponse(locale: Locale): Response {
   const dictionary = getDictionary(locale);
@@ -15,14 +16,16 @@ export function localizedNotFoundResponse(locale: Locale): Response {
   <meta name="robots" content="noindex, nofollow">
   <title>${metadata.title} · GoStone</title>
   <meta name="description" content="${metadata.description}">
+  <script>${THEME_BOOTSTRAP}</script>
   <style>
-    :root{color-scheme:dark;font-family:Arial,sans-serif;background:#262421;color:#f4f3f1}
+    :root{color-scheme:light;font-family:Arial,sans-serif;background:#f5f2eb;color:#171816;--muted:#575b54;--accent:#315f4e;--focus:#171816}
+    :root[data-theme="dark"]{color-scheme:dark;background:#262421;color:#f4f3f1;--muted:#b8b5b2;--accent:#477563;--focus:#fff}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}
-    main{max-width:640px;text-align:center}.kicker{color:#a9a6a2;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+    main{max-width:640px;text-align:center}.kicker{color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
     h1{font-size:clamp(40px,8vw,68px);letter-spacing:-.05em;line-height:1;margin:16px 0}
-    p{color:#b8b5b2;line-height:1.6;margin:0 auto 26px;max-width:520px}
-    a{background:#81b64c;border-radius:7px;color:#fff;display:inline-block;font-weight:800;padding:13px 18px;text-decoration:none}
-    a:focus-visible{outline:3px solid #fff;outline-offset:4px}
+    p{color:var(--muted);line-height:1.6;margin:0 auto 26px;max-width:520px}
+    a{background:var(--accent);border-radius:7px;color:#fff;display:inline-block;font-weight:800;padding:13px 18px;text-decoration:none}
+    a:focus-visible{outline:3px solid var(--focus);outline-offset:4px}
   </style>
 </head>
 <body>
