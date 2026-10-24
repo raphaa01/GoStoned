@@ -110,6 +110,13 @@ html[data-theme="dark"] .training-setup-card,
 html[data-theme="dark"] .training-board-panel,
 html[data-theme="dark"] .training-side-panel { background: var(--color-surface-raised); }
 html[data-theme="dark"] .training-setting select { background-color: var(--color-surface-raised); }
+html[data-theme="dark"] .training-time-selector button.is-selected,
+html[data-theme="dark"] .training-setting .size-selector button.is-selected,
+html[data-theme="dark"] .training-actions button.is-primary { color: var(--color-canvas); }
+.training-setting > small,
+.training-privacy-note,
+.training-model-note,
+.training-side-note { color: var(--color-text-muted); opacity: 1; }
 html[data-theme="dark"] .time-selector button:hover:not(:disabled):not(.is-selected),
 html[data-theme="dark"] .auth-social-button:hover,
 html[data-theme="dark"] .game-actions button:hover:not(:disabled) { background: var(--color-surface-raised); }

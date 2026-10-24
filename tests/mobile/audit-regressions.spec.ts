@@ -89,6 +89,8 @@ test("dark training setup and active game panels use the app palette", async ({ 
   expect(await contrast(panel.locator("select"))).toBeGreaterThanOrEqual(4.5);
   const selected = page.locator(".training-time-selector button.is-selected");
   expect(await contrast(selected)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(page.locator(".training-privacy-note"), panel)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(page.locator(".training-model-note"), panel)).toBeGreaterThanOrEqual(4.5);
   await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
   await page.screenshot({ path: `.cache/visual-audit/audit-training-dark-${info.project.name}.png`, fullPage: true });
   await page.locator(".training-start").click();

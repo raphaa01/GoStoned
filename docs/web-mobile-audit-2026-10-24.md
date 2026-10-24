@@ -9,7 +9,7 @@ establish that every possible defect has been found.
 | --- | --- | --- |
 | German privacy headings and links extend beyond a 320 px app screen. | Constrain the legal card's grid and wrap long titles and links. | All three legal destinations, light and dark, at 320 px. |
 | Winding learning-path labels extend beyond narrow screens. | Reserve horizontal room for the path offsets and allow label wrapping. | Every learning node and label at 320 px; authenticated website sweep. |
-| Dark app training screens keep white panels and selects behind pale text. | Apply the app palette to setup, selects, active game panels and selected time controls. | Dark setup screenshot plus setup and in-game surface checks. |
+| Dark training screens have unreadable text: the app keeps white panels, and website selections keep white text on pale green. | Apply the app palette to panels and controls, and dark foregrounds to selected website controls. | Setup screenshots and measured text contrast in app setup/gameplay and authenticated website training. |
 | The app's All games link changes the URL but leaves the profile at the top. | Scroll to fragment destinations after their content mounts. | Navigate from Home to the history anchor and verify the browser's scroll position. |
 | App screens remain declared English after changing locale. | Update the document language from the active route. | German, Japanese and French routes. |
 | Unknown app destinations show only GoStone / 404. | Show translated explanation and a working Home link. | Open an unknown German route and return Home. |

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { installHarness, USER } from "../shared/boardDesignHarness";
 import { installLearningFixture } from "../shared/betaFixHarness";
+import { contrast } from "../shared/gameReadabilityHarness";
 
 // Server-rendered account pages need a real isolated PostgreSQL session;
 // browser API fixtures alone cannot authorize their server-side page guard.
@@ -32,6 +33,14 @@ for (const theme of ["light", "dark"]) test(`authenticated website layout audit 
         const box = element.getBoundingClientRect();
         return box.left < -1 || box.right > innerWidth + 1;
       }).length)).toBe(0);
+    }
+    if (route === "learn/ai") {
+      for (const selector of [".training-time-selector button.is-selected", ".training-setting .size-selector button.is-selected"]) {
+        expect(await contrast(page.locator(selector))).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const note of await page.locator(".training-setting > small, .training-privacy-note, .training-model-note").all()) {
+        expect(await contrast(note, page.locator(".training-setup-card"))).toBeGreaterThanOrEqual(4.5);
+      }
     }
     await page.screenshot({ path: `.cache/visual-audit/audit-web-${route.replaceAll("/", "-")}-${theme}-${info.project.name}.png`, fullPage: true, animations: "disabled" });
   }
