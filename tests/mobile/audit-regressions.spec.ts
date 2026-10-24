@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { installHarness, GAME_ID } from "../shared/boardDesignHarness";
 import { getDictionary } from "../../lib/i18n/dictionary";
 import { installLearningFixture } from "../shared/betaFixHarness";
+import { contrast } from "../shared/gameReadabilityHarness";
 
 test.beforeEach(async () => { await mkdir(".cache/visual-audit", { recursive: true }); });
 
@@ -75,6 +76,27 @@ test("failed logout remains retryable and reports the error without an unhandled
   await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, user: null } }));
   await page.locator(".mobile-logout").click();
   await expect(page).toHaveURL(/\/de\/?$/);
+});
+
+test("dark training setup and active game panels use the app palette", async ({ page }, info) => {
+  await installHarness(page);
+  await page.addInitScript(() => localStorage.setItem("gostone.mobile.theme.v1", "dark"));
+  await page.goto("/de/learn/ai");
+  await expect(page.locator("html")).toHaveAttribute("data-mobile-theme", "dark");
+  const panel = page.locator(".training-setup-card");
+  expect(await contrast(panel.locator("h2"), panel)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(panel.locator("label").first(), panel)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(panel.locator("select"))).toBeGreaterThanOrEqual(4.5);
+  const selected = page.locator(".training-time-selector button.is-selected");
+  expect(await contrast(selected)).toBeGreaterThanOrEqual(4.5);
+  await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  await page.screenshot({ path: `.cache/visual-audit/audit-training-dark-${info.project.name}.png`, fullPage: true });
+  await page.locator(".training-start").click();
+  for (const selector of [".training-board-panel", ".training-side-panel"]) {
+    await expect(page.locator(selector)).toBeVisible();
+  }
+  expect(await contrast(page.locator(".training-turn-status strong"), page.locator(".training-board-panel"))).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(page.locator(".training-actions button").first())).toBeGreaterThanOrEqual(4.5);
 });
 
 test("All games opens the history section rather than the profile header", async ({ page }) => {

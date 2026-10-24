@@ -437,6 +437,13 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-legal-page h1 { font-size: clamp(24px, 6vw, 32px); line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
 .mobile-legal-page .button { max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 
+.mobile-app-content :is(.training-setup-card, .training-board-panel, .training-side-panel) { background: var(--mobile-surface-raised); }
+.mobile-app-content .training-setting select { background-color: var(--mobile-surface-raised); }
+.mobile-app-content .training-time-selector button { background: var(--mobile-surface-secondary); border-color: var(--mobile-border); color: var(--mobile-text-secondary); }
+.mobile-app-content .training-time-selector button.is-selected { background: var(--mobile-selected); border-color: var(--mobile-accent); color: var(--mobile-text); }
+.mobile-app-content .training-actions button { background: var(--mobile-surface-secondary); border-color: var(--mobile-border); color: var(--mobile-text-secondary); }
+.mobile-app-content :is(.training-error, .training-settlement__uncertain) { color: var(--mobile-danger); }
+
 @media (min-width: 760px) {
   :root { --mobile-content-max: 1040px; --mobile-page-inline: 28px; }
   .mobile-home { column-gap: 24px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
