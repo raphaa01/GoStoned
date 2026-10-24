@@ -26,7 +26,16 @@ export function installMobileFetchBridge(): void {
       headers.set(ACCOUNT_SECURITY_HEADER, ACCOUNT_SECURITY_VERSION);
       options.headers = headers;
     }
-    if (input instanceof Request) return platformFetch(new Request(resolved, input), options);
+    if (input instanceof Request) {
+      if (resolved === original) return platformFetch(input, options);
+      const request = new Request(resolved, input);
+      // Passing Request as RequestInit exposes a ReadableStream body. Materialize
+      // it for WebView/native HTTP bridges, while preserving explicit init bodies.
+      if (input.body && init?.body == null) {
+        return input.clone().arrayBuffer().then(body => platformFetch(request, { ...options, body }));
+      }
+      return platformFetch(request, options);
+    }
     return platformFetch(resolved, options);
   };
 }

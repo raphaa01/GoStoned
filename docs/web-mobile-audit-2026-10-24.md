@@ -15,7 +15,8 @@ establish that every possible defect has been found.
 | Failed app logout rejects without a visible, retryable error. | Catch failure, show a localized alert and guard pending submissions. | Fail logout, verify no unhandled rejection, then retry successfully. |
 | Website 404 responses ignore the saved appearance. | Reuse the theme bootstrap and supply both palettes. | Verify HTTP 404, light/dark appearance, recovery link and narrow layout. |
 | HTML, empty and malformed API replies bypass typed error recovery. | Validate the envelope while retaining HTTP status and Retry-After. | Gateway errors, unauthorized empty replies, null JSON, invalid success flags and proxy rate limiting. |
-| Absolute API Request URLs can remain on the native asset host. | Rewrite local API URLs for both native schemes; scope credential defaults and capability headers to GoStone APIs. | Native-scheme URL tests and built-app Request/body/header checks. |
+| Absolute API Request URLs can remain on the native asset host, and copying their body as a stream can lose payloads at a bridge. | Rewrite local API URLs for both native schemes, preserve buffered request bodies, and scope credential defaults and capability headers to GoStone APIs. | Native-scheme URL tests and built-app Request/body/header checks. |
+| Standard URL origins are opaque for the iOS asset scheme, making origin-based navigation checks unreliable. | Compare actual scheme and host and resolve paths against the full app URL. | Local iOS URLs, other app hosts and external HTTPS destinations. |
 | ESLint can traverse Playwright's changing generated output. | Ignore test-results and playwright-report. | Full lint run alongside the audit tools. |
 
 ## Screenshot coverage

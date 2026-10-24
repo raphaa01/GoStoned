@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allowsMobileBackGesture } from "./navigationPolicy";
+import { allowsMobileBackGesture, isSameMobileOrigin } from "./navigationPolicy";
 
 test("edge back gestures protect games while allowing review, learning and account pages", () => {
   for (const prefix of ["", "/de", "/ja"]) {
@@ -11,4 +11,12 @@ test("edge back gestures protect games while allowing review, learning and accou
       assert.equal(allowsMobileBackGesture(`${prefix}${route}`), true);
     }
   }
+});
+test("native navigation compares the actual scheme and host, including opaque iOS origins", () => {
+  const current = new URL("capacitor://localhost/de/profile");
+  assert.equal(isSameMobileOrigin(new URL("/de/puzzles", current), current), true);
+  assert.equal(isSameMobileOrigin(new URL("capacitor://other-app/de/puzzles"), current), false);
+  assert.equal(isSameMobileOrigin(new URL("https://localhost/de/puzzles"), current), false);
+  assert.equal(isSameMobileOrigin(new URL("https://gostone.app/de/puzzles"), new URL("https://localhost/")), false);
+  assert.equal(isSameMobileOrigin(new URL("https://localhost/de/puzzles"), new URL("https://localhost/")), true);
 });
