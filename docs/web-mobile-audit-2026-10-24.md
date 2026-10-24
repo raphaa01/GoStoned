@@ -19,6 +19,16 @@ establish that every possible defect has been found.
 | Absolute API Request URLs can remain on the native asset host, and copying their body as a stream can lose payloads at a bridge. | Rewrite local API URLs for both native schemes, preserve buffered request bodies, and scope credential defaults and capability headers to GoStone APIs. | Native-scheme URL tests and built-app Request/body/header checks. |
 | Standard URL origins are opaque for the iOS asset scheme, making origin-based navigation checks unreliable. | Compare actual scheme and host and resolve paths against the full app URL. | Local iOS URLs, other app hosts and external HTTPS destinations. |
 | ESLint can traverse Playwright's changing generated output. | Ignore test-results and playwright-report. | Full lint run alongside the audit tools. |
+| Locked runtime and build dependencies have published security advisories. | Update Next.js/ESLint config to 16.4.3, sharp to 0.35.5, Vite to 8.3.5, source-map-js to 1.2.2 and Zod to 4.6.7; scope Capacitor CLI's Xcode parser override to 4.0.0, which removes its vulnerable UUID dependency. | Full npm audit, application checks, native sync/build and Xcode project parse/serialization. |
+
+The initial full `npm audit` reported eight affected dependency packages
+(one critical, four high and three moderate); the production-only audit reported
+three. The updates clear the registry's reported advisories without suppressions.
+The production patches follow the published [Next.js image-optimization advisory](https://github.com/advisories/GHSA-2464-fhr4-w9xw),
+[sharp/librsvg advisory](https://github.com/advisories/GHSA-wq5f-xc86-pv6w) and
+[source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+This is dependency advisory remediation, not a claim that an exploit was
+demonstrated against this deployment. CI now rejects high/critical audit findings.
 
 ## Screenshot coverage
 
@@ -51,6 +61,7 @@ npm run lint
 npm test
 npm run build
 npm run mobile:build
+npm audit
 npm run test:browser
 npx playwright test --config playwright.mobile-board-designs.config.ts
 ```
@@ -65,9 +76,15 @@ regressions supplement those baselines. Final validation is recorded on the PR.
 
 ## Remaining verification boundaries
 
+An additional Android API 36 smoke used the final debug APK in a disposable,
+read-only emulator session. It covered cold launch, Home, Play, a live daily
+puzzle, local stone placement and the native fullscreen Go clock. Its screenshots
+and the boot/log caveats are recorded in `.cache/visual-audit/android-*.png` and
+`android-emulator-smoke.md` beside them.
+
 The app browser tests exercise the bundled client shared by Android and iOS,
 with existing native bridge fixtures. They do not replace physical-device
-tests. No Android device was connected for this audit, and Windows cannot run
+tests. No physical Android device was connected for this audit, and Windows cannot run
 Xcode or an iOS simulator. Native OAuth provider accounts, real share sheets,
 device safe areas, engine thermals and store-distributed binaries still require
 device verification. This change does not publish new App Store or Play builds.

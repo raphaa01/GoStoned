@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Audit dependency vulnerabilities
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
