@@ -67,7 +67,7 @@
     "@gostone/katago": "file:native/gostone-katago",
     "@vercel/analytics": "^2.0.1",
     "lucide-react": "^0.468.0",
-    "next": "16.3.6",
+    "next": "16.4.3",
     "onnxruntime-web": "1.27.0",
     "pg": "^8.13.1",
     "react": "19.2.6",
@@ -85,14 +85,17 @@
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^16.4.7",
     "eslint": "^9.17.0",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.4.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.5"
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5",
+    "@capacitor/cli": {
+      "xcode": "4.0.0"
+    }
   },
   "optionalDependencies": {
     "@emnapi/core": "1.11.3",

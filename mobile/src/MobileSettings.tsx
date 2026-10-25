@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { useI18n } from "@/components/i18n/I18nProvider";
@@ -14,9 +15,23 @@ export function MobileSettings() {
   const router = useRouter();
   const copy = getMobileCopy(locale);
   const privacy = getPrivacyCopy(locale);
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const logoutPending = useRef(false);
   const signOut = async () => {
-    await logout();
-    router.replace(href("/"));
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setSigningOut(true);
+    setLogoutError(null);
+    try {
+      await logout();
+      router.replace(href("/"));
+    } catch {
+      setLogoutError(dictionary.auth.errors.logout_failed);
+    } finally {
+      logoutPending.current = false;
+      setSigningOut(false);
+    }
   };
 
   return (
@@ -27,7 +42,8 @@ export function MobileSettings() {
           <MobileLegalLink pathname="/privacy">{privacy.navLabel}</MobileLegalLink>
           <MobileLegalLink pathname="/impressum">{dictionary.nav.legal}</MobileLegalLink>
         </nav>
-        <button className="mobile-logout" onClick={() => void signOut()} type="button"><LogOut aria-hidden="true" size={19} />{dictionary.nav.logout}</button>
+        {logoutError ? <p className="local-error" role="alert">{logoutError}</p> : null}
+        <button className="mobile-logout" disabled={signingOut} onClick={() => void signOut()} type="button"><LogOut aria-hidden="true" size={19} />{dictionary.nav.logout}</button>
       </section>
     </SettingsView>
   );

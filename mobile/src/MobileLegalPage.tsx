@@ -11,7 +11,7 @@ export function MobileLegalPage({ pathname }: { pathname: MobileLegalPath }) {
   const title = pathname === "/privacy" ? getPrivacyCopy(locale).title
     : pathname === "/delete-account" ? getAccountDeletionCopy(locale).title
       : dictionary.nav.legal;
-  return <section className="settings-section">
+  return <section className="settings-section mobile-legal-page">
     <h1>{title}</h1>
     {pathname === "/delete-account" && <AccountDeletionRequest />}
     <MobileLegalLink className="button button--secondary" pathname={pathname}>{title} ↗</MobileLegalLink>

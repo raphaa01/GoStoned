@@ -11,6 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     ".next-stale-codex/**",
     ".cache/**",
+    "test-results/**",
+    "playwright-report/**",
     ".venv-trainer/**",
     "out/**",
     "build/**",

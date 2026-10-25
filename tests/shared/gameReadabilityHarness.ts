@@ -1,7 +1,7 @@
 import { expect, test, type Locator } from "@playwright/test";
 import { gameFor, GAME_ID, installHarness, USER } from "./boardDesignHarness";
 
-async function contrast(locator: Locator, background: Locator = locator) {
+export async function contrast(locator: Locator, background: Locator = locator) {
   const foreground = await locator.evaluate((element) => getComputedStyle(element).color);
   const surface = await background.evaluate((element) => getComputedStyle(element).backgroundColor);
   const luminance = (value: string) => {

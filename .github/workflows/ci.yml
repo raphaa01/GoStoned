@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Audit dependency vulnerabilities
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
@@ -82,6 +85,15 @@ jobs:
 
       - name: Verify bundled Android and iOS board designs
         run: npx playwright test --config playwright.mobile-board-designs.config.ts
+
+      - name: Upload visual audit screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: ignore
+          name: visual-audit-client
+          path: .cache/visual-audit/
+          retention-days: 5
 
       - name: Upload browser failure artifacts
         if: failure()
@@ -210,6 +222,15 @@ jobs:
       - name: Run production-server PostgreSQL smokes
         shell: bash
         run: bash scripts/run-ci-production-smokes.sh
+
+      - name: Upload authenticated visual audit screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: ignore
+          name: visual-audit-authenticated
+          path: .cache/visual-audit/
+          retention-days: 5
 
       - name: Reverify migration and concurrent-index state
         run: npm run test:migrations-db -- --verify-only
