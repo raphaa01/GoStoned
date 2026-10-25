@@ -4,8 +4,9 @@ The same curriculum and LessonPlayer serve all three clients.
 
 ## Interaction contract
 
-- A correct learner move plays exactly the first authored opponent reply immediately.
-- A following `play` step with `continuePosition: true`, the same size and the same learner colour becomes interactive immediately. No Continue or Show move is needed. The board, history and captures carry forward.
+- A correct learner move stays visible for two seconds before exactly the first authored opponent reply plays automatically, including captures and passes. The board and advancement stay locked during this pause; the status explains that the opponent is about to reply.
+- After that reply, a following `play` step with `continuePosition: true`, the same size and the same learner colour becomes interactive. No Continue or Show move is needed. The board, history and captures carry forward.
+- Restart and leaving the lesson cancel a pending reply. Moves without an authored reply finish immediately.
 - A new position/task waits for Continue. Finishing a lesson still requires explicit completion.
 - Additional trainer plies in a demonstration require one Show next move click each, including passes. There is no multi-move batch. The board remains locked during the demonstration.
 - The consequence of the preceding exchange stays visible alongside the next own instruction.
@@ -24,7 +25,7 @@ Stage-four introductions each contain at least five distinct practice positions.
 ## Verification
 
 - Unit tests cover all 120 lessons' fixed learner colours and every continuous transition.
-- Shared full-path browser verification solves every lesson on website and mobile, compares the board immediately after each learner move and first reply, checks trainer continuations and completes actual browser-worker games.
+- Shared full-path browser verification solves every lesson on website and mobile, compares the board after the first reply, checks trainer continuations and completes actual browser-worker games. Focused browser tests verify the learner's stone at 1,999 ms, the reply at 2,000 ms, input locking and cancellation on restart/navigation.
 - Mobile phone/desktop tests specifically cover uninterrupted ladder, five nets, five snapbacks, Ko and the stage-three mixed challenge.
 - Stage-three life/death and commented-game tests assert that the first reply is automatic but a later trainer capture/move cannot occur before its own Show move click.
 - CI runs the website path against isolated PostgreSQL, checking real account progress, scoring and persistence; mobile tests cover the bundled client used by Android and iOS.

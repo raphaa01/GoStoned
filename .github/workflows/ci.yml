@@ -18,7 +18,8 @@ jobs:
   quality:
     name: Quality gates
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Full-path and regression checks now exercise the two-second lesson replies.
+    timeout-minutes: 40
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
