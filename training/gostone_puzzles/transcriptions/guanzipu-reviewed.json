@@ -1,0 +1,158 @@
+{
+  "schema": "gostone.reviewed-scan-transcriptions/1",
+  "source_pdf_sha1": "09beedab2e75febdebc589fd6dcf18ef53cce799",
+  "records": [
+    {
+      "label": "100-A-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "eb cc ec dd be ce",
+      "white": "fb hb fc ed de fe bf cf df bh",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "cb bb bc bd db dc ea ac ba ab"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-A-TR",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "pa pb pc rc qd qe qf rf",
+      "white": "oa ob oc pd pe re pf sf og qg rg",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "rb sd se sb ra qb sg rd"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-A-BR",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "po qo pp rp sp pq pr rr",
+      "white": "rm pn qn oo ro so op oq rq mr or",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "sq qp sr rs ps qr"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-B-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "db ec fc bd cd dd",
+      "white": "cb gc ic ed fd gd be ce de",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "ab ad fb eb fa gb hb ba bb ca"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-B-TR",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "pb pc pd pe qe re",
+      "white": "mb ob oc od oe pf qf rf rh",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "qb rb ra qc pa sb qa rd"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-B-BR",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "po qo ro pp pq pr",
+      "white": "rl pn qn rn oo op oq mr or",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "qr ps rq rs rp sp rr qs sr"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-C-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "ea fb cc dc ec cd",
+      "white": "gb fc hc dd ed fd be ce",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "db ab cb eb bb bc ba ca"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    },
+    {
+      "label": "100-D-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 100,
+      "black": "db bc dc ae be",
+      "white": "eb ec dd de af bf cf",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "ba bb da aa ab cb ac"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
+    }
+  ]
+}
