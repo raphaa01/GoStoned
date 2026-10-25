@@ -28,6 +28,25 @@ def group(stones: tuple[int, ...], size: int, point: int) -> tuple[frozenset[int
     return frozenset(found), frozenset(liberties)
 
 
+def static_placement_allowed(stones, size, point, color):
+    """Construction of AB/AW diagrams never silently captures setup stones."""
+    if stones[point] or color not in (1,2):
+        return False
+    board = list(stones)
+    board[point] = color
+    board = tuple(board)
+    if not group(board,size,point)[1]:
+        return False
+    checked = set()
+    for other in neighbors(size)[point]:
+        if board[other] == 3-color and other not in checked:
+            chain,liberties = group(board,size,other)
+            checked.update(chain)
+            if not liberties:
+                return False
+    return True
+
+
 @dataclass(frozen=True)
 class State:
     size: int
@@ -103,21 +122,33 @@ def unconditional_life(stones: tuple[int, ...], size: int, color: int) -> frozen
             blocks.append((chain, libs))
             checked.update(chain)
     owner = {p: i for i, (chain, _) in enumerate(blocks) for p in chain}
+    # A vital region is a subset of the liberties of at least one block.
+    # The open outside usually is not; reject it as soon as one of its cells
+    # cannot be a liberty of any friendly block. This is a sufficient rejection,
+    # never an assumption that outside moves are irrelevant to the game.
+    candidates = set().union(*(libs for _, libs in blocks)) if blocks else set()
     regions, visited = [], set()
-    for p, c in enumerate(stones):
-        if c or p in visited:
+    for p in sorted(candidates):
+        if p in visited:
             continue
         empty, boundary, stack = {p}, set(), [p]
         visited.add(p)
-        while stack:
+        possible = True
+        while stack and possible:
             for q in neighbors(size)[stack.pop()]:
                 if stones[q]:
+                    if stones[q] != color:
+                        possible = False
+                        break
                     boundary.add(q)
-                elif q not in visited:
-                    visited.add(q)
+                elif q not in empty:
+                    if q not in candidates:
+                        possible = False
+                        break
                     empty.add(q)
                     stack.append(q)
-        if boundary and all(stones[q] == color for q in boundary):
+        visited.update(empty)
+        if possible and boundary and any(empty <= libs for _, libs in blocks):
             regions.append((frozenset(empty), frozenset(owner[q] for q in boundary)))
     alive = set(range(len(blocks)))
     while True:

@@ -23,8 +23,9 @@ def main():
     training.add_argument("--resume", type=Path)
     training.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     training.add_argument("--no-feedback", action="store_true")
+    training.add_argument("--run-name", help="Separate checkpoint directory; preserve previous experiments")
     generate = sub.add_parser("generate")
-    generate.add_argument("--approach", choices=("joint", "denoise", "mutation"), default="joint")
+    generate.add_argument("--approach", choices=("joint", "denoise", "mutation", "fresh"), default="joint")
     generate.add_argument("--attempts", type=int, default=30)
     generate.add_argument("--own-moves", type=int, default=3)
     generate.add_argument("--kyu-min", type=int, default=10)
@@ -32,6 +33,7 @@ def main():
     generate.add_argument("--seed", type=int, default=2026)
     generate.add_argument("--proof-seconds", type=float, default=.25)
     generate.add_argument("--proof-nodes", type=int, default=3000)
+    generate.add_argument("--checkpoint", type=Path)
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=4186)
     serve.add_argument("--no-browser", action="store_true")
@@ -47,10 +49,18 @@ def main():
     render.add_argument("--renderer")
     render.add_argument("--ids")
     sub.add_parser("doctor")
+    sub.add_parser("import-reviewed")
+    sub.add_parser("audit-corpus")
+    sub.add_parser("calibrate-difficulty")
     comparison = sub.add_parser("compare")
     comparison.add_argument("--attempts", type=int, default=30)
     comparison.add_argument("--own-moves", type=int, default=3)
     comparison.add_argument("--proof-seconds", type=float, default=.3)
+    comparison.add_argument("--proof-nodes", type=int, default=30000)
+    comparison.add_argument("--checkpoint", type=Path)
+    quality = sub.add_parser("quality-report")
+    quality.add_argument("--destination", type=Path, required=True)
+    quality.add_argument("--candidate-root", type=Path, action="append", default=[])
     puzzle_export = sub.add_parser("export-puzzles")
     puzzle_export.add_argument("--destination", type=Path, required=True)
     puzzle_export.add_argument("--territory", default="DE")
@@ -69,7 +79,7 @@ def main():
     args.root = args.root.resolve()
     args.root.mkdir(parents=True, exist_ok=True)
     from .common import workspace_lock
-    readonly=("serve","doctor","verify-bundle","audit-transitions")
+    readonly=("serve","doctor","verify-bundle","audit-transitions","audit-corpus")
     with nullcontext() if args.command in readonly else workspace_lock(args.root):
         execute(args)
 
@@ -83,13 +93,22 @@ def execute(args):
         (args.root/"stop-training.flag").unlink(missing_ok=True)
         result = train(args.root, name=args.approach, steps=args.steps, channels=args.channels,
                        blocks=args.blocks, batch_size=args.batch_size, resume=args.resume,
-                       device=args.device, use_feedback=not args.no_feedback)
+                       device=args.device, use_feedback=not args.no_feedback, run_name=args.run_name)
     elif args.command == "generate":
         from .generate import generate
         (args.root/"stop-generation.flag").unlink(missing_ok=True)
         result = generate(args.root, approach=args.approach, count=args.attempts, own_moves=args.own_moves,
                           kyu_min=args.kyu_min, kyu_max=args.kyu_max, seed=args.seed,
-                          proof_seconds=args.proof_seconds, proof_nodes=args.proof_nodes)
+                          proof_seconds=args.proof_seconds, proof_nodes=args.proof_nodes, checkpoint=args.checkpoint)
+    elif args.command == "import-reviewed":
+        from .corpus import import_reviewed
+        result = import_reviewed(args.root)
+    elif args.command == "audit-corpus":
+        from .corpus import audit_corpus
+        result = audit_corpus(args.root)
+    elif args.command == "calibrate-difficulty":
+        from .difficulty import calibrate
+        result = calibrate(args.root)
     elif args.command == "serve":
         from .server import serve
         serve(args.root, args.port, not args.no_browser)
@@ -109,7 +128,11 @@ def execute(args):
         result = export_environment(args.root, args.destination, args.offline_windows, args.include_scans)
     elif args.command == "compare":
         from .experiments import compare
-        result = compare(args.root, args.attempts, args.own_moves, proof_seconds=args.proof_seconds)
+        result = compare(args.root, args.attempts, args.own_moves, proof_seconds=args.proof_seconds,
+                         proof_nodes=args.proof_nodes, checkpoint=args.checkpoint)
+    elif args.command == "quality-report":
+        from .quality import write_quality_report
+        result = write_quality_report(args.root,args.destination,args.candidate_root)
     elif args.command == "export-puzzles":
         from .export_puzzles import export_puzzles
         result = export_puzzles(args.root, args.destination, args.territory)

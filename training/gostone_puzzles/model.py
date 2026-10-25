@@ -14,7 +14,7 @@ class Config:
     channels: int = 48
     blocks: int = 4
     size: int = 19
-    input_planes: int = 12
+    input_planes: int = 16
 
 
 class Block(nn.Module):
@@ -52,16 +52,29 @@ class PuzzleNet(nn.Module):
                 self.preference(pooled).squeeze(1))
 
 
-def encode(board, to_play: int, category: str, visible=None) -> tuple[np.ndarray, np.ndarray]:
+def encode(board, to_play: int, category: str, visible=None, *, input_planes=12,
+           targets=(), goal_player=None, own_moves=None) -> tuple[np.ndarray, np.ndarray]:
     raw = np.asarray(board, dtype=np.int64).reshape(19, 19)
     target = np.where(raw == 0, 0, np.where(raw == to_play, 1, 2))
     visible = np.ones((19, 19), dtype=bool) if visible is None else visible.reshape(19, 19)
-    planes = np.zeros((12, 19, 19), dtype=np.float32)
+    if input_planes not in (12, 15, 16):
+        raise ValueError("Unsupported input feature version")
+    category_index = 5+CATEGORIES.index(category)
+    if category_index >= min(input_planes, 13):
+        raise ValueError("This checkpoint predates the historical tesuji category; train a new model")
+    planes = np.zeros((input_planes, 19, 19), dtype=np.float32)
     for value in range(3):
         planes[value] = (target == value) & visible
     planes[3] = visible
     planes[4] = to_play == 1
-    planes[5+CATEGORIES.index(category)] = 1
+    planes[category_index] = 1
+    if input_planes >= 15:
+        for point in targets:
+            planes[13, point//19, point % 19] = 1
+        # The defender's turn must not silently become the attacker's goal.
+        planes[14] = to_play == (goal_player if goal_player is not None else to_play)
+    if input_planes == 16 and own_moves is not None:
+        planes[15] = max(0,min(8,own_moves))/8
     return planes, target
 
 
@@ -79,4 +92,5 @@ def load_model(path, device="cpu"):
 def checkpoint_metadata(model):
     return {"schema": "gostone.puzzle-model/1", "config": asdict(model.config),
             "state_dict": model.state_dict(), "role": "candidate-proposal-only",
+            "feature_version": 3 if model.config.input_planes == 16 else 2 if model.config.input_planes == 15 else 1,
             "production_ready": False, "difficulty_calibrated": False}

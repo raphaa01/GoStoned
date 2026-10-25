@@ -8,7 +8,7 @@ import tempfile
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
-CATEGORIES = ("life", "kill", "ko", "semeai", "connect", "oiotoshi", "cut")
+CATEGORIES = ("life", "kill", "ko", "semeai", "connect", "oiotoshi", "cut", "tesuji")
 
 
 def default_root() -> Path:
@@ -89,6 +89,16 @@ def tactical_core(board, targets, player, radius=2):
         abs(p % 19-q % 19)+abs(p//19-q//19) <= radius for q in targets)]
     return relative_pattern([(p % 19, p//19) for p in points],
                             [1 if board[p] == player else 2 for p in points], ordered=False)
+
+
+def solution_fingerprint(moves, player):
+    moves = [move for move in moves if move["move"] >= 0]
+    # One normalized point cannot distinguish any one-move tasks. Use board
+    # and tactical-core hashes for those, not a universal false duplicate.
+    if len(moves) < 3:
+        return None
+    return relative_pattern([(m["move"] % 19,m["move"]//19) for m in moves],
+                            [1 if m["color"] == player else 2 for m in moves])
 
 
 @contextmanager

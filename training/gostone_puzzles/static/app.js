@@ -1,6 +1,6 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
-let state, signature = "", selectedTab = "candidates", scanImage, gridPoints = [], scannedBoard = Array(361).fill(0);
+let state, signature = "", referenceSignature = "", selectedTab = "candidates", scanImage, gridPoints = [], scannedBoard = Array(361).fill(0);
 let displayedScan = null;
 let scanProposals = [];
 const el = (tag, text, className) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; };
@@ -32,42 +32,48 @@ function replayControls(canvas,row,reference){
 }
 function makeCard(row, reference = false) {
   const card=el("article",undefined,"card"), canvas=el("canvas");canvas.width=canvas.height=440;
-  const badge=el("span",reference?"Historische Referenz":({"proven-win":row.verification.export_eligible?"Vorgaben vollständig bewiesen":"Gewinn bewiesen · Anforderungen offen","proven-loss":"Ziel widerlegt","already-terminal":"Ziel schon entschieden","unknown":"Lösung ungeklärt"}[row.verification.status]||row.verification.status),"badge");
+  const badge=el("span",reference?"Historische Referenz":({"proven-win":row.verification.export_eligible?"Beweisvorgaben erfüllt · Qualität und Kyu prüfen":"Gewinn bewiesen · Anforderungen offen","proven-loss":"Ziel widerlegt","already-terminal":"Ziel schon entschieden","unknown":"Lösung ungeklärt"}[row.verification.status]||row.verification.status),"badge");
   card.append(badge,canvas);board(canvas,row.board,row.targets);
   card.append(el("h2",reference?row.id:`Kandidat ${row.id.slice(0,8)}`));
   card.append(el("p",`${row.to_play===1?"Schwarz":"Weiß"} beginnt · ${row.category} · ${reference?"historische Zugfolge":row.approach}`));
   if(reference){
-    card.append(el("p",`${row.solutions.length} Referenzvariante(n) · Zielgruppe automatisch vorgeschlagen`));
+    card.append(el("p",`${row.solutions.length} Referenzvariante(n) · ${row.source_locator||""}`));
+    if(row.transcription_notes)card.append(el("p",row.category==="tesuji"?"Aus dem Originalbild übertragen. Genaues Aufgabenziel noch nicht als Gewinnbedingung bestätigt.":row.transcription_notes));
     card.append(replayControls(canvas,row,true));
   }else{
-    card.append(el("p",`Gewünschte Tiefe: ${row.requested_own_moves} eigene Züge · Kyu noch unbewertet`));
+    card.append(el("p",`Gewünschte Tiefe: ${row.requested_own_moves} eigene Züge · Kyu: ${row.feedback?.kyu??"noch unbewertet"}`));
     if(row.verification.status==="proven-win")card.append(el("p",`Nachgewiesen: höchstens ${row.verification.within_own_moves} eigene Züge. ${row.verification.export_eligible?"Beweisvorgaben erfüllt.":"Noch keine freigegebene Aufgabe für deine Vorgaben."}`));
     if(row.verification.solution)card.append(replayControls(canvas,row,false));
     const note=el("textarea");note.placeholder="Was ist gut, ähnlich, unklar oder unschön?";note.value=row.feedback?.note||"";note.setAttribute("aria-label",`Feedback für ${row.id}`);
-    const buttons=el("div",undefined,"feedback");for(const [rating,label] of [["good","Gute Idee"],["bad","Aussortieren"],["unsure","Unklar"]]){const button=el("button",label);if(row.feedback?.rating===rating)button.classList.add("selected");button.onclick=async()=>{try{await post("/api/feedback",{id:row.id,rating,note:note.value});message("Feedback gespeichert. Es wird beim Weiterlernen berücksichtigt.");}catch(error){message(error.message);}};buttons.append(button);}card.append(note,buttons);
+    const kyuLabel=el("label","Deine Kyu-Einschätzung"),kyuInput=el("select");kyuInput.setAttribute("aria-label",`Kyu-Einschätzung für ${row.id}`);for(const value of ["",...Array.from({length:30},(_,i)=>30-i)]){const option=el("option",value===""?"Noch unbewertet":`${value} Kyu`);option.value=String(value);kyuInput.append(option);}kyuInput.value=String(row.feedback?.kyu??"");kyuLabel.append(kyuInput);card.append(kyuLabel);
+    const buttons=el("div",undefined,"feedback");for(const [rating,label] of [["good","Gute Idee"],["bad","Aussortieren"],["unsure","Unklar"]]){const button=el("button",label);if(row.feedback?.rating===rating)button.classList.add("selected");button.onclick=async()=>{try{await post("/api/feedback",{id:row.id,rating,note:note.value,kyu:kyuInput.value?Number(kyuInput.value):null});message("Feedback gespeichert. Es wird beim Weiterlernen berücksichtigt.");}catch(error){message(error.message);}};buttons.append(button);}card.append(note,buttons);
   }
   return card;
 }
 function render() {
   $("connection").textContent=state.job.running?"Lokal · Lauf aktiv":"Lokal verbunden";
-  const stats=[[state.references.length,"historische Referenzen"],[state.candidates.length,"sichtbare Kandidaten"],[state.candidates.filter(r=>r.verification.export_eligible).length,"vollständig passende Aufgaben"],[state.candidates.filter(r=>r.feedback?.rating==="good").length,"positive Qualitätsurteile"]];
+  const stats=[[state.references.length,"historische Referenzen"],[state.candidates.length,"sichtbare Kandidaten"],[state.candidates.filter(r=>r.verification.export_eligible).length,"Beweisvorgaben erfüllt"],[state.candidates.filter(r=>r.feedback?.rating==="good").length,"positive Qualitätsurteile"]];
   $("stats").replaceChildren(...stats.map(([count,label])=>{const n=el("div",undefined,"stat");n.append(el("strong",String(count)),el("span",label));return n;}));
-  const nextSignature=JSON.stringify(state.candidates.map(r=>[r.id,r.feedback?.updated_at]));
+  const nextSignature=JSON.stringify(state.candidates.map(r=>[r.id,r.feedback?.updated_at,r.verification.status,r.verification.export_eligible,r.difficulty?.kyu]));
   if(signature!==nextSignature){signature=nextSignature;$("candidate-list").replaceChildren(...state.candidates.slice(0,36).map(r=>makeCard(r)));if(!state.candidates.length)$("candidate-list").append(el("p","Noch keine Kandidaten. Trainiere zuerst ein Modell oder starte einen Vergleichslauf."));}
-  if(!$("reference-list").children.length)$("reference-list").replaceChildren(...state.references.map(r=>makeCard(r,true)));
+  const nextReferences=JSON.stringify(state.references.map(r=>[r.id,r.solutions]));
+  if(referenceSignature!==nextReferences){referenceSignature=nextReferences;$("reference-list").replaceChildren(...state.references.map(r=>makeCard(r,true)));}
   const table=el("table"),head=el("tr");for(const title of ["Modell","Schritte","Parameter","Referenzzug Top 1","Brettrekonstruktion","Feedback"])head.append(el("th",title));table.append(head);
   for(const [name,report] of Object.entries(state.models)){if(!report)continue;const row=el("tr");for(const value of [name,report.steps,report.parameters,`${(report.validation.reference_move_top1*100).toFixed(1)} %`,report.validation.masked_cross_entropy.toFixed(3),report.feedback_examples])row.append(el("td",String(value)));table.append(row);}
   $("model-reports").replaceChildren(table,el("p","Diese Werte messen Nachahmung und Rekonstruktion auf getrennten Aufgabenfamilien. Sie messen noch keine Qualität neuer Puzzle."));
   $("job-log").textContent=state.job.log||"Noch kein Lauf über diese Oberfläche gestartet.";
+  const modelOptions=Object.entries(state.models).filter(([,report])=>report?.approach===($("approach").value==="fresh"?"joint":$("approach").value)).map(([name])=>name);
+  if(JSON.stringify(modelOptions)!==$("model-run").dataset.options){const selected=$("model-run").value;$("model-run").replaceChildren(...modelOptions.map(name=>{const option=el("option",name);option.value=name;return option;}));if(modelOptions.includes(selected))$("model-run").value=selected;else if(modelOptions.includes("joint-depth-64"))$("model-run").value="joint-depth-64";else if(modelOptions.includes("joint-compose-64"))$("model-run").value="joint-compose-64";else if(modelOptions.includes("joint-targeted-32"))$("model-run").value="joint-targeted-32";$("model-run").dataset.options=JSON.stringify(modelOptions);}
   for(const id of ["generate","train","download-scans"])$(id).disabled=state.job.running;
   if(!$("scan-source").options.length){for(const source of state.scans.sources){const option=el("option",`${source.id} · ${source.pages||"?"} Seiten`);option.value=source.id;$("scan-source").append(option);}}
   const downloaded=state.scans.sources.filter(s=>s.download_status==="complete");
-  $("scan-status").textContent=`${downloaded.length}/${state.scans.sources.length} Scans heruntergeladen · ${downloaded.reduce((n,s)=>n+(s.pages||0),0)} Quellseiten. ${state.recognition_progress?.diagram_proposals||0} automatische Diagrammvorschläge; noch keine geprüften Trainingsaufgaben daraus.`;
+  $("scan-status").textContent=`${downloaded.length}/${state.scans.sources.length} Scans heruntergeladen · ${downloaded.reduce((n,s)=>n+(s.pages||0),0)} Quellseiten. ${state.recognition_progress?.diagram_proposals||0} automatische Diagrammvorschläge; ${state.references.filter(row=>row.status==="visually-reviewed-historical-reference").length} geprüfte Aufgabenfamilien daraus.`;
 }
 async function refresh(){const response=await fetch("/api/state");if(!response.ok)throw new Error("Lab nicht erreichbar");state=await response.json();render();}
 document.querySelectorAll("nav button").forEach(button=>button.onclick=()=>{selectedTab=button.dataset.tab;document.querySelectorAll(".panel").forEach(panel=>panel.hidden=panel.id!==selectedTab);document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("selected",b===button));});
-$("generate").onclick=()=>post("/api/job",{action:"generate",approach:$("approach").value,attempts:Number($("attempts").value),own_moves:Number($("depth").value)}).catch(e=>message(e.message));
-$("train").onclick=()=>post("/api/job",{action:"train",approach:$("train-approach").value,steps:Number($("train-steps").value),resume:true}).catch(e=>message(e.message));
+$("approach").onchange=()=>render();
+$("generate").onclick=()=>post("/api/job",{action:"generate",approach:$("approach").value,attempts:Number($("attempts").value),own_moves:Number($("depth").value),kyu_min:Number($("kyu-min").value),kyu_max:Number($("kyu-max").value),proof_seconds:Number($("proof-seconds").value),model_run:$("model-run").value}).catch(e=>message(e.message));
+$("train").onclick=()=>post("/api/job",{action:"train",approach:$("train-approach").value,steps:Number($("train-steps").value),resume:true,run_name:$("train-run").value}).catch(e=>message(e.message));
 $("stop").onclick=()=>post("/api/stop",{}).then(()=>message("Anhalten angefordert. Der nächste Trainingscheckpoint wird gespeichert.")).catch(e=>message(e.message));
 $("download-scans").onclick=()=>post("/api/job",{action:"download-scans"}).catch(e=>message(e.message));
 function drawScan(){const canvas=$("scan-canvas"),context=canvas.getContext("2d");context.drawImage(scanImage,0,0);context.fillStyle="#d64b28";context.font="bold 25px sans-serif";gridPoints.forEach(([x,y],i)=>{context.beginPath();context.arc(x,y,7,0,Math.PI*2);context.fill();context.fillText(String(i+1),x+12,y);});}

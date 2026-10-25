@@ -20,6 +20,7 @@ SOURCE = {
     "rights": "public-domain-original-content",
     "reviewed_territories": ["DE", "US"],
     "attribution_required_for_original_content_in_reviewed_territories": False,
+    "commercial_use_of_original_content_in_reviewed_territories": True,
     "rights_basis": "Original publication 1908; authors died more than 70 years ago. Original board facts and historical coordinate answers only.",
     "limits": "No worldwide clearance is asserted. No modern cover, editorial commentary, Gutenberg marks or boilerplate are training content.",
     "answers": "historical-reference; not an exhaustive proof",
@@ -46,7 +47,7 @@ def coordinates(fragment: str, carry: bool = True) -> list[int]:
     return result
 
 
-def infer_targets(board, player: int, goal: str, first_move: int) -> list[int]:
+def infer_targets(board, player: int, goal: str, first_move: int, prefer_main=False) -> list[int]:
     if goal not in ("life", "kill"):
         return []
     color = player if goal == "life" else 3-player
@@ -56,7 +57,8 @@ def infer_targets(board, player: int, goal: str, first_move: int) -> list[int]:
             chain, _ = group(tuple(board), 19, p)
             checked.update(chain)
             distance = min(abs(q % 19-first_move % 19)+abs(q//19-first_move//19) for q in chain)
-            groups.append((distance, -len(chain), min(chain), chain))
+            groups.append(((-len(chain), distance, min(chain), chain) if prefer_main
+                           else (distance, -len(chain), min(chain), chain)))
     return sorted(min(groups)[3]) if groups else []
 
 

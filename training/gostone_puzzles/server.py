@@ -5,6 +5,7 @@ import json
 import mimetypes
 from pathlib import Path
 import secrets
+import re
 import subprocess
 import sys
 import threading
@@ -30,6 +31,8 @@ class Lab(ThreadingHTTPServer):
         with self.job_lock:
             if self.job and self.job.poll() is None:
                 raise ValueError("A training/generation job is already running")
+            if (self.root/"writer.lock").exists():
+                raise ValueError("A CLI run or retained writer lock already owns this workspace")
             self.root.mkdir(parents=True, exist_ok=True)
             log = (self.root / "job.log").open("w", encoding="utf-8")
             try:
@@ -69,7 +72,7 @@ class Handler(BaseHTTPRequestHandler):
         root = self.server.root
         try:
             if parsed.path == "/api/state":
-                reports = {name: read_json(root / "models" / name / "report.json") for name in ("joint", "denoise")}
+                reports = {path.parent.name: read_json(path) for path in sorted((root / "models").glob("*/report.json"))}
                 candidates = []
                 for path in sorted((root / "candidates").glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:120]:
                     row = read_json(path)
@@ -79,11 +82,14 @@ class Handler(BaseHTTPRequestHandler):
                     row["feedback"] = read_json(root / "reviews" / (row["id"]+".json"))
                     candidates.append(row)
                 job = self.server.job
+                external_writer = read_json(root/"writer.lock")
                 log_path = root / "job.log"
                 log = log_path.read_text(encoding="utf-8", errors="replace")[-6000:] if log_path.exists() else ""
                 return self.respond(200, {"token": self.server.token, "root": str(root), "models": reports,
                     "references": records(root), "candidates": candidates, "scans": scan_inventory(root),
-                    "job": {"running": job is not None and job.poll() is None, "log": log},
+                    "job": {"running": (job is not None and job.poll() is None) or bool(external_writer),
+                            "external_writer":external_writer,
+                            "log":log or ("Ein CLI-Lauf belegt diesen Arbeitsbestand. Fortschritt steht bei den Modellberichten." if external_writer else "")},
                     "generation": read_json(root / "generation-progress.json"),
                     "scan_progress": read_json(root / "scans/render-progress.json"),
                     "recognition_progress": read_json(root / "scans/recognition-progress.json")})
@@ -145,8 +151,8 @@ class Handler(BaseHTTPRequestHandler):
             path = urlsplit(self.path).path
             root = self.server.root
             if path == "/api/feedback":
-                from .generate import review
-                result = review(root, data["id"], data["rating"], data.get("note", ""), data.get("tags", []))
+                from .generate import review, UNSET
+                result = review(root, data["id"], data["rating"], data.get("note", ""), data.get("tags", []), data.get("kyu",UNSET))
             elif path == "/api/transcription":
                 result = register_transcription(root, data)
             elif path == "/api/job":
@@ -160,18 +166,37 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Choose 1–10000 training steps")
                     (root / "stop-training.flag").unlink(missing_ok=True)
                     arguments = ["train", "--approach", approach, "--steps", str(steps)]
-                    checkpoint = root / "models" / approach / "checkpoint.pt"
+                    run_name = data.get("run_name") or approach
+                    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", run_name):
+                        raise ValueError("Invalid training run name")
+                    arguments += ["--run-name", run_name]
+                    checkpoint = root / "models" / run_name / "checkpoint.pt"
                     if data.get("resume", True) and checkpoint.exists():
                         arguments += ["--resume", str(checkpoint)]
                 elif action == "generate":
                     approach = data.get("approach", "joint")
                     count = int(data.get("attempts", 30))
                     depth = int(data.get("own_moves", 3))
-                    if approach not in ("joint", "denoise", "mutation") or not 1 <= count <= 10000 or not 1 <= depth <= 8:
+                    kyu_min,kyu_max = int(data.get("kyu_min",10)),int(data.get("kyu_max",20))
+                    proof_seconds = float(data.get("proof_seconds",2))
+                    if approach not in ("joint", "denoise", "mutation", "fresh") or not 1 <= count <= 10000 or not 1 <= depth <= 8:
                         raise ValueError("Invalid generation settings")
+                    if not 1 <= kyu_min <= kyu_max <= 30 or not 0 < proof_seconds <= 600:
+                        raise ValueError("Invalid Kyu range or proof budget")
                     (root / "stop-generation.flag").unlink(missing_ok=True)
                     arguments = ["generate", "--approach", approach, "--attempts", str(count), "--own-moves", str(depth),
-                                 "--seed", str(int(time.time()))]
+                                 "--seed", str(int(time.time())),"--kyu-min",str(kyu_min),"--kyu-max",str(kyu_max),
+                                 "--proof-seconds",str(proof_seconds),"--proof-nodes","100000"]
+                    run_name = data.get("model_run")
+                    if run_name and approach != "mutation":
+                        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", run_name):
+                            raise ValueError("Invalid model run name")
+                        report = read_json(root/"models"/run_name/"report.json")
+                        if not report or report.get("approach") != ("joint" if approach == "fresh" else approach):
+                            raise ValueError("Choose a trained model for this approach")
+                        folder = root/"models"/run_name
+                        checkpoint = folder/"best.pt" if (folder/"best.pt").exists() else folder/"checkpoint.pt"
+                        arguments += ["--checkpoint", str(checkpoint)]
                 elif action == "download-scans":
                     arguments = ["download-scans"]
                 else:

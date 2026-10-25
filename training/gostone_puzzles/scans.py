@@ -175,10 +175,14 @@ def approve_transcription(root: Path, identifier: str, reviewer: str, checks: di
          "targets":infer_targets(item["board"],item["to_play"],item["category"],item["solutions"][0][0]),
          "target_status":"heuristic-needs-review","source_id":source["id"],
          "source_locator":f"page {item['page']} / {item['diagram_label']}",
+         "split_group":f"{item['source_id']}/page-{item['page']}",
+         "transcription_notes":item.get("notes", ""),
          "status":"visually-reviewed-historical-reference","proof_status":"unproved",
          "transcription_review":{"reviewer":reviewer,"checks":checks}}
     if not any(row["id"]==source["id"] for row in corpus["sources"]):
         corpus["sources"].append({**source,"reviewed_territories":["DE","US"],
+            "attribution_required_for_original_content_in_reviewed_territories":False,
+            "commercial_use_of_original_content_in_reviewed_territories":True,
             "rights_basis":"Ancient original content from the recorded PD-scan; modern editorial additions excluded. No worldwide clearance asserted."})
     corpus["records"].append(row)
     corpus["content_hash"]=digest(corpus["records"])

@@ -8,27 +8,25 @@ Datenbank, Browser-Bot oder KataGo-Servern. Standardadresse: `http://127.0.0.1:4
 Das Lab ist lauffähig, trainierbar und exportierbar. **Ein sehr starker Generator
 für vollständig geprüfte neue 3–5-Zug-Aufgaben ist noch nicht erreicht.**
 
-Aktuell sind 97 historische Aufgaben mit legalen Referenzvarianten übertragen;
-zwei weitere historische Antworten wurden quarantänisiert. Die 97 Aufgaben
-ergeben 777 Zugbeispiele, keine 777 unabhängigen Puzzle. Historische Antworten
-sind Referenzen, keine Beweise gegen sämtliche Gegenwehr.
+Der aktuell vollständig nachspielbare Bestand umfasst **104 Aufgabenfamilien
+und 843 Zugbeispiele**: 97 Aufgaben aus Smith (1908), sieben neue Familien aus
+acht einzeln gelesenen Guanzipu-Aufgaben und eine zusammengeführte gespiegelte
+Variante. Zwei fehlerhafte historische Antworten bleiben in Quarantäne.
+Es gibt keine 97-/104-Obergrenze; jeder Trainingslauf legt ein Manifest aller
+verwendeten und zurückgehaltenen Datensätze ab.
 
-Zwei kleine Modelle (je 60.614 Parameter) wurden tatsächlich auf diesem Laptop
-trainiert: gemeinsame Brettrekonstruktion und Zugvorhersage (`joint`) sowie
-reine Rekonstruktion (`denoise`). Ein dritter Vergleich verändert Stellungen
-zufällig. Der erste kontrollierte Vergleich mit je 60 Versuchen, drei eigenen
-Zügen und gleichem Suchbudget lieferte **keine exportfähige Aufgabe**. Die
-Erzeugung ist daher nicht als serienreif markiert. Siehe `RESEARCH_STATUS.md`.
+14 Scans / 1.223 Seiten sind heruntergeladen, darunter alternative Ausgaben.
+666 PDF-Seiten sind gerendert, 937 automatische Diagrammvorschläge gespeichert.
+**Die restlichen Anfangsstellungen und Lösungen sind noch nicht vollständig
+übertragen.** Ungeprüfte Erkennungen und rechtlich ungeklärte Ausgaben gelangen
+nicht ins Training. Siehe `RESEARCH_STATUS.md` für gemessene Ergebnisse,
+Bildbeobachtungen und verbleibende Abnahmelücken.
 
-14 historische Scans mit insgesamt 1.223 Seiten sind im lokalen Arbeitsbestand
-inventarisiert. Darunter sind alternative Ausgaben derselben Aufgaben. Die
-PDF-Ausgaben wurden in 666 Seitenbilder umgewandelt. Die drei DjVu-Ausgaben
-mit zusammen 557 Seiten bleiben zusätzliche Vergleichsausgaben und können
-seitenweise über Commons angezeigt werden. Die erste Bilderkennung lieferte
-937 **Diagrammvorschläge**, nicht 937 geprüfte Puzzle. Beobachtete Gitterfehler,
-chinesische Lösungsziffern, geschlagene Steine und schriftliche Varianten müssen
-noch übertragen und geprüft werden. Daraus ist noch kein zusätzliches
-Trainingsbeispiel freigegeben.
+Mehrere lokale Modelle wurden tatsächlich trainiert und verglichen. Eine neue
+Erzeugung aus leerem Bereich übernimmt keine Referenzsteine als festen Kern.
+Das ist weiterhin ein Kandidatengenerator: Noch kein Bestand erfüllt sämtliche
+Vorgaben einschließlich Kyu, drei notwendigen eigenen Zügen, eindeutiger
+Lösung, kurzen Widerlegungen und Qualitätsfreigabe.
 
 ## Start und Daten
 
@@ -58,6 +56,8 @@ python -m training.gostone_puzzles import-historical
 python -m training.gostone_puzzles download-scans
 python -m training.gostone_puzzles render-scans --renderer <pdftoppm.exe>
 python -m training.gostone_puzzles recognize-scans
+python -m training.gostone_puzzles import-reviewed
+python -m training.gostone_puzzles audit-corpus
 ```
 
 Der erste Import liest ausschließlich die ursprünglichen Brettkoordinaten,
@@ -99,22 +99,27 @@ historische Antwort bleibt bis zum Solverbeweis als `unproved` gekennzeichnet.
 ## Training und Vergleich
 
 ```powershell
-python -m training.gostone_puzzles train --approach joint --steps 1000
-python -m training.gostone_puzzles train --approach denoise --steps 1000
-python -m training.gostone_puzzles compare --attempts 60 --own-moves 3 --proof-seconds 0.5
-python -m training.gostone_puzzles generate --approach joint --attempts 30 --own-moves 3 --kyu-min 10 --kyu-max 20
+python -m training.gostone_puzzles train --approach joint --run-name mein-modell --channels 64 --blocks 5 --steps 2500
+python -m training.gostone_puzzles generate --approach fresh --checkpoint <Arbeitsbestand>/models/mein-modell/best.pt --attempts 60 --own-moves 3 --kyu-min 10 --kyu-max 20
+python -m training.gostone_puzzles compare --checkpoint <Arbeitsbestand>/models/mein-modell/best.pt --attempts 60 --own-moves 3 --proof-seconds 2 --proof-nodes 100000
 ```
 
-`--attempts` zählt untersuchte Vorschläge, nicht zugesicherte fertige Aufgaben.
-Kyu-Grenzen werden aktuell als Zielvorgabe gespeichert. **Es gibt noch kein
-kalibriertes Kyu-Modell und keine nachgewiesene Rangsteuerung.**
+`--attempts` zählt Vorschläge, keine zugesicherten fertigen Aufgaben. Alte
+Experimente bleiben erhalten; ein vorhandener Trainingslauf wird nur mit
+explizitem Resume fortgesetzt. `best.pt` bezeichnet den besten erhaltenen
+**Nachahmungs-Prüfwert**, keinen nachgewiesenen Sieger für Puzzlequalität.
 
-Das Netz verarbeitet 19×19-Stellungen, relative Steinfarben, sichtbare/verdeckte
-Punkte, Startfarbe und sieben Kategorien. Es sagt Steinbelegung, Zugprior und
-menschliche Qualitätspräferenz voraus. Erzeugt werden derzeit kontrollierte
-Ergänzungen/Änderungen historischer Lebens-/Todesformen. Vollständig freie
-Generierung und rückwärts gerichtete Aufgabenkonstruktion sind noch nicht
-implementiert. Es gibt keine künstlich lebende Außenwand.
+Neue Netze verarbeiten 19×19-Stellungen, relative Farben, sichtbare/verdeckte
+Punkte, aktuelle Farbe, acht Kategorien, Zielsteine, Spielerrolle und gewünschte
+eigene Zugzahl. Die historischen Tiefenlabels sind verbleibende Züge der
+Referenzfolge, keine erfundenen Mindesttiefen-Beweise.
+
+`joint` ändert historische Formen; `fresh` baut die gesamte Steinform aus einem
+leeren Bereich auf. Die Referenz gibt nur Kategorie und räumlichen Rahmen vor.
+Eine statische Konstruktionsregel verhindert freiheitslose AB/AW-Gruppen. Das
+belegt weder Lösung noch Schönheit. Die größte Gruppe der angegriffenen Farbe
+wird als Ziel vorgeschlagen; ein leicht schlagbarer Nebenstein soll nicht die
+auffällige Hauptaufgabe ersetzen. Es gibt keine künstlich lebende Außenwand.
 
 Trainings- und Prüffamilien werden vor Drehung/Farbwechsel durch einen stabilen
 Familienhash getrennt. Modellberichte messen auf getrennten Familien
@@ -134,7 +139,7 @@ Trainingsurteilen wird die Präferenz zur Auswahl unter drei Modellvorschlägen
 verwendet. Das ist eine erste Lernfunktion, keine validierte Qualitätsgarantie.
 
 ```powershell
-python -m training.gostone_puzzles train --approach joint --steps 500 --resume <Arbeitsbestand>/models/joint/checkpoint.pt
+python -m training.gostone_puzzles train --approach joint --run-name mein-modell --steps 500 --resume <Arbeitsbestand>/models/mein-modell/checkpoint.pt
 ```
 
 Gewichte, Optimierungszustand und Zufallszustände werden gespeichert.
@@ -144,11 +149,31 @@ dürfen beim Fortsetzen nicht unbemerkt verändert werden; dafür ist ein neuer,
 gesondert bewerteter Trainingslauf erforderlich. Modell-Checkpoints werden mit
 `weights_only=True` geladen. Fremde Checkpoints dennoch nicht ungeprüft laden.
 
+## Kyu-Einschätzung und Kalibrierung
+
+Ein unbekannter Rang bleibt unbekannt. Im Kandidatentab kannst du zusätzlich
+1–30 Kyu einschätzen. Eine automatische Schätzung lernt nur aus gut bewerteten,
+bewiesenen Verläufen: mindestens 30 echte Labels aus 20 unabhängigen Kernen,
+mindestens zehn Kyu Rangspanne, Prüfung ohne die jeweils komplette Familie,
+mittlerer Fehler höchstens 2,5 Kyu und 90-Prozent-Fehlerbereich höchstens vier.
+Verschiedene Modellstände werden getrennt kalibriert. Außerhalb der geprüften
+Merkmals-/Rangbereiche wird keine Zahl ausgegeben. Der Fehlerbereich einer
+automatischen Schätzung muss vollständig im gewünschten Exportband liegen.
+Dies sind empirische Schätzungen, keine exakten menschlichen Spielstärken.
+Aktuell fehlen entsprechende Nutzerlabels; es gibt noch keinen kalibrierten
+Kyu-Stand und keine nachgewiesene automatische Rangsteuerung.
+
+```powershell
+python -m training.gostone_puzzles calibrate-difficulty
+```
+
 ## Was der Prüfer belegt
 
 Der aktuelle Baseline-Löser durchsucht das **vollständige tatsächliche Brett**.
-Er verwendet keine feste lokale Suchbox, keine imaginären sicheren Gruppen
-und keinen neuronalen Wert als Endzustand. Eine markierte ursprüngliche Gruppe
+Eine beschränkte taktische Vorsuche und neuronale Prioren ordnen mögliche
+Züge, liefern aber ausdrücklich keine Beweise. Die eigentliche Prüfung lässt
+keine legalen Gegenantworten wegen dieser Vorsuche weg und verwendet keine
+imaginär sicheren Gruppen oder neuronalen Endzustände. Eine markierte ursprüngliche Gruppe
 ist entweder physisch gefangen oder konservativ über einen Benson-Fixpunkt
 unbedingt lebend. Außen-Ko, Seki und andere Zielarten sind keine freigegebenen
 Aufgabentypen. Ein gemeinsamer Regelkern behandelt Schlagen, Selbstmordverbot,
@@ -169,18 +194,39 @@ gesonderte didaktische Abgrenzung gegen reine Aufräumzüge steht noch aus.
 
 Für den Puzzleexport müssen Gewinn, exakte Zugzahl, Eindeutigkeit des ersten
 Zugs, Widerlegungen sämtlicher anderer erster Züge, zwei kurze Fehlvarianten
-und positives Qualitätsfeedback vorliegen. Alle Zertifikate werden erneut
+sowie Neuheit, Kyu-Einschätzung im gewünschten Band und positives Qualitätsfeedback vorliegen. Alle Zertifikate werden erneut
 geprüft. Aktuell erfüllt kein generierter Kandidat diese gesamten Kriterien.
 
 ```powershell
 python -m training.gostone_puzzles export-puzzles --destination <neuer Dateiname> --territory DE
 ```
 
-Nur dann entstehen JSON und SGF. Eine kurze Fehlvariante hat höchstens vier
-Halbzüge; der beigefügte vollständige Widerlegungsbeweis darf länger sein.
+Nur dann entstehen JSON und SGF mit expliziter Startfarbe, Anfangsstellung,
+Kyu, Hauptfolge und beiden Fehlerfolgen. Quellen müssen dokumentierte
+kommerzielle Nutzung des Originalinhalts ohne Pflichtnennung erlauben. Eine kurze Fehlvariante hat höchstens vier
+Halbzüge und erreicht innerhalb dieser Folge die bewiesene Zielverhinderung.
+Längere Widerlegungen werden nicht einfach bei vier Zügen abgeschnitten.
+Das persistente Exportregister vergibt stabile Nummern (`Puzzle 1` usw.) und
+verhindert auch über mehrere Exporte hinweg doppelte Aufgaben. Eine Teilmenge
+oder neue Sortierung vergibt frühere Nummern nicht neu.
 Symmetrien/Farbwechsel, räumlich normalisierte taktische Kerne und
 Lösungszugmuster verhindern einfache Wiederholungen. Diese Filter sind noch
 kein vollständiger Nachweis semantischer Vielfalt.
+
+## Screenshots und eigene Analysen
+
+```powershell
+python -m training.gostone_puzzles quality-report --destination <neuer Prüfungsordner> --candidate-root <Vergleichslauf>/fresh
+```
+
+Das HTML zeigt alle acht neuen Originalübertragungen mit Anfangslage,
+Druckziffern und tatsächlich ausgespieltem Ende. Bei Modellläufen werden die
+ersten sechs gespeicherten Vorschläge und sämtliche Gewinne gezeigt. Orange
+markiert das konkrete Ziel. Ein attraktives Diagramm ersetzt keinen Beweis;
+die Bildprüfung kann auch formal lösbare Aufgaben als schlechte Lehrbeispiele
+verwerfen. Browser-Screenshots werden anschließend aus diesem Bericht erstellt.
+`review.json` dokumentiert die Auswahl und Messwerte. Noch keine automatische
+professionelle Abnahme oder semantische Vielfaltgarantie wird behauptet.
 
 ## Umgebung und Modell auf einen anderen PC übertragen
 

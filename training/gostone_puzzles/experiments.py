@@ -8,20 +8,21 @@ from .common import atomic_json, read_json
 from .generate import generate
 
 
-def compare(root: Path, attempts=30, own_moves=3, seed=2026, proof_seconds=.3):
+def compare(root: Path, attempts=30, own_moves=3, seed=2026, proof_seconds=.3, checkpoint=None, proof_nodes=30000):
     """Identical seeds, budgets and fresh dedup indices for each approach."""
     run = root / "experiments" / f"comparison-{time.time_ns()}"
     reports = []
-    for approach in ("joint", "denoise", "mutation"):
+    for approach in (("joint", "fresh", "mutation") if checkpoint else ("joint", "denoise", "mutation")):
         workspace = run / approach
         shutil.copytree(root / "data", workspace / "data")
         if approach != "mutation":
-            source = root / "models" / approach / "checkpoint.pt"
+            source = checkpoint or root / "models" / approach / "checkpoint.pt"
             destination = workspace / "models" / approach / "checkpoint.pt"
             destination.parent.mkdir(parents=True)
             shutil.copy2(source, destination)
         report = generate(workspace, approach=approach, count=attempts, own_moves=own_moves,
-                          seed=seed, proof_seconds=proof_seconds)
+                          seed=seed, proof_seconds=proof_seconds, proof_nodes=proof_nodes,
+                          checkpoint=destination if approach != "mutation" else None)
         report["export_eligible"] = sum(read_json(path)["verification"].get("export_eligible", False)
                                         for path in (workspace / "candidates").glob("*.json"))
         for path in (workspace / "candidates").glob("*.json"):
@@ -32,7 +33,9 @@ def compare(root: Path, attempts=30, own_moves=3, seed=2026, proof_seconds=.3):
         reports.append(report)
     result = {"schema": "gostone.puzzle-experiment/1", "reports": reports,
               "conditions": {"attempts_each": attempts, "own_moves": own_moves, "seed": seed,
-                             "proof_seconds": proof_seconds, "fresh_indices_per_approach": True},
+                             "proof_seconds": proof_seconds, "proof_nodes":proof_nodes,
+                             "checkpoint":str(checkpoint) if checkpoint else None,"fresh_indices_per_approach": True},
+              "workspaces":str(run),
               "winner": None, "production_ready": False,
               "interpretation": "No winner without full export eligibility AND independent human quality/diversity review. Neural imitation accuracy alone cannot select a production generator."}
     atomic_json(run / "comparison.json", result)
