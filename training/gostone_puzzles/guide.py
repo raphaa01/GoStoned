@@ -7,12 +7,13 @@ from .rules import group, terminal
 
 
 class TacticalGuide:
-    def __init__(self, initial, goal, player, prior=None, seconds=.25, nodes=4000):
+    def __init__(self, initial, goal, player, prior=None, seconds=.25, nodes=4000,anchors=()):
         occupied = [p for p,c in enumerate(initial.stones) if c]
         low_x, high_x = max(0,min(p % initial.size for p in occupied)-2), min(initial.size-1,max(p % initial.size for p in occupied)+2)
         low_y, high_y = max(0,min(p//initial.size for p in occupied)-2), min(initial.size-1,max(p//initial.size for p in occupied)+2)
         self.zone = tuple(y*initial.size+x for y in range(low_y,high_y+1) for x in range(low_x,high_x+1))
         self.goal, self.player, self.prior = goal, player, prior
+        self.anchors=anchors
         self.seconds, self.max_nodes, self.nodes = seconds, nodes, 0
         self.moves, self.cache = {}, {}
         self.started = time.monotonic()
@@ -26,7 +27,7 @@ class TacticalGuide:
         self.nodes += 1
         if self.nodes > self.max_nodes or time.monotonic()-self.started > self.seconds:
             return 0
-        outcome = terminal(state,self.goal,self.player)
+        outcome = terminal(state,self.goal,self.player,self.anchors)
         if outcome is not None:
             return outcome
         if plies <= 0 or state.passes >= 2:

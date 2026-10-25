@@ -40,7 +40,7 @@ def samples(rows):
     return result
 
 
-def batch(items, count, rng, augment=True, input_planes=12, local_mask=False):
+def batch(items, count, rng, augment=True, input_planes=12, local_mask=False,category_dropout=0):
     features, labels, moves, masks = [], [], [], []
     for index in rng.integers(len(items), size=count):
         board, player, category, move, _, targets, goal_player, own_moves = items[index]
@@ -72,6 +72,8 @@ def batch(items, count, rng, augment=True, input_planes=12, local_mask=False):
             visible[move//19, move % 19] = False
         planes, target = encode(board, player, category, visible, input_planes=input_planes,
                                 targets=targets, goal_player=goal_player, own_moves=own_moves)
+        if augment and category_dropout and rng.random() < category_dropout:
+            planes[5:13]=0
         features.append(planes)
         labels.append(target)
         moves.append(move)
@@ -125,7 +127,8 @@ def feedback_examples(root: Path, training_families: set[str], input_planes=12):
 
 
 def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size=16,
-          resume: Path | None = None, seed=2026, device="cpu", use_feedback=True, run_name=None):
+          resume: Path | None = None, seed=2026, device="cpu", use_feedback=True, run_name=None,
+          category_dropout=None,solver_supervision_share=None):
     if name not in ("joint", "denoise") or not 1 <= steps <= 1000000 or not 1 <= batch_size <= 256:
         raise ValueError("Invalid training settings")
     if not 8 <= channels <= 256 or channels % 4 or not 1 <= blocks <= 20:
@@ -153,6 +156,18 @@ def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size
             raise ValueError("Cannot resume with a different training objective")
     else:
         model, previous = PuzzleNet(Config(channels, blocks)).to(device), {}
+    category_dropout=previous.get("category_dropout",0) if category_dropout is None else category_dropout
+    if not 0 <= category_dropout <= .9:
+        raise ValueError("Invalid category-dropout probability")
+    solver_supervision_share=previous.get("solver_supervision_share",0) if solver_supervision_share is None else solver_supervision_share
+    if not 0 <= solver_supervision_share <= .75:
+        raise ValueError("Invalid solver-supervision share")
+    synthetic_buckets={};synthetic_rows=[];synthetic_manifest=None
+    if solver_supervision_share:
+        from .self_training import training_records
+        synthetic_rows,synthetic_manifest=training_records(root,{r["family"]for r in training},{r["family"]for r in validation})
+        for own in sorted({r["minimum_own_moves"]for r in synthetic_rows}):
+            synthetic_buckets[own]=samples([r for r in synthetic_rows if r["minimum_own_moves"] == own])
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.0001)
     if previous.get("optimizer"):
         optimizer.load_state_dict(previous["optimizer"])
@@ -172,6 +187,8 @@ def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size
     output.mkdir(parents=True, exist_ok=True)
     from .corpus import training_manifest
     atomic_json(output / "corpus-manifest.json", training_manifest(root, training, validation))
+    if synthetic_manifest:
+        atomic_json(output/"solver-supervision-manifest.json",synthetic_manifest)
     started, completed = time.monotonic(), int(previous.get("steps", 0))
     baseline = evaluate(model.eval(), validation_samples, device)
     history = []
@@ -193,6 +210,10 @@ def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size
                           positive_feedback=positive_feedback,negative_feedback=negative_feedback)
         checkpoint["masking_strategy"] = "mixed-local-and-unseeded" if model.config.input_planes >= 15 else "global"
         checkpoint["depth_condition_labels"] = "historical reference length; not forced minimum-depth labels"
+        checkpoint["category_dropout"]=category_dropout
+        checkpoint["solver_supervision_share"]=solver_supervision_share
+        checkpoint["solver_supervision_records"]=len(synthetic_rows)
+        checkpoint["solver_supervision_hash"]=synthetic_manifest["dataset_hash"] if synthetic_manifest else None
         temporary = output / "checkpoint.tmp"
         torch.save(checkpoint, temporary)
         os.replace(temporary, output / "checkpoint.pt")
@@ -214,6 +235,9 @@ def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size
                   "baseline": baseline, "validation": metrics, "history": history[-100:],
                   "best_validation_checkpoint": best,
                   "feedback_examples": len(feedback), "production_ready": False,
+                  "category_dropout":category_dropout,
+                  "solver_supervision_share":solver_supervision_share,"solver_supervision_records":len(synthetic_rows),
+                  "solver_supervision_depths":{str(own):sum(r["minimum_own_moves"] == own for r in synthetic_rows)for own in synthetic_buckets},
                   "preference_ready": preference_ready,
                   "warning": "Research checkpoint; generating good new puzzles has to be measured separately."}
         atomic_json(output / "report.json", report)
@@ -228,8 +252,14 @@ def train(root: Path, name="joint", steps=500, channels=48, blocks=4, batch_size
             if (root / "stop-training.flag").exists():
                 report = save("stopped")
                 break
-            x, target, moves, mask = batch(training_samples, batch_size, rng, input_planes=model.config.input_planes,
-                                          local_mask=model.config.input_planes >= 15)
+            selected_samples=training_samples
+            if synthetic_buckets and rng.random() < solver_supervision_share:
+                # Equal depth strata prevent hundreds of easy one-move wins
+                # from drowning the rarer proved multi-move compositions.
+                own=int(rng.choice(list(synthetic_buckets)))
+                selected_samples=synthetic_buckets[own]
+            x, target, moves, mask = batch(selected_samples, batch_size, rng, input_planes=model.config.input_planes,
+                                          local_mask=model.config.input_planes >= 15,category_dropout=category_dropout)
             x, target, moves, mask = (t.to(device) for t in (x, target, moves, mask))
             board_logits, policy, _ = model(x)
             shape_loss = F.cross_entropy(board_logits, target, reduction="none")

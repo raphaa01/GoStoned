@@ -12,18 +12,18 @@ async function post(path, body) {
   await refresh();
   return result;
 }
-function board(canvas, stones, targets = [], moves = []) {
+function board(canvas, stones, targets = [], moves = [],anchors=[]) {
   const c = canvas.getContext("2d"), width = canvas.width, margin = width*.055, step = (width-2*margin)/18;
   c.fillStyle = "#cda76d"; c.fillRect(0,0,width,width); c.strokeStyle="#705735"; c.lineWidth=.7;
   for(let i=0;i<19;i++){const p=margin+i*step;c.beginPath();c.moveTo(p,margin);c.lineTo(p,width-margin);c.moveTo(margin,p);c.lineTo(width-margin,p);c.stroke();}
   for(const y of [3,9,15]) for(const x of [3,9,15]) {c.beginPath();c.arc(margin+x*step,margin+y*step,1.6,0,Math.PI*2);c.fillStyle="#634b2d";c.fill();}
-  stones.forEach((color,p)=>{if(!color)return;const x=margin+(p%19)*step,y=margin+Math.floor(p/19)*step;c.beginPath();c.arc(x,y,step*.46,0,Math.PI*2);c.fillStyle=color===1?"#17201b":"#f4f2e8";c.fill();c.strokeStyle=color===1?"#070d09":"#8e8d7c";c.stroke();if(targets.includes(p)){c.beginPath();c.arc(x,y,step*.18,0,Math.PI*2);c.strokeStyle="#e3995c";c.lineWidth=2;c.stroke();c.lineWidth=.7;}});
+  stones.forEach((color,p)=>{if(!color)return;const x=margin+(p%19)*step,y=margin+Math.floor(p/19)*step;c.beginPath();c.arc(x,y,step*.46,0,Math.PI*2);c.fillStyle=color===1?"#17201b":"#f4f2e8";c.fill();c.strokeStyle=color===1?"#070d09":"#8e8d7c";c.stroke();if(targets.includes(p)){c.beginPath();c.arc(x,y,step*.18,0,Math.PI*2);c.strokeStyle=anchors[0]?.includes(p)?"#72c7b2":"#e3995c";c.lineWidth=2;c.stroke();c.lineWidth=.7;}});
   moves.forEach((move,index)=>{if(move.move<0)return;const x=margin+(move.move%19)*step,y=margin+Math.floor(move.move/19)*step;c.beginPath();c.arc(x,y,step*.45,0,Math.PI*2);c.fillStyle=move.color===1?"#17201b":"#f4f2e8";c.fill();c.fillStyle=move.color===1?"#fff":"#17201b";c.font=`bold ${step*.7}px sans-serif`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(move.number||index+1),x,y);});
 }
 function replayControls(canvas,row,reference){
   const controls=el("div",undefined,"feedback"),start=el("button",reference?"Referenzfolge spielen":"Geprüfte Folge spielen"),previous=el("button","←"),next=el("button","→"),caption=el("span",""),variation=el("select");
   let snapshots=[],index=0;previous.hidden=next.hidden=true;
-  function show(){const snapshot=snapshots[index];board(canvas,snapshot.board,snapshot.targets,snapshot.move?[snapshot.move]:[]);caption.textContent=`${index}/${snapshots.length-1}`;previous.disabled=index===0;next.disabled=index===snapshots.length-1;}
+  function show(){const snapshot=snapshots[index];board(canvas,snapshot.board,snapshot.targets,snapshot.move?[snapshot.move]:[],row.anchor_groups||[]);caption.textContent=`${index}/${snapshots.length-1}`;previous.disabled=index===0;next.disabled=index===snapshots.length-1;}
   start.onclick=async()=>{try{const response=await fetch(`/api/replay?id=${encodeURIComponent(row.id)}&reference=${reference?1:0}&variant=${variation.value||0}`);const data=await response.json();if(!response.ok)throw new Error(data.error);snapshots=data.snapshots;index=0;previous.hidden=next.hidden=false;show();}catch(error){message(error.message);}};
   previous.onclick=()=>{if(index>0){index--;show();}};next.onclick=()=>{if(index<snapshots.length-1){index++;show();}};
   controls.append(start,previous,caption,next);
@@ -33,9 +33,11 @@ function replayControls(canvas,row,reference){
 function makeCard(row, reference = false) {
   const card=el("article",undefined,"card"), canvas=el("canvas");canvas.width=canvas.height=440;
   const badge=el("span",reference?"Historische Referenz":({"proven-win":row.verification.export_eligible?"Beweisvorgaben erfüllt · Qualität und Kyu prüfen":"Gewinn bewiesen · Anforderungen offen","proven-loss":"Ziel widerlegt","already-terminal":"Ziel schon entschieden","unknown":"Lösung ungeklärt"}[row.verification.status]||row.verification.status),"badge");
-  card.append(badge,canvas);board(canvas,row.board,row.targets);
+  card.append(badge,canvas);board(canvas,row.board,row.targets,[],row.anchor_groups||[]);
   card.append(el("h2",reference?row.id:`Kandidat ${row.id.slice(0,8)}`));
   card.append(el("p",`${row.to_play===1?"Schwarz":"Weiß"} beginnt · ${row.category} · ${reference?"historische Zugfolge":row.approach}`));
+  if(row.objective_text)card.append(el("p",row.objective_text));
+  if(row.agent_assessment)card.append(el("p",`Vorläufige Agent-Einschätzung: ${row.agent_assessment.estimated_kyu} Kyu, unsicherer Bereich ${row.agent_assessment.uncertain_range.join("–")}. Noch keine kalibrierte Einstufung.`));
   if(reference){
     card.append(el("p",`${row.solutions.length} Referenzvariante(n) · ${row.source_locator||""}`));
     if(row.transcription_notes)card.append(el("p",row.category==="tesuji"?"Aus dem Originalbild übertragen. Genaues Aufgabenziel noch nicht als Gewinnbedingung bestätigt.":row.transcription_notes));
@@ -58,13 +60,14 @@ function render() {
   if(signature!==nextSignature){signature=nextSignature;$("candidate-list").replaceChildren(...state.candidates.slice(0,36).map(r=>makeCard(r)));if(!state.candidates.length)$("candidate-list").append(el("p","Noch keine Kandidaten. Trainiere zuerst ein Modell oder starte einen Vergleichslauf."));}
   const nextReferences=JSON.stringify(state.references.map(r=>[r.id,r.solutions]));
   if(referenceSignature!==nextReferences){referenceSignature=nextReferences;$("reference-list").replaceChildren(...state.references.map(r=>makeCard(r,true)));}
-  const table=el("table"),head=el("tr");for(const title of ["Modell","Schritte","Parameter","Referenzzug Top 1","Brettrekonstruktion","Feedback"])head.append(el("th",title));table.append(head);
-  for(const [name,report] of Object.entries(state.models)){if(!report)continue;const row=el("tr");for(const value of [name,report.steps,report.parameters,`${(report.validation.reference_move_top1*100).toFixed(1)} %`,report.validation.masked_cross_entropy.toFixed(3),report.feedback_examples])row.append(el("td",String(value)));table.append(row);}
+  const table=el("table"),head=el("tr");for(const title of ["Modell","Schritte","Parameter","Referenzzug Top 1","Brettrekonstruktion","Beweisbeispiele","Feedback"])head.append(el("th",title));table.append(head);
+  for(const [name,report] of Object.entries(state.models)){if(!report)continue;const row=el("tr");for(const value of [name,report.steps,report.parameters,`${(report.validation.reference_move_top1*100).toFixed(1)} %`,report.validation.masked_cross_entropy.toFixed(3),report.solver_supervision_records||0,report.feedback_examples])row.append(el("td",String(value)));table.append(row);}
   $("model-reports").replaceChildren(table,el("p","Diese Werte messen Nachahmung und Rekonstruktion auf getrennten Aufgabenfamilien. Sie messen noch keine Qualität neuer Puzzle."));
   $("job-log").textContent=state.job.log||"Noch kein Lauf über diese Oberfläche gestartet.";
+  if(state.composition?.status==="running")$("job-log").textContent=`Fortlaufende Komposition: ${state.composition.proved_candidates.length}/${state.composition.proof_target} Beweiskandidaten · ${state.composition.attempts} Vorschläge · ${Math.round(state.composition.seconds)} Sekunden.\nBildprüfung und Kyu-Einstufung bleiben zusätzliche Anforderungen.\n${JSON.stringify(state.composition.profiles,null,2)}`;
   const modelOptions=Object.entries(state.models).filter(([,report])=>report?.approach===($("approach").value==="fresh"?"joint":$("approach").value)).map(([name])=>name);
   if(JSON.stringify(modelOptions)!==$("model-run").dataset.options){const selected=$("model-run").value;$("model-run").replaceChildren(...modelOptions.map(name=>{const option=el("option",name);option.value=name;return option;}));if(modelOptions.includes(selected))$("model-run").value=selected;else if(modelOptions.includes("joint-depth-64"))$("model-run").value="joint-depth-64";else if(modelOptions.includes("joint-compose-64"))$("model-run").value="joint-compose-64";else if(modelOptions.includes("joint-targeted-32"))$("model-run").value="joint-targeted-32";$("model-run").dataset.options=JSON.stringify(modelOptions);}
-  for(const id of ["generate","train","download-scans"])$(id).disabled=state.job.running;
+  for(const id of ["generate","compose","train","download-scans"])$(id).disabled=state.job.running;
   if(!$("scan-source").options.length){for(const source of state.scans.sources){const option=el("option",`${source.id} · ${source.pages||"?"} Seiten`);option.value=source.id;$("scan-source").append(option);}}
   const downloaded=state.scans.sources.filter(s=>s.download_status==="complete");
   $("scan-status").textContent=`${downloaded.length}/${state.scans.sources.length} Scans heruntergeladen · ${downloaded.reduce((n,s)=>n+(s.pages||0),0)} Quellseiten. ${state.recognition_progress?.diagram_proposals||0} automatische Diagrammvorschläge; ${state.references.filter(row=>row.status==="visually-reviewed-historical-reference").length} geprüfte Aufgabenfamilien daraus.`;
@@ -72,7 +75,8 @@ function render() {
 async function refresh(){const response=await fetch("/api/state");if(!response.ok)throw new Error("Lab nicht erreichbar");state=await response.json();render();}
 document.querySelectorAll("nav button").forEach(button=>button.onclick=()=>{selectedTab=button.dataset.tab;document.querySelectorAll(".panel").forEach(panel=>panel.hidden=panel.id!==selectedTab);document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("selected",b===button));});
 $("approach").onchange=()=>render();
-$("generate").onclick=()=>post("/api/job",{action:"generate",approach:$("approach").value,attempts:Number($("attempts").value),own_moves:Number($("depth").value),kyu_min:Number($("kyu-min").value),kyu_max:Number($("kyu-max").value),proof_seconds:Number($("proof-seconds").value),model_run:$("model-run").value}).catch(e=>message(e.message));
+$("generate").onclick=()=>post("/api/job",{action:"generate",approach:$("approach").value,attempts:Number($("attempts").value),own_moves:Number($("depth").value),kyu_min:Number($("kyu-min").value),kyu_max:Number($("kyu-max").value),proof_seconds:Number($("proof-seconds").value),model_run:$("model-run").value,category:$("objective").value||null}).catch(e=>message(e.message));
+$("compose").onclick=()=>post("/api/job",{action:"compose",target:Number($("proof-target").value),own_moves:Number($("depth").value),kyu_min:Number($("kyu-min").value),kyu_max:Number($("kyu-max").value),model_run:$("model-run").value}).catch(e=>message(e.message));
 $("train").onclick=()=>post("/api/job",{action:"train",approach:$("train-approach").value,steps:Number($("train-steps").value),resume:true,run_name:$("train-run").value}).catch(e=>message(e.message));
 $("stop").onclick=()=>post("/api/stop",{}).then(()=>message("Anhalten angefordert. Der nächste Trainingscheckpoint wird gespeichert.")).catch(e=>message(e.message));
 $("download-scans").onclick=()=>post("/api/job",{action:"download-scans"}).catch(e=>message(e.message));

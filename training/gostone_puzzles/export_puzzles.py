@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .common import atomic_json, read_json, canonical, solution_fingerprint, tactical_core
-from .rules import State, group
+from .rules import State, group, normalize_anchors
 from .solver import verify_certificate
 
 
@@ -79,16 +79,28 @@ def approved_puzzles(root: Path, territory="DE"):
                 or source.get("commercial_use_of_original_content_in_reviewed_territories") is not True):
             raise ValueError("Source lacks recorded commercial use without attribution")
         initial = State.setup(row["size"], row["board"], row["to_play"], row["targets"])
-        color = initial.stones[next(iter(initial.targets))]
-        target_group,_ = group(initial.stones,initial.size,next(iter(initial.targets)))
-        if target_group != initial.targets:
-            raise ValueError("The target must identify the complete initial group")
-        if any(len(group(initial.stones,initial.size,p)[0]) > len(target_group)
-               for p,c in enumerate(initial.stones) if c == color):
-            continue
+        anchors=normalize_anchors(row["category"],row.get("anchor_groups",()),row["size"])
+        if anchors:
+            if initial.targets != anchors[0] | anchors[1]:
+                raise ValueError("The exported targets must identify both anchor groups")
+            for index,points in enumerate(anchors):
+                chain,_=group(initial.stones,initial.size,next(iter(points)))
+                color=3-row["to_play"] if row["category"] == "semeai" and index == 1 else row["to_play"]
+                if chain != points or any(initial.stones[p] != color for p in points):
+                    raise ValueError("An anchor must identify a complete original group of the correct color")
+        else:
+            color = initial.stones[next(iter(initial.targets))]
+            target_group,_ = group(initial.stones,initial.size,next(iter(initial.targets)))
+            if target_group != initial.targets:
+                raise ValueError("The target must identify the complete initial group")
+            if any(len(group(initial.stones,initial.size,p)[0]) > len(target_group)
+                   for p,c in enumerate(initial.stones) if c == color):
+                continue
         def verify(state, proof):
             if proof.get("goal") != row["category"] or proof.get("player") != row["to_play"]:
                 raise ValueError("Certificate goal/player differs from the exported task")
+            if normalize_anchors(row["category"],proof.get("anchor_groups",()),row["size"]) != anchors:
+                raise ValueError("Certificate anchor groups differ from the exported objective")
             verify_certificate(state,proof)
         certificate = result["certificate"]
         if certificate.get("deadline_plies") is not None or certificate["nodes"][certificate["root"]]["outcome"] != 1:
@@ -164,9 +176,10 @@ def approved_puzzles(root: Path, territory="DE"):
         historical_patterns = set()
         for reference in corpus["records"]:
             for line in reference["solutions"]:
-                if len(line) >= len(solution):
-                    old_signature = pattern([{"move":m,"color":reference["to_play"] if i%2 == 0 else 3-reference["to_play"]}
-                                             for i,m in enumerate(line[:len(solution)])],reference["to_play"])
+                for offset in range(len(line)-len(solution)+1):
+                    player=reference["to_play"] if offset % 2 == 0 else 3-reference["to_play"]
+                    old_signature = pattern([{"move":m,"color":player if i%2 == 0 else 3-player}
+                                             for i,m in enumerate(line[offset:offset+len(solution)])],player)
                     if old_signature:
                         historical_patterns.add(old_signature)
         if position_key in positions or core_key in cores or (signature and (signature in patterns or signature in historical_patterns)):
@@ -191,14 +204,24 @@ def export_puzzles(root: Path, destination: Path, territory="DE"):
     sgf = []
     def point(p):
         return "" if p == -1 else chr(97+p % 19)+chr(97+p//19)
+    def escape(value):
+        return str(value).replace("\\","\\\\").replace("]","\\]")
     def branch(moves, status):
-        return "("+"".join(f";{'B' if move['color'] == 1 else 'W'}[{point(move['move'])}]C[{status}]" for move in moves)+")"
+        return "("+"".join(f";{'B' if move['color'] == 1 else 'W'}[{point(move['move'])}]"
+                           +(f"C[{status}]" if i == len(moves)-1 else "")for i,move in enumerate(moves))+")"
     for row in puzzles:
         setup = "".join(f"A{label}"+"".join(f"[{point(p)}]" for p,c in enumerate(row["board"]) if c == color)
                         for color, label in ((1,"B"),(2,"W")) if color in row["board"])
+        anchors=row.get("anchor_groups",[])
+        if anchors:
+            setup+="TR"+"".join(f"[{point(p)}]" for p in anchors[0])
+            setup+="SQ"+"".join(f"[{point(p)}]" for p in anchors[1])
+        elif row.get("targets"):
+            setup+="MA"+"".join(f"[{point(p)}]" for p in row["targets"])
+        markers="first anchor: triangles; second anchor: squares" if anchors else "target: crosses"
         result = row["verification"]
         sgf.append(f"(;GM[1]FF[4]CA[UTF-8]SZ[19]PL[{'B' if row['to_play'] == 1 else 'W'}]GN[Puzzle {row['puzzle_number']}]"
-                   f"C[Goal: {row['category']}; Kyu: {row['difficulty']['kyu']} ({row['difficulty']['status']}); own moves: {row['requested_own_moves']}]"
+                   f"C[Goal: {row['category']}; {escape(row.get('objective_text',''))}; Kyu: {row['difficulty']['kyu']} ({row['difficulty']['status']}); own moves: {row['requested_own_moves']}; {markers}]"
                    +setup+branch(result["solution"], "correct")
                    +"".join(branch(variation["moves"], "incorrect; full refutation in JSON") for variation in result["wrong_variations"])+")")
     destination.with_suffix(".sgf").write_text("\n".join(sgf)+"\n", encoding="utf-8")

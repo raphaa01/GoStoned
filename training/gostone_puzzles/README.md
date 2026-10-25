@@ -8,10 +8,11 @@ Datenbank, Browser-Bot oder KataGo-Servern. Standardadresse: `http://127.0.0.1:4
 Das Lab ist lauffähig, trainierbar und exportierbar. **Ein sehr starker Generator
 für vollständig geprüfte neue 3–5-Zug-Aufgaben ist noch nicht erreicht.**
 
-Der aktuell vollständig nachspielbare Bestand umfasst **104 Aufgabenfamilien
-und 843 Zugbeispiele**: 97 Aufgaben aus Smith (1908), sieben neue Familien aus
-acht einzeln gelesenen Guanzipu-Aufgaben und eine zusammengeführte gespiegelte
-Variante. Zwei fehlerhafte historische Antworten bleiben in Quarantäne.
+Der aktuell vollständig nachspielbare historische Bestand umfasst **113
+Aufgabenfamilien und 952 Zugbeispiele**: 97 Aufgaben aus Smith (1908), 16
+Familien aus 20 einzeln gelesenen Guanzipu-Diagrammen auf den Seiten 100/101.
+Vier gespiegelte Diagramme wurden mit den vorhandenen Familien zusammengeführt.
+Zwei fehlerhafte historische Antworten bleiben in Quarantäne.
 Es gibt keine 97-/104-Obergrenze; jeder Trainingslauf legt ein Manifest aller
 verwendeten und zurückgehaltenen Datensätze ab.
 
@@ -24,9 +25,56 @@ Bildbeobachtungen und verbleibende Abnahmelücken.
 
 Mehrere lokale Modelle wurden tatsächlich trainiert und verglichen. Eine neue
 Erzeugung aus leerem Bereich übernimmt keine Referenzsteine als festen Kern.
-Das ist weiterhin ein Kandidatengenerator: Noch kein Bestand erfüllt sämtliche
+Ein neuer kompakter Entwurf mit 18 Steinen erfüllt erstmals die vollständigen
+Beweisbedingungen für drei eigene Züge und zwei kurze Widerlegungen. Die
+Bildprüfung stuft ihn vorläufig eher bei 23 Kyu ein (unsicherer Bereich 20–27).
+Er ist deshalb kein bestätigter 10–20-Kyu-Erfolg. Das ist weiterhin ein
+Kandidatengenerator: Noch kein Bestand erfüllt sämtliche
 Vorgaben einschließlich Kyu, drei notwendigen eigenen Zügen, eindeutiger
 Lösung, kurzen Widerlegungen und Qualitätsfreigabe.
+
+Zusätzlich wurden 199 eigene taktische Strategien mit Gewinnzertifikaten und
+separat bewiesener Mindestzugzahl gesammelt. Sie sind **Lernbeispiele, keine
+199 fertigen Puzzle**. Das Training schließt 72 Beispiele aus zurückgehaltenen
+Elternfamilien aus und kann die übrigen 127 nach Zugzahl ausgewogen beimischen.
+Hierdurch entstehen weder menschliches Feedback noch automatische Kyu-Labels.
+
+Experimentelle Abtastung ist über `generate --shape-prior-correction <0..1>`
+und `--shape-fill-mode raster` reproduzierbar. Diese Varianten korrigieren den
+Klassengewichtungsanteil beziehungsweise erzeugen jedes Feld aus dem bereits
+erzeugten Präfix. Sie bleiben Vergleichswege; ein besseres Qualitätsresultat
+ist daraus nicht automatisch gegeben. Der geprüfte Standard bleibt unverändert.
+
+```powershell
+python -m training.gostone_puzzles harvest-proofs
+python -m training.gostone_puzzles train --run-name joint-proof-curriculum --resume <checkpoint.pt> --steps 1500 --solver-supervision-share 0.35
+```
+
+`models/<Lauf>/solver-supervision-manifest.json` dokumentiert die verwendeten
+Beweise und den Ausschluss der Prüffamilien. Das Verzeichnis `selfplay/` wird
+beim Umgebungsexport mitgenommen. Eine Fortsetzung übernimmt die Beimischung
+aus dem Checkpoint; Quellenänderungen ersetzen keine erneute Beweisprüfung.
+
+Für eine fortlaufende Suche ohne festes Vorschlagslimit:
+
+```powershell
+python -m training.gostone_puzzles compose --checkpoint <checkpoint.pt> --target 150 --own-moves 3 --kyu-min 10 --kyu-max 20 --batch-size 250
+```
+
+Das Ziel dieser Suche zählt **Beweiskandidaten**, einschließlich anschließender
+erneuter Prüfung nach dem Entfernen unnötiger Steine. Bildqualität und Kyu
+bleiben weitere Exportbedingungen. Geeignete fast vollständige Gegenbeweise
+werden in einer gespeicherten Warteschlange mit größeren Zeitbudgets
+weitergerechnet. Ein unentschiedener Zug bleibt unklassifiziert. `--resume`
+setzt den protokollierten Lauf mit denselben Gewichten auch nach einem
+Rechnerwechsel fort; `stop-composition.flag` fordert einen sauberen Stopp an.
+
+Die zusätzlichen Ziele sind präzise taktische Bedingungen: `connect` verbindet
+zwei ursprüngliche Gruppen mit mindestens zwei Freiheiten. `semeai` schlägt
+die gegnerische markierte Gruppe, während die eigene ursprüngliche Gruppe
+noch besteht und mindestens zwei Freiheiten hat. Das behauptet kein
+bedingungsloses Leben dieser geretteten Gruppe. Im SGF markieren Dreiecke die
+erste und Quadrate die zweite Gruppe; JSON enthält beide Koordinatenmengen.
 
 ## Start und Daten
 

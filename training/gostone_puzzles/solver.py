@@ -5,7 +5,7 @@ from collections import deque
 import hashlib
 import time
 
-from .rules import State, group, neighbors, terminal
+from .rules import State, group, neighbors, terminal, normalize_anchors
 
 
 @dataclass
@@ -26,10 +26,11 @@ class Solver:
     A horizon exhaustion is UNKNOWN. This baseline does not implement RZS yet.
     """
 
-    def __init__(self, goal: str, player: int, limits: Limits | None = None, policy=None, deadline=False, seek=None):
-        if goal not in ("life", "kill") or player not in (1, 2):
-            raise ValueError("Only explicit life/kill goals are currently provable")
+    def __init__(self, goal: str, player: int, limits: Limits | None = None, policy=None, deadline=False, seek=None, anchors=()):
+        if goal not in ("life", "kill", "connect", "semeai") or player not in (1, 2):
+            raise ValueError("Unsupported explicit puzzle objective")
         self.goal, self.player, self.limits, self.policy = goal, player, limits or Limits(), policy
+        self.anchors=tuple(frozenset(points) for points in anchors)
         if not 1 <= self.limits.own_moves <= 8 or self.limits.nodes < 1 or self.limits.seconds <= 0:
             raise ValueError("Invalid search limits")
         self.nodes, self.cache, self.proof = 0, {}, {}
@@ -60,7 +61,7 @@ class Solver:
         key = self._key(state, plies)
         if key in self.cache:
             return self.cache[key], key
-        outcome = terminal(state, self.goal, self.player)
+        outcome = terminal(state, self.goal, self.player,self.anchors)
         if outcome is not None:
             self.proof[key] = {"outcome": outcome, "terminal": True}
             self.cache[key] = outcome
@@ -72,8 +73,9 @@ class Solver:
         if plies <= 0 or state.passes >= 2:
             return 0, key
         own_left = (plies+int(state.to_play == self.player))//2
-        if self.goal == "kill" and state.targets:
-            _, liberties = group(state.stones, state.size, next(iter(state.targets)))
+        capture_targets=(state.targets & self.anchors[1]) if self.goal == "semeai" else state.targets
+        if self.goal in ("kill","semeai") and capture_targets:
+            _, liberties = group(state.stones, state.size, next(iter(capture_targets)))
             if len(liberties) > own_left:
                 # The defender can pass: this fixed target chain then loses at
                 # most one liberty per attacking move. It cannot be physically
@@ -110,9 +112,26 @@ class Solver:
             return -distance[move]
         moves = [point for point, color in enumerate(state.stones) if not color] + [-1]
         moves.sort(key=priority, reverse=True)
+        preferences={}
         if self.policy:
             preferences = self.policy.at_depth(state,own_left) if hasattr(self.policy,"at_depth") else self.policy(state)
-            moves.sort(key=lambda move: preferences.get(move, 0.0), reverse=True)
+        # Exact tactical facts precede a fallible learned prior. These scores
+        # only order moves: no legal response is removed or certified by them.
+        tactics={}
+        checked=set()
+        for point in focus:
+            if state.stones[point] and point not in checked:
+                chain,libs=group(state.stones,state.size,point)
+                checked.update(chain)
+                if len(libs) == 1:
+                    score=3 if state.stones[point] != state.to_play else 2
+                elif len(libs) == 2 and state.stones[point] != state.to_play:
+                    score=1
+                else:
+                    continue
+                for liberty in libs:
+                    tactics[liberty]=max(tactics.get(liberty,0),score)
+        moves.sort(key=lambda move:(tactics.get(move,0),preferences.get(move,0.0)),reverse=True)
         desired = 1 if state.to_play == self.player else -1
         branches, unknown = [], False
         for move in moves:
@@ -141,10 +160,22 @@ class Solver:
         return outcome, key
 
     def solve(self, state: State, allow_captured_target=False) -> dict:
-        if (not state.targets and not allow_captured_target) or (state.targets and len({state.stones[p] for p in state.targets}) != 1):
+        self.anchors=normalize_anchors(self.goal,self.anchors,state.size)
+        if (not state.targets and not allow_captured_target):
             raise ValueError("A nonempty single-color target must be marked")
-        expected = self.player if self.goal == "life" else 3-self.player
-        if state.targets and state.stones[next(iter(state.targets))] != expected:
+        if self.anchors:
+            if not state.targets <= self.anchors[0] | self.anchors[1]:
+                raise ValueError("Unmarked objective anchor")
+            if not allow_captured_target and state.targets != self.anchors[0] | self.anchors[1]:
+                raise ValueError("Initial objective anchor is absent")
+            for index,points in enumerate(self.anchors):
+                color=3-self.player if self.goal == "semeai" and index == 1 else self.player
+                if any(state.stones[p] != color for p in points & state.targets):
+                    raise ValueError("Anchor color disagrees with objective")
+        elif state.targets and len({state.stones[p] for p in state.targets}) != 1:
+            raise ValueError("A nonempty single-color target must be marked")
+        expected = self.player if self.goal in ("life","connect") else 3-self.player
+        if not self.anchors and state.targets and state.stones[next(iter(state.targets))] != expected:
             raise ValueError("Target color disagrees with goal")
         result, root_key, own = 0, "", None
         try:
@@ -170,6 +201,8 @@ class Solver:
                            "player": self.player, "root": root_key, "nodes": reachable,
                            "deadline_plies": plies if self.deadline else None,
                            "rules": "positional-superko; suicide forbidden; no artificial boundary"}
+            if self.anchors:
+                certificate["anchor_groups"]=[sorted(points) for points in self.anchors]
             verify_certificate(state, certificate)
         status = "proven-win" if result == 1 else "proven-loss" if result == -1 else "unknown"
         if self.deadline and result:
@@ -190,10 +223,18 @@ def verify_certificate(initial: State, certificate: dict) -> None:
     if certificate.get("schema") != "gostone.full-board-proof/1":
         raise ValueError("Unsupported proof schema")
     nodes, goal, player = certificate["nodes"], certificate["goal"], certificate["player"]
-    if goal not in ("life", "kill") or player not in (1, 2):
+    if goal not in ("life", "kill", "connect", "semeai") or player not in (1, 2):
         raise ValueError("Invalid proof goal")
+    anchors=normalize_anchors(goal,certificate.get("anchor_groups",()),initial.size)
+    if anchors:
+        if not initial.targets <= anchors[0] | anchors[1]:
+            raise ValueError("Certificate omits objective anchors")
+        for index,points in enumerate(anchors):
+            color=3-player if goal == "semeai" and index == 1 else player
+            if any(initial.stones[p] != color for p in points & initial.targets):
+                raise ValueError("Certificate anchor color disagrees with objective")
     target_color = player if goal == "life" else 3-player
-    if any(initial.stones[p] != target_color for p in initial.targets):
+    if not anchors and any(initial.stones[p] != target_color for p in initial.targets):
         raise ValueError("Certificate target color disagrees with its goal")
     active, visited = set(), set()
     def visit(state: State, key: str, depth: int):
@@ -210,16 +251,17 @@ def verify_certificate(initial: State, certificate: dict) -> None:
             is_deadline = node.get("deadline") is True
             if node.get("capture_liberty_bound") is True:
                 limit = certificate.get("deadline_plies")
-                if goal != "kill" or outcome != -1 or type(limit) is not int or limit <= depth or not state.targets:
+                capture_targets=state.targets & anchors[1] if goal == "semeai" else state.targets
+                if goal not in ("kill","semeai") or outcome != -1 or type(limit) is not int or limit <= depth or not capture_targets:
                     raise ValueError("False capture liberty bound")
                 own_left = (limit-depth+int(state.to_play == player))//2
-                _, liberties = group(state.stones, state.size, next(iter(state.targets)))
+                _, liberties = group(state.stones, state.size, next(iter(capture_targets)))
                 if len(liberties) <= own_left:
                     raise ValueError("False capture liberty bound")
             elif is_deadline:
-                if certificate.get("deadline_plies") != depth or outcome != -1 or terminal(state, goal, player) == 1:
+                if certificate.get("deadline_plies") != depth or outcome != -1 or terminal(state, goal, player,anchors) == 1:
                     raise ValueError("False deadline claim")
-            elif terminal(state, goal, player) != outcome:
+            elif terminal(state, goal, player,anchors) != outcome:
                 raise ValueError("False terminal claim")
             if node.get("branches"):
                 raise ValueError("Terminal contains branches")

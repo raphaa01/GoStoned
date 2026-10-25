@@ -14,7 +14,16 @@ from .rules import State, terminal, static_placement_allowed
 from .solver import Limits, Solver
 
 
-def draw_board(model, parent, rng, mode="joint", temperature=.8, stats=None, own_moves=3):
+def shape_probabilities(logits,temperature=.8,prior_correction=0):
+    # The board loss weights stones 3.0 and empties 0.35. Its optimum predicts
+    # a weight-biased posterior. Undoing those weights before sampling avoids
+    # interpreting the training rebalance as an instruction to fill the board.
+    weights=logits.new_tensor([.35,3.,3.])
+    return torch.softmax((logits-prior_correction*weights.log())/temperature,-1)
+
+
+def draw_board(model, parent, rng, mode="joint", temperature=.8, stats=None, own_moves=3,
+               unconditioned=False,shape_prior_correction=0,shape_fill_mode="confidence"):
     stats = stats if stats is not None else {}
     original = np.asarray(parent["board"], dtype=np.int64).reshape(19, 19)
     if mode == "fresh":
@@ -26,19 +35,27 @@ def draw_board(model, parent, rng, mode="joint", temperature=.8, stats=None, own
         board = np.zeros((19, 19), dtype=np.int64)
         visible = np.ones((19, 19), dtype=bool)
         visible[low[0]:high[0]+1, low[1]:high[1]+1] = False
+        iterations=int((~visible).sum()) if shape_fill_mode == "raster" else 10
         with torch.inference_mode():
-            for iteration in range(10):
+            for iteration in range(iterations):
                 features, _ = encode(board.ravel(), parent["to_play"], parent["category"], visible,
                                      input_planes=model.config.input_planes, own_moves=own_moves)
+                if unconditioned:
+                    features[5:13]=0
                 logits, _, preference = model(torch.from_numpy(features[None]))
-                probabilities = torch.softmax(logits[0].permute(1, 2, 0)/temperature, -1).numpy()
+                probabilities = shape_probabilities(logits[0].permute(1,2,0),temperature,shape_prior_correction).numpy()
                 pending = np.argwhere(~visible)
                 if not len(pending):
                     break
+                if shape_fill_mode == "raster":
+                    # Sample each next point from the already sampled prefix.
+                    # Parallel choices from marginal probabilities can average
+                    # incompatible forms into one dense, incoherent block.
+                    pending=pending[:1]
                 choices = [int(rng.choice(3, p=probabilities[y, x]/probabilities[y, x].sum())) for y, x in pending]
                 confidence = np.asarray([probabilities[y, x, choice] for (y, x), choice in zip(pending, choices)])
-                confidence += rng.gumbel(size=len(pending))*.08*(1-iteration/10)
-                count = max(1, int(np.ceil(len(pending)/(10-iteration))))
+                confidence += rng.gumbel(size=len(pending))*.08*(1-iteration/iterations)
+                count = 1 if shape_fill_mode == "raster" else max(1,int(np.ceil(len(pending)/(iterations-iteration))))
                 for index in np.argsort(-confidence)[:count]:
                     y, x = pending[index]
                     choice = choices[index]
@@ -75,7 +92,7 @@ def draw_board(model, parent, rng, mode="joint", temperature=.8, stats=None, own
             x, _ = encode(board.ravel(), parent["to_play"], parent["category"], visible,
                           input_planes=model.config.input_planes, targets=parent.get("targets", ()), own_moves=own_moves)
             logits, _, preference = model(torch.from_numpy(x[None]))
-            probs = torch.softmax(logits[0].permute(1, 2, 0)/temperature, -1).numpy()
+            probs = shape_probabilities(logits[0].permute(1,2,0),temperature,shape_prior_correction).numpy()
             remaining = np.argwhere(~visible)
             if not len(remaining):
                 break
@@ -106,17 +123,18 @@ def proof_line(state, certificate):
     return line
 
 
-def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None):
+def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None,refutation_seconds=None):
     initial = State.setup(19, candidate["board"], candidate["to_play"], candidate["targets"])
-    if terminal(initial, candidate["category"], candidate["to_play"]) is not None:
+    anchors=candidate.get("anchor_groups",())
+    if terminal(initial, candidate["category"], candidate["to_play"],anchors) is not None:
         return {"status": "already-terminal", "scope": "full-board"}
     from .guide import TacticalGuide
     guide = TacticalGuide(initial, candidate["category"], candidate["to_play"], prior=policy,
-                          seconds=min(.5,seconds*.25), nodes=min(10000,nodes))
+                          seconds=min(.5,seconds*.25), nodes=min(10000,nodes),anchors=anchors)
     hypothesis = guide.search(initial,2*own_moves-1)
     guide_report = guide.report(hypothesis)
     ordering = guide if hypothesis == 1 else policy
-    result = Solver(candidate["category"], candidate["to_play"], Limits(own_moves, nodes, seconds), policy=ordering, seek=1).solve(initial)
+    result = Solver(candidate["category"], candidate["to_play"], Limits(own_moves, nodes, seconds), policy=ordering, seek=1,anchors=anchors).solve(initial)
     result["tactical_guide"] = guide_report
     if result["status"] != "proven-win":
         return result
@@ -136,6 +154,7 @@ def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None):
     first = line[0]["move"] if line else None
     # Full refutation of every other legal first move is required for uniqueness.
     started = time.monotonic()
+    refutation_seconds=seconds if refutation_seconds is None else refutation_seconds
     unresolved = []
     other_winners = []
     alternatives = list(initial.legal())
@@ -145,11 +164,13 @@ def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None):
     for move, child in alternatives:
         if move == first:
             continue
-        if time.monotonic()-started > seconds:
+        remaining=refutation_seconds-(time.monotonic()-started)
+        if remaining <= 0:
             unresolved.append(move)
             continue
         answer = Solver(candidate["category"], candidate["to_play"],
-                        Limits(min(8,own_moves+3), nodes, max(.01, seconds-(time.monotonic()-started))), policy=policy, seek=-1).solve(child, allow_captured_target=True)
+                        Limits(min(8,own_moves+3), nodes,min(remaining,max(.025,min(.5,refutation_seconds/100)))),
+                        policy=policy, seek=-1,anchors=anchors).solve(child, allow_captured_target=True)
         if answer["status"] == "proven-loss":
             result["first_move_refutations"].append({"move": move, "certificate": answer["certificate"]})
             if move != -1:
@@ -171,7 +192,7 @@ def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None):
     lower = None
     if own_moves > 1:
         lower = Solver(candidate["category"], candidate["to_play"],
-                       Limits(own_moves-1, nodes, seconds), policy=policy, deadline=True).solve(initial)
+                       Limits(own_moves-1, nodes, seconds), policy=policy, deadline=True,anchors=anchors).solve(initial)
     result["minimum_depth_certified"] = own_moves == 1 or lower["status"] == "deadline-failure"
     result["minimum_depth_certificate"] = lower.get("certificate") if lower else None
     result["export_blockers"] = []
@@ -190,17 +211,31 @@ def certify(candidate, own_moves, seconds=2.0, nodes=20000, policy=None):
 
 
 def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, kyu_max=20,
-             seed=2026, proof_seconds=.25, proof_nodes=3000, checkpoint: Path | None = None):
+             seed=2026, proof_seconds=.25, proof_nodes=3000, checkpoint: Path | None = None,category=None,
+             proposal_filter=None,anchor_profile=None,refutation_seconds=None,stop_requested=None,
+             shape_prior_correction=0,shape_fill_mode="confidence"):
     if approach not in ("joint", "denoise", "mutation", "fresh") or not 1 <= count <= 10000:
         raise ValueError("Invalid generation settings")
     if not 1 <= own_moves <= 8 or not 1 <= kyu_min <= kyu_max <= 30:
         raise ValueError("Invalid depth or Kyu range")
     if not 0 < proof_seconds <= 600 or not 1 <= proof_nodes <= 10000000:
         raise ValueError("Invalid proof budget")
+    if refutation_seconds is not None and not 0 < refutation_seconds <= 3600:
+        raise ValueError("Invalid counterexample budget")
+    if anchor_profile not in (None,"atari","tempo","balanced","initiative"):
+        raise ValueError("Invalid capturing-race profile")
+    if not 0 <= shape_prior_correction <= 1:
+        raise ValueError("Invalid shape-prior correction")
+    if shape_fill_mode not in ("confidence","raster") or (shape_fill_mode == "raster" and approach != "fresh"):
+        raise ValueError("Sequential shape sampling is supported only for fresh composition")
     rng = np.random.default_rng(seed)
-    source = [r for r in records(root) if r["category"] in ("life", "kill")]
+    supported=("life","kill","connect","semeai")
+    if category is not None and category not in supported:
+        raise ValueError("Unsupported generation category")
+    all_references=records(root)
+    source = [r for r in all_references if r["category"] in supported and (category is None or r["category"] == category)]
     if not source:
-        raise ValueError("No historical life/death references imported")
+        raise ValueError("No historical references for this objective imported")
     model = None
     metadata = {}
     if approach != "mutation":
@@ -219,18 +254,27 @@ def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, ky
     seen_solutions = {read_json(path).get("solution_pattern") for path in (root / "candidates").glob("*.json")}
     counts, saved = Counter(), []
     started = time.monotonic()
+    performed=0
     for attempt in range(count):
-        if (root / "stop-generation.flag").exists():
+        if (root / "stop-generation.flag").exists() or (stop_requested and stop_requested()):
             counts["stopped"] += 1
             break
-        parent = source[int(rng.integers(len(source)))]
+        performed+=1
+        unconditioned=(approach == "fresh" and metadata.get("category_dropout",0) > 0 and rng.random() < .5)
+        if unconditioned:
+            reference=all_references[int(rng.integers(len(all_references)))]
+            parent={**reference,"category":category or str(rng.choice(supported))}
+        else:
+            reference=parent=source[int(rng.integers(len(source)))]
         proposal_stats = {}
-        board, preference = draw_board(model, parent, rng, approach, stats=proposal_stats, own_moves=own_moves)
+        board, preference = draw_board(model, parent, rng, approach, stats=proposal_stats, own_moves=own_moves,
+                                       unconditioned=unconditioned,shape_prior_correction=shape_prior_correction,shape_fill_mode=shape_fill_mode)
         if model and metadata.get("preference_ready"):
             options = [(board,preference,proposal_stats)]
             for _ in range(2):
                 alternative_stats = {}
-                alternate,score = draw_board(model,parent,rng,approach,own_moves=own_moves,stats=alternative_stats)
+                alternate,score = draw_board(model,parent,rng,approach,own_moves=own_moves,stats=alternative_stats,
+                                             unconditioned=unconditioned,shape_prior_correction=shape_prior_correction,shape_fill_mode=shape_fill_mode)
                 options.append((alternate,score,alternative_stats))
             board,preference,proposal_stats = max(options,key=lambda item:item[1])
         player = parent["to_play"]
@@ -263,7 +307,10 @@ def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, ky
             logits = logits[0, :361].numpy()
             logits[np.asarray(board) != 0] = -1e9
             first = int(logits.argmax())
-        targets = infer_targets(board, player, parent["category"], first, prefer_main=True)
+        from .objectives import select_anchors,objective_text
+        anchors=select_anchors(board,player,parent["category"],first,profile=anchor_profile) if parent["category"] in ("connect","semeai") else []
+        targets=(sorted(set().union(*(set(points) for points in anchors))) if anchors else
+                 infer_targets(board, player, parent["category"], first, prefer_main=True))
         if not targets:
             counts["no-target"] += 1
             continue
@@ -277,9 +324,11 @@ def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, ky
         candidate = {"schema": "gostone.puzzle-candidate/1", "id": identifier,
                      "size": 19, "board": board, "to_play": player,
                      "category": parent["category"], "targets": targets,
-                     "target_selection":{"method":"largest-challenged-color-group","review_required":True},
+                     "anchor_groups":anchors,"objective_text":objective_text(parent["category"]),
+                     "target_selection":{"method":"two-fighting-anchor-groups" if anchors else "largest-challenged-color-group","review_required":True},
                      "core_fingerprint": core,
                      "parent_id": parent["id"], "parent_family": parent["family"],
+                     "geometry_source_category":reference["category"],"unconditioned_shape":unconditioned,
                      "approach": approach, "seed": seed, "attempt": attempt,
                      "requested_own_moves": own_moves, "requested_kyu": [kyu_min, kyu_max],
                      "difficulty": {"kyu": None, "status": "uncalibrated", "requested_band_only": True},
@@ -287,10 +336,17 @@ def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, ky
                      "model_run": metadata.get("run_name", metadata.get("approach")),
                      "reference_stones_fixed": approach != "fresh",
                      "proposal_constraints":proposal_stats,
+                     "shape_prior_correction":shape_prior_correction,
+                     "shape_fill_mode":shape_fill_mode,
                      "preference_trained": metadata.get("preference_ready", False),
                      "review": "pending", "created_at": time.time(), "model_role": "proposal-only"}
+        if proposal_filter:
+            reason=proposal_filter(candidate)
+            if reason:
+                counts[reason]+=1
+                continue
         policy = NeuralOrdering(model, parent["category"], player) if model else None
-        candidate["verification"] = certify(candidate, own_moves, proof_seconds, proof_nodes, policy=policy)
+        candidate["verification"] = certify(candidate, own_moves, proof_seconds, proof_nodes, policy=policy,refutation_seconds=refutation_seconds)
         candidate["neural_ordering_calls"] = policy.calls if policy else 0
         from .difficulty import estimate
         candidate["difficulty"] = estimate(root,candidate)
@@ -308,6 +364,8 @@ def generate(root: Path, approach="joint", count=30, own_moves=3, kyu_min=10, ky
         atomic_json(root / "generation-progress.json", {"approach": approach, "attempted": attempt+1,
                     "requested_attempts": count, "counts": dict(counts), "seconds": time.monotonic()-started})
     report = {"approach": approach, "attempts_requested": count, "counts": dict(counts),
+              "attempts_performed":performed,
+              "shape_prior_correction":shape_prior_correction,"shape_fill_mode":shape_fill_mode,
               "saved": saved, "seconds": time.monotonic()-started, "seed": seed,
               "production_ready": False, "approved_puzzles": 0,
               "note": "Candidate count is not a count of correct, novel, human-approved puzzles."}

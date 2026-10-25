@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from functools import lru_cache
 import importlib.util
 import json
 from pathlib import Path
@@ -18,7 +19,110 @@ from .rules import State, unconditional_life
 from .solver import Limits, Solver, verify_certificate
 
 
+@lru_cache(maxsize=1)
+def generated_race_proof():
+    from .common import ROOT
+    from .generate import certify
+    return certify(read_json(ROOT/"fixtures/generated-race.json"),3,6,150000,refutation_seconds=20)
+
+
 class RuleProofTests(unittest.TestCase):
+    def test_pending_counterproof_rechecks_real_moves_and_keeps_unknowns_unclassified(self):
+        from .common import ROOT
+        from .composer import recheck_refutations,replay_proofs
+        row=read_json(ROOT/"fixtures/generated-race.json")
+        row["requested_own_moves"]=3
+        row["verification"]=copy.deepcopy(generated_race_proof())
+        result=row["verification"]
+        self.assertTrue(result["export_eligible"])
+        removed=result["first_move_refutations"].pop()
+        result.update(unresolved_initial_moves=[removed["move"]],all_initial_moves_resolved=False,
+                      unique_first_move=False,export_eligible=False,export_blockers=["unresolved-first-moves"])
+        recheck_refutations(row,None,stop_requested=lambda:True)
+        self.assertFalse(result["export_eligible"])
+        self.assertEqual(result["unresolved_initial_moves"],[removed["move"]])
+        recheck_refutations(row,None,seconds=3)
+        self.assertTrue(result["export_eligible"])
+        replay_proofs(row)
+
+    def test_generated_eighteen_stone_race_is_a_real_three_move_problem(self):
+        result=generated_race_proof()
+        self.assertTrue(result["export_eligible"],result.get("export_blockers"))
+        self.assertTrue(result["minimum_depth_certified"])
+        self.assertEqual(result["solution"][0]["move"],302)
+        self.assertEqual(len(result["wrong_variations"]),2)
+
+    def test_capturing_race_does_not_accept_losing_snapback(self):
+        from .rules import terminal
+        state=State.setup(3,[2,1,0,0,2,2,1,2,0],1,[6,0])
+        anchors=({6},{0})
+        child=state.play(3)
+        self.assertIsNone(terminal(child,"semeai",1,anchors))
+        recaptured=child.play(0)
+        self.assertEqual(terminal(recaptured,"semeai",1,anchors),-1)
+        # The new white stone at 0 must not resurrect the captured original.
+        self.assertFalse(recaptured.targets)
+
+    def test_new_objectives_agree_with_unpruned_deadline_oracle(self):
+        from .rules import terminal,group
+        def brute(state,goal,anchors,player,depth):
+            value=terminal(state,goal,player,anchors)
+            if value is not None:
+                return value
+            if depth == 0 or state.passes >= 2:
+                return -1
+            choices=[brute(child,goal,anchors,player,depth-1)for _,child in state.legal()]
+            return max(choices) if state.to_play == player else min(choices)
+        rng=random.Random(88109)
+        checked=0
+        for _ in range(60):
+            state=State.setup(3,[0]*9,1)
+            for _ in range(rng.randrange(3,9)):
+                state=rng.choice(list(state.legal()))[1]
+            colors={color:[p for p,c in enumerate(state.stones)if c==color] for color in (1,2)}
+            if not all(colors.values()):
+                continue
+            anchors=[group(state.stones,3,colors[color][0])[0]for color in (1,2)]
+            marked=State(3,state.stones,state.to_play,anchors[0]|anchors[1],state.history)
+            answer=Solver("semeai",1,Limits(2,100000,2),deadline=True,anchors=anchors).solve(marked)
+            if answer["status"] != "unknown":
+                self.assertEqual(answer["status"] == "deadline-success",brute(marked,"semeai",anchors,1,3 if marked.to_play==1 else 4)==1)
+                checked+=1
+        self.assertGreater(checked,20)
+    def test_connection_goal_requires_both_original_groups_and_no_self_atari(self):
+        from .rules import terminal
+        state=State.setup(3,[1,0,1,0,0,0,0,0,0],1,[0,2])
+        anchors=({0},{2})
+        self.assertIsNone(terminal(state,"connect",1,anchors))
+        self.assertEqual(terminal(state.play(1),"connect",1,anchors),1)
+        result=Solver("connect",1,Limits(1,10000,2),anchors=anchors).solve(state)
+        self.assertEqual(result["status"],"proven-win")
+        verify_certificate(state,result["certificate"])
+        forged=copy.deepcopy(result["certificate"])
+        forged["anchor_groups"]=[[0],[8]]
+        with self.assertRaisesRegex(ValueError,"anchor"):
+            verify_certificate(state,forged)
+        lost=State(3,state.stones,1,frozenset({2}),state.history)
+        self.assertEqual(terminal(lost,"connect",1,anchors),-1)
+
+    def test_capturing_race_tracks_both_colors_and_loss_precedes_horizon(self):
+        from .rules import terminal
+        board=[1,2,0,1,2,1,0,1,0]
+        state=State.setup(3,board,1,[0,3,1,4])
+        anchors=({0,3},{1,4})
+        self.assertIsNone(terminal(state,"semeai",1,anchors))
+        won=state.play(2)
+        self.assertEqual(terminal(won,"semeai",1,anchors),1)
+        result=Solver("semeai",1,Limits(1,10000,2),anchors=anchors).solve(state)
+        self.assertEqual(result["status"],"proven-win")
+        verify_certificate(state,result["certificate"])
+        no_own=State(3,state.stones,1,frozenset({1,4}),state.history)
+        loss=Solver("semeai",1,Limits(1,1000,2),anchors=anchors).solve(no_own,allow_captured_target=True)
+        self.assertEqual(loss["status"],"proven-loss")
+        verify_certificate(no_own,loss["certificate"])
+        with self.assertRaisesRegex(ValueError,"anchor"):
+            Solver("semeai",1,anchors=({0,3},{4,7})).solve(state)
+
     def test_capture_bound_cannot_hide_an_opponents_life_refutation(self):
         state=State.setup(2,[2,0,0,0],2,[0])
         result=Solver("kill",1,Limits(1,5000,2),seek=-1).solve(state)
@@ -155,6 +259,48 @@ class RuleProofTests(unittest.TestCase):
 
 
 class DataTests(unittest.TestCase):
+    def test_solver_training_evidence_replays_proofs_and_excludes_heldout_parents(self):
+        from .common import ROOT
+        from .self_training import training_records
+        row=read_json(ROOT/"fixtures/generated-race.json")
+        proof=copy.deepcopy(generated_race_proof())
+        row.update(id="synthetic-fixture",family=canonical(row["board"],19,row["to_play"]),parent_family="held-out",
+                   minimum_own_moves=3,solutions=[[m["move"]for m in proof["solution"]]],
+                   win_certificate=proof["certificate"],minimum_depth_certificate=proof["minimum_depth_certificate"])
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            def write():
+                atomic_json(root/"selfplay/verified.json",{"schema":"gostone.solver-supervision/1","records":[row],"content_hash":digest([row])})
+            write()
+            with self.assertRaisesRegex(ValueError,"training split"):
+                training_records(root,{"train"},{"held-out"})
+            row["parent_family"]="train";write()
+            selected,manifest=training_records(root,{"train"},{"held-out"})
+            self.assertEqual(len(selected),1)
+            self.assertEqual(manifest["human_feedback_examples"],0)
+            row["win_certificate"]["nodes"][row["win_certificate"]["root"]]["outcome"]=-1
+            write()
+            with self.assertRaisesRegex(ValueError,"does not establish"):
+                training_records(root,{"train"},{"held-out"})
+    def test_composition_stop_and_resume_use_checkpoint_content_across_directories(self):
+        from .composer import compose
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            atomic_json(root/"data/corpus.json",{"records":[]})
+            a=root/"weights-a.pt";b=root/"moved/weights-b.pt"
+            a.write_bytes(b"test checkpoint")
+            b.parent.mkdir();b.write_bytes(a.read_bytes())
+            (root/"stop-composition.flag").touch()
+            with patch("training.gostone_puzzles.composer.load_model",return_value=(None,{})):
+                stopped=compose(root,a,target=2)
+                self.assertEqual(stopped["status"],"stopped")
+                run=Path(read_json(root/"composition-progress.json")["workspace"])
+                resumed=compose(root,b,target=2,resume=run)
+                self.assertEqual(resumed["status"],"stopped")
+                self.assertEqual(resumed["attempts"],0)
+                b.write_bytes(b"different weights")
+                with self.assertRaisesRegex(ValueError,"settings"):
+                    compose(root,b,target=2,resume=run)
     def test_generated_objective_does_not_chase_a_stray_stone(self):
         from .historical import infer_targets
         board=[0]*361
@@ -294,6 +440,39 @@ class DataTests(unittest.TestCase):
 
 
 class ExportTests(unittest.TestCase):
+    def test_capturing_race_export_preserves_both_marked_groups_and_rejects_changed_objective(self):
+        from .common import ROOT
+        from .generate import review
+        from .export_puzzles import export_puzzles,approved_puzzles
+        row=read_json(ROOT/"fixtures/generated-race.json")
+        row.update(id="c"*24,size=19,parent_id="parent",parent_family="test-family",requested_kyu=[10,20],requested_own_moves=3)
+        row["verification"]=copy.deepcopy(generated_race_proof())
+        self.assertTrue(row["verification"]["export_eligible"])
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            board=[0]*361;board[180],board[181]=1,2
+            atomic_json(root/"data/corpus.json",{"sources":[{"id":"fixture-only",
+                "reviewed_territories":["DE"],"commercial_use_of_original_content_in_reviewed_territories":True,
+                "attribution_required_for_original_content_in_reviewed_territories":False}],
+                "records":[{"id":"parent","source_id":"fixture-only","board":board,"to_play":1,
+                            "family":canonical(board,19,1),"solutions":[[0]]}]})
+            path=root/"candidates"/(row["id"]+".json")
+            atomic_json(path,row)
+            # Temporary test labels exercise the export contract, not real
+            # human feedback or a claimed rank for the generated fixture.
+            review(root,row["id"],"good",kyu=15)
+            result=export_puzzles(root,root/"output")
+            puzzle=read_json(Path(result["json"]))["puzzles"][0]
+            self.assertEqual(puzzle["anchor_groups"],row["anchor_groups"])
+            self.assertEqual(puzzle["starting_color"],"white")
+            sgf=Path(result["sgf"]).read_text(encoding="utf-8")
+            self.assertIn("TR",sgf);self.assertIn("SQ",sgf)
+            self.assertIn("TR[qp][pq][qq]",sgf)
+            row["anchor_groups"][1]=[321]
+            atomic_json(path,row)
+            with self.assertRaisesRegex(ValueError,"anchor|targets"):
+                approved_puzzles(root)
+
     def test_actual_proofs_export_both_colors_and_resist_forgery_and_relabeling(self):
         from .generate import certify,review
         from .export_puzzles import export_puzzles,approved_puzzles
@@ -341,7 +520,7 @@ class ExportTests(unittest.TestCase):
                 sgf=Path(exported["sgf"]).read_text()
                 self.assertIn("GN[Puzzle 1]",sgf)
                 self.assertIn("PL[B]" if player == 1 else "PL[W]",sgf)
-                self.assertEqual(sgf.count("incorrect;"),4)
+                self.assertEqual(sgf.count("incorrect;"),2)
                 broken=copy.deepcopy(row)
                 certificate=broken["verification"]["certificate"]
                 certificate["nodes"][certificate["root"]]["branches"][0]["move"]=14
@@ -386,6 +565,26 @@ class ServerTests(unittest.TestCase):
             urllib.request.urlopen(request)
         self.assertEqual(error.exception.code,403)
         self.assertFalse((Path(self.directory.name)/"stop-training.flag").exists())
+
+    def test_continuing_composition_records_settings_and_blocks_concurrent_launch(self):
+        root=Path(self.directory.name)
+        atomic_json(root/"models/test-run/report.json",{"approach":"joint"})
+        (root/"models/test-run/best.pt").touch()
+        payload={"action":"compose","model_run":"test-run","target":150,"own_moves":3,"kyu_min":10,"kyu_max":20}
+        request=urllib.request.Request(self.url+"/api/job",data=json.dumps(payload).encode(),
+                headers={"Origin":self.url,"X-Lab-Token":self.server.token})
+        with patch.object(self.server,"start_job",return_value={"pid":123}) as start:
+            with urllib.request.urlopen(request) as response:
+                self.assertEqual(json.load(response),{"pid":123})
+            arguments=start.call_args.args[0]
+            self.assertEqual(arguments[0],"compose")
+            for option,value in (("--target","150"),("--own-moves","3"),("--kyu-min","10"),("--kyu-max","20")):
+                self.assertEqual(arguments[arguments.index(option)+1],value)
+        atomic_json(root/"composer.lock",{"pid":123})
+        with urllib.request.urlopen(self.url+"/api/state") as response:
+            self.assertTrue(json.load(response)["job"]["running"])
+        with self.assertRaisesRegex(ValueError,"composition"):
+            self.server.start_job(["compose"])
 
     def test_generation_preserves_kyu_depth_budget_and_rejects_external_writer(self):
         def request(payload):
@@ -467,6 +666,14 @@ class VisionTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("torch"),"PyTorch not installed")
 class ModelTests(unittest.TestCase):
+    def test_shape_decoder_can_recover_distribution_before_class_weighting(self):
+        import torch
+        from .generate import shape_probabilities
+        probabilities=torch.tensor([[.6,.25,.15],[.2,.45,.35]])
+        weighted_logits=(probabilities*torch.tensor([.35,3.,3.])).log()
+        decoded=shape_probabilities(weighted_logits,temperature=1,prior_correction=1)
+        self.assertTrue(torch.allclose(decoded,probabilities,atol=1e-6))
+
     def test_kyu_calibration_needs_independent_labels_and_generalizes_by_family(self):
         from .difficulty import fit_examples,predict_vector
         import numpy as np
@@ -535,12 +742,27 @@ class ModelTests(unittest.TestCase):
                 identifier=f"{i:024x}"
                 atomic_json(root/"candidates"/(identifier+".json"),{**training[i],"id":identifier,"parent_family":training[i]["family"],"verification":{"status":"unknown"}})
                 review(root,identifier,rating)
-            first=train(root,steps=1,channels=8,blocks=1,batch_size=2)
+            from .common import ROOT
+            evidence=read_json(ROOT/"fixtures/generated-race.json")
+            proof=copy.deepcopy(generated_race_proof())
+            evidence.update(id="solver-fixture",family=canonical(evidence["board"],19,evidence["to_play"]),
+                parent_family=training[0]["family"],minimum_own_moves=3,
+                solutions=[[m["move"]for m in proof["solution"]]],win_certificate=proof["certificate"],
+                minimum_depth_certificate=proof["minimum_depth_certificate"])
+            atomic_json(root/"selfplay/verified.json",{"schema":"gostone.solver-supervision/1",
+                "records":[evidence],"content_hash":digest([evidence])})
+            first=train(root,steps=1,channels=8,blocks=1,batch_size=2,category_dropout=.25,solver_supervision_share=.35)
             self.assertEqual(first["feedback_examples"],2)
             checkpoint=root/"models/joint/checkpoint.pt"
             second=train(root,steps=1,batch_size=2,resume=checkpoint)
             self.assertEqual(second["steps"],2)
             _,metadata=load_model(checkpoint)
+            self.assertEqual(first["category_dropout"],.25)
+            self.assertEqual(second["category_dropout"],.25)
+            self.assertEqual(metadata["category_dropout"],.25)
+            self.assertEqual(second["solver_supervision_share"],.35)
+            self.assertEqual(second["solver_supervision_records"],1)
+            self.assertEqual(metadata["solver_supervision_records"],1)
             self.assertTrue(metadata["optimizer"]["state"])
             self.assertIn("record_hashes",metadata)
             self.assertFalse(metadata["production_ready"])

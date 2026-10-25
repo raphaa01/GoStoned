@@ -159,10 +159,45 @@ def unconditional_life(stones: tuple[int, ...], size: int, color: int) -> frozen
         alive = surviving
 
 
-def terminal(state: State, goal: str, player: int) -> int | None:
+def normalize_anchors(goal, anchors, size):
+    anchors=tuple(frozenset(points) for points in anchors)
+    if goal in ("connect","semeai"):
+        if len(anchors) != 2 or any(not points for points in anchors) or anchors[0] & anchors[1]:
+            raise ValueError("This objective requires two separate nonempty anchor groups")
+        if any(type(p) is not int or not 0 <= p < size*size for points in anchors for p in points):
+            raise ValueError("Invalid objective anchor coordinate")
+    elif anchors:
+        raise ValueError("Unexpected anchor groups for this objective")
+    return anchors
+
+
+def terminal(state: State, goal: str, player: int, anchors=()) -> int | None:
+    if goal in ("connect","semeai"):
+        if len(anchors) != 2:
+            raise ValueError("Missing objective anchor groups")
+        remaining=[frozenset(points) & state.targets for points in anchors]
+        if goal == "semeai":
+            # Own and enemy original stones are sticky markers. Capturing and
+            # replaying a stone on the same coordinate cannot restore an anchor.
+            if not remaining[0]:
+                return -1
+            if not remaining[1]:
+                # A snapback that immediately loses the protected group is
+                # not a successful capturing race. The saved chain needs at
+                # least two liberties when the capture goal is reached.
+                return 1 if len(group(state.stones,state.size,next(iter(remaining[0])))[1]) >= 2 else None
+            if remaining[1] & unconditional_life(state.stones,state.size,3-player):
+                return -1
+        else:
+            if not all(remaining):
+                return -1
+            chain,libs=group(state.stones,state.size,next(iter(remaining[0])))
+            if chain & remaining[1] and len(libs) >= 2:
+                return 1
+        return None
     if not state.targets:
         return 1 if goal == "kill" else -1
     target_color = 3-player if goal == "kill" else player
-    if state.targets & unconditional_life(state.stones, state.size, target_color):
+    if state.targets & unconditional_life(state.stones,state.size,target_color):
         return -1 if goal == "kill" else 1
     return None

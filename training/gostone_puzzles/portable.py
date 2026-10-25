@@ -122,7 +122,7 @@ def export_environment(root: Path, destination: Path, offline_windows=False, inc
     shutil.copytree(ROOT, package, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (destination / "training/__init__.py").write_text("", encoding="utf-8")
     data_root = destination / "workspace"
-    for name in ("data", "models", "reviews", "candidates", "experiments"):
+    for name in ("data", "models", "reviews", "candidates", "experiments","selfplay"):
         if (root / name).exists():
             shutil.copytree(root / name, data_root / name)
     if (root / "scans").exists():

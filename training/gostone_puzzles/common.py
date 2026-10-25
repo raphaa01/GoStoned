@@ -102,9 +102,11 @@ def solution_fingerprint(moves, player):
 
 
 @contextmanager
-def workspace_lock(root: Path):
+def workspace_lock(root: Path,name="writer.lock"):
     """One CLI writer per workspace, including commands started by other UI instances."""
-    path=root/"writer.lock"
+    if name not in ("writer.lock","composer.lock"):
+        raise ValueError("Unsupported workspace lock name")
+    path=root/name
     root.mkdir(parents=True,exist_ok=True)
     try:
         handle=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)

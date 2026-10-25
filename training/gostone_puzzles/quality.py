@@ -12,7 +12,7 @@ from .corpus import sgf_points
 from .rules import State, group
 
 
-def board_svg(board, moves=(), targets=()):
+def board_svg(board, moves=(), targets=(), anchors=()):
     size, margin, step = 440, 22, 22
     parts = [f'<svg viewBox="0 0 {size} {size}" role="img" aria-label="Go-Stellung"><rect width="440" height="440" fill="#d3b17c"/>']
     for i in range(19):
@@ -26,7 +26,8 @@ def board_svg(board, moves=(), targets=()):
         x, y = margin+point % 19*step, margin+point//19*step
         parts.append(f'<circle cx="{x}" cy="{y}" r="10" fill="{"#131a19" if color == 1 else "#faf8ef"}" stroke="#343731" stroke-width=".7"/>')
         if point in targets:
-            parts.append(f'<circle cx="{x}" cy="{y}" r="5" fill="none" stroke="#d15b21" stroke-width="2"/>')
+            stroke="#20836c" if anchors and point in anchors[0] else "#d15b21"
+            parts.append(f'<circle cx="{x}" cy="{y}" r="5" fill="none" stroke="{stroke}" stroke-width="2"/>')
         if point in labels:
             parts.append(f'<text x="{x}" y="{y+4}" text-anchor="middle" font-size="12" font-family="sans-serif" fill="{"white" if color == 1 else "black"}">{labels[point][1]}</text>')
     return "".join(parts)+"</svg>"
@@ -57,10 +58,13 @@ def write_quality_report(root: Path, destination: Path, candidate_roots=()):
               "C": ((235,2188),(1095,2177),(1114,3016),(252,3033)),
               "D": ((1197,2179),(2063,2175),(2082,3004),(1215,3020))}
     sections, evidence = [], []
-    originals = read_json(ROOT/"transcriptions/guanzipu-reviewed.json")["records"]
-    source = root/"scans/pages/guanzipu-anthology/0100.jpg"
-    page = Image.open(source).convert("RGB")
-    for i, item in enumerate(originals):
+    documents=[read_json(path) for path in sorted((ROOT/"transcriptions").glob("*.json"))]
+    originals=[(document,item) for document in documents for item in document["records"]]
+    source_hashes={}
+    for i, (document,item) in enumerate(originals):
+        source=root/"scans/pages"/item["source_id"]/f"{item['page']:04d}.jpg"
+        page=Image.open(source).convert("RGB")
+        source_hashes[f"{item['source_id']}/{item['page']}"]=hashlib.sha256(source.read_bytes()).hexdigest()
         board = [0]*361
         for color, field in ((1,"black"),(2,"white")):
             for point in sgf_points(item[field]):
@@ -78,11 +82,12 @@ def write_quality_report(root: Path, destination: Path, candidate_roots=()):
         xs, ys = [p % 19 for p in points], [p//19 for p in points]
         left, right = max(-.5,min(xs)-.75), min(18.5,max(xs)+.75)
         top, bottom = max(-.5,min(ys)-.75), min(18.5,max(ys)+.75)
-        a,b,c,d = frames[item["label"].split("-")[1]]
+        a,b,c,d = document.get("frames",frames)[item["label"].split("-")[1]]
+        render_width,render_height=document.get("render_dimensions",(2218,3200))
         def pixel(x,y):
             x,y = x/18,y/18
             return tuple(((1-x)*(1-y)*a[k]+x*(1-y)*b[k]+x*y*c[k]+(1-x)*y*d[k])*
-                         (page.width/2218 if k == 0 else page.height/3200) for k in range(2))
+                         (page.width/render_width if k == 0 else page.height/render_height) for k in range(2))
         corners = [pixel(x,y) for x,y in ((left,top),(right,top),(left,bottom),(right,bottom))]
         box = (int(min(x for x,y in corners)),int(min(y for x,y in corners)),
                int(max(x for x,y in corners))+1,int(max(y for x,y in corners))+1)
@@ -94,7 +99,7 @@ def write_quality_report(root: Path, destination: Path, candidate_roots=()):
                  "optimal_defense_proven":False,"professional_review":False}
         evidence.append(facts)
         capture_text = ", ".join(f"Zug {c['ply']}: {c['stones']} Stein" for c in captures) or "keine"
-        sections.append(f'<section id="reference-{i+1}"><h2>{html.escape(item["label"])}</h2><p>Originalseite 100 · Weiß beginnt · {len(line)} Halbzüge · Schläge im tatsächlichen Verlauf: {capture_text}.</p><div class="four"><figure><img src="assets/{filename}" alt="Ausschnitt aus dem historischen Original"><figcaption>Original, nummerierte Steine gehören bereits zur Antwort</figcaption></figure><figure>{board_svg(board)}<figcaption>Übertragene Ausgangslage</figcaption></figure><figure>{board_svg(board,numbered)}<figcaption>Referenzziffern wie im Druck, einschließlich später geschlagener Züge</figcaption></figure><figure>{board_svg(state.stones)}<figcaption>Tatsächlich ausgespieltes Ende mit Schlagregeln</figcaption></figure></div><p class="notice">Historische Referenz, kein Beweis stärkster Gegenwehr. Die genaue Gewinnbedingung bleibt offen.</p></section>')
+        sections.append(f'<section id="reference-{i+1}"><h2>{html.escape(item["label"])}</h2><p>Originalseite {item["page"]} · {"Schwarz" if item["to_play"] == 1 else "Weiß"} beginnt · {len(line)} Halbzüge · Schläge im tatsächlichen Verlauf: {capture_text}.</p><div class="four"><figure><img src="assets/{filename}" alt="Ausschnitt aus dem historischen Original"><figcaption>Original, nummerierte Steine gehören bereits zur Antwort</figcaption></figure><figure>{board_svg(board)}<figcaption>Übertragene Ausgangslage</figcaption></figure><figure>{board_svg(board,numbered)}<figcaption>Referenzziffern wie im Druck, einschließlich später geschlagener Züge</figcaption></figure><figure>{board_svg(state.stones)}<figcaption>Tatsächlich ausgespieltes Ende mit Schlagregeln</figcaption></figure></div><p class="notice">Historische Referenz, kein Beweis stärkster Gegenwehr. Die genaue Gewinnbedingung bleibt offen.</p></section>')
     counts = {}
     for candidate_root in candidate_roots:
         rows = sorted((read_json(path) for path in (Path(candidate_root)/"candidates").glob("*.json")),
@@ -124,11 +129,11 @@ def write_quality_report(root: Path, destination: Path, candidate_roots=()):
                 end = end.play(move["move"])
             alternative = board_svg(end.stones) if mainline else '<p class="unresolved">Kein bewiesener Lösungsverlauf vorhanden.</p>'
             numbered = board_svg(row["board"],mainline,targets=row["targets"]) if mainline else '<p class="unresolved">Keine bewiesene Hauptfolge.</p>'
-            sections.append(f'<section id="candidate-{html.escape(label)}-{row["id"]}"><h2>{html.escape(label)} · Versuch {row["attempt"]+1}</h2><p>{"Schwarz" if row["to_play"] == 1 else "Weiß"} beginnt · {html.escape(row["category"])} · {html.escape(verification["status"])} · Exportfähig: {result["export_eligible"]}</p><div class="three"><figure>{board_svg(row["board"],targets=row["targets"])}<figcaption>Erzeugte Ausgangslage · Zielsteine orange markiert</figcaption></figure><figure>{numbered}<figcaption>Bewiesene Hauptfolge, Ziffern wie im Aufgabenbuch</figcaption></figure><figure>{alternative}<figcaption>Tatsächlich ausgespieltes Ende</figcaption></figure></div><p>Eigene Züge: {result["demonstrated_own_moves"]} / gewünscht {result["requested_own_moves"]}; Mindesttiefe bewiesen: {result["minimum_depth_certified"]}. Steine: {result["position"]["stones"]}; Zielsteine: {result["target_stones"]}; Gruppen in Atari: {result["position"]["groups_in_atari"]}. Vorgegebene Referenzsteine: {result["fixed_reference_stones"]}.</p><p class="notice">Ein plausibles Bild belegt keine korrekte oder gute Aufgabe. Keine menschliche Freigabe.</p></section>')
-    document = '<!doctype html><html lang="de"><meta charset="utf-8"><title>GoStone – visuelle Puzzleprüfung</title><style>body{font:16px system-ui;margin:24px;background:#f3f0e7;color:#202920}h1{font-size:28px}section{background:white;padding:20px;margin:20px 0;break-inside:avoid;border-radius:12px}.four{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}@media(max-width:800px){.four,.three{grid-template-columns:1fr}}figure{margin:0}svg{width:100%;display:block}img{width:100%;height:345px;object-fit:contain;background:#fff}figcaption{font-size:13px;margin-top:8px}.notice{color:#7a4328}.unresolved{padding:60px;background:#eee}pre{white-space:pre-wrap}</style><h1>Visuelle Prüfung: historische Übertragung und Modellvorschläge</h1><p>Bildauswahl: alle acht neuen Übertragungen, die ersten sechs gespeicherten Vorschläge je Vergleichslauf und alle nachgewiesenen Gewinne. Keine automatische Qualitätsfreigabe.</p><pre>'+html.escape(json.dumps(counts,indent=2))+'</pre>'+"".join(sections)+'</html>'
+            sections.append(f'<section id="candidate-{html.escape(label)}-{row["id"]}"><h2>{html.escape(label)} · Versuch {row["attempt"]+1}</h2><p>{"Schwarz" if row["to_play"] == 1 else "Weiß"} beginnt · {html.escape(row["category"])} · {html.escape(verification["status"])} · Beweisvorgaben erfüllt: {result["export_eligible"]}</p><div class="three"><figure>{board_svg(row["board"],targets=row["targets"])}<figcaption>Erzeugte Ausgangslage · Zielsteine orange markiert</figcaption></figure><figure>{numbered}<figcaption>Bewiesene Hauptfolge, Ziffern wie im Aufgabenbuch</figcaption></figure><figure>{alternative}<figcaption>Tatsächlich ausgespieltes Ende</figcaption></figure></div><p>Eigene Züge: {result["demonstrated_own_moves"]} / gewünscht {result["requested_own_moves"]}; Mindesttiefe bewiesen: {result["minimum_depth_certified"]}. Steine: {result["position"]["stones"]}; Zielsteine: {result["target_stones"]}; Gruppen in Atari: {result["position"]["groups_in_atari"]}. Vorgegebene Referenzsteine: {result["fixed_reference_stones"]}.</p><p class="notice">Ein plausibles Bild belegt keine korrekte oder gute Aufgabe. Keine menschliche Freigabe.</p></section>')
+    document = '<!doctype html><html lang="de"><meta charset="utf-8"><title>GoStone – visuelle Puzzleprüfung</title><style>body{font:16px system-ui;margin:24px;background:#f3f0e7;color:#202920}h1{font-size:28px}section{background:white;padding:20px;margin:20px 0;break-inside:avoid;border-radius:12px}.four{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}@media(max-width:800px){.four,.three{grid-template-columns:1fr}}figure{margin:0}svg{width:100%;display:block}img{width:100%;height:345px;object-fit:contain;background:#fff}figcaption{font-size:13px;margin-top:8px}.notice{color:#7a4328}.unresolved{padding:60px;background:#eee}pre{white-space:pre-wrap}</style><h1>Visuelle Prüfung: historische Übertragung und Modellvorschläge</h1><p>Bildauswahl: sämtliche geprüften Übertragungen, die ersten sechs gespeicherten Vorschläge je Vergleichslauf und alle nachgewiesenen Gewinne. Keine automatische Qualitätsfreigabe.</p><pre>'+html.escape(json.dumps(counts,indent=2))+'</pre>'+"".join(sections)+'</html>'
     (destination/"index.html").write_text(document,encoding="utf-8")
     manifest = {"schema":"gostone.visual-quality-review/1","corpus_hash":digest(records(root)),
-                "source_page_sha256":hashlib.sha256(source.read_bytes()).hexdigest(),"candidate_counts":counts,
+                "source_pages_sha256":source_hashes,"candidate_counts":counts,
                 "cases":evidence,"screenshots_are_separate_browser_artifacts":True}
     atomic_json(destination/"review.json",manifest)
     return {"html":str(destination/"index.html"),"cases":len(evidence),"counts":counts}

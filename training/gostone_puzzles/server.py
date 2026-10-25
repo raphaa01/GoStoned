@@ -33,6 +33,8 @@ class Lab(ThreadingHTTPServer):
                 raise ValueError("A training/generation job is already running")
             if (self.root/"writer.lock").exists():
                 raise ValueError("A CLI run or retained writer lock already owns this workspace")
+            if (self.root/"composer.lock").exists():
+                raise ValueError("A continuing composition run already owns this workspace")
             self.root.mkdir(parents=True, exist_ok=True)
             log = (self.root / "job.log").open("w", encoding="utf-8")
             try:
@@ -82,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
                     row["feedback"] = read_json(root / "reviews" / (row["id"]+".json"))
                     candidates.append(row)
                 job = self.server.job
-                external_writer = read_json(root/"writer.lock")
+                external_writer = read_json(root/"writer.lock") or read_json(root/"composer.lock")
                 log_path = root / "job.log"
                 log = log_path.read_text(encoding="utf-8", errors="replace")[-6000:] if log_path.exists() else ""
                 return self.respond(200, {"token": self.server.token, "root": str(root), "models": reports,
@@ -91,6 +93,7 @@ class Handler(BaseHTTPRequestHandler):
                             "external_writer":external_writer,
                             "log":log or ("Ein CLI-Lauf belegt diesen Arbeitsbestand. Fortschritt steht bei den Modellberichten." if external_writer else "")},
                     "generation": read_json(root / "generation-progress.json"),
+                    "composition":read_json(root/"composition-progress.json"),
                     "scan_progress": read_json(root / "scans/render-progress.json"),
                     "recognition_progress": read_json(root / "scans/recognition-progress.json")})
             if parsed.path == "/api/scan-proposal":
@@ -177,6 +180,9 @@ class Handler(BaseHTTPRequestHandler):
                     approach = data.get("approach", "joint")
                     count = int(data.get("attempts", 30))
                     depth = int(data.get("own_moves", 3))
+                    category=data.get("category")
+                    if category not in (None,"life","kill","connect","semeai"):
+                        raise ValueError("Unsupported puzzle objective")
                     kyu_min,kyu_max = int(data.get("kyu_min",10)),int(data.get("kyu_max",20))
                     proof_seconds = float(data.get("proof_seconds",2))
                     if approach not in ("joint", "denoise", "mutation", "fresh") or not 1 <= count <= 10000 or not 1 <= depth <= 8:
@@ -187,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
                     arguments = ["generate", "--approach", approach, "--attempts", str(count), "--own-moves", str(depth),
                                  "--seed", str(int(time.time())),"--kyu-min",str(kyu_min),"--kyu-max",str(kyu_max),
                                  "--proof-seconds",str(proof_seconds),"--proof-nodes","100000"]
+                    if category:
+                        arguments += ["--category",category]
                     run_name = data.get("model_run")
                     if run_name and approach != "mutation":
                         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", run_name):
@@ -197,6 +205,21 @@ class Handler(BaseHTTPRequestHandler):
                         folder = root/"models"/run_name
                         checkpoint = folder/"best.pt" if (folder/"best.pt").exists() else folder/"checkpoint.pt"
                         arguments += ["--checkpoint", str(checkpoint)]
+                elif action == "compose":
+                    target=int(data.get("target",150))
+                    depth=int(data.get("own_moves",3))
+                    low,high=int(data.get("kyu_min",10)),int(data.get("kyu_max",20))
+                    run_name=data.get("model_run")
+                    if (not 1 <= target <= 10000 or not 1 <= depth <= 8 or not 1 <= low <= high <= 30
+                            or not isinstance(run_name,str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}",run_name)):
+                        raise ValueError("Invalid continuing composition settings")
+                    report=read_json(root/"models"/run_name/"report.json")
+                    if not report or report.get("approach") != "joint":
+                        raise ValueError("Choose a trained joint composition model")
+                    folder=root/"models"/run_name
+                    checkpoint=folder/"best.pt" if (folder/"best.pt").exists() else folder/"checkpoint.pt"
+                    arguments=["compose","--checkpoint",str(checkpoint),"--target",str(target),
+                               "--own-moves",str(depth),"--kyu-min",str(low),"--kyu-max",str(high),"--batch-size","250"]
                 elif action == "download-scans":
                     arguments = ["download-scans"]
                 else:
@@ -205,6 +228,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/stop":
                 (root / "stop-training.flag").touch()
                 (root / "stop-generation.flag").touch()
+                (root / "stop-composition.flag").touch()
                 result = {"status": "stop-requested; checkpoint will be saved"}
             else:
                 return self.respond(404, {"error": "Not found"})

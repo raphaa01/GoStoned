@@ -24,6 +24,9 @@ def main():
     training.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     training.add_argument("--no-feedback", action="store_true")
     training.add_argument("--run-name", help="Separate checkpoint directory; preserve previous experiments")
+    training.add_argument("--category-dropout",type=float,default=None)
+    training.add_argument("--solver-supervision-share",type=float,default=None)
+    sub.add_parser("harvest-proofs")
     generate = sub.add_parser("generate")
     generate.add_argument("--approach", choices=("joint", "denoise", "mutation", "fresh"), default="joint")
     generate.add_argument("--attempts", type=int, default=30)
@@ -34,6 +37,18 @@ def main():
     generate.add_argument("--proof-seconds", type=float, default=.25)
     generate.add_argument("--proof-nodes", type=int, default=3000)
     generate.add_argument("--checkpoint", type=Path)
+    generate.add_argument("--category",choices=("life","kill","connect","semeai"))
+    generate.add_argument("--shape-prior-correction",type=float,default=0)
+    generate.add_argument("--shape-fill-mode",choices=("confidence","raster"),default="confidence")
+    compose=sub.add_parser("compose")
+    compose.add_argument("--checkpoint",type=Path,required=True)
+    compose.add_argument("--target",type=int,default=30)
+    compose.add_argument("--own-moves",type=int,default=3)
+    compose.add_argument("--kyu-min",type=int,default=10)
+    compose.add_argument("--kyu-max",type=int,default=20)
+    compose.add_argument("--batch-size",type=int,default=500)
+    compose.add_argument("--seed",type=int,default=2026)
+    compose.add_argument("--resume",type=Path)
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=4186)
     serve.add_argument("--no-browser", action="store_true")
@@ -79,7 +94,7 @@ def main():
     args.root = args.root.resolve()
     args.root.mkdir(parents=True, exist_ok=True)
     from .common import workspace_lock
-    readonly=("serve","doctor","verify-bundle","audit-transitions","audit-corpus")
+    readonly=("serve","doctor","verify-bundle","audit-transitions","audit-corpus","compose")
     with nullcontext() if args.command in readonly else workspace_lock(args.root):
         execute(args)
 
@@ -93,13 +108,26 @@ def execute(args):
         (args.root/"stop-training.flag").unlink(missing_ok=True)
         result = train(args.root, name=args.approach, steps=args.steps, channels=args.channels,
                        blocks=args.blocks, batch_size=args.batch_size, resume=args.resume,
-                       device=args.device, use_feedback=not args.no_feedback, run_name=args.run_name)
+                       device=args.device, use_feedback=not args.no_feedback, run_name=args.run_name,
+                       category_dropout=args.category_dropout,solver_supervision_share=args.solver_supervision_share)
+    elif args.command == "harvest-proofs":
+        from .self_training import harvest
+        result=harvest(args.root)
     elif args.command == "generate":
         from .generate import generate
         (args.root/"stop-generation.flag").unlink(missing_ok=True)
         result = generate(args.root, approach=args.approach, count=args.attempts, own_moves=args.own_moves,
                           kyu_min=args.kyu_min, kyu_max=args.kyu_max, seed=args.seed,
-                          proof_seconds=args.proof_seconds, proof_nodes=args.proof_nodes, checkpoint=args.checkpoint)
+                          proof_seconds=args.proof_seconds, proof_nodes=args.proof_nodes, checkpoint=args.checkpoint,category=args.category,
+                          shape_prior_correction=args.shape_prior_correction,shape_fill_mode=args.shape_fill_mode)
+    elif args.command == "compose":
+        from .composer import compose
+        from .common import workspace_lock
+        with workspace_lock(args.root,"composer.lock"):
+            (args.root/"stop-composition.flag").unlink(missing_ok=True)
+            result=compose(args.root,args.checkpoint,target=args.target,own_moves=args.own_moves,
+                kyu_min=args.kyu_min,kyu_max=args.kyu_max,batch_size=args.batch_size,
+                seed=args.seed,resume=args.resume)
     elif args.command == "import-reviewed":
         from .corpus import import_reviewed
         result = import_reviewed(args.root)

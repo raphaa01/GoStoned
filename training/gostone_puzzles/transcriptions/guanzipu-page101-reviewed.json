@@ -1,0 +1,294 @@
+{
+  "schema": "gostone.reviewed-scan-transcriptions/1",
+  "source_pdf_sha1": "09beedab2e75febdebc589fd6dcf18ef53cce799",
+  "records": [
+    {
+      "label": "101-A-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "fa fb db bc ec",
+      "white": "ga gb fc cd dd fd ae be ee",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "cb cc bb ab ba dc eb ea da ca"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-A-TR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "ob oc qc rc pd",
+      "white": "nb nc nd qd rd oe pe rf",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "qa pa sc sb ra qb na"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-A-BL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "bq eq dr fr fs",
+      "white": "ao bo eo cp dp fp fq gr gs",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "br ar aq ap cq cr bs cs bp as"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-A-BR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "qo ro pp qq qr",
+      "white": "pn qn rn oo op pq pr nr",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "sq sp qs rs sr qp sn so rq rr"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-C-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "cb fb bc cc bd dd ed fd fe",
+      "white": "hb gc cd gd be ce de ee ge ff",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "eb fc fa ga ea gb dc db ha"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-C-TR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "pa pb rb qc rd qf rf rg",
+      "white": "oa ob pc pd qd pe pf qg ph rh",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "re qe qb qa sb ra se"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-C-BL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "bn dn en do dp bq cq cr dr",
+      "white": "bl cm dm em fn eo ep dq eq er bp",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "bo cn an am ao cp bm ar"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-C-BR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "rm qn rn rp qq pr rr ps",
+      "white": "pl rl qm pn po pp qp pq oq or os",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "ro qo so sp qr rq rs sr"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-D-TL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "cb db dc bd cd de df cg",
+      "white": "eb ec dd ed ce ci",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "be ba ac bc ae ab bh"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-D-TR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "ob oc rc pd qd",
+      "white": "lb nb nc nd oe qe se rf rd",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "rb sc qb qc oa pa pb na od pc ra"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-D-BL",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "cm dn do bp cp dq cr dr",
+      "white": "ck co dp ep eq br er",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "bo ap ao cq ds bn cs an aq cn bq"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    },
+    {
+      "label": "101-D-BR",
+      "source_id": "guanzipu-anthology",
+      "page": 101,
+      "black": "np op qp rp mq pq rq pr",
+      "white": "kq po qo ro pp oq rr",
+      "to_play": 2,
+      "category": "tesuji",
+      "solutions": [
+        "or qr rs ps sr sq os nr so ns sp"
+      ],
+      "review": {
+        "reviewer": "Codex visual transcription, 2026-10-25",
+        "position": true,
+        "solution": true,
+        "source": true
+      },
+      "note": "Read setup stones and consecutively numbered moves from the original scan, page 101. Independent corner tasks on the same grid are separated. Non-numeral ink annotations on existing stones are not moves. The historical reference line has not been independently established as an optimal-defense proof; no Kyu grade is inferred."
+    }
+  ],
+  "render_dimensions": [
+    2218,
+    3200
+  ],
+  "frames": {
+    "A": [
+      [
+        207,
+        609
+      ],
+      [
+        1065,
+        622
+      ],
+      [
+        1065,
+        1458
+      ],
+      [
+        206,
+        1456
+      ]
+    ],
+    "C": [
+      [
+        191,
+        2215
+      ],
+      [
+        1053,
+        2235
+      ],
+      [
+        1053,
+        3054
+      ],
+      [
+        191,
+        3050
+      ]
+    ],
+    "D": [
+      [
+        1158,
+        2235
+      ],
+      [
+        2027,
+        2255
+      ],
+      [
+        2027,
+        3074
+      ],
+      [
+        1158,
+        3052
+      ]
+    ]
+  }
+}
