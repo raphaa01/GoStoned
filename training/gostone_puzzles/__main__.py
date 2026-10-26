@@ -84,6 +84,13 @@ def main():
     recognition = sub.add_parser("recognize-scans")
     recognition.add_argument("--ids")
     recognition.add_argument("--limit", type=int, default=0)
+    reader = sub.add_parser("read-scan-batch")
+    reader.add_argument("--checkpoint", type=Path, required=True)
+    reader.add_argument("--first-page", type=int, default=100)
+    reader.add_argument("--last-page", type=int, default=223)
+    reader.add_argument("--target-drafts", type=int, default=1000)
+    reader_review = sub.add_parser("review-scan-batch")
+    reader_review.add_argument("--directory", type=Path, required=True)
     approval = sub.add_parser("approve-transcription")
     approval.add_argument("--id", required=True)
     approval.add_argument("--reviewer", required=True)
@@ -174,6 +181,13 @@ def execute(args):
         from .scans import approve_transcription
         result = approve_transcription(args.root,args.id,args.reviewer,
             {"position":args.position_checked,"solution":args.solution_checked,"source":args.source_checked})
+    elif args.command == "read-scan-batch":
+        from .scan_reader import read_batch
+        (args.root/"stop-reader.flag").unlink(missing_ok=True)
+        result = read_batch(args.root, args.checkpoint, args.first_page, args.last_page, args.target_drafts)
+    elif args.command == "review-scan-batch":
+        from .scan_review import write_reader_review
+        result = write_reader_review(args.directory)
     elif args.command == "verify-bundle":
         from .portable import verify_bundle
         result = verify_bundle(args.directory)

@@ -137,17 +137,22 @@
     },
     {
       "label": "101-C-BR",
+      "revision": 2,
+      "replaces_record_sha256": "c9f8a282968c538505004111b6c440dcef2a54c45faf9718a4ba097794b6fdd3",
+      "merge_into_reference": "scan-cd91d51462dda6ef9a85ad2e",
+      "merge_target_sha256": "b9b6f939cc5331973803716e5b2ebd5edbc5b53ffa5b39dc9ef09314da323694",
+      "revision_reason": "Re-read the labeled high-resolution original on 2026-10-26. oq is an empty grid intersection; the nearby white stones are pq, or and os. Remove the erroneously transcribed white oq without changing the printed answer.",
       "source_id": "guanzipu-anthology",
       "page": 101,
       "black": "rm qn rn rp qq pr rr ps",
-      "white": "pl rl qm pn po pp qp pq oq or os",
+      "white": "pl rl qm pn po pp qp pq or os",
       "to_play": 2,
       "category": "tesuji",
       "solutions": [
         "ro qo so sp qr rq rs sr"
       ],
       "review": {
-        "reviewer": "Codex visual transcription, 2026-10-25",
+        "reviewer": "Codex second visual transcription, 2026-10-26",
         "position": true,
         "solution": true,
         "source": true
@@ -156,17 +161,22 @@
     },
     {
       "label": "101-D-TL",
+      "revision": 2,
+      "replaces_record_sha256": "bbb442bd6e7ada23d706341952734736f69ed7a92d0b2b3fb112445cca88a99c",
+      "merge_into_reference": "scan-067d13feffab0448b173be98",
+      "merge_target_sha256": "5ed5a5bfae33a5073fa69256e2ed63bb81fcefbb8067cde58ff67d2bba9a4d13",
+      "revision_reason": "Re-read the labeled high-resolution original on 2026-10-26. bb contains the damaged outline of a plain white stone between the printed black 2, 4 and 6. Add this omitted initial white stone; it is captured later in the unchanged printed answer.",
       "source_id": "guanzipu-anthology",
       "page": 101,
       "black": "cb db dc bd cd de df cg",
-      "white": "eb ec dd ed ce ci",
+      "white": "bb eb ec dd ed ce ci",
       "to_play": 2,
       "category": "tesuji",
       "solutions": [
         "be ba ac bc ae ab bh"
       ],
       "review": {
-        "reviewer": "Codex visual transcription, 2026-10-25",
+        "reviewer": "Codex second visual transcription, 2026-10-26",
         "position": true,
         "solution": true,
         "source": true

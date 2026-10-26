@@ -127,8 +127,11 @@ def export_environment(root: Path, destination: Path, offline_windows=False, inc
             shutil.copytree(root / name, data_root / name)
     if (root / "scans").exists():
         print("Copying scan workspace",flush=True)
+        def without_source_images(directory, names):
+            return [name for name in names if name in ("originals", "pages")
+                    or Path(name).suffix.lower() in (".png", ".jpg", ".jpeg")]
         shutil.copytree(root / "scans", data_root / "scans",
-                        ignore=None if include_scans else shutil.ignore_patterns("originals", "pages"))
+                        ignore=None if include_scans else without_source_images)
     if offline_windows:
         runtime = add_windows_runtime(destination, root / "download-cache")
         command = '"%~dp0runtime\\python.exe"'

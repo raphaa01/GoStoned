@@ -278,6 +278,61 @@ professionelle Abnahme oder semantische Vielfaltgarantie wird behauptet.
 
 ## Umgebung und Modell auf einen anderen PC übertragen
 
+### Originalscans in großen Stapeln übertragen
+
+Der lokale optische Leser erkennt Steine und gedruckte chinesische Zugziffern
+1–11. Er ist ein eigenes Hilfsmodell, kein Go-Löser. Die trainierten Gewichte
+liegen im lokalen Bestand unter `models/scan-glyph-v3/checkpoint.pt`; sie werden
+mit dem Arbeitsbestand exportiert. Die Scanbibliotheken aus
+`requirements-scans.txt` und Poppler sind für neue hochauflösende Renderings
+erforderlich. Es gibt keine kostenpflichtige OCR-API.
+
+```powershell
+python -m training.gostone_puzzles read-scan-batch --checkpoint <Arbeitsbestand>/models/scan-glyph-v3/checkpoint.pt --first-page 100 --last-page 223 --target-drafts 1000
+python -m training.gostone_puzzles review-scan-batch --directory <Arbeitsbestand>/scans/assisted/<Laufordner>
+```
+
+Die zweite Anweisung erstellt unter `review/index.html` eine Seitenübersicht
+und Original-/Stellungsvergleiche für jeden Entwurf. Die Ziffernfolge wird auf
+Vollständigkeit 1…N, wechselnde Farben und legales Nachspielen geprüft. Das
+beweist weder eine richtige Übertragung noch die stärkste Gegenwehr. Mehrere
+Aufgaben auf einem Druckbrett, fehlende oder wiederbesetzte Steine, längere
+Folgen und Textvarianten müssen gesondert gelesen werden. Auch eine Ausgabe
+ohne optische Warnungen kann Steine übersehen. Die Aufgabengrenzen und das
+19×19-Raster bleiben immer prüfpflichtig.
+
+`--target-drafts` zählt **ungeprüfte Lesarten**, keine genehmigten Aufgaben
+und keine garantierten unterschiedlichen Trainingsfamilien. Der erste echte
+1.000er-Durchlauf las 113 Seiten mit 450 Druckbrettern in 476,75 Sekunden.
+Alle Ergebnisse bleiben außerhalb des geprüften Korpus. Der Leser ruft weder
+`register_transcription` noch `approve_transcription` auf. Erst die getrennte
+Sichtprüfung von Stellung, vollständiger Lösung und Quelle erlaubt einen Import.
+
+Wiederholte Läufe nutzen vorhandene Seiten erst nach Prüfung von Modell,
+Lesercode, Rastervorgaben, Originaledition und den beteiligten Bild-/JSON-Hashes.
+Ein geänderter Leser erhält einen eigenen Laufordner; ältere Versuche bleiben
+erhalten. `stop-reader.flag` im Arbeitsbestand beendet den Lauf nach der
+aktuellen Seite. Die CLI entfernt dieses Stoppsignal vor einem neuen Lauf.
+
+Ein gesonderter Forschungsversuch nutzt 473 gefilterte optische
+Stellungsentwürfe ausschließlich zum Lernen von Steinformen. Deren ungeprüfte
+Zugfolgen liefern **keine** richtigen Zuglabels, Zielgruppen, taktischen
+Kategorien oder Kyu-Bewertungen. Der Versuch liegt mit eigener Auswahl- und
+Trainingsbeschreibung unter `experiments/weak-shape-curriculum-*` und ersetzt
+den geprüften historischen Bestand nicht. Erst Erzeugungs- und Sichtprüfungen
+können zeigen, ob solche zusätzlichen schwachen Formdaten helfen.
+
+Nach 1.500 zusätzlichen Trainingsschritten und je 1.000 Erzeugungsversuchen
+liefert der Formlernversuch weiterhin keinen vollständigen neuen Drei-Züge-
+Beweiskandidaten und mehr dichte Blöcke als das Ausgangsmodell. Er ist kein
+verbesserter Generator. Die Sichtprüfung entdeckte außerdem zwei Fehler in
+älteren manuellen Referenzen. Ihre ausdrücklich nummerierten Korrekturen
+archivieren die alten Datensätze und vereinigen die danach erkannten Dubletten.
+Der aktuelle Bestand beträgt 111 Familien mit weiterhin 952 Zugbeispielen;
+ältere Trainingsmanifeste mit 113 Familien werden als ältere Datenstände erhalten.
+
+### Export
+
 ```powershell
 python -m training.gostone_puzzles export-environment --destination <neuer Ordner außerhalb des Arbeitsbestands> --offline-windows --include-scans
 ```
@@ -312,7 +367,7 @@ Arbeitsbestand hinein geschrieben werden.
 ## Prüfungen
 
 ```powershell
-python -m unittest training.gostone_puzzles.test_lab -v
+python -m unittest training.gostone_puzzles.test_lab training.gostone_puzzles.test_scan_reader -v
 python -m training.gostone_puzzles audit-transitions --destination .cache/puzzle-ai/transitions.json
 npx tsx scripts/audit-puzzle-ai-rules.ts .cache/puzzle-ai/transitions.json
 npm run typecheck

@@ -1,8 +1,72 @@
 # Abnahme des gewünschten starken Puzzle-Modells
 
-Stand: 25. Oktober 2026. **Der geforderte starke Seriengenerator ist weiterhin
+Stand: 26. Oktober 2026. **Der geforderte starke Seriengenerator ist weiterhin
 nicht erreicht.** Diese Datei unterscheidet ausgeführte Arbeiten von offenen
 Abnahmekriterien. Eine höhere Nachahmungsquote ist kein Qualitätsnachweis.
+
+## Aktueller großer Übertragungs- und Trainingsversuch
+
+Der neue lokale Scanleser hat in 476,75 Sekunden **1.000 ungeprüfte Lesarten**
+aus 113 Originalseiten mit 450 Druckbrettern erfasst. Diese enthalten jeweils
+eine vorgeschlagene Ausgangslage und eine legal nachspielbare nummerierte
+Folge. 977 vorgeschlagene Bretter und 946 vorgeschlagene Zugmuster unterscheiden
+sich nach der rein geometrischen Prüfung. Keine dieser Zahlen bedeutet
+1.000 korrekte Aufgaben, eine Qualitätsfreigabe oder zusätzliche genehmigte
+Trainingsfamilien. Alle Entwürfe bleiben unter `scans/assisted/` und gelangen
+nicht durch den Leser in `data/corpus.json`.
+
+Das optische Hilfsmodell wurde mit 1.646 Zellen aus 20 einzeln übertragenen
+Diagrammen auf den Seiten 100 und 101 trainiert. Auf drei separat gelesenen
+Figuren von Seite 102 stimmen 229 von 233 Zellklassen, darunter 20 von 21
+Ziffern. Die zusätzliche Sequenzprüfung rekonstruiert dort alle drei ganzen
+Lösungsfolgen; eine beschädigte schwarze Ausgangsfigur wird weiterhin weiß
+gelesen. Dies ist eine kleine optische Stichprobe, keine vollständige unabhängige
+Puzzle-Abnahme. Auf den 20 bekannten Trainingsdiagrammen ergeben das korrigierte
+Raster und die räumliche Aufteilung 20 richtige Referenzfolgen und 17 richtige
+Ausgangsstellungen. Gerade auch optisch unauffällige Lesarten können falsch sein.
+
+Beim Nachlesen der Fehler wurden **zwei Fehler im bisherigen manuellen Bestand**
+entdeckt: `101-C-BR` enthielt einen zusätzlichen weißen Stein auf `oq`;
+`101-D-TL` ließ einen verblassten weißen Stein auf `bb` aus. Die Originalbilder
+wurden erneut mit Koordinaten angesehen und die Datensätze ausdrücklich als
+Revision 2 korrigiert. Beide korrekten Stellungen sind Symmetrie-Duplikate bereits
+vorhandener Familien. Ihre zusätzlichen historischen Antwortfolgen wurden in
+die passende Orientierung übertragen und erhalten. Der aktuelle geprüfte
+historische Bestand ist deshalb **111 Familien / 952 Zugbeispiele**: 97 Smith,
+14 Guanzipu; 46 schwarze und 65 weiße Startstellungen. 90 Familien sind Training,
+21 Prüfung. Die später in dieser Datei dokumentierten 113 Familien beschreiben
+den damaligen Stand vor der Korrektur.
+
+Vor einer Änderung prüft `import-reviewed` den genauen vorherigen Datensatzhash,
+die benannte neue Sichtprüfung und den Revisionsgrund. Bei einer erkannten
+Doppelung muss auch die genaue Zielfamilie mit ihrem vorherigen Hash angegeben
+sein. Alte Datensätze und gegebenenfalls die vorherige Zielfamilie werden unter
+`data/revisions/` erhalten. Vorhandene Modellstände und Versuche behalten ihre
+alten Datenmanifeste; eine unveränderte Fortsetzung auf geändertem Bestand wird
+weiterhin abgewiesen. Es werden keine Nutzerbewertungen erfunden.
+
+Aus dem 1.000er-Stapel wurden 477 weniger unsichere Stellungsformen für einen
+**getrennten schwachen Formlernversuch** ausgewählt. Vier Formen mit bekannten
+zurückgehaltenen Lösungsfußabdrücken wurden ausgeschlossen, 473 genutzt. Diese
+ungeprüften Daten liefern nur Formverluste; ihre Lösungen, Kategorien, Ziele
+und Zugzahlen sind keine Trainingslabels. Das Zugtraining
+benutzt den damals als geprüft geführten 113er-Bestand und die separat bewiesenen 127 Löserbeispiele.
+Der Versuch bewahrt genau diesen älteren, inzwischen korrigierten Datenstand
+als Experiment-Snapshot auf und wird nicht zum aktuellen geprüften Modell erklärt.
+
+1.500 weitere Trainingsschritte dauerten 436,41 Sekunden. Der beste Zwischenstand
+bei Schritt 1.000 erreicht auf derselben historischen Prüfstichprobe 40,63 %
+Referenzzug-Top-1, der letzte 39,06 %. Danach wurden beide Modelle mit je 1.000
+frischen Vorschlägen, demselben Zufallsstart und vier Schlagwettlauf-Profilen
+getestet. Das Ausgangsmodell ergibt 12 Zwei-Züge-Gewinne, der Formlernversuch 10,
+beide **null vollständig neue Drei-Züge-Beweiskandidaten**. Die verworfenen
+dichten Blöcke steigen von 16 auf 40. Die zwölf tatsächlich angesehenen
+Rohform-Diagramme in zwei Browser-Screenshots zeigen beim neuen Modell häufiger
+gefüllte Bänder. Der Versuch wird deshalb nicht als Verbesserung übernommen.
+
+Die noch offene Aufgabe ist ein großer **korrekt übertragener** Bestand mit
+vollständigen Antworten und danach eine neue Modellprüfung. Die hier erreichte
+Stapelverarbeitung und der zusätzliche Versuch erfüllen dieses Ziel noch nicht.
 
 ## Datenbestand und die Zahl 97
 

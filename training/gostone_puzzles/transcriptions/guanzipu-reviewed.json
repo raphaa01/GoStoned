@@ -154,5 +154,83 @@
       },
       "note": "Numerals and plain setup stones read from the historical scan. Other independent problems on the same grid are omitted. This is a historical reference line, not an independently established optimal-defense strategy. The precise tactical objective is not inferred from its length."
     }
-  ]
+  ],
+  "render_dimensions": [
+    2218,
+    3200
+  ],
+  "frames": {
+    "A": [
+      [
+        220,
+        596
+      ],
+      [
+        1082,
+        591
+      ],
+      [
+        1087,
+        1437
+      ],
+      [
+        229,
+        1431
+      ]
+    ],
+    "B": [
+      [
+        1180,
+        595
+      ],
+      [
+        2053,
+        595
+      ],
+      [
+        2053,
+        1430
+      ],
+      [
+        1185,
+        1430
+      ]
+    ],
+    "C": [
+      [
+        235,
+        2188
+      ],
+      [
+        1095,
+        2177
+      ],
+      [
+        1114,
+        3016
+      ],
+      [
+        252,
+        3033
+      ]
+    ],
+    "D": [
+      [
+        1197,
+        2179
+      ],
+      [
+        2063,
+        2175
+      ],
+      [
+        2082,
+        3004
+      ],
+      [
+        1215,
+        3020
+      ]
+    ]
+  }
 }

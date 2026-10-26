@@ -5,7 +5,7 @@ from pathlib import Path
 import hashlib
 import re
 
-from .common import ROOT, atomic_json, canonical, digest, read_json, records, transform_point
+from .common import CATEGORIES, ROOT, atomic_json, canonical, digest, read_json, records, transform_point
 from .rules import State
 from .scans import approve_transcription, register_transcription, scan_inventory
 
@@ -19,6 +19,98 @@ def sgf_points(value: str) -> list[int]:
     return result
 
 
+def revise_reference(root, old, item, board, solutions, source_sha1):
+    """Apply an explicitly numbered, visually checked correction with an archive."""
+    from .historical import infer_targets
+    revision = item.get("revision", 1)
+    review = item.get("review", {})
+    if (type(revision) is not int or revision <= old.get("reviewed_revision", 1)
+            or item.get("replaces_record_sha256") != digest(old)
+            or not str(item.get("revision_reason", "")).strip()
+            or item.get("category") not in CATEGORIES
+            or not review.get("reviewer")
+            or not all(review.get(key) is True for key in ("position", "solution", "source"))):
+        raise ValueError("A newer reviewed revision, exact previous record hash and correction reason are required")
+    identifier = digest((item["source_id"], item["page"], item["label"]))[:24]
+    if old["id"] != "scan-"+identifier or old["source_id"] != item["source_id"]:
+        raise ValueError("Correction does not identify the same historical reference")
+    if old.get("additional_source_evidence"):
+        raise ValueError("Merged source evidence must be separately re-reviewed before correcting its shared family")
+    initial = State.setup(19, board, item["to_play"])
+    if not solutions or any(not line for line in solutions):
+        raise ValueError("The corrected reference needs its complete historical answer")
+    for line in solutions:
+        state = initial
+        for point in line:
+            state = state.play(point)
+    family = canonical(board, 19, item["to_play"])
+    corpus = read_json(root/"data/corpus.json")
+    current = next((r for r in corpus["records"] if r["id"] == old["id"]), None)
+    if current != old:
+        raise ValueError("The reference changed while its correction was being prepared")
+    duplicate = next((r for r in corpus["records"] if r["id"] != old["id"] and r["family"] == family), None)
+    mapped_solutions, symmetry = [], None
+    if duplicate:
+        if (item.get("merge_into_reference") != duplicate["id"]
+                or item.get("merge_target_sha256") != digest(duplicate)):
+            raise ValueError("Correction collides with another family; identify its exact merge target explicitly")
+        for candidate in range(8):
+            mapped = [0]*361
+            for point, color in enumerate(board):
+                mapped[transform_point(point, 19, candidate)] = (
+                    color if item["to_play"] == duplicate["to_play"] else 3-color if color else 0)
+            if mapped == duplicate["board"]:
+                symmetry = candidate
+                break
+        if symmetry is None:
+            raise ValueError("Cannot align corrected source with its explicit merge target")
+        mapped_solutions = [[transform_point(p, 19, symmetry) for p in line] for line in solutions]
+        for line in mapped_solutions:
+            state = State.setup(19, duplicate["board"], duplicate["to_play"])
+            for point in line:
+                state = state.play(point)
+    archive = root/"data/revisions"/f"{identifier}-v{old.get('reviewed_revision', 1)}-{digest(old)[:16]}.json"
+    archived = {"schema": "gostone.reference-revision-archive/1", "record": old,
+                "record_sha256": digest(old), "replaced_by_revision": revision,
+                "source_pdf_sha1": source_sha1, "reason": item["revision_reason"]}
+    if duplicate:
+        archived["merge_target_before"] = duplicate
+    if archive.exists() and read_json(archive) != archived:
+        raise ValueError("The prior revision archive already contains different evidence")
+    atomic_json(archive, archived)
+    replacement = {**old, "board": board, "to_play": item["to_play"], "category": item["category"],
+                   "solutions": solutions, "family": family, "reviewed_revision": revision,
+                   "previous_record_sha256": digest(old), "revision_archive": str(archive.relative_to(root)).replace("\\", "/"),
+                   "revision_reason": item["revision_reason"], "transcription_notes": item["note"],
+                   "targets": infer_targets(board, item["to_play"], item["category"], solutions[0][0]),
+                   "target_status": "heuristic-needs-review", "proof_status": "unproved",
+                   "transcription_review": {"reviewer": review["reviewer"],
+                                            "checks": {key: True for key in ("position", "solution", "source")}}}
+    pending_path = root/"scans/transcriptions"/(identifier+".json")
+    pending = read_json(pending_path)
+    if pending:
+        pending.update(board=board, to_play=item["to_play"], category=item["category"], solutions=solutions,
+                       reviewed_revision=revision, notes=item["note"], reviewer=review["reviewer"])
+        if duplicate:
+            pending["merged_into_reference"] = duplicate["id"]
+        atomic_json(pending_path, pending)
+    if duplicate:
+        for line in mapped_solutions:
+            if line not in duplicate["solutions"]:
+                duplicate["solutions"].append(line)
+        duplicate.setdefault("additional_source_evidence", []).append({
+            "transcription_id": identifier, "source_id": item["source_id"], "page": item["page"],
+            "label": item["label"], "review": review, "symmetry_to_record": symmetry,
+            "note": item["note"], "reviewed_revision": revision, "revision_reason": item["revision_reason"],
+            "previous_record_sha256": digest(old), "revision_archive": replacement["revision_archive"]})
+        corpus["records"] = [r for r in corpus["records"] if r["id"] != old["id"]]
+    else:
+        corpus["records"] = [replacement if r["id"] == old["id"] else r for r in corpus["records"]]
+    corpus["content_hash"] = digest(corpus["records"])
+    atomic_json(root/"data/corpus.json", corpus)
+    return replacement["id"]
+
+
 def import_reviewed(root: Path) -> dict:
     """Import only individually read/reviewed specifications, never OCR guesses.
 
@@ -26,7 +118,7 @@ def import_reviewed(root: Path) -> dict:
     implying that a professional Go player certified the historical answer.
     """
     inventory = {s["id"]: s for s in scan_inventory(root)["sources"]}
-    added, present, merged = [], [], []
+    added, present, merged, corrected = [], [], [], []
     checked_sources = set()
     for path in sorted((ROOT/"transcriptions").glob("*.json")):
         document = read_json(path)
@@ -60,7 +152,8 @@ def import_reviewed(root: Path) -> dict:
                 if (any(old[key] != value for key, value in
                        (("board", board), ("to_play", item["to_play"]), ("category", item["category"])))
                         or any(line not in old["solutions"] for line in solutions)):
-                    raise ValueError("Reviewed source changed; an explicit new revision is needed")
+                    corrected.append(revise_reference(root, old, item, board, solutions, document["source_pdf_sha1"]))
+                    continue
                 present.append(old["id"])
                 continue
             family = canonical(board, 19, item["to_play"])
@@ -90,6 +183,8 @@ def import_reviewed(root: Path) -> dict:
                 evidence = {"transcription_id": identifier, "source_id": item["source_id"],
                             "page": item["page"], "label": item["label"], "review": item["review"],
                             "symmetry_to_record": symmetry, "note": item["note"]}
+                if item.get("revision", 1) > 1:
+                    evidence.update(reviewed_revision=item["revision"], revision_reason=item["revision_reason"])
                 previous = duplicate.setdefault("additional_source_evidence", [])
                 if not any(e["transcription_id"] == identifier for e in previous):
                     previous.append(evidence)
@@ -105,6 +200,14 @@ def import_reviewed(root: Path) -> dict:
             review = item["review"]
             result = approve_transcription(root, transcription["id"], review["reviewer"],
                                            {key: review.get(key) for key in ("position", "solution", "source")})
+            if item.get("revision", 1) > 1:
+                # A new workspace imports the corrected version directly. It
+                # must not invent a local archive of a version it never had.
+                corpus = read_json(root/"data/corpus.json")
+                current = next(r for r in corpus["records"] if r["id"] == result["added"])
+                current.update(reviewed_revision=item["revision"], revision_reason=item["revision_reason"])
+                corpus["content_hash"] = digest(corpus["records"])
+                atomic_json(root/"data/corpus.json", corpus)
             added.append(result["added"])
     audit = audit_corpus(root)
     corpus = read_json(root/"data/corpus.json")
@@ -117,7 +220,8 @@ def import_reviewed(root: Path) -> dict:
     index["sources"] = corpus["sources"]
     atomic_json(root/"data/sources.json",index)
     atomic_json(root/"data/corpus-audit.json", audit)
-    return {"added": added, "already_present": present, "merged_same_family": merged, "audit": audit}
+    return {"added": added, "already_present": present, "merged_same_family": merged,
+            "corrected_references": corrected, "audit": audit}
 
 
 def audit_corpus(root: Path) -> dict:
