@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import "dotenv/config";
 import { closePool, getPool, query, withTransaction } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
@@ -13,6 +14,20 @@ import { finalizeGameRatings } from "../lib/rating/ratingFinalizer";
 async function run() {
   assert.ok(isUnambiguousLocalDatabase(getDatabaseUrl()), "Deletion smoke is isolated-local-only.");
   await assertSmokeDatabaseIdentity(getPool());
+  // Production previously recorded 049 without creating its disabled request
+  // table. Verify the repair and repeatability without changing the CI schema.
+  const repair = await getPool().connect();
+  try {
+    await repair.query("BEGIN");
+    await repair.query("DROP TABLE account_deletion_requests");
+    const migration = await readFile(new URL("../db/migrations/056_self_service_account_deletion.sql", import.meta.url), "utf8");
+    await repair.query(migration);
+    await repair.query(migration);
+    assert.equal((await repair.query("SELECT 1 FROM pg_class WHERE oid = 'public.account_deletion_requests'::regclass AND relrowsecurity")).rowCount, 1);
+  } finally {
+    await repair.query("ROLLBACK");
+    repair.release();
+  }
   const create = () => registerAccount(`erase_${randomUUID().replaceAll("-", "").slice(0, 12)}`, randomUUID(), null);
   const fresh = await create();
   const extraSession = await createSession(fresh.user.id);

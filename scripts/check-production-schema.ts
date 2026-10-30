@@ -55,6 +55,7 @@ async function checkProductionSchema(): Promise<void> {
 
   const deletionSchema = await query<{ ready: boolean }>(`
     SELECT to_regclass('public.apple_revocation_tokens') IS NOT NULL
+      AND to_regclass('public.account_deletion_requests') IS NOT NULL
       AND EXISTS (SELECT 1 FROM pg_constraint
         WHERE conrelid = 'public.player_initial_rating_claims'::regclass
           AND conname = 'player_initial_rating_claims_user_id_fkey' AND confdeltype = 'c')

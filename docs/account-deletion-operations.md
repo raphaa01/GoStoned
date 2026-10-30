@@ -11,6 +11,8 @@ The legacy missing-email screen also offers deletion directly.
 
 Apply `056_self_service_account_deletion.sql` using the numbered migration
 runner before deploying this API. The production build preflight checks it.
+It also repairs the request/receipt table when an earlier deployment recorded
+migration 049 without creating that table. The repair is repeatable and tested.
 `ACCOUNT_DELETION_REQUESTS_ENABLED` is obsolete: deletion is always available.
 Rebuild and publish both native clients to expose the updated settings form;
 merging server code does not update already installed app bundles.
