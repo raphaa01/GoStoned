@@ -5,6 +5,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import { getAccountSecurityCopy } from "@/lib/i18n/accountSecurity";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
+import { AccountDeletionRequest } from "@/components/legal/AccountDeletionRequest";
 
 export function AccountEmailGate() {
   const { refresh, logout } = useAuth();
@@ -59,6 +60,7 @@ export function AccountEmailGate() {
           try { await logout(); } catch { setError(dictionary.auth.errors.logout_failed); }
           finally { setBusy(false); }
         }}>{copy.logout}</button>
+        <AccountDeletionRequest />
       </section>
     </main>
   );

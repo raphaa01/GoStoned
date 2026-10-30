@@ -1,5 +1,7 @@
 import {
   createHash,
+  createCipheriv,
+  createDecipheriv,
   createPrivateKey,
   createPublicKey,
   randomBytes,
@@ -7,6 +9,7 @@ import {
   verify,
   type JsonWebKey,
 } from "node:crypto";
+import { query } from "@/lib/db";
 import type { Locale } from "@/lib/i18n/config";
 import type { OAuthProvider, VerifiedOAuthIdentity } from "./oauthAccountService";
 
@@ -112,6 +115,43 @@ function appleCredentials(): ProviderCredentials {
     clientId: requiredEnvironment("APPLE_CLIENT_ID"),
     clientSecret: appleClientSecret(),
   };
+}
+
+// Reuse the existing server-only Apple signing key as key material, with a
+// separate purpose. Normalizing the PEM avoids differences in newline encoding.
+function appleTokenKey(): Buffer {
+  const key = createPrivateKey(requiredEnvironment("APPLE_PRIVATE_KEY").replace(/\\n/g, "\n"));
+  return createHash("sha256").update("gostone-apple-revocation-v1\0")
+    .update(key.export({ format: "der", type: "pkcs8" })).digest();
+}
+
+export function encryptAppleToken(subject: string, token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", appleTokenKey(), iv);
+  cipher.setAAD(Buffer.from(subject));
+  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), ciphertext].map(value => value.toString("base64url")).join(".");
+}
+
+export function decryptAppleToken(subject: string, encrypted: string): string {
+  const [iv, tag, ciphertext, extra] = encrypted.split(".");
+  if (!iv || !tag || !ciphertext || extra) throw new Error("Invalid encrypted Apple credential.");
+  const decipher = createDecipheriv("aes-256-gcm", appleTokenKey(), Buffer.from(iv, "base64url"));
+  decipher.setAAD(Buffer.from(subject));
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
+}
+
+export async function revokeAppleToken(subject: string, encrypted: string): Promise<void> {
+  const credentials = appleCredentials();
+  const response = await fetch("https://appleid.apple.com/auth/revoke", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: credentials.clientId, client_secret: credentials.clientSecret,
+      token: decryptAppleToken(subject, encrypted), token_type_hint: "refresh_token" }),
+    cache: "no-store", signal: AbortSignal.timeout(5_000),
+  });
+  // Never include a provider response body or token in errors/logs.
+  if (!response.ok) throw new Error("Apple authorization revocation failed.");
 }
 
 function providerCredentials(provider: OAuthProvider): ProviderCredentials {
@@ -334,6 +374,23 @@ async function appleIdentity(
   const email = typeof claims.email === "string" ? claims.email : null;
   const emailVerified = claims.email_verified === true || claims.email_verified === "true";
   if (email && !emailVerified) throw new Error("Apple did not verify the account email.");
+  if (typeof token.refresh_token !== "string" || !token.refresh_token) {
+    throw new Error("Apple did not return a revocable credential.");
+  }
+  await query(
+    `INSERT INTO apple_revocation_tokens (provider_subject, encrypted_token)
+     VALUES ($1, $2) ON CONFLICT (provider_subject) DO UPDATE
+       SET encrypted_token = EXCLUDED.encrypted_token, updated_at = statement_timestamp()`,
+    [claims.sub, encryptAppleToken(claims.sub, token.refresh_token)],
+  );
+  await query(`DELETE FROM apple_revocation_tokens WHERE provider_subject IN (
+    SELECT token.provider_subject FROM apple_revocation_tokens token
+    WHERE token.updated_at < statement_timestamp() - INTERVAL '1 day'
+      AND NOT EXISTS (SELECT 1 FROM auth_identities WHERE provider = 'apple' AND provider_subject = token.provider_subject)
+      AND NOT EXISTS (SELECT 1 FROM oauth_registration_intents WHERE provider = 'apple' AND provider_subject = token.provider_subject)
+      AND NOT EXISTS (SELECT 1 FROM mobile_oauth_handoffs WHERE provider = 'apple' AND provider_subject = token.provider_subject)
+    LIMIT 200
+  )`);
   return {
     provider: "apple",
     subject: claims.sub,

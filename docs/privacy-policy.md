@@ -19,15 +19,12 @@ deployment if any of those facts changes.
    internal processing register. The public wording deliberately states the
    applicable maximum or retention criterion where the repository cannot know a
    deployment plan.
-4. Establish an operational process for access, correction, export, objection,
-   and deletion requests sent to `LEGAL_EMAIL`. `/delete-account` provides the
-   public request instructions and settings links to it on web and native apps.
-   Account deletion is an operator-managed request, not immediate self-service
-   deletion. Verify ownership, remove associated personal data, revoke sessions,
-   check shared game records and backups against the disclosed retention
-   criteria, and confirm completion to the requester. Do not mark deletion
-   support in Play Console until this operational process and the public page
-   are available in production.
+4. Settings and `/delete-account` now provide confirmed self-service deletion
+   on web, iOS and Android. Deploy migration 056 and the API, then rebuild the
+   native clients. Use the deployed `/delete-account` URL in Play Console.
+   See `docs/account-deletion-operations.md` for erasure, retained shared game
+   evidence, Apple revocation and backup handling. Continue handling other
+   privacy rights through `LEGAL_EMAIL`.
 5. Define and perform necessity reviews for stored account/game history, chat,
    analysis results, and any enabled player reports. Do not promise a fixed
    deletion period unless the corresponding cleanup is implemented and tested.

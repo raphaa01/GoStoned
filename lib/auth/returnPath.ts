@@ -62,7 +62,8 @@ export function safeReauthenticationReturnPath(
 export function safeAuthReturnPath(
   value: string | string[] | undefined,
 ): string | null {
-  return safeAccountReturnPath(value) ?? safeReauthenticationReturnPath(value);
+  return safeAccountReturnPath(value) ?? safeReauthenticationReturnPath(value)
+    ?? (safeLogicalPath(value) === "/delete-account" ? "/delete-account" : null);
 }
 
 export function accountRegistrationPath(returnTo: string): string {

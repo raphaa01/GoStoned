@@ -812,13 +812,13 @@ async function loadGame(
               CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
               NULLIF(BTRIM(black_user.display_name), ''),
               black_user.username,
-              'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
+              CASE WHEN g.black_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.black_player_key, 6)) END
             ) AS black_player_name,
             COALESCE(
               CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
               NULLIF(BTRIM(white_user.display_name), ''),
               white_user.username,
-              'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
+              CASE WHEN g.white_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.white_player_key, 6)) END
             ) AS white_player_name,
             black_user.id AS black_player_user_id,
             white_user.id AS white_player_user_id,
@@ -2509,51 +2509,54 @@ export async function respondToTakeback(
 }
 
 export async function resignGame(gameId: string, playerKey: string): Promise<GameState> {
-  return withTransaction(async (client) => {
-    let loaded = await loadGame(client, gameId, playerKey, true);
-    loaded = await resumeExpiredScoring(client, loaded, new Date()) ?? loaded;
-    const { game } = loaded;
-    if (game.status !== "active") {
-      throw new GameServiceError("This game is already finished.", 409, "game_finished");
-    }
+  return withTransaction((client) => resignGameInTransaction(client, gameId, playerKey));
+}
 
-    const now = new Date();
-    const turn = currentTurn(game, loaded.moveRows, loaded.rules.policy);
-    if (turn) {
-      const clocks = calculateClocks(game, turn, now);
-      if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
-    }
+// Account deletion uses the same resignation and rating rules atomically.
+export async function resignGameInTransaction(client: PoolClient, gameId: string, playerKey: string): Promise<GameState> {
+  let loaded = await loadGame(client, gameId, playerKey, true);
+  loaded = await resumeExpiredScoring(client, loaded, new Date()) ?? loaded;
+  const { game } = loaded;
+  if (game.status !== "active") {
+    throw new GameServiceError("This game is already finished.", 409, "game_finished");
+  }
 
-    const winnerKey = playerKey === game.black_player_key
-      ? game.white_player_key
-      : game.black_player_key;
-    const winnerColor = winnerKey === game.black_player_key ? "B" : "W";
-    if (loaded.scoring) {
-      await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [game.id]);
-    }
-    if (loaded.takeback) {
-      await client.query("DELETE FROM game_takeback_requests WHERE game_id = $1", [game.id]);
-    }
-    const updated = await client.query<GameRow>(
-      `UPDATE games
-          SET status = 'finished', phase = 'play', to_move = NULL,
-              finish_reason = 'resignation',
-              result = $2, winner_key = $3,
-              finished_at = $4, updated_at = $4, version = version + 1
-        WHERE id = $1
-        RETURNING *`,
-      [game.id, `${winnerColor}+R`, winnerKey, now],
-    );
-    const nextLoaded = {
-      ...withUpdatedGame(loaded, updated.rows[0]),
-      scoring: null,
-      deadRows: [],
-      takeback: null,
-    };
-    const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
-    return serializeGame({
-      ...nextLoaded,
-      game: { ...nextLoaded.game, rated },
-    }, now);
-  });
+  const now = new Date();
+  const turn = currentTurn(game, loaded.moveRows, loaded.rules.policy);
+  if (turn) {
+    const clocks = calculateClocks(game, turn, now);
+    if (clocks[turn].timedOut) return finishOnTime(client, loaded, turn, now);
+  }
+
+  const winnerKey = playerKey === game.black_player_key
+    ? game.white_player_key
+    : game.black_player_key;
+  const winnerColor = winnerKey === game.black_player_key ? "B" : "W";
+  if (loaded.scoring) {
+    await client.query("DELETE FROM game_scoring_state WHERE game_id = $1", [game.id]);
+  }
+  if (loaded.takeback) {
+    await client.query("DELETE FROM game_takeback_requests WHERE game_id = $1", [game.id]);
+  }
+  const updated = await client.query<GameRow>(
+    `UPDATE games
+        SET status = 'finished', phase = 'play', to_move = NULL,
+            finish_reason = 'resignation',
+            result = $2, winner_key = $3,
+            finished_at = $4, updated_at = $4, version = version + 1
+      WHERE id = $1
+      RETURNING *`,
+    [game.id, `${winnerColor}+R`, winnerKey, now],
+  );
+  const nextLoaded = {
+    ...withUpdatedGame(loaded, updated.rows[0]),
+    scoring: null,
+    deadRows: [],
+    takeback: null,
+  };
+  const { rated } = await finalizeGameRatings(client, nextLoaded.game.id);
+  return serializeGame({
+    ...nextLoaded,
+    game: { ...nextLoaded.game, rated },
+  }, now);
 }

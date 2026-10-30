@@ -19,7 +19,7 @@ test("privacy copy is complete for every supported locale", () => {
       section.title.length > 0
       && section.paragraphs.length + section.items.length > 0
     )), locale);
-    assert.equal(copy.cookies.rows.length, 4, locale);
+    assert.equal(copy.cookies.rows.length, 5, locale);
     assert.deepEqual(
       copy.cookies.rows.map(({ name }) => name),
       [
@@ -27,6 +27,7 @@ test("privacy copy is complete for every supported locale", () => {
         "gostone_guest_session",
         "gostone_oauth_google / gostone_oauth_apple",
         "gostone_locale",
+        "gostone_deletion_receipt",
       ],
       locale,
     );
@@ -65,6 +66,6 @@ test("privacy policy discloses only the currently implemented storage technologi
   assert.match(english.processors.transfer, /Standard Contractual Clauses/);
   assert.match(
     english.sections.flatMap(({ paragraphs }) => paragraphs).join(" "),
-    /do not store provider access or refresh tokens/,
+    /Apple refresh tokens encrypted solely to revoke Apple authorization/,
   );
 });
