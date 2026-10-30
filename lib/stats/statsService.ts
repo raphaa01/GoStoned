@@ -289,12 +289,12 @@ export async function getPlayerProfileStats(playerKey: string) {
                   CASE WHEN game_record.white_player_key = game_bot.bot_player_key
                     THEN game_bot.display_name END,
                   NULLIF(BTRIM(white_user.display_name), ''), white_user.username,
-                  'Guest ' || UPPER(RIGHT(game_record.white_player_key, 6)))
+                  CASE WHEN game_record.white_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(game_record.white_player_key, 6)) END)
                 ELSE COALESCE(
                   CASE WHEN game_record.black_player_key = game_bot.bot_player_key
                     THEN game_bot.display_name END,
                   NULLIF(BTRIM(black_user.display_name), ''), black_user.username,
-                  'Guest ' || UPPER(RIGHT(game_record.black_player_key, 6)))
+                  CASE WHEN game_record.black_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(game_record.black_player_key, 6)) END)
               END AS opponent_name,
               COALESCE(
                 CASE WHEN game_record.black_player_key = $1

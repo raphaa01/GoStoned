@@ -182,13 +182,13 @@ const GAME_READ_SQL = `
            CASE WHEN g.black_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
            NULLIF(BTRIM(black_user.display_name), ''),
            black_user.username,
-           'Guest ' || UPPER(RIGHT(g.black_player_key, 6))
+           CASE WHEN g.black_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.black_player_key, 6)) END
          ) AS black_player_name,
          COALESCE(
            CASE WHEN g.white_player_key = game_bot.bot_player_key THEN game_bot.display_name END,
            NULLIF(BTRIM(white_user.display_name), ''),
            white_user.username,
-           'Guest ' || UPPER(RIGHT(g.white_player_key, 6))
+           CASE WHEN g.white_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.white_player_key, 6)) END
          ) AS white_player_name,
          black_user.id AS black_player_user_id,
          white_user.id AS white_player_user_id,

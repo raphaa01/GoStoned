@@ -1,5 +1,6 @@
 import { kyPrivacy } from "./catalogs/ky";
 import type { Locale, LocalizedText } from "./config";
+import { getAccountDeletionCopy } from "./accountDeletion";
 
 type LocalizedSection = {
   title: LocalizedText;
@@ -190,8 +191,8 @@ const sections: LocalizedSection[] = [
     title: text("Accounts and authentication", "Konten und Authentifizierung", "Comptes et authentification", "Cuentas y autenticación", "账户与身份验证", "アカウントと認証", "계정 및 인증"),
     paragraphs: [
       text(
-        "On the website and updated apps, password accounts require an email address, username, and password. Existing accounts without an email must add one after signing in or log out. Previously published apps remain usable without this new screen until updated. Login accepts email or username. We store the account ID, email, names, password hash, timestamps, and hashed session tokens for authentication, password recovery, profiles, ratings, and game history. Passwords are never stored in plain text. The legal basis is Article 6(1)(b) GDPR. Guest play remains available.",
-        "Auf der Website und in aktualisierten Apps benötigen Passwort-Konten E-Mail-Adresse, Benutzername und Passwort. Bestehende Konten ohne E-Mail müssen nach der Anmeldung eine Adresse ergänzen oder sich abmelden. Bereits veröffentlichte Apps bleiben bis zum Update ohne diesen neuen Bildschirm benutzbar. Die Anmeldung ist mit E-Mail oder Benutzername möglich. Wir speichern Konto-ID, E-Mail-Adresse, Namen, Passwort-Hash, Zeitpunkte und gehashte Sitzungstokens für Anmeldung, Passwort-Wiederherstellung, Profil, Wertungen und Partieverlauf. Passwörter werden niemals im Klartext gespeichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Gastspiel bleibt möglich.",
+        "On the website and updated apps, password accounts require an email address, username, and password. Existing accounts without an email can add one after signing in, log out, or delete the account directly. Previously published apps remain usable without this new screen until updated. Login accepts email or username. We store the account ID, email, names, password hash, timestamps, and hashed session tokens for authentication, password recovery, profiles, ratings, and game history. Passwords are never stored in plain text. The legal basis is Article 6(1)(b) GDPR. Guest play remains available.",
+        "Auf der Website und in aktualisierten Apps benötigen Passwort-Konten E-Mail-Adresse, Benutzername und Passwort. Bestehende Konten ohne E-Mail können nach der Anmeldung eine Adresse ergänzen, sich abmelden oder das Konto direkt löschen. Bereits veröffentlichte Apps bleiben bis zum Update ohne diesen neuen Bildschirm benutzbar. Die Anmeldung ist mit E-Mail oder Benutzername möglich. Wir speichern Konto-ID, E-Mail-Adresse, Namen, Passwort-Hash, Zeitpunkte und gehashte Sitzungstokens für Anmeldung, Passwort-Wiederherstellung, Profil, Wertungen und Partieverlauf. Passwörter werden niemals im Klartext gespeichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Gastspiel bleibt möglich.",
         "Sur le site et les applications mises à jour, les comptes avec mot de passe nécessitent une adresse e-mail, un nom d’utilisateur et un mot de passe. Les comptes existants sans e-mail doivent en ajouter un après connexion ou se déconnecter. Les applications déjà publiées restent utilisables sans ce nouvel écran jusqu’à leur mise à jour. La connexion accepte l’e-mail ou le nom d’utilisateur. Nous conservons l’identifiant, l’e-mail, les noms, l’empreinte du mot de passe, les dates et les jetons de session hachés pour l’authentification, la récupération, les profils, classements et historiques. Les mots de passe ne sont jamais stockés en clair. La base juridique est l’article 6(1)(b) du RGPD. Le jeu en invité reste disponible.",
         "En la web y las aplicaciones actualizadas, las cuentas con contraseña requieren correo, nombre de usuario y contraseña. Las cuentas existentes sin correo deben añadirlo tras iniciar sesión o cerrar sesión. Las aplicaciones ya publicadas siguen funcionando sin esta nueva pantalla hasta actualizarse. Puedes entrar con correo o nombre de usuario. Guardamos el identificador, correo, nombres, hash de contraseña, fechas y tokens de sesión con hash para autenticación, recuperación, perfiles, puntuaciones e historial. Las contraseñas nunca se guardan en texto claro. La base jurídica es el artículo 6.1.b del RGPD. Puedes jugar como invitado.",
         "网站和更新后的应用中的密码账户需要邮箱、用户名和密码。没有邮箱的现有账户登录后须添加邮箱或退出。已发布的旧应用在更新前仍可正常使用，无需此新界面。登录可使用邮箱或用户名。我们保存账户 ID、邮箱、名字、密码哈希、时间和哈希会话令牌，用于登录、密码恢复、资料、等级分和对局历史。密码绝不以明文保存。法律依据是 GDPR 第6条第1款(b)项。仍可使用访客模式。",
@@ -199,13 +200,13 @@ const sections: LocalizedSection[] = [
         "웹사이트와 업데이트된 앱의 비밀번호 계정에는 이메일, 사용자 이름과 비밀번호가 필요합니다. 이메일이 없는 기존 계정은 로그인 후 이메일을 추가하거나 로그아웃해야 합니다. 이미 출시된 이전 앱은 업데이트 전까지 이 새 화면 없이 계속 사용할 수 있습니다. 이메일 또는 사용자 이름으로 로그인할 수 있습니다. 인증, 복구, 프로필, 레이팅 및 대국 기록을 위해 ID, 이메일, 이름, 비밀번호 해시, 시각 및 해시된 세션 토큰을 저장합니다. 비밀번호는 평문으로 저장하지 않습니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다. 게스트 플레이도 가능합니다.",
       ),
       text(
-        "Alternatively, you can choose Google or Apple sign-in. You are redirected to that provider, which processes the authentication request under its own privacy terms. GoStone receives the provider-specific account identifier, verified email address, and—when supplied—your name. We store the identifier mapping, email and verification status to recognize the account; we do not store provider access or refresh tokens. The legal basis is Article 6(1)(b) GDPR because this processing performs the sign-in method you request.",
-        "Alternativ kannst du die Anmeldung mit Google oder Apple wählen. Du wirst zum jeweiligen Anbieter weitergeleitet, der die Authentifizierungsanfrage nach seinen eigenen Datenschutzbedingungen verarbeitet. GoStone erhält die anbieterspezifische Kontokennung, die bestätigte E-Mail-Adresse und – sofern übermittelt – deinen Namen. Wir speichern die Zuordnung, E-Mail-Adresse und den Bestätigungsstatus zur Wiedererkennung des Kontos; Zugriffs- oder Aktualisierungstokens des Anbieters werden nicht gespeichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, da die von dir gewählte Anmeldemethode ausgeführt wird.",
-        "Vous pouvez aussi choisir la connexion Google ou Apple. Vous êtes redirigé vers ce fournisseur, qui traite la demande selon ses propres règles de confidentialité. GoStone reçoit l’identifiant propre au fournisseur, l’adresse e-mail vérifiée et, s’il est transmis, votre nom. Nous conservons cette association, l’e-mail et son état de vérification pour reconnaître le compte ; aucun jeton d’accès ou d’actualisation du fournisseur n’est conservé. La base juridique est l’article 6, paragraphe 1, point b) du RGPD.",
-        "También puedes iniciar sesión con Google o Apple. Serás redirigido al proveedor, que trata la autenticación según sus propias condiciones de privacidad. GoStone recibe el identificador del proveedor, el correo verificado y, si se facilita, tu nombre. Guardamos la asociación, el correo y su estado de verificación para reconocer la cuenta; no guardamos tokens de acceso ni de actualización. La base jurídica es el artículo 6.1.b del RGPD.",
-        "您也可以选择使用 Google 或 Apple 登录。系统会将您重定向至相应提供商，提供商将依据其自身隐私条款处理验证请求。GoStone 会收到提供商专用账户标识符、已验证的电子邮箱以及（如提供）您的姓名。我们保存标识符映射、邮箱及验证状态以识别账户；不会保存提供商访问令牌或刷新令牌。法律依据为 GDPR 第6条第1款(b)项。",
-        "Google または Apple でのサインインも選択できます。各事業者に移動し、そのプライバシー条件に基づいて認証が処理されます。GoStone は事業者固有のアカウント ID、確認済みメールアドレス、提供された場合は氏名を受け取ります。アカウント識別のため対応関係、メール、確認状態を保存しますが、アクセストークンや更新トークンは保存しません。法的根拠は GDPR 第6条1項(b)です。",
-        "Google 또는 Apple 로그인을 선택할 수도 있습니다. 해당 업체로 이동하며 업체는 자체 개인정보 조건에 따라 인증 요청을 처리합니다. GoStone은 업체별 계정 식별자, 확인된 이메일 주소 및 제공된 경우 이름을 받습니다. 계정 식별을 위해 연결 정보, 이메일 및 확인 상태를 저장하지만 업체의 액세스 토큰이나 갱신 토큰은 저장하지 않습니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다.",
+        "Alternatively, you can choose Google or Apple sign-in. You are redirected to that provider, which processes the authentication request under its own privacy terms. GoStone receives the provider-specific account identifier, verified email address, and—when supplied—your name. We store the identifier mapping, email and verification status to recognize the account; we store Apple refresh tokens encrypted solely to revoke Apple authorization when deleting an account; Google access and refresh tokens are not retained. The legal basis is Article 6(1)(b) GDPR because this processing performs the sign-in method you request.",
+        "Alternativ kannst du die Anmeldung mit Google oder Apple wählen. Du wirst zum jeweiligen Anbieter weitergeleitet, der die Authentifizierungsanfrage nach seinen eigenen Datenschutzbedingungen verarbeitet. GoStone erhält die anbieterspezifische Kontokennung, die bestätigte E-Mail-Adresse und – sofern übermittelt – deinen Namen. Wir speichern die Zuordnung, E-Mail-Adresse und den Bestätigungsstatus zur Wiedererkennung des Kontos; Apple-Aktualisierungstokens werden ausschließlich zum Widerruf der Apple-Freigabe bei der Kontolöschung verschlüsselt gespeichert; Google-Zugriffs- und Aktualisierungstokens werden nicht aufbewahrt. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, da die von dir gewählte Anmeldemethode ausgeführt wird.",
+        "Vous pouvez aussi choisir la connexion Google ou Apple. Vous êtes redirigé vers ce fournisseur, qui traite la demande selon ses propres règles de confidentialité. GoStone reçoit l’identifiant propre au fournisseur, l’adresse e-mail vérifiée et, s’il est transmis, votre nom. Nous conservons cette association, l’e-mail et son état de vérification pour reconnaître le compte ; les jetons de renouvellement Apple sont chiffrés et conservés uniquement pour révoquer l’autorisation à la suppression du compte. Les jetons Google ne sont pas conservés. La base juridique est l’article 6, paragraphe 1, point b) du RGPD.",
+        "También puedes iniciar sesión con Google o Apple. Serás redirigido al proveedor, que trata la autenticación según sus propias condiciones de privacidad. GoStone recibe el identificador del proveedor, el correo verificado y, si se facilita, tu nombre. Guardamos la asociación, el correo y su estado de verificación para reconocer la cuenta; guardamos cifrados los tokens de actualización de Apple solo para revocar la autorización al eliminar la cuenta; no conservamos tokens de Google. La base jurídica es el artículo 6.1.b del RGPD.",
+        "您也可以选择使用 Google 或 Apple 登录。系统会将您重定向至相应提供商，提供商将依据其自身隐私条款处理验证请求。GoStone 会收到提供商专用账户标识符、已验证的电子邮箱以及（如提供）您的姓名。我们保存标识符映射、邮箱及验证状态以识别账户；仅为删除账户时撤销 Apple 授权而加密保存 Apple 刷新令牌；不保留 Google 令牌。法律依据为 GDPR 第6条第1款(b)项。",
+        "Google または Apple でのサインインも選択できます。各事業者に移動し、そのプライバシー条件に基づいて認証が処理されます。GoStone は事業者固有のアカウント ID、確認済みメールアドレス、提供された場合は氏名を受け取ります。アカウント識別のため対応関係、メール、確認状態を保存しますが、アカウント削除時の認可取り消しのため Apple の更新トークンのみ暗号化して保存します。Google のトークンは保持しません。法的根拠は GDPR 第6条1項(b)です。",
+        "Google 또는 Apple 로그인을 선택할 수도 있습니다. 해당 업체로 이동하며 업체는 자체 개인정보 조건에 따라 인증 요청을 처리합니다. GoStone은 업체별 계정 식별자, 확인된 이메일 주소 및 제공된 경우 이름을 받습니다. 계정 식별을 위해 연결 정보, 이메일 및 확인 상태를 저장하지만 계정 삭제 시 승인 철회를 위한 Apple 갱신 토큰만 암호화하여 저장합니다. Google 토큰은 보관하지 않습니다. 법적 근거는 GDPR 제6조 제1항 (b)입니다.",
       ),
     ],
   },
@@ -520,13 +521,23 @@ const recoveryPurpose: LocalizedText = {
 };
 
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
+  const deletion = getAccountDeletionCopy(locale);
+  const deletionSection = {
+    title: deletion.title,
+    paragraphs: [deletion.inAppIntro, deletion.data,
+      locale === "de"
+        ? "Die Löschbestätigung speichert 30 Tage lang nur eine zufällige Referenz und Zeitpunkte ohne Konto oder Kontaktdaten. Ein notwendiges HttpOnly-Cookie (gostone_deletion_receipt) zeigt dir das Ergebnis nach der Abmeldung. Neue Apple-Widerrufstokens bleiben bis zur Kontolöschung verschlüsselt gespeichert; nach abgebrochenen Anmeldungen ohne Konto werden sie nach einem Tag bei späteren Apple-Anmeldungen zur Bereinigung vorgemerkt. Rechtsgrundlagen sind Art. 6 Abs. 1 lit. b und c DSGVO."
+        : "For 30 days, a deletion receipt stores only a random reference and dates without account or contact details. A necessary HttpOnly cookie (gostone_deletion_receipt) lets you check completion after sign-out. New Apple revocation tokens are retained encrypted until account deletion; tokens from abandoned sign-ins without an account become eligible for cleanup after one day during later Apple sign-ins. Legal bases: Article 6(1)(b) and (c) GDPR."],
+    items: [],
+  };
   if (locale === "ky") return {
     ...kyPrivacy,
+    cookies: { ...kyPrivacy.cookies, rows: [...kyPrivacy.cookies.rows, { name: "gostone_deletion_receipt", purpose: "Каттоо эсеби жок кылынгандан кийин ырастоону көрсөтөт; кокус белги гана сакталат.", duration: "30 күн" }] },
     updated: "11-октябрь, 2026-жыл",
     processors: { ...kyPrivacy.processors, entries: [...kyPrivacy.processors.entries, {
       name: "Resend", purpose: recoveryPurpose.ky!, privacyUrl: "https://resend.com/legal/privacy-policy",
     }] },
-    sections: kyPrivacy.sections.map((section, index) => index === 2 ? {
+    sections: kyPrivacy.sections.map((section, index) => index === 8 ? { ...section, paragraphs: [...section.paragraphs, ...deletionSection.paragraphs] } : index === 2 ? {
       ...section,
       paragraphs: [...section.paragraphs, "Ошондой эле баракча көрүнүп турган убакыт өлчөнөт. Ар 30 секундда, баракча алмашканда же жашырылганда GoStone тазаланган жолду, көрүнгөн миллисекунддарды жана ачылыш санын алат. Маалымат базасында баракча боюнча сааттык суммалар гана сакталат; эсеп, келүүчү, сеанс же IP идентификаторлору сакталбайт. Кукилер жана браузер сактагычы колдонулбайт. Жашырылган өтмөктөр эсептелбейт; Do Not Track кошумча өлчөөнү өчүрөт. Максат — мазмунду жана колдонууга ыңгайлуулукту жакшыртуу; укуктук негиз — GDPR 6(1)(f). Анонимдүү суммалар тенденцияларды талдоо үчүн сакталат."],
     } : section),
@@ -546,11 +557,12 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
       address: localize(locale, controller.address),
       contact: localize(locale, controller.contact),
     },
-    sections: sections.map((section) => ({
+    sections: sections.map((section, index) => ({
       title: localize(locale, section.title),
       paragraphs: [
         ...(section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? []),
         ...(section === sections[3] ? [localize(locale, recoveryPurpose)] : []),
+        ...(index === 8 ? deletionSection.paragraphs : []),
       ],
       items: section.items?.map((item) => localize(locale, item)) ?? [],
     })),
@@ -560,11 +572,11 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
       name: localize(locale, cookies.name),
       purpose: localize(locale, cookies.purpose),
       duration: localize(locale, cookies.duration),
-      rows: cookies.rows.map((row) => ({
+      rows: [...cookies.rows.map((row) => ({
         name: row.name,
         purpose: localize(locale, row.purpose),
         duration: localize(locale, row.duration),
-      })),
+      })), { name: "gostone_deletion_receipt", purpose: locale === "de" ? "Zeigt die Löschbestätigung nach der Abmeldung; enthält nur einen zufälligen Belegtoken." : "Shows deletion completion after sign-out; contains only a random receipt token.", duration: locale === "de" ? "30 Tage" : "30 days" }],
       closing: localize(locale, cookies.closing),
     },
     processors: {

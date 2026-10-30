@@ -53,6 +53,18 @@ async function checkProductionSchema(): Promise<void> {
     throw new Error("Production database schema is stale: run migration 054 for account email and password recovery.");
   }
 
+  const deletionSchema = await query<{ ready: boolean }>(`
+    SELECT to_regclass('public.apple_revocation_tokens') IS NOT NULL
+      AND EXISTS (SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.player_initial_rating_claims'::regclass
+          AND conname = 'player_initial_rating_claims_user_id_fkey' AND confdeltype = 'c')
+      AND NOT EXISTS (SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.game_glicko2_rating_events'::regclass
+          AND conname = 'game_glicko2_rating_events_player_fk') AS ready`);
+  if (!deletionSchema.rows[0]?.ready) {
+    throw new Error("Production database schema is stale: run migration 056 for self-service account deletion.");
+  }
+
   const result = await query<SchemaRow>(
     `SELECT
        (SELECT column_default FROM information_schema.columns

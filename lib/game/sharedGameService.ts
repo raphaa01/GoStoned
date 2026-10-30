@@ -92,10 +92,10 @@ export async function getSharedFinishedGame(token: string): Promise<SharedFinish
               scoring.neutral_region_seeds, scoring.finalized_at,
               COALESCE(NULLIF(BTRIM(black_user.display_name), ''), black_user.username,
                 CASE WHEN g.black_player_key = bot.bot_player_key THEN bot.display_name END,
-                'Guest ' || UPPER(RIGHT(g.black_player_key, 6))) AS black_player_name,
+                CASE WHEN g.black_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.black_player_key, 6)) END) AS black_player_name,
               COALESCE(NULLIF(BTRIM(white_user.display_name), ''), white_user.username,
                 CASE WHEN g.white_player_key = bot.bot_player_key THEN bot.display_name END,
-                'Guest ' || UPPER(RIGHT(g.white_player_key, 6))) AS white_player_name
+                CASE WHEN g.white_player_key LIKE 'user:%' THEN 'Deleted player' ELSE 'Guest ' || UPPER(RIGHT(g.white_player_key, 6)) END) AS white_player_name
          FROM game_share_links share
          JOIN games g ON g.id = share.game_id
          LEFT JOIN users black_user ON g.black_player_key = 'user:' || black_user.id::text

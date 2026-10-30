@@ -1,82 +1,77 @@
-# In-app account deletion requests
+# Self-service account deletion
 
-## Release gate
+Website, iOS and Android use the same authenticated deletion API and shared
+confirmation form. Open Profile → Settings → Delete account, confirm permanent
+deletion, and submit. The public `/delete-account` page runs the same flow and
+links directly to existing-account login with a return path to deletion.
+No support contact, added email, local password, or new registration is required.
+The legacy missing-email screen also offers deletion directly.
 
-`ACCOUNT_DELETION_REQUESTS_ENABLED=true` enables the authenticated in-app
-request flow for accounts and guest profiles, including the bundled native
-settings page. It is disabled by default. Migration
-`049_account_deletion_requests.sql` must be applied before enabling it.
+## Deploy
 
-The operator agreed to complete requests within seven days. Retries preserve
-the original deadline. An optional email can receive confirmation; users who
-leave it blank can check the private receipt in the app after session removal.
-The receipt cookie is HttpOnly and reveals only request status and dates.
-Completion removes the queue's player key and email. Completed receipts are
-available for 30 days and must then be purged by the operator.
+Apply `056_self_service_account_deletion.sql` using the numbered migration
+runner before deploying this API. The production build preflight checks it.
+`ACCOUNT_DELETION_REQUESTS_ENABLED` is obsolete: deletion is always available.
+Rebuild and publish both native clients to expose the updated settings form;
+merging server code does not update already installed app bundles.
 
-**Do not enable the flow or submit the iOS app yet.** This change records
-requests; it does not implement data erasure. The immutable initial-rating
-claims and rating-event foreign keys currently prevent a simple account
-DELETE. A reviewed, tested erasure/anonymization procedure is still required.
-Never disable the immutable rating triggers to bypass that problem.
+Deletion runs in one database transaction. It ends active games with the existing
+resignation/time/rating rules, validates their rating evidence, then erases the
+user, provider identities, all sessions, password resets, friendships and their
+messages/invites, game chat, blocks/reports, learning/puzzle progress, preferences,
+live ratings, old personal rating history, statistics, price votes and owned
+share links. OAuth registration intents and native handoffs for linked identities
+are removed. Guest profiles follow the same personal-data cleanup.
 
-## Before enabling
+Shared game records and immutable rating/bot/scoring evidence keep random internal
+player keys, but no username, email, password, provider subject or profile mapping.
+They preserve the opponents’ game history and rating integrity. Do not describe
+these records as irreversibly anonymous: an opponent may remember a shared game.
+The rating event insert/commit and immutable mutation guards remain enabled;
+historical events no longer require the departing player's current rating row.
+Initial claims are erased through their existing post-user-delete cascade exception.
 
-1. Define and test erasure for a fresh account, an Apple/Google account, a
-   guest profile, and a rated account with chat, games, learning progress,
-   puzzle progress, friends, reports, votes, and analysis. Preserve other
-   players' game integrity without retaining the departing player's identity.
-2. Test session invalidation, pending OAuth registration/handoff cleanup,
-   Sign in with Apple token revocation, and the post-deletion receipt.
-   Apple provider tokens are not currently retained, so the revocation flow
-   needs a deliberate implementation. Do not assume deleting a local identity
-   revokes Apple's authorization.
-3. Update the public privacy policy for the optional confirmation email,
-   private queue, seven-day commitment, necessary receipt cookie, and 30-day
-   completed-receipt retention. Add Customer Support, linked to identity and
-   used for App Functionality, to Apple privacy disclosures and the native
-   privacy manifest before enabling this support flow.
-4. Establish daily monitoring, a backup operator, and escalation before a
-   deadline is missed. Test a synthetic request end to end, including receipt
-   confirmation and email delivery when an email is supplied.
-5. Deploy the API and migration, enable the gate only after those checks,
-   rebuild the native bundle, and verify the actual release on a device.
+The completed receipt has no identity/contact, only a random reference and dates.
+An HttpOnly, purpose-limited receipt cookie permits checking success after all
+sessions are revoked. It expires after 30 days; reads reject older receipts and
+submissions remove old completed receipts in bounded batches. The existing
+`npm run deletion:requests -- purge-completed` command can also purge them.
+Legacy pending requests remain available to their owner; confirming now completes
+the deletion automatically. No optional confirmation email is collected or sent.
 
-## Daily operator checklist
+## Sign in with Apple
 
-Use an authorized terminal with `DATABASE_URL` securely configured. All
-connections go through `lib/db.ts`. No public administrator endpoint exists.
+New Apple code exchanges store an AES-256-GCM encrypted refresh token, bound to
+the provider subject. Encryption derives a separate purpose-specific key from the
+existing server-only `APPLE_PRIVATE_KEY`; no new secret is needed. Tokens never
+enter browser/native responses or handoffs. Deletion revokes stored tokens through
+Apple's REST API before erasure. Provider errors leave the transaction uncommitted
+and the form retryable. Repeated revocation of an already revoked token is safe.
 
-```sh
-npm run deletion:requests -- list
-```
+Before rotating `APPLE_PRIVATE_KEY`, re-encrypt stored revocation tokens using the
+old and new keys; replacing it without migration makes existing ciphertext unreadable.
+Legacy accounts created before this change have no recoverable provider token.
+They are still deleted without requiring sign-in again or a password; GoStone
+cannot programmatically revoke a token it never retained. The completion page
+explains the optional Apple authorization removal for those accounts.
 
-This prints private account identifiers and optional confirmation addresses.
-Do not paste its output into chats, logs, Git, or App Review notes. Check the
-oldest deadline first. The in-app authenticated request already verifies
-ownership of the requesting account or guest profile. Email-only requests
-still require an appropriate ownership check; never request passwords.
+Abandoned Apple sign-ins without an account are eligible for token cleanup after
+one day; later Apple exchanges remove expired unclaimed credentials in bounded
+batches. Keep the provider-specific account identifier/token retention disclosed.
 
-Apply the reviewed erasure procedure, revoke access, handle any justified
-retention explicitly, and email completion when an address was supplied.
-Record completion only after all of that work is done:
+## Verification
 
-```sh
-npm run deletion:requests -- complete <request-uuid> \
-  --confirm-data-erased --confirm-access-revoked --confirm-notified
-```
+`npm test` covers session-bound authorization, explicit confirmation, native
+origins, receipt privacy, rollback, legacy missing-email accounts, and authenticated
+encryption/revocation. Browser tests exercise confirmation, cancellation, failure,
+retry and signed-out completion in Next.js and the shared iOS/Android bundle.
+`scripts/smoke-account-deletion.ts` runs against an explicitly isolated PostgreSQL
+database in CI to verify real cascades, rated games, surviving opponent evidence,
+session invalidation and immutable guards. Never use production accounts for it.
 
-Without an email, `--confirm-notified` means that completion will be confirmed
-by the in-app receipt. The command refuses completion while the account or
-guest session still exists. It does not delete accounts and cannot prove that
-all associated data was erased; the operator must attest truthfully.
+Backups expire under the provider's configured rolling cycle. Any restoration
+procedure must reapply completed erasures before restoring normal service.
 
-Run the following daily to remove expired, already de-identified receipts:
-
-```sh
-npm run deletion:requests -- purge-completed
-```
-
-Backups expire under the provider's documented retention cycle. Record any
-restoration procedure that re-applies erasures, so deleted personal data does
-not silently reappear after recovery.
+References: [Apple account deletion](https://developer.apple.com/support/offering-account-deletion-in-your-app/),
+[Apple token revocation](https://developer.apple.com/documentation/technotes/tn3194-handling-account-deletions-and-revoking-tokens-for-sign-in-with-apple),
+[Google Play deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111).

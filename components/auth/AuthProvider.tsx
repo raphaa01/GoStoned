@@ -26,6 +26,7 @@ type AuthContextValue = {
   refresh: (options?: { silent?: boolean }) => Promise<void>;
   refreshRating: () => Promise<void>;
   logout: () => Promise<void>;
+  clearSession: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -97,14 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.playerKey, user?.emailRequired]);
 
-  const logout = useCallback(async () => {
-    const response = await fetch("/api/auth/logout", { method: "POST" });
-    const body = (await response.json()) as { ok: boolean; code?: string };
-    if (!response.ok || !body.ok) {
-      const logoutError = new Error(localizedAuthError(dictionary, body.code, "logout_failed"));
-      setError(logoutError.message);
-      throw logoutError;
-    }
+  // Clear local identity only after the server confirms logout or deletion.
+  const clearSession = useCallback(() => {
     invalidateRouteData();
     sessionRequestGeneration.current += 1;
     cacheOwner.current = null;
@@ -114,7 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRating(null);
     setRatingLoading(false);
     setError(null);
-  }, [dictionary]);
+  }, []);
+
+  const logout = useCallback(async () => {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    const body = (await response.json()) as { ok: boolean; code?: string };
+    if (!response.ok || !body.ok) {
+      const logoutError = new Error(localizedAuthError(dictionary, body.code, "logout_failed"));
+      setError(logoutError.message);
+      throw logoutError;
+    }
+    clearSession();
+  }, [dictionary, clearSession]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -147,8 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refresh,
       refreshRating,
       logout,
+      clearSession,
     }),
-    [user, loading, error, rating, ratingLoading, refresh, refreshRating, logout],
+    [user, loading, error, rating, ratingLoading, refresh, refreshRating, logout, clearSession],
   );
 
   return <AuthContext.Provider value={value}>{user?.emailRequired ? <AccountEmailGate /> : children}</AuthContext.Provider>;

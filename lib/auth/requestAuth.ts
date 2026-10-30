@@ -38,12 +38,13 @@ export async function requireRequestUser(request: NextRequest): Promise<AuthUser
 export async function resolvePlayerKey(
   request: NextRequest,
   resolvers: IdentityResolvers = defaultIdentityResolvers,
+  options: { allowIncomplete?: boolean } = {},
 ): Promise<string> {
   const accountToken = request.cookies.get(SESSION_COOKIE)?.value;
   if (accountToken !== undefined) {
     const account = await resolvers.getAccount(accountToken);
     if (account) {
-      if (!usesLegacyAccountContract(request)) assertAccountEmailComplete(account);
+      if (!options.allowIncomplete && !usesLegacyAccountContract(request)) assertAccountEmailComplete(account);
       return account.playerKey;
     }
     throw new GameServiceError(
