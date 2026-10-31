@@ -1,3 +1,4 @@
+import { assertCommunityParticipation, assertNotRestricted } from "@/lib/moderation/communityService";
 import type { PoolClient, QueryResultRow } from "pg";
 import { query, withTransaction } from "@/lib/db";
 import { getTimeControl } from "@/lib/game/timeControls";
@@ -296,6 +297,7 @@ export async function sendFriendRequest(actorId: string, targetId: string): Prom
     throw new GameServiceError("You cannot add yourself.", 400, "cannot_friend_self");
   }
   return withTransaction(async (client) => {
+    await assertNotRestricted(playerKey(actorId), client);
     await lockPlayerPair(client, playerKey(actorId), playerKey(targetId));
     if (await isPlayerPairBlocked(client, playerKey(actorId), playerKey(targetId))) {
       throw new GameServiceError("This player is unavailable.", 409, "player_unavailable");
@@ -369,6 +371,11 @@ export async function getFriendMessages(
   return withTransaction(async (client) => {
     const friendship = await lockFriendshipForActor(client, friendshipId, actorId, true);
     const partnerId = otherId(friendship, actorId);
+    await assertNotRestricted(playerKey(actorId), client);
+    await assertNotRestricted(playerKey(partnerId), client);
+    const moderated = await client.query("SELECT 1 FROM friend_messages WHERE friendship_id = $1 AND moderated_at IS NOT NULL LIMIT 1", [friendshipId]);
+    if (moderated.rowCount) throw new GameServiceError("Chat is unavailable.", 409, "chat_unavailable");
+
     if (await isPlayerPairBlocked(client, playerKey(actorId), playerKey(partnerId))) {
       throw new GameServiceError("Chat is unavailable.", 409, "chat_unavailable");
     }
@@ -410,8 +417,14 @@ export async function sendFriendMessage(
     throw new GameServiceError("This message contains blocked language.", 400, "message_blocked");
   }
   return withTransaction(async (client) => {
+    await assertCommunityParticipation(playerKey(actorId), client);
     const friendship = await lockFriendshipForActor(client, friendshipId, actorId, true);
     const partnerId = otherId(friendship, actorId);
+    await assertNotRestricted(playerKey(actorId), client);
+    await assertNotRestricted(playerKey(partnerId), client);
+    const moderated = await client.query("SELECT 1 FROM friend_messages WHERE friendship_id = $1 AND moderated_at IS NOT NULL LIMIT 1", [friendshipId]);
+    if (moderated.rowCount) throw new GameServiceError("Chat is unavailable.", 409, "chat_unavailable");
+
     if (await isPlayerPairBlocked(client, playerKey(actorId), playerKey(partnerId))) {
       throw new GameServiceError("Chat is unavailable.", 409, "chat_unavailable");
     }
@@ -438,6 +451,7 @@ export async function createGameInvite(
   timeControl: TimeControlId,
 ): Promise<FriendGameInvite> {
   return withTransaction(async (client) => {
+    await assertNotRestricted(playerKey(actorId), client);
     const friendship = await lockFriendshipForActor(client, friendshipId, actorId, true);
     const inviteeId = otherId(friendship, actorId);
     if (await isPlayerPairBlocked(client, playerKey(actorId), playerKey(inviteeId))) {
@@ -491,6 +505,8 @@ export async function respondToGameInvite(
     if (action === "cancel" && snapshot.inviter_id !== actorId) notFound();
     if (action !== "cancel" && snapshot.invitee_id !== actorId) notFound();
     if (action === "accept") {
+      await assertNotRestricted(playerKey(snapshot.inviter_id), client);
+      await assertNotRestricted(playerKey(snapshot.invitee_id), client);
       await lockPlayerGameActivity(client, [snapshot.inviter_id, snapshot.invitee_id]);
     }
     await lockPlayerPair(client, playerKey(snapshot.inviter_id), playerKey(snapshot.invitee_id));

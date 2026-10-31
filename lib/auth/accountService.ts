@@ -4,6 +4,7 @@ import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
 import { requireEmail } from "./email";
+import { acceptCommunityRules } from "@/lib/moderation/communityService";
 import {
   initialRatingForStartingStrength,
   STARTING_STRENGTH_POLICY_VERSION,
@@ -88,6 +89,7 @@ export async function registerAccount(
   emailValue: string | null,
   startingStrength: StartingStrength = { estimate: "unspecified", knownRank: null },
   boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
+  rulesAccepted = false,
 ): Promise<Registration> {
   const email = emailValue === null ? null : requireEmail(emailValue);
   const passwordHash = await hashPassword(password);
@@ -137,6 +139,7 @@ export async function registerAccount(
       throw error;
     });
     const user = serializeAuthUser(result.rows[0]);
+    if (rulesAccepted) await acceptCommunityRules(user.playerKey, client);
     const token = await createSessionInTransaction(client, user.id);
     return { user, token };
   });

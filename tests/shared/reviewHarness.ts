@@ -70,7 +70,7 @@ async function fitsViewport(page: Page) {
 
 export function registerReviewTests(authenticatedServer = false) {
   if (authenticatedServer) test.beforeEach(async ({ context }) => {
-    const registered = await context.request.post("/api/auth/register", { data: {
+    const registered = await context.request.post("/api/auth/register", { headers: { "x-gostone-community-rules": "2026-10-30" }, data: {
       username: `review_${crypto.randomUUID().slice(0, 8)}`, password: crypto.randomUUID(),
       email: `${crypto.randomUUID()}@example.test`,
       startingStrength: "unspecified", knownRank: null, boardPlacement: "direct",

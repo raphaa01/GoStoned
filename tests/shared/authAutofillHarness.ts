@@ -57,6 +57,7 @@ export function registerAuthAutofillTests(mobile: boolean) {
     const onboarding = getBeginnerGuideCopy("de").onboarding;
     const placement = getBoardPlacementCopy("de");
     await page.goto("/de/register");
+    await page.locator('input[name="communityRules"]').check();
     const form = page.locator(".auth-form");
     await expect(form).toBeVisible();
     await autofill(form.locator('[name="username"]'), "New_Player");
@@ -103,6 +104,7 @@ export function registerAuthAutofillTests(mobile: boolean) {
   test("invalid registration and recovery fields do not send requests", async ({ page }) => {
     const submissions = await installApi(page);
     await page.goto("/de/register");
+    await page.locator('input[name="communityRules"]').check();
     const form = page.locator(".auth-form");
     await form.locator('[name="username"]').fill("Valid_Player");
     await form.locator('[name="email"]').fill("invalid-address");
@@ -154,6 +156,7 @@ export function registerAuthAutofillTests(mobile: boolean) {
   if (mobile) test("switching mobile account modes clears the previous credentials and recovery state", async ({ page }) => {
     await installApi(page);
     await page.goto("/de/register");
+    await page.locator('input[name="communityRules"]').check();
     await page.locator('[name="username"]').fill("previous_player");
     await page.locator('[name="password"]').fill("previous-password-123");
     await page.locator(".auth-switch").getByRole("link").click();

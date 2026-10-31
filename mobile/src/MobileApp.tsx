@@ -1,3 +1,5 @@
+import { CommunityRules } from "@/components/legal/CommunityRules";
+import { ModerationBoard } from "@/components/moderation/ModerationBoard";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
@@ -107,6 +109,8 @@ function MobileRoute() {
     case "/review": content = <div className="mobile-tab-screen mobile-review-screen"><MobileAccountGate returnTo="/review" title={dictionary.nav.review}><ReviewGuide /></MobileAccountGate></div>; break;
     case "/puzzles": content = <div className="mobile-tab-screen mobile-puzzle-screen"><PuzzleWorkspace initialMode={search.get("mode") === "practice" ? "practice" : "daily"} /></div>; break;
     case "/leaderboard": content = <div className="mobile-tab-screen mobile-leaderboard-screen"><LeaderboardView /></div>; break;
+    case "/community-rules": content = <PushedScreen><CommunityRules /></PushedScreen>; break;
+    case "/moderation": content = <PushedScreen><MobileAccountGate returnTo="/moderation" title="Moderation"><ModerationBoard /></MobileAccountGate></PushedScreen>; break;
     case "/privacy": content = <PushedScreen><MobileLegalPage pathname="/privacy" /></PushedScreen>; break;
     case "/impressum": content = <PushedScreen><MobileLegalPage pathname="/impressum" /></PushedScreen>; break;
     case "/delete-account": content = <PushedScreen><MobileLegalPage pathname="/delete-account" /></PushedScreen>; break;

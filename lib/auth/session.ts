@@ -34,7 +34,8 @@ const executeSessionLookup: SessionLookupExecutor = async (tokenHash) => {
             (u.password_hash IS NOT NULL AND u.email IS NULL AND NOT EXISTS
               (SELECT 1 FROM auth_identities WHERE user_id = u.id)) AS email_required,
             COALESCE((to_jsonb(u)->>'coach_beta_enabled')::boolean, false) AS coach_beta_enabled,
-            COALESCE((to_jsonb(u)->>'analysis_unlimited')::boolean, false) AS analysis_unlimited
+            COALESCE((to_jsonb(u)->>'analysis_unlimited')::boolean, false) AS analysis_unlimited,
+            EXISTS (SELECT 1 FROM moderation_moderators WHERE user_id = u.id) AS moderator
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1

@@ -42,6 +42,7 @@ export async function installHarness(page: Page) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
+    if (pathname === "/api/community-rules") return json(route, { ok: true, actor: USER.playerKey, accepted: true });
     if (pathname === "/api/auth/session") return json(route, { ok: true, user: USER });
     if (pathname === "/api/profile/rating") return json(route, { ok: true, rating: null });
     if (pathname === "/api/profile/preferences") return json(route, { ok: true, preferences: { boardPlacement: "direct" } });

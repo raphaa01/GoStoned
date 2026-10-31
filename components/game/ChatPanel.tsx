@@ -1,5 +1,9 @@
 "use client";
 
+import { CommunityAgreement } from "@/components/auth/CommunityAgreement";
+import { useCommunityConsent } from "@/components/auth/useCommunityConsent";
+import { PlayerReport } from "./PlayerReport";
+import { getCommunityCopy } from "@/lib/i18n/community";
 import { Ban, MessageCircle, Send, Undo2 } from "lucide-react";
 import {
   FormEvent,
@@ -15,6 +19,7 @@ import type { GameMessage } from "@/lib/game/chatService";
 import { localizedApiError } from "@/lib/i18n/dictionary";
 
 type ChatPanelProps = {
+  gameId: string;
   blockActionRef: RefObject<HTMLButtonElement | null>;
   blockedByYou: boolean | null;
   blockBusy: boolean;
@@ -33,6 +38,7 @@ type ChatPanelProps = {
 };
 
 export function ChatPanel({
+  gameId,
   blockActionRef,
   blockedByYou,
   blockBusy,
@@ -49,7 +55,9 @@ export function ChatPanel({
   onSend,
   onUnblock,
 }: ChatPanelProps) {
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
+  const community = getCommunityCopy(locale);
+  const consent = useCommunityConsent(opponentIsBot ? "" : playerKey);
   const copy = dictionary.game;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,6 +97,7 @@ export function ChatPanel({
     setBusy(true);
     setError(null);
     try {
+      await consent.accept(event.currentTarget);
       await onSend(message);
       setText("");
     } catch (sendError) {
@@ -96,7 +105,7 @@ export function ChatPanel({
         !(sendError instanceof ApiRequestError)
         || sendError.code !== "chat_unavailable"
       ) {
-        setError(localizedApiError(dictionary, sendError, copy.sendFailed));
+        setError(sendError instanceof ApiRequestError && sendError.code === "community_suspended" ? community.suspended : localizedApiError(dictionary, sendError, copy.sendFailed));
       }
     } finally {
       setBusy(false);
@@ -110,6 +119,7 @@ export function ChatPanel({
           <MessageCircle aria-hidden="true" size={18} />
           <h2 id={titleId}>{copy.chatTitle}</h2>
         </span>
+        {!opponentIsBot ? <PlayerReport key={`${gameId}:${playerKey}`} gameId={gameId} playerKey={playerKey} /> : null}
         {!opponentIsBot ? <button
           aria-disabled={blockActionUnavailable}
           aria-label={
@@ -178,6 +188,7 @@ export function ChatPanel({
         </div>
       ) : null}
       <form className="chat-form" onSubmit={submit} ref={formRef}>
+        {!opponentIsBot && !chatUnavailable && consent.loaded && !consent.accepted ? <CommunityAgreement disabled={busy} /> : null}
         <input
           aria-describedby={chatUnavailable ? unavailableId : undefined}
           aria-label={copy.chatMessage}
@@ -190,7 +201,7 @@ export function ChatPanel({
           placeholder={chatUnavailable || disabled ? copy.chatUnavailable : copy.writeMessage}
           value={text}
         />
-        <button aria-label={copy.sendMessage} disabled={disabled || busy || chatUnavailable || !text.trim()} type="submit">
+        <button aria-label={copy.sendMessage} disabled={disabled || busy || chatUnavailable || !consent.loaded || !text.trim()} type="submit">
           <Send aria-hidden="true" size={17} />
         </button>
       </form>

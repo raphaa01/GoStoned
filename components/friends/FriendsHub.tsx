@@ -1,5 +1,8 @@
 "use client";
 
+import { CommunityAgreement } from "@/components/auth/CommunityAgreement";
+import { useCommunityConsent } from "@/components/auth/useCommunityConsent";
+import { FriendSafetyActions } from "./FriendSafetyActions";
 import {
   Check,
   Clock3,
@@ -20,7 +23,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Button } from "@/components/ui/Button";
 import { ModalDialog } from "@/components/ui/ModalDialog";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
-import { readApi } from "@/lib/client/api";
+import { ApiRequestError, readApi } from "@/lib/client/api";
 import type { BoardSize, TimeControlId } from "@/lib/game/types";
 import type {
   FriendGameInvite,
@@ -54,6 +57,7 @@ export function FriendsHub() {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<PlayerSearchResult[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<SelectedFriend | null>(null);
+  const consent = useCommunityConsent(selectedFriend ? user?.playerKey ?? "" : "");
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [messageText, setMessageText] = useState("");
   const [profile, setProfile] = useState<FriendProfile | null>(null);
@@ -138,7 +142,8 @@ export function FriendsHub() {
       const body = await readApi<{ messages: FriendMessage[] }>(response);
       setMessages(body.messages);
       if (!silent) setError(null);
-    } catch {
+    } catch (requestError) {
+      if (requestError instanceof ApiRequestError && ["chat_unavailable", "community_suspended"].includes(requestError.code ?? "")) setMessages([]);
       if (!silent) setError(copy.actionFailed);
     }
   }, [actorHeader, copy.actionFailed]);
@@ -224,7 +229,9 @@ export function FriendsHub() {
     const friend = selectedFriend;
     const text = messageText.trim();
     if (!friend || !text) return;
+    const form = event.currentTarget as HTMLFormElement;
     await action("send-message", async () => {
+      await consent.accept(form);
       const response = await fetch(`/api/friends/${friend.friendshipId}/messages`, {
         method: "POST",
         headers: { ...actorHeader, "Content-Type": "application/json" },
@@ -359,7 +366,7 @@ export function FriendsHub() {
       </div>
 
       <ModalDialog className="friends-modal chat-modal" initialFocusRef={chatInput} onDismiss={() => setSelectedFriend(null)} open={Boolean(selectedFriend)} titleId={chatTitleId}>
-        {selectedFriend ? <><header><div><span className="section-kicker">{copy.message}</span><h2 id={chatTitleId}>{formatFriendsText(copy.chatWith, { name: selectedFriend.displayName })}</h2></div><button aria-label={copy.close} onClick={() => setSelectedFriend(null)} type="button"><X /></button></header><div className="friend-chat-log">{messages.length === 0 ? <p>{copy.chatEmpty}</p> : messages.map((message) => <article className={message.senderId === user?.id ? "is-mine" : ""} key={message.id}><strong>{message.senderId === user?.id ? user.displayName : message.senderName}</strong><p>{message.message}</p><time dateTime={message.createdAt}>{new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(message.createdAt))}</time></article>)}</div><form className="friend-chat-form" onSubmit={sendMessage}><input aria-label={copy.messagePlaceholder} maxLength={500} onChange={(event) => setMessageText(event.target.value)} placeholder={copy.messagePlaceholder} ref={chatInput} value={messageText} /><Button aria-label={copy.send} disabled={!messageText.trim() || busy === "send-message"} type="submit"><Send size={17} /></Button></form></> : null}
+        {selectedFriend ? <><header><div><span className="section-kicker">{copy.message}</span><h2 id={chatTitleId}>{formatFriendsText(copy.chatWith, { name: selectedFriend.displayName })}</h2></div><button aria-label={copy.close} onClick={() => setSelectedFriend(null)} type="button"><X /></button></header>{user ? <FriendSafetyActions key={`${selectedFriend.friendshipId}:${user.playerKey}`} friendshipId={selectedFriend.friendshipId} playerKey={user.playerKey} onBlocked={() => setMessages([])} /> : null}<div className="friend-chat-log">{messages.length === 0 ? <p>{copy.chatEmpty}</p> : messages.map((message) => <article className={message.senderId === user?.id ? "is-mine" : ""} key={message.id}><strong>{message.senderId === user?.id ? user.displayName : message.senderName}</strong><p>{message.message}</p><time dateTime={message.createdAt}>{new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(message.createdAt))}</time></article>)}</div><form className="friend-chat-form" onSubmit={sendMessage}>{consent.loaded && !consent.accepted ? <CommunityAgreement disabled={busy === "send-message"} /> : null}<input aria-label={copy.messagePlaceholder} maxLength={500} onChange={(event) => setMessageText(event.target.value)} placeholder={copy.messagePlaceholder} ref={chatInput} value={messageText} /><Button aria-label={copy.send} disabled={!consent.loaded || !messageText.trim() || busy === "send-message"} type="submit"><Send size={17} /></Button></form></> : null}
       </ModalDialog>
 
       <ModalDialog className="friends-modal profile-preview-modal" onDismiss={() => setProfile(null)} open={Boolean(profile)} titleId={profileTitleId}>

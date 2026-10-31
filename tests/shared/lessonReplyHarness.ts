@@ -8,7 +8,7 @@ export function registerLessonReplyTests(mobile: boolean) {
     if (!mobile) {
       // The website's server-side gate requires a real disposable PostgreSQL session.
       const identity = crypto.randomUUID().replaceAll("-", "");
-      const registered = await page.request.post("/api/auth/register", { data: {
+      const registered = await page.request.post("/api/auth/register", { headers: { "x-gostone-community-rules": "2026-10-30" }, data: {
         username: `reply_${identity.slice(0, 12)}`, email: `${identity}@example.test`, password: crypto.randomUUID(),
         startingStrength: "unspecified", knownRank: null, boardPlacement: "direct",
       } });

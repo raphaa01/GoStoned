@@ -107,6 +107,7 @@ export async function requestAccountDeletion(playerKey: string) {
     await client.query("DELETE FROM matchmaking_queue WHERE player_key = $1", [playerKey]);
     await client.query("DELETE FROM game_messages WHERE player_key = $1", [playerKey]);
     await client.query("DELETE FROM player_blocks WHERE blocker_key = $1 OR blocked_key = $1", [playerKey]);
+    await client.query("DELETE FROM moderation_cases WHERE reporter_key = $1 OR reported_key = $1", [playerKey]);
     await client.query("DELETE FROM player_reports WHERE reporter_key = $1 OR reported_key = $1", [playerKey]);
     await client.query("DELETE FROM puzzle_attempts WHERE player_key = $1", [playerKey]);
     await client.query("DELETE FROM player_rating_history WHERE player_key = $1", [playerKey]);

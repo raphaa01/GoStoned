@@ -1,5 +1,7 @@
 "use client";
 
+import { CommunityAgreement } from "./CommunityAgreement";
+import { COMMUNITY_RULES_HEADER, COMMUNITY_RULES_VERSION } from "@/lib/moderation/communityContract";
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,7 +38,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
     try {
       const response = await fetch("/api/auth/oauth/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [COMMUNITY_RULES_HEADER]: COMMUNITY_RULES_VERSION },
         body: JSON.stringify({
           username,
           startingStrength: strength.estimate,
@@ -135,6 +137,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
           <small id={usernameHintId}>{dictionary.auth.usernameHint}</small>
         </label>
 
+        <CommunityAgreement disabled={busy} />
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}

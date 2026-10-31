@@ -1,31 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const root = process.cwd();
 
 async function source(path: string) {
   return readFile(`${root}/${path}`, "utf8");
-}
-
-async function sourceTree(relativeRoot: string): Promise<Array<{ path: string; value: string }>> {
-  const absoluteRoot = path.join(root, relativeRoot);
-  const files: Array<{ path: string; value: string }> = [];
-  async function visit(directory: string): Promise<void> {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const absolutePath = path.join(directory, entry.name);
-      if (entry.isDirectory()) await visit(absolutePath);
-      else if (/\.[cm]?[jt]sx?$/.test(entry.name)) {
-        files.push({
-          path: path.relative(root, absolutePath),
-          value: await readFile(absolutePath, "utf8"),
-        });
-      }
-    }
-  }
-  await visit(absoluteRoot);
-  return files;
 }
 
 function reportTable(sql: string) {
@@ -105,24 +85,12 @@ test("production preflight verifies report table, index, constraints, RLS, and g
   assert.match(preflight, /client_roles_have_table_access/);
 });
 
-test("the player-facing action remains release-gated until triage exists", async () => {
-  const [runbook, gate, ...renderedTrees] = await Promise.all([
-    source("docs/player-reporting.md"),
-    source("lib/moderation/playerReportGate.ts"),
-    sourceTree("app/(en)"),
-    sourceTree("app/[locale]"),
-    sourceTree("components"),
+test("player reporting is paired with authenticated triage and an emergency disable switch", async () => {
+  const [runbook, gate, triage] = await Promise.all([
+    source("docs/player-reporting.md"), source("lib/moderation/playerReportGate.ts"), source("app/api/moderation/route.ts"),
   ]);
-  assert.match(runbook, /must not be presented to players until/i);
-  assert.match(runbook, /Name the person or team responsible for triage/i);
-  assert.match(runbook, /retention/i);
-  assert.match(gate, /value === "true"/);
-  const renderedSources = renderedTrees.flat();
-  for (const rendered of renderedSources) {
-    assert.doesNotMatch(
-      rendered.value,
-      /\/api\/games\/[\s\S]{0,80}\/report|playerReport|PLAYER_REPORT_CATEGORIES|reportGameOpponent/,
-      `reporting must remain absent from ${rendered.path}`,
-    );
-  }
+  assert.match(runbook, /rapha/);
+  assert.match(gate, /value === undefined \|\| value === "true"/);
+  assert.match(triage, /requireRequestUser/);
+  assert.match(triage, /isModerator/);
 });

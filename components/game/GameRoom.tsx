@@ -1558,6 +1558,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             selectedDisputeStone={selectedDisputeStone}
           />
           <ChatPanel
+            gameId={gameId}
             blockActionRef={blockActionRef}
             blockedByYou={opponent ? blockedByYou : null}
             blockBusy={blockBusy}

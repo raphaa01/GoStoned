@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { assertElf16kbAlignment } from "../lib/mobile/elfAlignment";
 import { cpus, homedir, platform } from "node:os";
 import { basename, delimiter, join } from "node:path";
 
@@ -128,13 +129,15 @@ for (const abi of ABIS) {
     `-DCMAKE_MAKE_PROGRAM=${ninja}`,
     `-DANDROID_ABI=${abi}`,
     "-DANDROID_PLATFORM=android-26",
+    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
     "-DUSE_BACKEND=EIGEN",
     `-DEIGEN3_INCLUDE_DIRS=${eigenSource}`,
     "-DNO_GIT_REVISION=1",
     "-DBUILD_DISTRIBUTED=0",
     "-DCMAKE_BUILD_TYPE=Release",
     "-DCMAKE_CXX_FLAGS=-DLITTLE_ENDIAN=1234 -DBIG_ENDIAN=4321 -DBYTE_ORDER=1234",
-    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections",
+    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--gc-sections,-z,max-page-size=16384",
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
   ], repository, environment);
   run(cmake, [
     "--build", build,
@@ -148,5 +151,6 @@ for (const abi of ABIS) {
   copyFileSync(join(build, "katago"), join(symbols, "libgostone_katago_exec.so"));
   copyFileSync(join(build, "katago"), destination);
   run(strip, [destination], repository, environment);
+  assertElf16kbAlignment(readFileSync(destination));
   console.log(`Built KataGo ${KATAGO_VERSION} for ${abi}: ${destination}`);
 }

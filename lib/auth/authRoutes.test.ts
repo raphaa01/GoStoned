@@ -29,6 +29,7 @@ function malformedRequest(path: string, address: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-gostone-community-rules": "2026-10-30",
       "x-real-ip": address,
     },
     body: "{",
@@ -54,6 +55,7 @@ function credentialRequest(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-gostone-community-rules": "2026-10-30",
       "x-real-ip": address,
       ...headers,
     },
@@ -461,6 +463,7 @@ test("successful registration exposes only the committed user and hardened sessi
   const client = {
     async query(sql: string, values: readonly unknown[] = []) {
       transactionStatements.push(sql.replace(/\s+/g, " ").trim());
+      if (sql.includes("INSERT INTO community_acceptances")) return { rows: [], rowCount: 1 };
       if (sql === "BEGIN" || sql.startsWith("SET LOCAL")) {
         return { rows: [], rowCount: 0 };
       }
@@ -529,6 +532,7 @@ test("successful registration exposes only the committed user and hardened sessi
   assert.match(accountStatement, /INSERT INTO player_rating_preferences/);
   assert.match(accountStatement, /INSERT INTO player_glicko2_ratings/);
   assert.deepEqual(transactionStatements.slice(3), [
+    "INSERT INTO community_acceptances (player_key, rules_version) VALUES ($1, $2) ON CONFLICT (player_key) DO UPDATE SET rules_version = EXCLUDED.rules_version, accepted_at = statement_timestamp()",
     "INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')",
     "WITH expired_sessions AS MATERIALIZED ( SELECT user_session.id FROM user_sessions AS user_session WHERE user_session.expires_at <= NOW() ORDER BY user_session.expires_at, user_session.id LIMIT 200 FOR UPDATE OF user_session SKIP LOCKED ) DELETE FROM user_sessions AS user_session USING expired_sessions AS expired WHERE user_session.id = expired.id",
     "COMMIT",
@@ -564,6 +568,7 @@ test("registration failures roll back the account and never set a session cookie
       const client = {
         async query(sql: string, values: readonly unknown[] = []) {
           transactionStatements.push(sql.replace(/\s+/g, " ").trim());
+          if (sql.includes("INSERT INTO community_acceptances")) return { rows: [], rowCount: 1 };
           if (sql === "BEGIN" || sql.startsWith("SET LOCAL")) {
             return { rows: [], rowCount: 0 };
           }
@@ -756,7 +761,8 @@ test("successful login clears the target and every shared-account attempt bucket
     "https://gostone.test/api/auth/login",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-real-ip": address },
+      headers: { "Content-Type": "application/json",
+      "x-gostone-community-rules": "2026-10-30", "x-real-ip": address },
       body: JSON.stringify({ username, password }),
     },
   )));
@@ -788,4 +794,13 @@ test("successful login clears the target and every shared-account attempt bucket
       "33333333-3333-4333-8333-333333333333",
     ),
   ]));
+});
+
+test("registration without current community agreement never creates an account", async () => {
+  let connected = false;
+  const pool = { query: async () => allowedRateLimitRow(), connect: async () => { connected = true; throw new Error("Unexpected account write"); } } as unknown as Pool;
+  const response = await withPool(pool, () => register(credentialRequest("/api/auth/register", "203.0.113.201", { "x-gostone-community-rules": "" })));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, "community_rules_required");
+  assert.equal(connected, false);
 });

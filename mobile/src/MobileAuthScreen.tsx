@@ -1,3 +1,4 @@
+import { MobilePublicLegal } from "./MobilePublicLegal";
 import { useEffect, useState } from "react";
 import { AuthForm } from "@/components/auth/AuthForm";
 import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
@@ -33,6 +34,7 @@ export function MobileAuthScreen({ mode, returnTo, oauthError }: {
             window.dispatchEvent(new Event("gostone:navigation"));
           });
         }} />
+      <MobilePublicLegal />
     </main>
   );
 }

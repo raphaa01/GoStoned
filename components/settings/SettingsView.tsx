@@ -1,5 +1,6 @@
 "use client";
 
+import { getCommunityCopy } from "@/lib/i18n/community";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -21,6 +22,7 @@ export function SettingsView({ children }: { children?: React.ReactNode }) {
     <BoardPlacementSettings key={user?.playerKey} />
     <AppearanceSettings />
     <AccountDeletionRequest />
+    {user?.moderator ? <Link href={href("/moderation")}>{getCommunityCopy(locale).moderation}</Link> : null}
     {children}
   </div>;
 }
