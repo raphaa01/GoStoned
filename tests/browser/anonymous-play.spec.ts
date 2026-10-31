@@ -666,6 +666,7 @@ async function installApiHarness(
     }
 
     const method = request.method();
+    if (url.pathname === "/api/community-rules") { await route.fulfill({ json: { ok: true, actor: PLAYER_KEY, accepted: true } }); return; }
     if (method === "GET" && url.pathname === "/api/auth/session" && exactQuery(url, {})) {
       notifySessionRequested();
       await sessionGate;

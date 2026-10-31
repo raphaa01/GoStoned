@@ -1,5 +1,7 @@
 "use client";
 
+import { CommunityAgreement } from "./CommunityAgreement";
+import { COMMUNITY_RULES_HEADER, COMMUNITY_RULES_VERSION } from "@/lib/moderation/communityContract";
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -76,7 +78,7 @@ export function AuthForm({
     try {
       const response = await fetch(`/api/auth/${mode}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(mode === "register" ? { [COMMUNITY_RULES_HEADER]: COMMUNITY_RULES_VERSION } : {}) },
         body: JSON.stringify(mode === "register"
           ? {
               username,
@@ -256,6 +258,7 @@ export function AuthForm({
           </span>
         </label>
 
+        {registering ? <CommunityAgreement disabled={busy} /> : null}
         {error ? <p className="form-error" id={errorId} role="alert">{error.message}</p> : null}
         <button className="button button--primary button--lg auth-submit" disabled={busy} type="submit">
           {busy ? <LoaderCircle className="spin" size={19} /> : null}

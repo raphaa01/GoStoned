@@ -137,6 +137,7 @@ for (const [locale, dictionary] of [["en", en], ["de", de]] as const) {
     await page.getByLabel(dictionary.auth.username).fill("global_player");
     await page.getByLabel(locale === "de" ? "E-Mail-Adresse" : "Email address").fill("player@example.test");
     await page.getByLabel(dictionary.auth.password).fill("correct-horse-battery");
+    await page.locator('input[name="communityRules"]').check();
     await page.getByRole("button", { name: dictionary.auth.createAccount }).click();
     const onboardingDialog = page.getByRole("dialog", { name: onboarding.canPlayTitle });
     await expect(onboardingDialog).toBeVisible();

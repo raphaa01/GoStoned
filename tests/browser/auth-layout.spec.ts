@@ -24,6 +24,7 @@ test("keeps account creation first and moves experience setup into onboarding", 
   await page.getByRole("textbox", { name: "Username" }).fill("new_player");
   await page.getByLabel("Email address").fill("player@example.test");
   await page.getByLabel("Password").fill("correct-horse-battery");
+  await page.locator('input[name="communityRules"]').check();
   await page.getByRole("button", { name: "Create account" }).click();
   const onboardingDialog = page.getByRole("dialog", { name: onboarding.canPlayTitle });
   await expect(onboardingDialog).toBeVisible();

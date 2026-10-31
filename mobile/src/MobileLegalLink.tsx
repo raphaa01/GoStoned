@@ -3,7 +3,7 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
-export type MobileLegalPath = "/privacy" | "/impressum" | "/delete-account";
+export type MobileLegalPath = "/privacy" | "/impressum" | "/delete-account" | "/community-rules";
 
 export function MobileLegalLink({ pathname, children, className }: {
   pathname: MobileLegalPath;

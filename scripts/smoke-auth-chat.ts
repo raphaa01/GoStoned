@@ -57,6 +57,7 @@ function json(
     method,
     headers: {
       "Content-Type": "application/json",
+      "x-gostone-community-rules": "2026-10-30",
       ...(cookie ? { Cookie: cookie } : {}),
       ...(expectedPlayerKey
         ? { [EXPECTED_PLAYER_HEADER]: expectedPlayerKey }

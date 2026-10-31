@@ -35,6 +35,9 @@ class ChatRoutePool {
   async query(sql: string) {
     const normalized = sql.replace(/\s+/g, " ").trim();
     this.statements.push(normalized);
+    if (normalized.includes("FROM community_acceptances") && normalized.includes("AS accepted")) return { rows: [{ accepted: true, restricted: false }], rowCount: 1 };
+    if (normalized.startsWith("SELECT 1 FROM player_restrictions") || normalized.startsWith("SELECT 1 FROM game_messages WHERE game_id") || normalized.startsWith("INSERT INTO community_acceptances")) return { rows: [], rowCount: 0 };
+
     if (normalized.includes("FROM user_sessions s")) {
       return {
         rows: [{
@@ -76,6 +79,9 @@ class ChatRoutePool {
   async transactionQuery(sql: string, values: readonly unknown[] = []) {
     const normalized = sql.replace(/\s+/g, " ").trim();
     this.statements.push(normalized);
+    if (normalized.includes("FROM community_acceptances") && normalized.includes("AS accepted")) return { rows: [{ accepted: true, restricted: false }], rowCount: 1 };
+    if (normalized.startsWith("SELECT 1 FROM player_restrictions") || normalized.startsWith("SELECT 1 FROM game_messages WHERE game_id") || normalized.startsWith("INSERT INTO community_acceptances")) return { rows: [], rowCount: 0 };
+
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(normalized) || normalized.startsWith("SET LOCAL")) {
       return { rows: [], rowCount: 0 };
     }

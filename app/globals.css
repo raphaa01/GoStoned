@@ -4151,3 +4151,23 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 .account-email-gate .auth-card { width: min(100%, 480px); margin: auto; }
 .account-email-gate .auth-card > p { margin-block: 16px; line-height: 1.6; }
 .account-email-gate .auth-card > button { margin-top: 16px; }
+
+/* Quiet community controls; long policy copy is opened only on request. */
+.community-agreement { display: flex !important; align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.5; grid-column: 1 / -1; }
+.community-agreement input[type="checkbox"] { appearance: auto; width: 16px; height: 16px; min-height: 0; flex: 0 0 16px; }
+.community-rules-link { border: 0; padding: 0; background: transparent; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }
+.community-report-dialog, .community-rules-dialog { width: min(100%, 520px); max-height: 85dvh; overflow: auto; padding: 24px; background: var(--surface, var(--bg)); color: var(--text); border: 1px solid var(--border); }
+.community-report-dialog label { display: grid; gap: 8px; margin-block: 20px; }
+.community-report-dialog select { width: 100%; max-width: 100%; min-height: 44px; color: inherit; background: var(--bg); }
+.community-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.community-rules p { line-height: 1.65; margin-block: 16px; }
+.community-rules-dialog .community-rules { padding: 0; margin: 0; }
+.community-rules-dialog .community-rules > h1 { display: none; }
+.mobile-public-legal { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; margin: 18px 0; font-size: 11px; opacity: .75; }
+.mobile-auth-screen > .mobile-public-legal { width: min(100%, 480px); }
+.chat-panel > header { flex-wrap: wrap; gap: 8px; }
+.friend-safety-actions { display: flex; gap: 12px; }
+.moderation-board { width: min(100%, 900px); margin: 30px auto; padding: 16px; }
+.moderation-board > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.moderation-case { padding: 20px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.moderation-case details { max-height: 420px; overflow: auto; }

@@ -1,3 +1,4 @@
+import { getCommunityCopy } from "./community";
 import { kyPrivacy } from "./catalogs/ky";
 import type { Locale, LocalizedText } from "./config";
 import { getAccountDeletionCopy } from "./accountDeletion";
@@ -522,6 +523,7 @@ const recoveryPurpose: LocalizedText = {
 
 export function getPrivacyCopy(locale: Locale): PrivacyCopy {
   const deletion = getAccountDeletionCopy(locale);
+  const moderation = getCommunityCopy(locale);
   const deletionSection = {
     title: deletion.title,
     paragraphs: [deletion.inAppIntro, deletion.data,
@@ -537,7 +539,7 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
     processors: { ...kyPrivacy.processors, entries: [...kyPrivacy.processors.entries, {
       name: "Resend", purpose: recoveryPurpose.ky!, privacyUrl: "https://resend.com/legal/privacy-policy",
     }] },
-    sections: kyPrivacy.sections.map((section, index) => index === 8 ? { ...section, paragraphs: [...section.paragraphs, ...deletionSection.paragraphs] } : index === 2 ? {
+    sections: kyPrivacy.sections.map((section, index) => index === 8 ? { ...section, paragraphs: [...section.paragraphs, ...deletionSection.paragraphs, moderation.retention] } : index === 2 ? {
       ...section,
       paragraphs: [...section.paragraphs, "Ошондой эле баракча көрүнүп турган убакыт өлчөнөт. Ар 30 секундда, баракча алмашканда же жашырылганда GoStone тазаланган жолду, көрүнгөн миллисекунддарды жана ачылыш санын алат. Маалымат базасында баракча боюнча сааттык суммалар гана сакталат; эсеп, келүүчү, сеанс же IP идентификаторлору сакталбайт. Кукилер жана браузер сактагычы колдонулбайт. Жашырылган өтмөктөр эсептелбейт; Do Not Track кошумча өлчөөнү өчүрөт. Максат — мазмунду жана колдонууга ыңгайлуулукту жакшыртуу; укуктук негиз — GDPR 6(1)(f). Анонимдүү суммалар тенденцияларды талдоо үчүн сакталат."],
     } : section),
@@ -562,7 +564,7 @@ export function getPrivacyCopy(locale: Locale): PrivacyCopy {
       paragraphs: [
         ...(section.paragraphs?.map((paragraph) => localize(locale, paragraph)) ?? []),
         ...(section === sections[3] ? [localize(locale, recoveryPurpose)] : []),
-        ...(index === 8 ? deletionSection.paragraphs : []),
+        ...(index === 8 ? [...deletionSection.paragraphs, moderation.retention] : []),
       ],
       items: section.items?.map((item) => localize(locale, item)) ?? [],
     })),

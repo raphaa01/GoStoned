@@ -170,6 +170,9 @@ jobs:
       - name: Verify self-service account deletion and retained game integrity
         run: npx tsx scripts/smoke-account-deletion.ts
 
+      - name: Verify community reporting, moderation and erasure
+        run: npx tsx scripts/smoke-community-moderation.ts
+
       - name: Verify board-design persistence and earned unlocks
         run: npx tsx scripts/smoke-board-designs.ts
 

@@ -1,5 +1,6 @@
 import { query, withTransaction } from "@/lib/db";
 import { containsBannedChatContent } from "@/lib/moderation/chatModeration";
+import { assertCommunityParticipation } from "@/lib/moderation/communityService";
 import {
   isPlayerPairBlocked,
   lockPlayerPair,
@@ -59,7 +60,10 @@ export async function getGameMessages(
             AND $2 IN (black_player_key, white_player_key)
             AND black_player_key <> white_player_key
        ), availability AS (
-         SELECT participant.opponent_key NOT LIKE 'bot:%' AND NOT (
+         SELECT participant.opponent_key NOT LIKE 'bot:%'
+         AND NOT EXISTS (SELECT 1 FROM game_messages WHERE game_id = $1 AND moderated_at IS NOT NULL)
+         AND NOT EXISTS (SELECT 1 FROM player_restrictions WHERE player_key IN ($2, participant.opponent_key) AND restricted_until > statement_timestamp())
+         AND NOT (
            EXISTS (
              SELECT 1 FROM player_blocks
               WHERE blocker_key = $2 AND blocked_key = participant.opponent_key
@@ -125,7 +129,7 @@ export async function sendGameMessage(
     );
   }
   return withTransaction(async (client) => {
-    const opponentKey = await resolveGameOpponent(client, gameId, playerKey);
+    const opponentKey = await resolveGameOpponent(client, gameId, playerKey, { lockGame: true });
     if (opponentKey.startsWith("bot:")) {
       throw new GameServiceError(
         "Chat is unavailable for bot games.",
@@ -141,6 +145,9 @@ export async function sendGameMessage(
         "chat_unavailable",
       );
     }
+    await assertCommunityParticipation(playerKey, client);
+    const moderated = await client.query("SELECT 1 FROM game_messages WHERE game_id = $1 AND moderated_at IS NOT NULL LIMIT 1", [gameId]);
+    if (moderated.rowCount) throw new GameServiceError("Chat is unavailable for this game.", 409, "chat_unavailable");
     const result = await client.query<MessageRow>(
       `WITH inserted AS (
          INSERT INTO game_messages (game_id, player_key, message)

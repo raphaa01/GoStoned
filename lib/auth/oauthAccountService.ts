@@ -19,6 +19,7 @@ import {
 } from "@/lib/rating/ratingFinalizer";
 import { AuthError, registrationDatabaseError } from "./accountService";
 import { normalizeUsername } from "./password";
+import { acceptCommunityRules } from "@/lib/moderation/communityService";
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
@@ -159,6 +160,7 @@ export async function completeOAuthRegistration(
   usernameValue: unknown,
   startingStrength: StartingStrength,
   boardPlacement: BoardPlacementPreference = DEFAULT_BOARD_PLACEMENT,
+  rulesAccepted = false,
 ): Promise<OAuthRegistration> {
   if (!isOAuthRegistrationTokenFormat(registrationToken)) {
     throw new AuthError(
@@ -300,6 +302,7 @@ export async function completeOAuthRegistration(
     }
 
     const user = serializeAuthUser(account);
+    if (rulesAccepted) await acceptCommunityRules(user.playerKey, client);
     const token = await createSessionInTransaction(client, user.id);
     await client.query(
       "DELETE FROM oauth_registration_intents WHERE token_hash = $1",

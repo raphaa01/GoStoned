@@ -1,3 +1,4 @@
+import { COMMUNITY_RULES_HEADER, COMMUNITY_RULES_VERSION } from "@/lib/moderation/communityContract";
 import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
 import { AuthError, registerAccount } from "@/lib/auth/accountService";
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
     assertAuthMutationRequest(request, { requireJson: true });
     await consumeIpPolicyRateLimit(request, RATE_LIMIT_POLICIES.registerAddress);
     const credentials = await readRegistrationRequest(request);
+    if (request.headers.get(COMMUNITY_RULES_HEADER) !== COMMUNITY_RULES_VERSION) throw new AuthError("Accept the community rules first.", 400, "community_rules_required");
     await consumeRateLimit(
       request,
       RATE_LIMIT_POLICIES.registerTarget.scope,
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
       credentials.email,
       credentials.startingStrength,
       credentials.boardPlacement,
+      true,
     );
     const response = noStoreJson({ ok: true, user }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, {

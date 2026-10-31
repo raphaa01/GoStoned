@@ -1,3 +1,4 @@
+import { MobilePublicLegal } from "./MobilePublicLegal";
 import {
   ArrowRight,
   BookOpen,
@@ -196,6 +197,7 @@ export function MobileHome() {
           </div>
         </section>
       ) : null}
+      {!user ? <MobilePublicLegal /> : null}
     </div>
   );
 }

@@ -106,7 +106,7 @@ async function withPool<T>(
   globalThis.goStonedDbPool = pool as unknown as Pool;
   globalThis.goStoneEphemeralRateLimits = new Map();
   if (reportingEnabled) process.env.PLAYER_REPORTING_ENABLED = "true";
-  else delete process.env.PLAYER_REPORTING_ENABLED;
+  else process.env.PLAYER_REPORTING_ENABLED = "false";
   try {
     return await action();
   } finally {

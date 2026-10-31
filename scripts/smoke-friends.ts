@@ -1,3 +1,4 @@
+import { acceptCommunityRules } from "@/lib/moderation/communityService";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { closePool, query, withTransaction } from "@/lib/db";
@@ -40,6 +41,7 @@ async function main() {
     const accepted = await getFriendsDashboard(firstId);
     assert.equal(accepted.friends[0]?.friendshipId, friendshipId);
 
+    await acceptCommunityRules(`user:${firstId}`);
     const sent = await sendFriendMessage(firstId, friendshipId, "Ready for a friendly game?");
     const messages = await getFriendMessages(secondId, friendshipId, 0);
     assert.equal(messages[0]?.id, sent.id);

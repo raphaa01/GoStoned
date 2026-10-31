@@ -1,3 +1,4 @@
+import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { NextRequest } from "next/server";
 import { apiError, noStoreJson } from "@/lib/api/responses";
 import { AuthError } from "@/lib/auth/accountService";
@@ -36,49 +37,8 @@ function assertCanonicalGameId(gameId: string): void {
 }
 
 async function readBoundedCategory(request: NextRequest) {
-  if (request.body === null) throw invalidRequest();
-  const contentLength = request.headers.get("content-length");
-  if (contentLength !== null) {
-    const declaredLength = Number(contentLength);
-    if (
-      !Number.isSafeInteger(declaredLength)
-      || declaredLength < 1
-      || declaredLength > MAX_REPORT_BODY_BYTES
-    ) {
-      throw invalidRequest();
-    }
-  }
-
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let body = "";
-  let bytesRead = 0;
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      bytesRead += chunk.value.byteLength;
-      if (bytesRead > MAX_REPORT_BODY_BYTES) {
-        await reader.cancel();
-        throw invalidRequest();
-      }
-      body += decoder.decode(chunk.value, { stream: true });
-    }
-    body += decoder.decode();
-  } catch (error) {
-    if (error instanceof GameServiceError) throw error;
-    throw invalidRequest();
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    throw invalidRequest();
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw invalidRequest();
-  }
+  const parsed = await readBoundedJsonObject(request, { maxBytes: MAX_REPORT_BODY_BYTES, maxChunks: MAX_REPORT_BODY_BYTES,
+    idleTimeoutMs: 1000, totalTimeoutMs: 2000, invalidJson: invalidRequest, invalidObject: invalidRequest });
   const entries = Object.entries(parsed);
   if (
     entries.length !== 1

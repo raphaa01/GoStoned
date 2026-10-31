@@ -66,6 +66,19 @@ async function checkProductionSchema(): Promise<void> {
     throw new Error("Production database schema is stale: run migration 056 for self-service account deletion.");
   }
 
+  const moderation = await query<{ ready: boolean }>(`SELECT
+    to_regclass('public.moderation_cases') IS NOT NULL AND
+    to_regclass('public.moderation_moderators') IS NOT NULL AND
+    to_regclass('public.moderation_decisions') IS NOT NULL AND
+    to_regclass('public.moderation_audit') IS NOT NULL AND
+    to_regclass('public.community_acceptances') IS NOT NULL AND
+    to_regclass('public.player_restrictions') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'game_messages' AND column_name = 'moderated_at') AND
+    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'friend_messages' AND column_name = 'moderated_at') AS ready`);
+  if (!moderation.rows[0]?.ready) throw new Error("Production database schema is stale: run migration 057 for community moderation.");
+  const moderator = await query<{ ready: boolean }>("SELECT EXISTS (SELECT 1 FROM moderation_moderators) AS ready");
+  if (!moderator.rows[0]?.ready) throw new Error("Production moderation has no appointed operator: provision the approved account before deployment.");
+
   const result = await query<SchemaRow>(
     `SELECT
        (SELECT column_default FROM information_schema.columns

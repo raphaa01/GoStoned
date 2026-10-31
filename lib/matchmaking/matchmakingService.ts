@@ -1,3 +1,4 @@
+import { assertNotRestricted } from "@/lib/moderation/communityService";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { botDifficultyForRating } from "@/lib/bot/difficulty";
@@ -526,6 +527,7 @@ export async function joinMatchmaking(
   const timeControl = getTimeControl(timeControlId);
   const rules = newGameRulesConfiguration();
   return withTransaction(async (client) => {
+    await assertNotRestricted(playerKey, client);
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
       [`matchmaking-pool:v1:${boardSize}:${timeControlId}:${rules.rulesProfile}`],
