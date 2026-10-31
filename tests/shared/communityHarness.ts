@@ -45,4 +45,27 @@ export function communityFlow(mobile: boolean) {
     expect(payloads).toEqual([{ category: "threat_or_sexual_safety" }, { category: "threat_or_sexual_safety" }]);
     await expect(page.locator(".go-board .stone")).toHaveCount(stones);
   });
+
+  test("a slow report can be dismissed while its submission completes", async ({ page }) => {
+    await installHarness(page);
+    let finish!: () => void;
+    const release = new Promise<void>(resolve => { finish = resolve; });
+    await page.route(`**/api/games/${GAME_ID}/report`, async route => {
+      await release;
+      await route.fulfill({ json: { ok: true, actor: USER.playerKey, reported: true } });
+    });
+    try {
+      await page.goto(`/de/game/${GAME_ID}`);
+      if (mobile) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+      await expect(page.locator(".go-board .stone")).toHaveCount(2);
+      await page.getByRole("button", { name: "Spieler melden", exact: true }).click();
+      await page.getByRole("button", { name: "Meldung senden", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Wird gesendet…", exact: true })).toBeDisabled();
+      await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.locator(".go-board .stone")).toHaveCount(2);
+      finish();
+      await expect(page.getByRole("button", { name: "Meldung eingegangen", exact: true })).toBeDisabled();
+    } finally { finish(); }
+  });
 }

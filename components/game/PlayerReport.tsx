@@ -17,20 +17,22 @@ export function PlayerReport({ gameId, friendshipId, playerKey }: { gameId?: str
   const pending = useRef(false); const action = useRef<HTMLButtonElement>(null);
   async function submit() {
     if (pending.current) return; pending.current = true; setBusy(true); setError(false);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(friendshipId ? `/api/friends/${friendshipId}/report` : `/api/games/${gameId}/report`, { method: "POST", headers: { "Content-Type": "application/json", [EXPECTED_PLAYER_HEADER]: playerKey }, body: JSON.stringify({ category }) });
+      const response = await fetch(friendshipId ? `/api/friends/${friendshipId}/report` : `/api/games/${gameId}/report`, { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json", [EXPECTED_PLAYER_HEADER]: playerKey }, body: JSON.stringify({ category }) });
       const body = await readApi<{ actor: string; reported: boolean }>(response); assertResponseActor(body.actor, playerKey);
       if (body.reported !== true) throw new Error(); setSent(true); setOpen(false);
-    } catch { setError(true); } finally { pending.current = false; setBusy(false); }
+    } catch { setError(true); } finally { window.clearTimeout(timeout); pending.current = false; setBusy(false); }
   }
   return <><button className="chat-safety-action" type="button" ref={action} onClick={() => setOpen(true)} disabled={sent} aria-label={sent ? copy.sent : copy.reportTitle}>
     <Flag aria-hidden="true" size={15} />{sent ? copy.sent : copy.report}
   </button>
-    <ModalDialog open={open} onDismiss={busy ? undefined : () => setOpen(false)} titleId={title} finalFocusRef={action} className="community-report-dialog">
+    <ModalDialog open={open} onDismiss={() => setOpen(false)} titleId={title} finalFocusRef={action} className="community-report-dialog">
       <h2 id={title}>{copy.reportTitle}</h2><label>{copy.category}<select aria-label={copy.category} value={category} disabled={busy} onChange={e => setCategory(e.target.value)}>
         {PLAYER_REPORT_CATEGORIES.map((value, index) => <option key={value} value={value}>{copy.categories[index]}</option>)}
       </select></label>{error ? <p role="alert">{copy.failed}</p> : null}
-      <div className="community-actions"><button type="button" className="button" disabled={busy} onClick={() => setOpen(false)}>{copy.cancel}</button>
+      <div className="community-actions"><button type="button" className="button" onClick={() => setOpen(false)}>{copy.cancel}</button>
         <button type="button" className="button button--primary" disabled={busy} onClick={() => void submit()}>{busy ? copy.pending : copy.send}</button></div>
     </ModalDialog>
     {sent ? <span className="sr-only" role="status">{copy.sent}</span> : null}
