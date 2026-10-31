@@ -31,7 +31,7 @@ export function ModerationBoard() {
     {cases?.map(item => <article key={item.id} className="moderation-case"><h2>{item.reportedName}</h2>
       <p>{copy.categories[PLAYER_REPORT_CATEGORIES.indexOf(item.category as typeof PLAYER_REPORT_CATEGORIES[number])]} · <time>{new Date(item.createdAt).toLocaleString(locale)}</time></p>
       {item.decision ? <p>{copy[item.decision]}</p> : null}
-      <details><summary>{copy.evidence}</summary>{item.messages.map(message => <p key={message.id}><strong>{message.playerKey}</strong>{": "}{message.message}</p>)}</details>
+      <details><summary>{copy.evidence}</summary>{item.messages.map(message => <p key={message.id}><strong>{message.playerKey === item.reportedKey ? item.reportedName : message.playerKey}</strong>{": "}{message.message}</p>)}</details>
       <div className="community-actions">{MODERATION_ACTIONS.filter(action => closed ? action === "restore" && item.decision !== "restore" : action !== "restore").map(action => <button key={action} className="button" disabled={busy} onClick={() => void decide(item.id, action)}>{copy[action]}</button>)}</div>
     </article>)}
   </section>;

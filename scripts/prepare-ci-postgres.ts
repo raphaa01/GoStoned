@@ -81,7 +81,7 @@ async function run(): Promise<void> {
   const existingClientRoles = await query<{ role_name: string }>(
     `SELECT rolname AS role_name
        FROM pg_roles
-      WHERE rolname IN ('anon', 'authenticated', 'gostone_ci_runner')`,
+      WHERE rolname IN ('anon', 'authenticated', 'gostone_ci_runner', 'gostone_app')`,
   );
   assert.equal(existingClientRoles.rows.length, 0, "CI smoke roles already exist.");
 
@@ -105,6 +105,12 @@ async function run(): Promise<void> {
                           NOINHERIT NOREPLICATION NOBYPASSRLS`);
     await client.query(`CREATE ROLE authenticated NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
                           NOINHERIT NOREPLICATION NOBYPASSRLS`);
+    await client.query(`CREATE ROLE gostone_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+                          NOINHERIT NOREPLICATION NOBYPASSRLS`);
+    // Reproduce production installation defaults, so migrations must explicitly
+    // narrow privileges on moderator membership and the append-only audit.
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE gostone_ci_runner IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO gostone_app`);
     await client.query("ALTER DATABASE gostone_ci OWNER TO gostone_ci_runner");
   });
   await closePool();

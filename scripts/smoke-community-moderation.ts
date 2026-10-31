@@ -57,6 +57,16 @@ async function run() {
     const access = await query<{ allowed: boolean }>("SELECT has_table_privilege('anon',$1,'SELECT') AS allowed", [table]);
     assert.equal(access.rows[0].allowed, false);
   }
+  const runtime = await query("SELECT 1 FROM pg_roles WHERE rolname='gostone_app'");
+  if (process.env.CI === "true") assert.equal(runtime.rowCount, 1);
+  if (runtime.rowCount) {
+    const grants = await query<{ membership_read: boolean; membership_write: boolean; audit_append: boolean; audit_mutate: boolean }>(`SELECT
+      has_table_privilege('gostone_app','moderation_moderators','SELECT') AS membership_read,
+      (has_table_privilege('gostone_app','moderation_moderators','INSERT') OR has_table_privilege('gostone_app','moderation_moderators','UPDATE') OR has_table_privilege('gostone_app','moderation_moderators','DELETE')) AS membership_write,
+      has_table_privilege('gostone_app','moderation_audit','SELECT,INSERT') AS audit_append,
+      (has_table_privilege('gostone_app','moderation_audit','UPDATE') OR has_table_privilege('gostone_app','moderation_audit','DELETE')) AS audit_mutate`);
+    assert.deepEqual(grants.rows[0], { membership_read: true, membership_write: false, audit_append: true, audit_mutate: false });
+  }
   await query("DELETE FROM moderation_moderators WHERE user_id=$1", [moderator.id]);
   await assert.rejects(moderationQueue(moderator.id), { code: "not_found" });
   await requestAccountDeletion(reported.playerKey);

@@ -4,7 +4,7 @@ Owner: **rapha**, explicitly appointed by the product owner. Migration 057 resol
 
 ## Release and access
 
-Apply numbered migration `057_community_moderation.sql` with `npm run db:migrate` before deployment. Production preflight rejects a missing schema. New installations enable reporting by default; `PLAYER_REPORTING_ENABLED=false` is the emergency switch for game report intake. Remove any old false setting when launching. Both native clients require rebuild/sync and a new signed store build; a server merge cannot update installed bundles.
+Apply numbered migrations `057_community_moderation.sql` and `058_moderation_runtime_privileges.sql` with `npm run db:migrate` before deployment. Production preflight rejects a missing schema. New installations enable reporting by default; `PLAYER_REPORTING_ENABLED=false` is the emergency switch for game report intake. Remove any old false setting when launching. Both native clients require rebuild/sync and a new signed store build; a server merge cannot update installed bundles.
 
 Rapha opens Profile → Settings → Moderation. The same panel works on web, iOS and Android. Nonmoderators receive no navigation link; every server page/API/service authenticates independently. The runtime database role cannot provision moderator memberships. An authorized database operator may revoke a UUID by deleting its membership; the next request loses access. No credentials belong in Git.
 

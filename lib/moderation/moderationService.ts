@@ -6,7 +6,7 @@ export async function isModerator(userId: string): Promise<boolean> {
   const result = await query<{ allowed: boolean }>("SELECT EXISTS (SELECT 1 FROM moderation_moderators WHERE user_id = $1) AS allowed", [userId]);
   return result.rows[0]?.allowed === true;
 }
-export type ModerationCase = { id: string; category: string; createdAt: string; reportedName: string; decision: ModerationAction | null; messages: Array<{ id: string; playerKey: string; message: string }> };
+export type ModerationCase = { id: string; category: string; createdAt: string; reportedName: string; reportedKey: string; decision: ModerationAction | null; messages: Array<{ id: string; playerKey: string; message: string }> };
 export async function moderationQueue(moderatorId: string, closed = false): Promise<ModerationCase[]> {
   if (!await isModerator(moderatorId)) throw new GameServiceError("Not found.", 404, "not_found");
   await query(`DELETE FROM game_messages WHERE id IN (SELECT id FROM game_messages WHERE moderated_at < statement_timestamp() - INTERVAL '90 days' ORDER BY id LIMIT 1000)`);
@@ -14,12 +14,12 @@ export async function moderationQueue(moderatorId: string, closed = false): Prom
   await query(`DELETE FROM moderation_cases WHERE id IN (SELECT case_id FROM moderation_decisions WHERE decided_at < statement_timestamp() - INTERVAL '180 days' ORDER BY decided_at LIMIT 1000)`);
   const result = await query<ModerationCase>(`
     SELECT r.id, (SELECT action FROM moderation_decisions d WHERE d.case_id = r.id) AS decision, r.category_code AS category, r.created_at::text AS "createdAt",
-      COALESCE(u.display_name, u.username, 'Guest') AS "reportedName",
+      COALESCE(u.display_name, u.username, 'Guest') AS "reportedName", r.reported_key AS "reportedKey",
       CASE WHEN r.context_kind = 'game' THEN
-        COALESCE((SELECT jsonb_agg(m ORDER BY m.id) FROM (
+        COALESCE((SELECT jsonb_agg(m ORDER BY m.id::bigint) FROM (
           SELECT id::text, player_key AS "playerKey", message FROM game_messages WHERE game_id = r.context_id ORDER BY id DESC LIMIT 100
         ) m), '[]'::jsonb)
-      ELSE COALESCE((SELECT jsonb_agg(m ORDER BY m.id) FROM (
+      ELSE COALESCE((SELECT jsonb_agg(m ORDER BY m.id::bigint) FROM (
           SELECT id::text, 'user:' || sender_id::text AS "playerKey", message FROM friend_messages WHERE friendship_id = r.context_id ORDER BY id DESC LIMIT 100
         ) m), '[]'::jsonb) END AS messages
     FROM moderation_cases r LEFT JOIN users u ON r.reported_key = 'user:' || u.id::text

@@ -78,6 +78,13 @@ async function checkProductionSchema(): Promise<void> {
   if (!moderation.rows[0]?.ready) throw new Error("Production database schema is stale: run migration 057 for community moderation.");
   const moderator = await query<{ ready: boolean }>("SELECT EXISTS (SELECT 1 FROM moderation_moderators) AS ready");
   if (!moderator.rows[0]?.ready) throw new Error("Production moderation has no appointed operator: provision the approved account before deployment.");
+  const privileges = await query<{ limited: boolean }>(`SELECT
+    NOT has_table_privilege(current_user, 'moderation_moderators', 'INSERT') AND
+    NOT has_table_privilege(current_user, 'moderation_moderators', 'UPDATE') AND
+    NOT has_table_privilege(current_user, 'moderation_moderators', 'DELETE') AND
+    NOT has_table_privilege(current_user, 'moderation_audit', 'UPDATE') AND
+    NOT has_table_privilege(current_user, 'moderation_audit', 'DELETE') AS limited`);
+  if (!privileges.rows[0]?.limited) throw new Error("Production moderation privileges are too broad: apply migration 058 and use the restricted runtime role.");
 
   const result = await query<SchemaRow>(
     `SELECT
