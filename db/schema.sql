@@ -4172,7 +4172,7 @@ BEGIN
 END $$;
 
 -- Remove newly introduced personal state through existing account/guest erasure.
-CREATE OR REPLACE FUNCTION cleanup_community_identity() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION cleanup_community_identity() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE identity_key TEXT;
 BEGIN
   identity_key := CASE WHEN TG_TABLE_NAME = 'users' THEN 'user:' || (to_jsonb(OLD)->>'id')
@@ -4187,7 +4187,7 @@ DROP TRIGGER IF EXISTS guests_community_cleanup ON guest_sessions;
 CREATE TRIGGER guests_community_cleanup AFTER DELETE ON guest_sessions FOR EACH ROW EXECUTE FUNCTION cleanup_community_identity();
 
 -- Capture immutable game reports atomically, including clients released earlier.
-CREATE OR REPLACE FUNCTION enqueue_game_moderation_case() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION enqueue_game_moderation_case() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 BEGIN
   INSERT INTO moderation_cases (context_kind, context_id, reporter_key, reported_key, category_code, created_at)
   VALUES ('game', NEW.game_id, NEW.reporter_key, NEW.reported_key, NEW.category_code, NEW.created_at) ON CONFLICT DO NOTHING;
