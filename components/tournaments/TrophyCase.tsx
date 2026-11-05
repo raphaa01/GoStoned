@@ -30,9 +30,9 @@ export function TrophyCase({ userId }: { userId?: string }) {
           headers: { [EXPECTED_PLAYER_HEADER]: identity },
           signal,
         },
-      ).then(readApi<{ trophies: TournamentTrophy[] }>);
+      ).then(readApi<{ trophies?: TournamentTrophy[] }>);
       if (!signal?.aborted) {
-        setTrophies(result.trophies);
+        setTrophies(Array.isArray(result.trophies) ? result.trophies : []);
         setError(false);
       }
     },

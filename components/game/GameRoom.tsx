@@ -1352,7 +1352,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
           {connectionLabel}
         </span>
         <LanguageSwitcher />
-        {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink gameId={game.id} /> : null}
+        {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink gameId={game.id} finished={game.status === "finished"} /> : null}
         <button
           className="game-exit"
           disabled={busy && gameInteractionAllowed}

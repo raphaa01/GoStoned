@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
@@ -70,9 +70,16 @@ export function TournamentNotice() {
   );
 }
 
-export function TournamentGameLink({ gameId }: { gameId: string }) {
+export function TournamentGameLink({
+  gameId,
+  finished = false,
+}: {
+  gameId: string;
+  finished?: boolean;
+}) {
   const { user } = useAuth();
   const { href, locale } = useI18n();
+  const router = useRouter();
   const [id, setId] = useState<string | null>(null);
   useEffect(() => {
     if (!user) return;
@@ -91,6 +98,9 @@ export function TournamentGameLink({ gameId }: { gameId: string }) {
       .catch(() => undefined);
     return () => controller.abort();
   }, [gameId, user]);
+  useEffect(() => {
+    if (id && finished) router.replace(href(`/tournaments/${id}`));
+  }, [id, finished, router, href]);
   return id ? (
     <Link className="tournament-game-link" href={href(`/tournaments/${id}`)}>
       {getTournamentsCopy(locale).backLobby}

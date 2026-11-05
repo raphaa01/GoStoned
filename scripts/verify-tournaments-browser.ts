@@ -43,6 +43,10 @@ async function main() {
         VALUES ($1,$2,1200,120,0.06,10,'glicko2-v1-tau-0.5',statement_timestamp())`,
         [`user:${user}`, user],
       );
+      await query(
+        "INSERT INTO player_rating_preferences(user_id) VALUES ($1)",
+        [user],
+      );
       const token = await createSession(user);
       const context = await browser.newContext({
         viewport: { width: 1440, height: 1000 },
@@ -195,7 +199,7 @@ async function main() {
       black.getByRole("link", { name: "Zurück zum Turnier" }),
     ).toBeVisible();
     await resignGame(game.gameId!, `user:${pairing.blackId}`);
-    await black.getByRole("link", { name: "Zurück zum Turnier" }).click();
+    await black.waitForURL(new RegExp(`/tournaments/${id}$`));
     await expect(
       black.getByRole("heading", { name: "Rangliste", exact: true }),
     ).toBeVisible();

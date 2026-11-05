@@ -265,6 +265,21 @@ function TournamentHubBody({ id }: { id?: string }) {
       (m.blackId === detail.userId || m.whiteId === detail.userId) &&
       (m.status === "playing" || (m.status === "pending" && m.readyDeadline)),
   );
+  const pendingReadyId = ownMatch?.status === "pending" ? ownMatch.id : null;
+  useEffect(() => {
+    if (!pendingReadyId) return;
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`tournament-ready-${pendingReadyId}`)
+        ?.scrollIntoView({
+          block: "center",
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+        });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingReadyId]);
   useEffect(() => {
     if (ownMatch) {
       if (ownMatch.gameId && ownMatch.status === "playing")
@@ -578,7 +593,11 @@ function TournamentHubBody({ id }: { id?: string }) {
         </div>
       ) : null}
       {ownMatch?.status === "pending" ? (
-        <section className="tournament-ready" aria-live="polite">
+        <section
+          className="tournament-ready"
+          id={`tournament-ready-${ownMatch.id}`}
+          aria-live="polite"
+        >
           <div>
             <strong>{copy.newPairing}</strong>
             <p>

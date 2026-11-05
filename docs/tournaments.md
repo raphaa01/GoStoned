@@ -39,8 +39,9 @@ https://lichess.org/swiss
   minutes. A ready player wins against a no-show; two no-shows receive no points
   and are eliminated in knockout. Forfeits never affect ratings.
 - Waiting/finished players can watch tournament games with read-only controls.
-  The next pairing is announced across website pages; finished games link back
-  to the lobby. Standings show points, wins, losses, draws and completed games.
+  The next pairing is announced across website pages; finished games return
+  players automatically to the lobby. Standings show points, wins, losses, draws
+  and completed games.
 - Hosting is temporarily open. `tournament_settings.premium_hosting_enabled`
   switches on a server-side entitlement check against
   `tournament_host_entitlements.premium_until`; joining stays independent.
