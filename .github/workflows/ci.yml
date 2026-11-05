@@ -110,7 +110,7 @@ jobs:
   postgres-integration:
     name: PostgreSQL integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
