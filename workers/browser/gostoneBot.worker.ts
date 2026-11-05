@@ -40,6 +40,9 @@ function inferenceSession(model: GoStoneBotRuntimeModel): Promise<ort.InferenceS
   const created = ort.InferenceSession.create(model.artifactUrl, {
     executionProviders: ["wasm"],
     graphOptimizationLevel: "all",
+  }).catch((error: unknown) => {
+    sessionPromises.delete(model.artifactSha256);
+    throw error;
   });
   sessionPromises.set(model.artifactSha256, created);
   return created;
@@ -361,6 +364,12 @@ async function handleRequest(request: GoStoneBotWorkerRequest): Promise<GoStoneB
   }
 }
 
+let requestChain = Promise.resolve();
 workerScope.addEventListener("message", (event: MessageEvent<GoStoneBotWorkerRequest>) => {
-  void handleRequest(event.data).then((response) => workerScope.postMessage(response));
+  requestChain = requestChain.then(async () => {
+    const response = await handleRequest(event.data);
+    workerScope.postMessage(response);
+  }).catch(() => {
+    workerScope.postMessage({id:event.data.id,ok:false,error:"The local GoStone bot failed."});
+  });
 });

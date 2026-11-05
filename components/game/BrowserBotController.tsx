@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { browserBotRetryDelay } from "@/lib/bot/retryPolicy";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import {
   generateBrowserBotMove,
@@ -55,6 +56,7 @@ async function postBotAction(
   body: Record<string, unknown>,
 ): Promise<GameState> {
   const response = await fetch(`/api/games/${gameId}/browser-bot`, {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -77,6 +79,8 @@ async function postBotAction(
 }
 
 export function BrowserBotController({ game, playerKey, onGame, onError }: Props) {
+  const [retry, setRetry] = useState(0);
+  const failures = useRef(0);
   const activeAction = useRef<string | null>(null);
   const gameRef = useRef(game);
   const currentBotColor = botColor(game);
@@ -114,6 +118,7 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
     );
     activeAction.current = moveActionKey;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     void (async () => {
       const startedAt = Date.now();
@@ -149,7 +154,7 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
               move,
             },
           );
-          if (!cancelled) onGame(updated);
+          if (!cancelled) { failures.current = 0; onGame(updated); }
           return;
         } catch (error) {
           if (
@@ -163,17 +168,21 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
           throw error;
         }
       }
+      if (!cancelled) throw new Error("The bot could not submit a legal move. Retrying the position.");
     })().catch((error) => {
       if (!cancelled) {
         activeAction.current = null;
         onError(error);
+        const delay = browserBotRetryDelay(error, failures.current++);
+        if (delay !== null) retryTimer = setTimeout(() => setRetry((value) => value + 1), delay);
       }
     });
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
       if (activeAction.current === moveActionKey) activeAction.current = null;
     };
-  }, [moveActionKey, onError, onGame, playerKey]);
+  }, [moveActionKey, onError, onGame, playerKey, retry]);
 
   useEffect(() => {
     if (!scoringActionKey || activeAction.current === scoringActionKey) return;
@@ -185,7 +194,15 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
       snapshot.browserBotModelSha256 ?? undefined,
     );
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     activeAction.current = scoringActionKey;
+    const failed = (error: unknown) => {
+      if (cancelled) return;
+      activeAction.current = null;
+      onError(error);
+      const delay = browserBotRetryDelay(error, failures.current++);
+      if (delay !== null) retryTimer = setTimeout(() => setRetry((value) => value + 1), delay);
+    };
 
     if (scoringActionKey.startsWith("settlement:")) {
       void proposeJapaneseSettlement({
@@ -212,15 +229,12 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
           },
         )).then((updated) => {
           if (cancelled || !updated) return;
+          failures.current = 0;
           onGame(updated);
-        }).catch((error) => {
-          if (!cancelled) {
-            activeAction.current = null;
-            onError(error);
-          }
-        });
+        }).catch(failed);
       return () => {
         cancelled = true;
+        clearTimeout(retryTimer);
         if (activeAction.current === scoringActionKey) activeAction.current = null;
       };
     }
@@ -235,18 +249,14 @@ export function BrowserBotController({ game, playerKey, onGame, onError }: Props
         expectedRevision: snapshot.scoring.revision,
       },
     ).then((updated) => {
-      if (!cancelled) onGame(updated);
-    }).catch((error) => {
-      if (!cancelled) {
-        activeAction.current = null;
-        onError(error);
-      }
-    });
+      if (!cancelled) { failures.current = 0; onGame(updated); }
+    }).catch(failed);
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
       if (activeAction.current === scoringActionKey) activeAction.current = null;
     };
-  }, [onError, onGame, playerKey, scoringActionKey]);
+  }, [onError, onGame, playerKey, scoringActionKey, retry]);
 
   return null;
 }
