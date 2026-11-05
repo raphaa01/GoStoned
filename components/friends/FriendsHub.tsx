@@ -3,6 +3,7 @@
 import { CommunityAgreement } from "@/components/auth/CommunityAgreement";
 import { useCommunityConsent } from "@/components/auth/useCommunityConsent";
 import { FriendSafetyActions } from "./FriendSafetyActions";
+import { TrophyCase } from "@/components/tournaments/TrophyCase";
 import {
   Check,
   Clock3,
@@ -44,7 +45,7 @@ function displayDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(value));
 }
 
-export function FriendsHub() {
+export function FriendsHub({ tournamentTrophies = false }: { tournamentTrophies?: boolean } = {}) {
   const { user } = useAuth();
   const { locale, href, dictionary } = useI18n();
   const copy = getFriendsCopy(locale);
@@ -370,7 +371,7 @@ export function FriendsHub() {
       </ModalDialog>
 
       <ModalDialog className="friends-modal profile-preview-modal" onDismiss={() => setProfile(null)} open={Boolean(profile)} titleId={profileTitleId}>
-        {profile ? <><header><span className="section-kicker">{copy.profileTitle}</span><button aria-label={copy.close} onClick={() => setProfile(null)} type="button"><X /></button></header><div className="profile-preview__identity"><ProfileAvatar size="lg" style={profile.avatarStyle} /><div><h2 id={profileTitleId}>{profile.displayName}</h2><p>@{profile.username} · {copy[profile.presence]}</p></div></div><dl className="profile-preview__stats"><div><dt>{copy.rating}</dt><dd>{profile.rating === null ? copy.provisional : Math.round(profile.rating)}</dd></div><div><dt>{copy.ratedGames}</dt><dd>{profile.ratedGames}</dd></div><div><dt>{copy.friendlyGames}</dt><dd>{profile.friendlyGames}</dd></div><div><dt>{copy.sharedGames}</dt><dd>{profile.sharedFriendlyGames}</dd></div></dl><p>{copy.joined}: {displayDate(profile.joinedAt, locale)}</p><footer>{profile.friendshipStatus === "friends" && profile.friendshipId ? <><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setSelectedFriend(friend); setProfile(null); }} variant="secondary"><MessageCircle size={17} /> {copy.message}</Button><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setInviteFriend(friend); setProfile(null); }}><Gamepad2 size={17} /> {copy.invite}</Button><Button onClick={() => void remove(profile.friendshipId!)} variant="ghost"><UserMinus size={17} /> {copy.removeFriend}</Button></> : profile.friendshipStatus === "none" ? <Button onClick={() => void addFriend({ ...profile, friendshipId: null, friendshipStatus: "none" })}><UserPlus size={17} /> {copy.addFriend}</Button> : null}</footer></> : null}
+        {profile ? <><header><span className="section-kicker">{copy.profileTitle}</span><button aria-label={copy.close} onClick={() => setProfile(null)} type="button"><X /></button></header><div className="profile-preview__identity"><ProfileAvatar size="lg" style={profile.avatarStyle} /><div><h2 id={profileTitleId}>{profile.displayName}</h2><p>@{profile.username} · {copy[profile.presence]}</p></div></div><dl className="profile-preview__stats"><div><dt>{copy.rating}</dt><dd>{profile.rating === null ? copy.provisional : Math.round(profile.rating)}</dd></div><div><dt>{copy.ratedGames}</dt><dd>{profile.ratedGames}</dd></div><div><dt>{copy.friendlyGames}</dt><dd>{profile.friendlyGames}</dd></div><div><dt>{copy.sharedGames}</dt><dd>{profile.sharedFriendlyGames}</dd></div></dl>{tournamentTrophies ? <TrophyCase userId={profile.userId} /> : null}<p>{copy.joined}: {displayDate(profile.joinedAt, locale)}</p><footer>{profile.friendshipStatus === "friends" && profile.friendshipId ? <><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setSelectedFriend(friend); setProfile(null); }} variant="secondary"><MessageCircle size={17} /> {copy.message}</Button><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setInviteFriend(friend); setProfile(null); }}><Gamepad2 size={17} /> {copy.invite}</Button><Button onClick={() => void remove(profile.friendshipId!)} variant="ghost"><UserMinus size={17} /> {copy.removeFriend}</Button></> : profile.friendshipStatus === "none" ? <Button onClick={() => void addFriend({ ...profile, friendshipId: null, friendshipStatus: "none" })}><UserPlus size={17} /> {copy.addFriend}</Button> : null}</footer></> : null}
       </ModalDialog>
 
       <ModalDialog className="friends-modal invite-modal" onDismiss={() => setInviteFriend(null)} open={Boolean(inviteFriend)} titleId={inviteTitleId}>

@@ -1,4 +1,5 @@
 export type ProductionSchemaSnapshot = Readonly<{
+  tournamentStorageReady: boolean;
   gameRulesDefault: string | null;
   gameRulesProfileDefault: string | null;
   gameScoringMethodDefault: string | null;
@@ -43,6 +44,9 @@ function requireFragment(
 export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
+  if (!snapshot.tournamentStorageReady) {
+    throw new Error("Production database schema is stale: tournament storage or server permissions; run migration 059.");
+  }
   if (!snapshot.gameShareRls || !snapshot.gameShareAccessible) {
     throw new Error("Production database schema is stale: game sharing access; run migration 055.");
   }

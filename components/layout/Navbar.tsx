@@ -2,7 +2,7 @@
 
 import { BrandMark } from "./BrandMark";
 
-import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, Users, X } from "lucide-react";
+import { BookOpen, Crown, Gamepad2, LogIn, LogOut, Menu, Puzzle, Search, Trophy, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -14,6 +14,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { RatingLabel } from "@/components/rating/RatingLabel";
 import { getFriendsCopy } from "@/lib/i18n/friends";
 import { isRouteActive } from "@/lib/i18n/routing";
+import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -33,6 +34,7 @@ export function Navbar() {
     { destination: href("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
     { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
     { destination: href("/friends"), path: "/friends", label: friendsCopy.nav, icon: Users },
+    { destination: href("/tournaments"), path: "/tournaments", label: getTournamentsCopy(locale).title, icon: Trophy },
     { destination: href(user ? "/profile" : "/login"), path: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
   ];
 

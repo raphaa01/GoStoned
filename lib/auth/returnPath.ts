@@ -45,6 +45,8 @@ export function safeAccountReturnPath(
     || logicalPath === "/profile"
     || logicalPath === "/profile/settings"
     || logicalPath === "/friends"
+    || logicalPath === "/tournaments"
+    || /^\/tournaments\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(logicalPath)
     || logicalPath === "/review"
     || REVIEW_GAME_PATH.test(logicalPath)
     ? logicalPath

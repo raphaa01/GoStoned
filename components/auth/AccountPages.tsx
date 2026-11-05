@@ -12,7 +12,7 @@ import type { Locale } from "@/lib/i18n/config";
 
 export async function AccountProfilePage({ locale }: { locale: Locale }) {
   await requireAccountPage("/profile", locale);
-  return <AppShell><ProfileView /></AppShell>;
+  return <AppShell><ProfileView tournamentTrophies /></AppShell>;
 }
 
 export async function AccountSettingsPage({ locale }: { locale: Locale }) {
@@ -22,7 +22,7 @@ export async function AccountSettingsPage({ locale }: { locale: Locale }) {
 
 export async function AccountFriendsPage({ locale }: { locale: Locale }) {
   await requireAccountPage("/friends", locale);
-  return <AppShell><FriendsHub /></AppShell>;
+  return <AppShell><FriendsHub tournamentTrophies /></AppShell>;
 }
 
 export async function AccountLearnPage({ locale }: { locale: Locale }) {

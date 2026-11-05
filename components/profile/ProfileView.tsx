@@ -35,6 +35,7 @@ import type {
   RecentGame,
 } from "@/lib/stats/statsService";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
+import { TrophyCase } from "@/components/tournaments/TrophyCase";
 
 export type ProfileResponse = {
   rating?: GlobalRatingSummary;
@@ -56,7 +57,7 @@ function formatDate(value: string, locale: Locale) {
   }).format(new Date(value));
 }
 
-export function ProfileView() {
+export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies?: boolean } = {}) {
   const { user, loading, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.profile;
@@ -131,6 +132,7 @@ export function ProfileView() {
     !== user.username.trim().toLocaleLowerCase();
   return <>
     {profileStatus}
+    {tournamentTrophies ? <TrophyCase /> : null}
     <header className="profile-header">
       <div className="profile-header__primary">
         <button
