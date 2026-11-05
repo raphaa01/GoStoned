@@ -1,5 +1,21 @@
 # GoStone Browser Bot v1
 
+## Wiederanlauf nach Laufzeitfehlern
+
+Ein Botzug und ein Endwertungsvorschlag werden nach vorübergehenden Worker- oder
+Netzwerkfehlern für dieselbe Stellung erneut angestoßen. Die Wartezeit steigt von
+einer auf höchstens 15 Sekunden; HTTP-429-Antworten behalten ihr Retry-After.
+Abgelaufene oder gewechselte Identitäten und inkompatible Modellbindungen stoppen
+die Wiederholung. Ein veränderter Spielstand oder das Verlassen der Seite verwirft
+ausstehende Aktionen und Wiederholungstimer.
+
+Der erste lokale Modellstart darf bis zu 60 Sekunden benötigen. Nach einem
+Worker-Timeout, Absturz oder Übertragungsfehler wird der Worker beendet und beim
+nächsten Versuch neu angelegt. Fehlgeschlagene ONNX-Session-Promises bleiben nicht
+im Cache; Inferenzanfragen laufen nacheinander. Serveranfragen haben ein eigenes
+15-Sekunden-Limit. Der Server prüft weiterhin die erwartete Spielversion und
+verhindert dadurch doppelte Züge nach verspäteten Antworten.
+
 ## Konsistente Wertung und Gebietsanzeige
 
 Spielstandsschätzung, Bot-Endvorschlag und Trainings-Endvorschlag verwenden

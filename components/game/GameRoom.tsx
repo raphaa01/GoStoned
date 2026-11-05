@@ -345,7 +345,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const acceptBrowserBotGame = useCallback((nextGame: GameState) => {
     const requestIdentity = identityAuthority.current.capture();
-    acceptGameResponse({ game: nextGame }, Date.now(), requestIdentity);
+    if (acceptGameResponse({ game: nextGame }, Date.now(), requestIdentity)) setError(null);
   }, [acceptGameResponse]);
 
   const reportBrowserBotError = useCallback((requestError: unknown) => {
