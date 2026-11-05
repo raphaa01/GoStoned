@@ -269,7 +269,7 @@ async function insertPairs(
 }
 
 async function advance(client: PoolClient, t: TournamentRow): Promise<void> {
-  if (t.status === "finished" || t.status === "cancelled") return;
+  if (t.status === "cancelled") return;
   if (
     t.kind === "monthly" &&
     t.status === "lobby" &&
@@ -288,6 +288,9 @@ async function advance(client: PoolClient, t: TournamentRow): Promise<void> {
     FROM games g WHERE m.tournament_id=$1 AND m.game_id=g.id AND m.status='playing' AND g.status='finished'`,
     [t.id],
   );
+  // Games may outlive a monthly deadline. Keep their visible state current
+  // without reopening the event or changing its frozen standings/awards.
+  if (t.status === "finished") return;
   await client.query(
     `UPDATE tournament_matches SET status=CASE WHEN $2='private' AND (black_ready OR white_ready) THEN 'finished' ELSE 'void' END,
       winner_id=CASE WHEN $2<>'private' THEN NULL WHEN black_ready THEN black_id WHEN white_ready THEN white_id ELSE NULL END,

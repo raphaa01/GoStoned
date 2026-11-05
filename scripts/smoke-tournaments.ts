@@ -273,6 +273,20 @@ async function main() {
     await assert.rejects(tournaments.queueMonthly(host, monthly.id, true), {
       code: "tournament_game_limit",
     });
+    const lateOpponent = users[7];
+    for (const user of [outsider, lateOpponent])
+      await tournaments.joinTournament(user, { id: monthly.id });
+    await tournaments.queueMonthly(outsider, monthly.id, true);
+    await tournaments.queueMonthly(lateOpponent, monthly.id, true);
+    const latePairing = (
+      await tournaments.getTournamentDetail(outsider, monthly.id)
+    ).matches.find((m) => m.status === "pending")!;
+    const lateGame = await playReady(
+      monthly.id,
+      latePairing.id,
+      latePairing.blackId!,
+      latePairing.whiteId!,
+    );
     await query(
       "UPDATE tournaments SET ends_at=statement_timestamp() WHERE id=$1",
       [monthly.id],
@@ -282,11 +296,38 @@ async function main() {
       tournaments.getTournamentDetail(a, monthly.id),
     ]);
     const awards = await query<{ user_id: string; place: number }>(
-      "SELECT user_id,place FROM tournament_trophies WHERE tournament_id=$1",
+      "SELECT user_id,place FROM tournament_trophies WHERE tournament_id=$1 ORDER BY user_id",
       [monthly.id],
     );
     assert(awards.rows.length > 0);
     assert(awards.rows.every((r) => r.place <= 3));
+    await resignGame(lateGame, key(outsider));
+    const afterDeadline = await tournaments.getTournamentDetail(
+      outsider,
+      monthly.id,
+    );
+    assert.equal(afterDeadline.tournament.status, "finished");
+    assert.equal(
+      afterDeadline.matches.find((m) => m.id === latePairing.id)?.status,
+      "finished",
+    );
+    assert.equal(
+      afterDeadline.standings.find((r) => r.userId === outsider)?.played,
+      0,
+    );
+    assert.equal(
+      afterDeadline.standings.find((r) => r.userId === lateOpponent)?.points,
+      0,
+    );
+    assert.deepEqual(
+      (
+        await query(
+          "SELECT user_id,place FROM tournament_trophies WHERE tournament_id=$1 ORDER BY user_id",
+          [monthly.id],
+        )
+      ).rows,
+      awards.rows,
+    );
     const winner = awards.rows[0].user_id;
     await tournaments.displayTrophy(winner, monthly.id, false);
     assert.equal((await tournaments.getTrophies(winner, false)).length, 0);
