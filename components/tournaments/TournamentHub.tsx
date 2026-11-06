@@ -27,6 +27,7 @@ import type {
   TournamentDetail,
   TournamentSettings,
 } from "@/lib/tournaments/types";
+import { ClassicRegistration, ClassicSchedule } from "./ClassicRegistration";
 import "./tournaments.css";
 
 const DEFAULT_SETTINGS: TournamentSettings = {
@@ -374,10 +375,22 @@ function TournamentHubBody({ id }: { id?: string }) {
     );
   if (!id && dashboard) {
     const monthly = dashboard.monthly.find(
-      (t) => t.category === dashboard.category,
+      (t) => t.category === dashboard.category && t.monthlyMode === "rapid",
     );
     const joinedMonthly = dashboard.mine.find(
-      (t) => t.kind === "monthly" && t.month === monthly?.month,
+      (t) =>
+        t.kind === "monthly" &&
+        t.month === monthly?.month &&
+        t.monthlyMode === "rapid",
+    );
+    const classic = dashboard.monthly.filter(
+      (t) => t.category === dashboard.category && t.monthlyMode === "classic",
+    );
+    const joinedClassic = dashboard.mine.find(
+      (t) =>
+        t.kind === "monthly" &&
+        t.month === monthly?.month &&
+        t.monthlyMode === "classic",
     );
     return (
       <section className="tournaments">
@@ -397,7 +410,7 @@ function TournamentHubBody({ id }: { id?: string }) {
           <>
             <section className="tournament-monthly">
               <div>
-                <span className="section-kicker">{copy.monthly}</span>
+                <span className="section-kicker">{copy.rapid}</span>
                 <h2>
                   {new Intl.DateTimeFormat(locale, {
                     month: "long",
@@ -440,6 +453,41 @@ function TournamentHubBody({ id }: { id?: string }) {
               <details className="tournament-rules">
                 <summary>{copy.format}</summary>
                 <p>{copy.monthlyDetails}</p>
+              </details>
+            </section>
+            <section className="tournament-monthly">
+              <div>
+                <h2>{copy.classic}</h2>
+                <p>{copy.classicRules}</p>
+              </div>
+              {joinedClassic ? (
+                <Link
+                  className="button button--primary"
+                  href={href(`/tournaments/${joinedClassic.id}`)}
+                >
+                  {copy.view}
+                </Link>
+              ) : !dashboard.classicEligible ? (
+                <p>{copy.tournament_classic_rank_required}</p>
+              ) : dashboard.classicBlockedMonth ? (
+                <p>{copy.tournament_classic_suspended}</p>
+              ) : (
+                <ClassicRegistration
+                  events={classic}
+                  busy={busy}
+                  now={now}
+                  onJoin={(id) =>
+                    void act(
+                      { action: "join", id, acceptSchedule: true },
+                      { navigate: true },
+                    )
+                  }
+                />
+              )}
+              <p>{copy.classicMinimum}</p>
+              <details className="tournament-rules">
+                <summary>{copy.format}</summary>
+                <p>{copy.classicDetails}</p>
               </details>
             </section>
             <section className="tournament-private">
@@ -516,13 +564,19 @@ function TournamentHubBody({ id }: { id?: string }) {
               </section>
             ) : null}
             {dashboard.mine.some(
-              (t) => t.kind === "monthly" && t.id !== joinedMonthly?.id,
+              (t) =>
+                t.kind === "monthly" &&
+                t.id !== joinedMonthly?.id &&
+                t.id !== joinedClassic?.id,
             ) ? (
               <section>
                 <h2>{copy.monthly}</h2>
                 {dashboard.mine
                   .filter(
-                    (t) => t.kind === "monthly" && t.id !== joinedMonthly?.id,
+                    (t) =>
+                      t.kind === "monthly" &&
+                      t.id !== joinedMonthly?.id &&
+                      t.id !== joinedClassic?.id,
                   )
                   .map(eventRow)}
               </section>
@@ -568,8 +622,11 @@ function TournamentHubBody({ id }: { id?: string }) {
           <h1>{t.name}</h1>
           <p>
             {t.boardSize}×{t.boardSize} ·{" "}
-            {TIME_CONTROLS.find((v) => v.id === t.timeControl)?.shortLabel} ·{" "}
-            {copy[t.format]} ·{" "}
+            {t.monthlyMode === "classic"
+              ? copy.classicTime
+              : TIME_CONTROLS.find((v) => v.id === t.timeControl)
+                  ?.shortLabel}{" "}
+            · {copy[t.format]} ·{" "}
             {t.kind === "private" ? copy.unranked : copy.rated}
           </p>
         </div>
@@ -581,16 +638,41 @@ function TournamentHubBody({ id }: { id?: string }) {
       {t.kind === "monthly" ? (
         <div className="tournament-meta">
           <span>
-            {CATEGORY_LABELS[t.category!]} · {dateRange(t, locale)}
+            {CATEGORY_LABELS[t.category!]} · {copy.group} {detail.group} ·{" "}
+            {dateRange(t, locale)}
           </span>
           <span>
             {own?.played ?? 0} / {MONTHLY_GAMES} {copy.games}
           </span>
           <details className="tournament-rules">
             <summary>{copy.format}</summary>
-            <p>{copy.monthlyDetails}</p>
+            <p>
+              {t.monthlyMode === "classic"
+                ? copy.classicDetails
+                : copy.monthlyDetails}
+            </p>
           </details>
         </div>
+      ) : null}
+      {t.monthlyMode === "classic" ? (
+        <>
+          <ClassicSchedule dates={detail.schedule} />
+          {detail.withdrawn ? (
+            <p role="status">{copy.withdrawn}</p>
+          ) : detail.noShows > 0 ? (
+            <p role="status">{copy.firstNoShow}</p>
+          ) : null}
+          {t.status === "cancelled" ? <p>{copy.classicCancelled}</p> : null}
+          {detail.joined && t.status === "lobby" ? (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void act({ action: "leave", id: t.id })}
+            >
+              {copy.leave}
+            </Button>
+          ) : null}
+        </>
       ) : null}
       {ownMatch?.status === "pending" ? (
         <section
@@ -626,6 +708,7 @@ function TournamentHubBody({ id }: { id?: string }) {
         </section>
       ) : null}
       {t.kind === "monthly" &&
+      t.monthlyMode === "rapid" &&
       t.status === "running" &&
       !ownMatch &&
       detail.joined ? (
@@ -655,12 +738,23 @@ function TournamentHubBody({ id }: { id?: string }) {
       {!detail.joined &&
       t.kind === "monthly" &&
       ["lobby", "running"].includes(t.status) ? (
-        <Button
-          disabled={busy}
-          onClick={() => void act({ action: "join", id: t.id })}
-        >
-          {copy.join}
-        </Button>
+        t.monthlyMode === "classic" ? (
+          <ClassicRegistration
+            events={[t]}
+            busy={busy}
+            now={now}
+            onJoin={(id) =>
+              void act({ action: "join", id, acceptSchedule: true })
+            }
+          />
+        ) : (
+          <Button
+            disabled={busy}
+            onClick={() => void act({ action: "join", id: t.id })}
+          >
+            {copy.join}
+          </Button>
+        )
       ) : null}
       {t.kind === "private" && t.status === "lobby" ? (
         <section className="tournament-lobby">

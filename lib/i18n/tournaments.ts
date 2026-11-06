@@ -3,6 +3,29 @@ import type { Locale } from "./config";
 const en = {
   title: "Tournaments",
   monthly: "Monthly",
+  rapid: "Monthly Rapid",
+  classic: "Monthly Classic",
+  classicTime: "60 min + 3×30 sec",
+  group: "Group",
+  slot: "Daily start time",
+  confirmSchedule:
+    "I can attend all five rounds. Check in with Ready within 5 minutes. Two missed rounds exclude me from this event and next month's Classic.",
+  classicRules: "19×19 · 60 min + 3×30 sec · 5 scheduled rounds",
+  classicDetails:
+    "From 10 kyu. Fields of 6–32 players in your category. Swiss pairing; round robin for fields up to 10. A win is 1 point, a draw ½; ties use opponents' points, then wins. Podium trophies require five completed rounds. Byes and forfeits count for the event only, never for rating. Both absent: 0 points each. Two no-shows withdraw you and block next month's Classic. Personal blocks do not change scheduled opponents.",
+  classicCancelled:
+    "This Classic has been cancelled. Cancellation adds no missed check-ins.",
+  classicMinimum:
+    "At least 6 entrants per category and time slot. Otherwise cancelled without penalty.",
+  firstNoShow:
+    "Missed check-in: 1 of 2. A second missed round withdraws you and blocks next month's Classic.",
+  withdrawn:
+    "Withdrawn after two missed rounds. Next month's Classic is blocked.",
+  tournament_classic_rank_required: "Classic requires 10 kyu or stronger.",
+  tournament_registration_closed:
+    "Classic registration is closed for this month.",
+  tournament_classic_suspended:
+    "You are suspended from this month's Classic after repeated missed rounds.",
   private: "Private",
   create: "Create tournament",
   join: "Join",
@@ -61,7 +84,7 @@ const en = {
   progress: "rated games completed",
   monthlyRules: "Last 7 days · 5 games · 13×13 · Rapid",
   monthlyDetails:
-    "Play when you are available. Five games against different opponents. Win 1 · Draw ½. Ties: opponents' points, then wins. Complete all five games to qualify for a trophy.",
+    "Play when you are available. Standings in groups of up to 24; matchmaking across your entire category. Five games against different opponents. Win 1 · Draw ½. Ties: opponents' points, then wins. Complete all five games to qualify for a trophy.",
   deadline: "UTC",
   completed: "Five games completed",
   category: "Category",
@@ -107,6 +130,29 @@ const en = {
 const de: typeof en = {
   title: "Turniere",
   monthly: "Monatsturnier",
+  rapid: "Monthly Rapid",
+  classic: "Monthly Classic",
+  classicTime: "60 Min. + 3×30 Sek.",
+  group: "Gruppe",
+  slot: "Tägliche Startzeit",
+  confirmSchedule:
+    "Ich kann an allen fünf Runden teilnehmen und klicke innerhalb von 5 Minuten auf Bereit. Zwei verpasste Runden schließen mich aus diesem Turnier und dem Classic im Folgemonat aus.",
+  classicRules: "19×19 · 60 Min. + 3×30 Sek. · 5 feste Runden",
+  classicDetails:
+    "Ab 10 Kyu. Felder mit 6–32 Spielern deiner Leistungsklasse. Schweizer System; bis 10 Spieler Rundenturnier. Sieg 1 Punkt, Remis ½; bei Gleichstand Gegnerpunkte, dann Siege. Podiumstrophäen nach fünf abgeschlossenen Runden. Freilose und kampflose Siege zählen nur fürs Turnier, nie fürs Rating. Fehlen beide: jeweils 0 Punkte. Zwei verpasste Runden bedeuten Ausschluss und Classic-Sperre im Folgemonat. Persönliche Blockierungen ändern die festen Gegner nicht.",
+  classicCancelled:
+    "Dieses Classic wurde abgesagt. Durch die Absage entstehen keine weiteren Versäumnisse.",
+  classicMinimum:
+    "Mindestens 6 Anmeldungen pro Leistungsklasse und Zeitslot, sonst Absage ohne Strafe.",
+  firstNoShow:
+    "Check-in verpasst: 1 von 2. Beim zweiten Mal folgen Ausschluss und Classic-Sperre im Folgemonat.",
+  withdrawn:
+    "Nach zwei verpassten Runden ausgeschlossen. Das Classic im Folgemonat ist gesperrt.",
+  tournament_classic_rank_required: "Classic ist ab 10 Kyu verfügbar.",
+  tournament_registration_closed:
+    "Die Classic-Anmeldung ist für diesen Monat geschlossen.",
+  tournament_classic_suspended:
+    "Du bist wegen wiederholt verpasster Runden für das Classic dieses Monats gesperrt.",
   private: "Privat",
   create: "Turnier erstellen",
   join: "Beitreten",
@@ -165,7 +211,7 @@ const de: typeof en = {
   progress: "gewertete Partien abgeschlossen",
   monthlyRules: "Letzte 7 Tage · 5 Partien · 13×13 · Rapid",
   monthlyDetails:
-    "Spiele, wenn du Zeit hast. Fünf Partien gegen verschiedene Gegner. Sieg 1 · Remis ½. Bei Gleichstand: Gegnerpunkte, dann Siege. Für eine Trophäe müssen alle fünf Partien abgeschlossen sein.",
+    "Spiele, wenn du Zeit hast. Rangliste in Gruppen bis 24 Spieler, Spielsuche in deiner gesamten Leistungsklasse. Fünf Partien gegen verschiedene Gegner. Sieg 1 · Remis ½. Bei Gleichstand: Gegnerpunkte, dann Siege. Für eine Trophäe müssen alle fünf Partien abgeschlossen sein.",
   deadline: "UTC",
   completed: "Fünf Partien abgeschlossen",
   category: "Leistungskategorie",

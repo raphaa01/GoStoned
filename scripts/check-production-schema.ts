@@ -222,7 +222,7 @@ async function checkProductionSchema(): Promise<void> {
   const tournamentStorage = await query<{ ready: boolean }>(`SELECT NOT EXISTS (
     SELECT 1 FROM (VALUES ('tournament_settings',false),('tournament_host_entitlements',false),
       ('tournaments',true),('tournament_members',true),('tournament_matches',true),
-      ('tournament_invitations',true),('tournament_trophies',true)) AS required(name,writable)
+      ('tournament_invitations',true),('tournament_trophies',true),('tournament_classic_penalties',true)) AS required(name,writable)
     WHERE NOT COALESCE((SELECT c.relrowsecurity
       AND has_table_privilege(current_user,c.oid,'SELECT')
       AND (NOT required.writable OR (has_table_privilege(current_user,c.oid,'INSERT')
@@ -233,7 +233,12 @@ async function checkProductionSchema(): Promise<void> {
           AND p.policyname='gostone_app_server_access' AND pg_has_role(current_user,'gostone_app','USAGE')))
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public' AND c.relname=required.name),false)
-  ) AS ready`);
+  ) AND (SELECT COUNT(*)=8 FROM information_schema.columns
+    WHERE table_schema='public' AND (table_name,column_name) IN (
+      ('tournaments','monthly_mode'),('tournaments','schedule_hour'),
+      ('tournament_members','leaderboard_group'),('tournament_members','no_shows'),
+      ('tournament_members','withdrawn'),('tournament_matches','scheduled_at'),
+      ('tournament_matches','attendance_recorded'),('tournament_settings','monthly_classic_enabled'))) AS ready`);
   validateProductionSchemaContract({
     tournamentStorageReady: tournamentStorage.rows[0]?.ready === true,
     gameRulesDefault: row.game_rules_default,

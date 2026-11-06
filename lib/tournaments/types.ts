@@ -16,6 +16,8 @@ export type Tournament = {
   code: string | null;
   month: string | null;
   category: number | null;
+  monthlyMode: "rapid" | "classic";
+  scheduleHour: number;
   format: TournamentFormat;
   boardSize: BoardSize;
   timeControl: TimeControlId;
@@ -54,6 +56,10 @@ export type TournamentMatch = {
   result: string | null;
 };
 export type TournamentDetail = {
+  group: number;
+  schedule: string[];
+  noShows: number;
+  withdrawn: boolean;
   tournament: Tournament;
   standings: Standing[];
   matches: TournamentMatch[];
@@ -66,6 +72,8 @@ export type TournamentDashboard = {
   ratedGames: number;
   canHost: boolean;
   category: number;
+  classicEligible: boolean;
+  classicBlockedMonth: string | null;
   monthly: Tournament[];
   mine: Tournament[];
   invitations: Tournament[];
