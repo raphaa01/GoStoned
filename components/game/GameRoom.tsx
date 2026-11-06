@@ -1,5 +1,7 @@
 "use client";
 
+import { TournamentGameLink } from "@/components/tournaments/TournamentNotice";
+
 import { Calculator, Check, LogIn, LogOut, RefreshCw, ShieldCheck, Undo2, Wifi, WifiOff, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -82,7 +84,7 @@ function rememberScoringHelpHidden(playerKey: string) {
   }
 }
 
-export function GameRoom({ gameId }: { gameId: string }) {
+export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: string; tournamentNavigation?: boolean }) {
   const router = useRouter();
   const { refreshRating } = useAuth();
   const { dictionary, href } = useI18n();
@@ -1350,6 +1352,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           {connectionLabel}
         </span>
         <LanguageSwitcher />
+        {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink gameId={game.id} finished={game.status === "finished"} /> : null}
         <button
           className="game-exit"
           disabled={busy && gameInteractionAllowed}

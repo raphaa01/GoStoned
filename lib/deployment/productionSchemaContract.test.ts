@@ -12,6 +12,7 @@ const productionPreflight = readFileSync(
 );
 
 const currentSnapshot: ProductionSchemaSnapshot = {
+  tournamentStorageReady: true,
   gameRulesDefault: "'japanese'::text",
   gameRulesProfileDefault: "'japanese-1989-gostone-v1'::text",
   gameScoringMethodDefault: "'territory'::text",
@@ -51,6 +52,10 @@ const currentSnapshot: ProductionSchemaSnapshot = {
 
 test("accepts the current Japanese matchmaking schema", () => {
   assert.doesNotThrow(() => validateProductionSchemaContract(currentSnapshot));
+});
+
+test("rejects missing tournament storage before website deployment", () => {
+  assert.throws(() => validateProductionSchemaContract({...currentSnapshot,tournamentStorageReady:false}), /migration 059/);
 });
 
 test("rejects missing or inaccessible game share storage before deployment", () => {

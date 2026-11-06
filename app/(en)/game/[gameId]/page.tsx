@@ -9,5 +9,5 @@ export default async function GamePage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
-  return <GameRoom key={gameId} gameId={gameId} />;
+  return <GameRoom key={gameId} gameId={gameId} tournamentNavigation />;
 }

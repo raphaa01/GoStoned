@@ -12,6 +12,7 @@ import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { getFriendsCopy } from "@/lib/i18n/friends";
 import { isRouteActive } from "@/lib/i18n/routing";
+import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 
 export function DesktopHeader() {
   const pathname = usePathname();
@@ -28,6 +29,7 @@ export function DesktopHeader() {
     { destination: localizedHref("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles },
     { destination: localizedHref("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard },
     { destination: localizedHref("/friends"), path: "/friends", label: friendsCopy.nav },
+    { destination: localizedHref("/tournaments"), path: "/tournaments", label: getTournamentsCopy(locale).title },
   ];
 
   async function signOut() {
