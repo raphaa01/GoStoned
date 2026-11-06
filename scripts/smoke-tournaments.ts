@@ -336,6 +336,259 @@ async function main() {
       "Monthly queue, no-show recovery, 15 rated games, five-game cap, deadline, idempotent awards and profile display passed.",
     );
 
+    // Rapid rankings are local; the search pool still spans the category.
+    const grouped = (
+      await query<{
+        id: string;
+      }>(`INSERT INTO tournaments(kind,name,month,category,format,board_size,time_control,max_players,starts_at,ends_at,status)
+      VALUES ('monthly','Grouped Rapid','2050-04',1,'league',13,'rapid',32,statement_timestamp()-interval '1 hour',statement_timestamp()+interval '1 day','running') RETURNING id`)
+    ).rows[0].id;
+    events.push(grouped);
+    const groupedPlayers: string[] = [];
+    for (let i = 0; i < 26; i++) {
+      const u = await newUser();
+      groupedPlayers.push(u);
+      await tournaments.joinTournament(u, { id: grouped });
+    }
+    const firstGroup = await tournaments.getTournamentDetail(
+      groupedPlayers[0],
+      grouped,
+    );
+    const secondGroup = await tournaments.getTournamentDetail(
+      groupedPlayers[25],
+      grouped,
+    );
+    assert.equal(firstGroup.standings.length, 24);
+    assert.equal(secondGroup.standings.length, 2);
+    assert.equal(secondGroup.group, 2);
+    assert.equal(secondGroup.standings[0].place, 1);
+    await tournaments.queueMonthly(groupedPlayers[0], grouped, true);
+    await tournaments.queueMonthly(groupedPlayers[25], grouped, true);
+    const crossGroup = (
+      await tournaments.getTournamentDetail(groupedPlayers[25], grouped)
+    ).matches.find((m) => m.status === "pending");
+    assert(
+      crossGroup &&
+        [crossGroup.blackId, crossGroup.whiteId].includes(groupedPlayers[0]),
+    );
+    console.log("Rapid groups capped at 24; cross-group matchmaking passed.");
+
+    const classicPlayers: string[] = [];
+    for (let i = 0; i < 6; i++)
+      classicPlayers.push(await newUser(10, 1700 + i));
+    async function classicEvent(month: string, players = classicPlayers) {
+      const id = (
+        await query<{ id: string }>(
+          `INSERT INTO tournaments(kind,name,month,category,format,board_size,time_control,max_players,starts_at,ends_at,monthly_mode,schedule_hour)
+        VALUES ('monthly','Monthly Classic test',$1,2,'league',19,'classic',32,statement_timestamp()+interval '1 day',statement_timestamp()+interval '8 days','classic',16) RETURNING id`,
+          [month],
+        )
+      ).rows[0].id;
+      events.push(id);
+      if (players.length)
+        await assert.rejects(tournaments.joinTournament(players[0], { id }), {
+          code: "invalid_tournament_request",
+        });
+      for (const u of players)
+        await tournaments.joinTournament(u, { id, acceptSchedule: true });
+      return id;
+    }
+    const classic = await classicEvent("2050-05");
+    await assert.rejects(tournaments.joinTournament(host, { id: classic }), {
+      code: "tournament_category_mismatch",
+    });
+    await assert.rejects(
+      tournaments.queueMonthly(classicPlayers[0], classic, true),
+      { code: "tournament_not_running" },
+    );
+    // Five rounds with real games; fast-forward only the isolated event schedule.
+    const opponents = new Set<string>();
+    for (let round = 1; round <= 5; round++) {
+      await query(
+        "UPDATE tournament_matches SET finished_at=statement_timestamp()-interval '10 minutes' WHERE tournament_id=$1 AND status IN ('finished','void')",
+        [classic],
+      );
+      await query(
+        "UPDATE tournaments SET starts_at=statement_timestamp()-($2::int*interval '1 day')-interval '1 minute' WHERE id=$1",
+        [classic, round - 1],
+      );
+      const detail = await tournaments.getTournamentDetail(
+        classicPlayers[0],
+        classic,
+      );
+      assert.equal(detail.tournament.round, round);
+      for (const match of detail.matches.filter(
+        (m) => m.round === round && m.status === "pending",
+      )) {
+        const pair = [match.blackId!, match.whiteId!].sort().join(":");
+        assert(!opponents.has(pair));
+        opponents.add(pair);
+        const remaining = Date.parse(match.readyDeadline!) - Date.now();
+        assert(remaining > 230000 && remaining < 245000);
+        const gameId = await playReady(
+          classic,
+          match.id,
+          match.blackId!,
+          match.whiteId!,
+        );
+        const clock = await getGameState(gameId, key(match.blackId!));
+        assert.equal(clock.boardSize, 19);
+        assert.equal(clock.clock.mainTimeSeconds, 3600);
+        assert.equal(clock.clock.byoYomiPeriods, 3);
+        assert.equal(clock.clock.byoYomiSeconds, 30);
+        assert.equal(
+          (await resignGame(gameId, key(match.whiteId!))).rated,
+          true,
+        );
+      }
+      await tournaments.getTournamentDetail(classicPlayers[0], classic);
+    }
+    const classicFinal = await tournaments.getTournamentDetail(
+      classicPlayers[0],
+      classic,
+    );
+    assert.equal(classicFinal.tournament.status, "finished");
+    assert(classicFinal.standings.every((r) => r.played === 5));
+    assert(
+      (
+        await query(
+          "SELECT 1 FROM tournament_trophies WHERE tournament_id=$1",
+          [classic],
+        )
+      ).rowCount! > 0,
+    );
+    const missed = await classicEvent("2050-06");
+    // A late check-in commits attendance exactly once even though it is rejected.
+    for (let round = 1; round <= 2; round++) {
+      await query(
+        "UPDATE tournament_matches SET finished_at=statement_timestamp()-interval '10 minutes' WHERE tournament_id=$1",
+        [missed],
+      );
+      await query(
+        "UPDATE tournaments SET starts_at=statement_timestamp()-($2::int*interval '1 day')-interval '1 minute' WHERE id=$1",
+        [missed, round - 1],
+      );
+      const detail = await tournaments.getTournamentDetail(
+        classicPlayers[0],
+        missed,
+      );
+      const pair = detail.matches.find(
+        (m) =>
+          m.round === round &&
+          m.status === "pending" &&
+          [m.blackId, m.whiteId].includes(classicPlayers[0]),
+      )!;
+      const opponent =
+        pair.blackId === classicPlayers[0] ? pair.whiteId! : pair.blackId!;
+      await tournaments.readyTournamentMatch(opponent, missed, pair.id);
+      await query(
+        "UPDATE tournament_matches SET ready_deadline=statement_timestamp()-interval '1 second' WHERE tournament_id=$1 AND round=$2",
+        [missed, round],
+      );
+      await assert.rejects(
+        tournaments.readyTournamentMatch(classicPlayers[0], missed, pair.id),
+        { code: "tournament_match_closed" },
+      );
+      const after = await tournaments.getTournamentDetail(
+        classicPlayers[0],
+        missed,
+      );
+      assert.equal(after.noShows, round);
+      assert.equal(after.withdrawn, round === 2);
+      assert.equal(
+        after.standings.find((r) => r.userId === classicPlayers[0])!.points,
+        0,
+      );
+      assert.equal(
+        after.standings.find((r) => r.userId === opponent)!.wins >= 1,
+        true,
+      );
+    }
+    assert.equal(
+      (
+        await query(
+          "SELECT 1 FROM tournament_classic_penalties WHERE user_id=$1 AND blocked_month=$2",
+          [classicPlayers[0], "2050-07"],
+        )
+      ).rowCount,
+      1,
+    );
+    const nextClassic = await classicEvent("2050-07", []);
+    await assert.rejects(
+      tournaments.joinTournament(classicPlayers[0], {
+        id: nextClassic,
+        acceptSchedule: true,
+      }),
+      { code: "tournament_classic_suspended" },
+    );
+    const freshClassic = await newUser(10, 1700);
+    await tournaments.joinTournament(freshClassic, {
+      id: nextClassic,
+      acceptSchedule: true,
+    });
+    await tournaments.leaveTournament(freshClassic, nextClassic);
+    assert.equal(
+      (await tournaments.getTournamentDetail(freshClassic, nextClassic)).joined,
+      false,
+    );
+    await query(
+      "UPDATE tournaments SET starts_at=statement_timestamp()-interval '1 minute' WHERE id=$1",
+      [nextClassic],
+    );
+    assert.equal(
+      (await tournaments.getTournamentDetail(freshClassic, nextClassic))
+        .tournament.status,
+      "cancelled",
+    );
+    assert.equal(
+      (
+        await query(
+          "SELECT 1 FROM tournament_matches WHERE tournament_id=$1 AND game_id IS NOT NULL",
+          [missed],
+        )
+      ).rowCount,
+      0,
+    );
+    const largePlayers = [classicPlayers[0], freshClassic];
+    for (let i = 0; i < 31; i++) largePlayers.push(await newUser(10, 1700));
+    const largeClassic = await classicEvent("2050-08", largePlayers);
+    await query(
+      "UPDATE tournaments SET starts_at=statement_timestamp()-interval '1 minute' WHERE id=$1",
+      [largeClassic],
+    );
+    await tournaments.getTournamentDetail(largePlayers[0], largeClassic);
+    const fields = await query<{ leaderboard_group: number; count: string }>(
+      "SELECT leaderboard_group,COUNT(*)::text FROM tournament_members WHERE tournament_id=$1 GROUP BY leaderboard_group ORDER BY leaderboard_group",
+      [largeClassic],
+    );
+    assert.deepEqual(
+      fields.rows.map((r) => Number(r.count)),
+      [17, 16],
+    );
+    const fieldTwo = (
+      await query<{ user_id: string }>(
+        "SELECT user_id FROM tournament_members WHERE tournament_id=$1 AND leaderboard_group=2 LIMIT 1",
+        [largeClassic],
+      )
+    ).rows[0].user_id;
+    const fieldDetail = await tournaments.getTournamentDetail(
+      fieldTwo,
+      largeClassic,
+    );
+    assert.equal(fieldDetail.group, 2);
+    assert.equal(fieldDetail.standings.length, 16);
+    assert(
+      fieldDetail.matches.every((m) =>
+        [m.blackId, m.whiteId].every(
+          (u) =>
+            u === null || fieldDetail.standings.some((s) => s.userId === u),
+        ),
+      ),
+    );
+    console.log(
+      "Classic 19x19/60min/3x30, five real rated rounds, trophies, no-show idempotency, next-month suspension, withdrawal and minimum field passed.",
+    );
+
     await query("UPDATE tournament_settings SET premium_hosting_enabled=true");
     await assert.rejects(tournaments.createTournament(outsider, settings), {
       code: "premium_required",

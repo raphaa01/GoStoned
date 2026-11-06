@@ -11,7 +11,12 @@ import { closePool, getPool, query } from "../lib/db";
 import { getDatabaseUrl, isUnambiguousLocalDatabase } from "../lib/env";
 import { assertSmokeDatabaseIdentity } from "../lib/smokeDatabase";
 import { createSession, SESSION_COOKIE } from "../lib/auth/session";
-import { getTournamentDetail } from "../lib/tournaments/service";
+import {
+  getTournamentDetail,
+  getTournamentDashboard,
+  joinTournament,
+  readyTournamentMatch,
+} from "../lib/tournaments/service";
 import { resignGame } from "../lib/game/gameService";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
@@ -26,6 +31,7 @@ async function main() {
   const pages = new Map<string, Page>();
   const errors: string[] = [];
   let id: string | null = null;
+  let classicId: string | null = null;
   try {
     for (let i = 0; i < 3; i++) {
       const user = (
@@ -203,6 +209,105 @@ async function main() {
     await expect(
       black.getByRole("heading", { name: "Rangliste", exact: true }),
     ).toBeVisible();
+    // Classic registration is a deliberate commitment to five visible slots.
+    await query("UPDATE tournaments SET status='cancelled' WHERE id=$1", [id]);
+    await query(
+      "UPDATE player_glicko2_ratings SET rating=1700 WHERE user_id=$1",
+      [users[0]],
+    );
+    const dashboard = await getTournamentDashboard(users[0]);
+    classicId = dashboard.monthly.find(
+      (t) =>
+        t.monthlyMode === "classic" &&
+        t.category === 2 &&
+        t.scheduleHour === 16,
+    )!.id;
+    await query(
+      "UPDATE tournaments SET starts_at=statement_timestamp()+interval '1 hour',ends_at=statement_timestamp()+interval '7 days',status='lobby' WHERE id=$1",
+      [classicId],
+    );
+    for (let i = 0; i < 5; i++) {
+      const u = (
+        await query<{ id: string }>(
+          "INSERT INTO users(username) VALUES ($1) RETURNING id",
+          [`tc_${randomUUID().replaceAll("-", "").slice(0, 12)}`],
+        )
+      ).rows[0].id;
+      users.push(u);
+      await query(
+        `INSERT INTO player_glicko2_ratings(player_key,user_id,rating,rating_deviation,volatility,rated_game_count,algorithm_version,last_rating_period_at)
+        VALUES ($1,$2,1700,120,0.06,10,'glicko2-v1-tau-0.5',statement_timestamp())`,
+        [`user:${u}`, u],
+      );
+      await joinTournament(u, { id: classicId, acceptSchedule: true });
+    }
+    await host.goto(`${base}/de/tournaments`);
+    await expect(
+      host.getByRole("heading", { name: "Monthly Classic", exact: true }),
+    ).toBeVisible();
+    await host
+      .getByLabel("Tägliche Startzeit", { exact: true })
+      .selectOption(classicId);
+    const registration = host.locator(".tournament-classic-registration");
+    await expect(registration.locator("li")).toHaveCount(5);
+    await expect(
+      registration.getByRole("button", { name: "Beitreten", exact: true }),
+    ).toBeDisabled();
+    for (const theme of ["dark", "light"]) {
+      await host.evaluate((t) => {
+        localStorage.setItem("gostone.theme.v1", t);
+        document.documentElement.setAttribute("data-theme", t);
+      }, theme);
+      for (const width of [320, 390, 768, 1440]) {
+        await host.setViewportSize({ width, height: 1000 });
+        assert(
+          await host.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          `Classic overflow at ${width}px`,
+        );
+        await host.screenshot({
+          path: `.cache/visual-audit/tournaments/classic-${theme}-${width}.png`,
+          fullPage: true,
+        });
+      }
+    }
+    await registration.getByRole("checkbox").check();
+    await registration
+      .getByRole("button", { name: "Beitreten", exact: true })
+      .click();
+    await host.waitForURL(new RegExp(`/tournaments/${classicId}$`));
+    await expect(host.locator(".tournament-schedule li")).toHaveCount(5);
+    await expect(host.getByText(/60 Min\./).first()).toBeVisible();
+    await query(
+      "UPDATE tournaments SET starts_at=statement_timestamp()-interval '1 minute' WHERE id=$1",
+      [classicId],
+    );
+    const classicDetail = await getTournamentDetail(users[0], classicId);
+    const classicPair = classicDetail.matches.find((m) =>
+      [m.blackId, m.whiteId].includes(users[0]),
+    )!;
+    await expect(
+      host.getByRole("button", { name: "Bereit", exact: true }),
+    ).toBeVisible();
+    await host.getByRole("button", { name: "Bereit", exact: true }).click();
+    const opponent =
+      classicPair.blackId === users[0]
+        ? classicPair.whiteId!
+        : classicPair.blackId!;
+    const classicGame = await readyTournamentMatch(
+      opponent,
+      classicId,
+      classicPair.id,
+    );
+    assert(classicGame);
+    await host.waitForURL(new RegExp(`/game/${classicGame}$`));
+    await expect(host.getByRole("gridcell")).toHaveCount(361);
+    await resignGame(classicGame, `user:${users[0]}`);
+    await host.waitForURL(new RegExp(`/tournaments/${classicId}$`));
+    console.log(
+      "Classic browser registration, five local slots, explicit attendance consent, responsive themes, scheduled check-in and 19x19 game passed.",
+    );
     assert.deepEqual(
       errors,
       [],
@@ -224,6 +329,8 @@ async function main() {
           games.rows.map((r) => r.game_id),
         ]);
     }
+    if (classicId)
+      await query("DELETE FROM tournaments WHERE id=$1", [classicId]);
     if (users.length)
       await query("DELETE FROM users WHERE id=ANY($1::uuid[])", [users]);
     await closePool();

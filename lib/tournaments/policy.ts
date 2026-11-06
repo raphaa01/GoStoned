@@ -1,7 +1,125 @@
 import type { TournamentSettings, Standing } from "./types";
 import { GameServiceError } from "@/lib/game/gameServiceError";
+import { deriveGoRank } from "@/lib/rating/rankPolicy";
 
 export const MONTHLY_GAMES = 5;
+export const RAPID_GROUP_SIZE = 24;
+export const CLASSIC_HOURS = [8, 16, 20] as const;
+export const CLASSIC_READY_MS = 300_000;
+export const CLASSIC_TIME = {
+  mainTimeSeconds: 3600,
+  byoYomiPeriods: 3,
+  byoYomiSeconds: 30,
+};
+
+export function classicEligible(rating: number): boolean {
+  const rank = deriveGoRank(rating);
+  return rank.kind === "dan" || rank.value <= 10;
+}
+
+/** Five consecutive days, followed by two buffer days before monthly closure. */
+export function classicSchedule(start: Date): Date[] {
+  return Array.from(
+    { length: MONTHLY_GAMES },
+    (_, i) => new Date(start.getTime() + i * 86_400_000),
+  );
+}
+
+export function nextMonth(month: string): string {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  return date.toISOString().slice(0, 7);
+}
+
+/** Balanced fields, each with 6–32 entrants. Never create a tiny overflow field. */
+export function classicGroups(ids: string[]): string[][] {
+  if (ids.length < 6) return [];
+  const count = Math.ceil(ids.length / 32);
+  const base = Math.floor(ids.length / count);
+  let cursor = 0;
+  return Array.from({ length: count }, (_, i) => {
+    const size = base + (i < ids.length % count ? 1 : 0);
+    const group = ids.slice(cursor, cursor + size);
+    cursor += size;
+    return group;
+  });
+}
+
+/** Score-first Swiss pairing, no repeat opponents; lower score receives a bye. */
+export function swissPairs(
+  rows: Standing[],
+  history: Array<{ black_id: string | null; white_id: string | null }>,
+  round: number,
+): Array<[string, string | null]> {
+  const seen = new Set(
+    history
+      .filter((m) => m.white_id)
+      .map((m) => [m.black_id, m.white_id].sort().join(":")),
+  );
+  const byes = new Set(
+    history.filter((m) => !m.white_id).map((m) => m.black_id),
+  );
+  const colors = new Map<string, number>();
+  for (const m of history) {
+    if (m.black_id) colors.set(m.black_id, (colors.get(m.black_id) ?? 0) + 1);
+    if (m.white_id) colors.set(m.white_id, (colors.get(m.white_id) ?? 0) - 1);
+  }
+  const sorted = [...rows].sort(
+    (a, b) =>
+      b.points - a.points ||
+      b.rating - a.rating ||
+      a.userId.localeCompare(b.userId),
+  );
+  const byeCandidates =
+    sorted.length % 2
+      ? [...sorted].reverse().filter((r) => !byes.has(r.userId))
+      : [null];
+  let budget = 100_000;
+  function pair(remaining: Standing[]): Array<[string, string | null]> | null {
+    if (!remaining.length) return [];
+    if (--budget < 0) return null;
+    // Most constrained player first avoids greedy dead ends in the final rounds.
+    const legal = (a: Standing, b: Standing) =>
+      !seen.has([a.userId, b.userId].sort().join(":"));
+    const first = [...remaining].sort(
+      (a, b) =>
+        remaining.filter((r) => r !== a && legal(a, r)).length -
+        remaining.filter((r) => r !== b && legal(b, r)).length,
+    )[0];
+    const opponents = remaining
+      .filter((r) => r !== first && legal(first, r))
+      .sort(
+        (a, b) =>
+          Math.abs(first.points - a.points) -
+            Math.abs(first.points - b.points) ||
+          Math.abs(first.rating - a.rating) - Math.abs(first.rating - b.rating),
+      );
+    for (const opponent of opponents) {
+      const rest = pair(remaining.filter((r) => r !== first && r !== opponent));
+      if (rest) {
+        const blackFirst =
+          (colors.get(first.userId) ?? 0) <
+            (colors.get(opponent.userId) ?? 0) ||
+          ((colors.get(first.userId) ?? 0) ===
+            (colors.get(opponent.userId) ?? 0) &&
+            round % 2 === 1);
+        return [
+          [
+            blackFirst ? first.userId : opponent.userId,
+            blackFirst ? opponent.userId : first.userId,
+          ],
+          ...rest,
+        ];
+      }
+    }
+    return null;
+  }
+  for (const bye of byeCandidates) {
+    const pairs = pair(sorted.filter((r) => r !== bye));
+    if (pairs) return bye ? [...pairs, [bye.userId, null]] : pairs;
+  }
+  throw new Error("No legal Swiss pairing available.");
+}
 export const REQUIRED_RATED_GAMES = 10;
 export const READY_WINDOW_MS = 120_000;
 export const QUEUE_LEASE_MS = 30_000;

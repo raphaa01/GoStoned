@@ -176,8 +176,20 @@ export async function POST(request: NextRequest) {
     const id = uuid(body.id);
     switch (action) {
       case "join":
-        fields(body, ["action", "id"]);
-        await tournaments.joinTournament(user.id, { id });
+        fields(body, [
+          "action",
+          "id",
+          ...(Object.hasOwn(body, "acceptSchedule") ? ["acceptSchedule"] : []),
+        ]);
+        if (
+          Object.hasOwn(body, "acceptSchedule") &&
+          typeof body.acceptSchedule !== "boolean"
+        )
+          invalidTournament();
+        await tournaments.joinTournament(user.id, {
+          id,
+          acceptSchedule: body.acceptSchedule === true,
+        });
         break;
       case "settings":
         fields(body, [
