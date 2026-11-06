@@ -46,7 +46,7 @@ async function main() {
       users.push(user);
       await query(
         `INSERT INTO player_glicko2_ratings(player_key,user_id,rating,rating_deviation,volatility,rated_game_count,algorithm_version,last_rating_period_at)
-        VALUES ($1,$2,1200,120,0.06,10,'glicko2-v1-tau-0.5',statement_timestamp())`,
+        VALUES ($1,$2,1700,120,0.06,10,'glicko2-v1-tau-0.5',statement_timestamp())`,
         [`user:${user}`, user],
       );
       await query(
@@ -211,10 +211,6 @@ async function main() {
     ).toBeVisible();
     // Classic registration is a deliberate commitment to five visible slots.
     await query("UPDATE tournaments SET status='cancelled' WHERE id=$1", [id]);
-    await query(
-      "UPDATE player_glicko2_ratings SET rating=1700 WHERE user_id=$1",
-      [users[0]],
-    );
     const dashboard = await getTournamentDashboard(users[0]);
     classicId = dashboard.monthly.find(
       (t) =>
