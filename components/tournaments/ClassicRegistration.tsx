@@ -69,6 +69,7 @@ export function ClassicRegistration({
       <label>
         {copy.slot}
         <select
+          aria-label={copy.slot}
           value={event.id}
           onChange={(e) => {
             setSelected(e.target.value);
@@ -79,7 +80,8 @@ export function ClassicRegistration({
             .sort((a, b) => a.scheduleHour - b.scheduleHour)
             .map((t) => (
               <option key={t.id} value={t.id}>
-                {date.format(new Date(t.startsAt))} · {t.memberCount} {copy.capacity}
+                {date.format(new Date(t.startsAt))} · {t.memberCount}{" "}
+                {copy.capacity}
               </option>
             ))}
         </select>

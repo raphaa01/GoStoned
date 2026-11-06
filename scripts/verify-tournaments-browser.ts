@@ -235,6 +235,10 @@ async function main() {
         VALUES ($1,$2,1700,120,0.06,10,'glicko2-v1-tau-0.5',statement_timestamp())`,
         [`user:${u}`, u],
       );
+      await query(
+        "INSERT INTO player_rating_preferences(user_id) VALUES ($1)",
+        [u],
+      );
       await joinTournament(u, { id: classicId, acceptSchedule: true });
     }
     await host.goto(`${base}/de/tournaments`);
@@ -312,6 +316,25 @@ async function main() {
     console.log(
       "Browser → API → PostgreSQL → lobby → ready → live game → spectator → standings passed at desktop and mobile widths.",
     );
+  } catch (error) {
+    const page = pages.get(users[0]);
+    if (page) {
+      console.error(
+        "Tournament browser page:",
+        page.url(),
+        await page
+          .locator(".tournaments")
+          .innerText()
+          .catch(() => "unavailable"),
+      );
+      await page
+        .screenshot({
+          path: ".cache/visual-audit/tournaments/failure.png",
+          fullPage: true,
+        })
+        .catch(() => undefined);
+    }
+    throw error;
   } finally {
     await browser.close();
     if (id) {
