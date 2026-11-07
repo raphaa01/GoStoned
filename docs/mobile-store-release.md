@@ -1,5 +1,26 @@
 # Mobile store release
 
+## iOS 1.0, build 3 (2026-10-31)
+
+Build 3 uses main commit `5b80e1d`, including the self-service account deletion
+fix from `e2306a8` and the community moderation updates, plus a native archive
+compatibility fix: the iOS Go clock uses Capacitor's `SystemBars` API to hide
+and restore the home indicator instead of overriding its non-open property.
+Apple rejected build 2
+under guideline 5.1.1(v) because account deletion required extra steps.
+
+The replacement bundle exposes Profile → Settings → Delete account inside the
+app. Deletion requires explicit confirmation and completes through the shared
+authenticated API; users do not need support contact, a new account, an added
+email address, or a local password. The missing-email screen also exposes the
+same deletion form. See `docs/account-deletion-operations.md` for the server
+cleanup, Apple-token revocation, migration and verification details.
+
+The signed archive, dSYMs, exported IPA and checksum are stored outside Git in
+`artifacts/release/1.0-3/ios/`. Select build 3 for the existing version 1.0 and
+retain **manual release** after approval. App Review notes should identify the
+in-app deletion path and explain the resolution of guideline 5.1.1(v).
+
 ## iOS 1.0, build 2 (2026-10-08)
 
 Build 2 uses main commit `59e36c7`, including the mobile beta fixes, compact
