@@ -3548,11 +3548,9 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
   :root {
     --sidebar-width: 0px;
   }
+}
 
-  .sidebar {
-    display: none;
-  }
-
+@media (max-width: 1366px) {
   .mobile-nav {
     align-items: center;
     background: var(--bg-deep);
@@ -3571,7 +3569,7 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
     font-size: 18px;
   }
 
-  .icon-button {
+  .mobile-nav > .icon-button {
     align-items: center;
     background: #3b3937;
     border: 0;
@@ -3597,8 +3595,8 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
     top: 60px;
   }
 
-.mobile-menu a,
-.mobile-menu button {
+  .mobile-menu a,
+  .mobile-menu button {
     align-items: center;
     border-radius: 7px;
     color: var(--muted);
@@ -3606,21 +3604,23 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
     font-size: 14px;
     gap: 9px;
     min-height: 44px;
-  padding: 10px 12px;
-}
+    padding: 10px 12px;
+  }
 
-.mobile-menu button {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  width: 100%;
-}
+  .mobile-menu button {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    width: 100%;
+  }
 
   .mobile-menu a.is-active {
     background: var(--panel);
     color: #fff;
   }
+}
 
+@media (max-width: 840px) {
   .app-main {
     margin-left: 0;
   }
