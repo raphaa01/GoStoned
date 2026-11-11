@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Home, Search } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -136,8 +136,18 @@ export function GameResultModal({
           {exiting ? dictionary.common.pleaseWait : ""}
         </span>
         <div className="result-secondary-actions">
-          <button disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">{copy.viewBoard}</button>
-          <button disabled={exiting} onClick={() => void exitResult(onHome)} type="button">{copy.home}</button>
+          <button
+            className="button button--secondary result-home-action"
+            disabled={exiting}
+            onClick={() => void exitResult(onHome)}
+            type="button"
+          >
+            <Home aria-hidden="true" size={18} />
+            {copy.home}
+          </button>
+          <button className="result-view-board" disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">
+            {copy.viewBoard}
+          </button>
         </div>
         <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
     </ModalDialog>

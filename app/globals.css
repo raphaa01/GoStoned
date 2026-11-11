@@ -2389,11 +2389,10 @@ a {
 .result-secondary-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 1fr;
   padding: 9px 20px 20px;
 }
 
-.result-secondary-actions button {
+.result-view-board {
   align-items: center;
   background: transparent;
   border: 0;
@@ -2404,10 +2403,11 @@ a {
   font-size: 10px;
   gap: 6px;
   justify-content: center;
+  justify-self: center;
   padding: 8px;
 }
 
-.result-secondary-actions button:hover {
+.result-view-board:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
 }

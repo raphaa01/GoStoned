@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, ChevronRight, Clock3, Flag } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Clock3, Flag, Home } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { BoardPreview } from "@/components/game/BoardPreview";
@@ -52,7 +52,7 @@ export function LocalPlay() {
 function LocalGameView({ boardSize, timeControl, onAgain, onExit }: {
   boardSize: BoardSize; timeControl: TimeControlId; onAgain: () => void; onExit: () => void;
 }) {
-  const { dictionary, locale } = useI18n();
+  const { dictionary, href, locale } = useI18n();
   const copy = getLocalPlayCopy(locale);
   const gameCopy = dictionary.game;
   const [game, setGame] = useState(() => createLocalGame(boardSize, timeControl, Date.now()));
@@ -203,7 +203,13 @@ function LocalGameView({ boardSize, timeControl, onAgain, onExit }: {
       </div>)}</div>
       {settlement ? <div className="local-score"><span>{gameCopy.black}<strong>{settlement.score.blackTotal}</strong></span><span>{gameCopy.white}<strong>{settlement.score.whiteTotal}</strong></span></div> : null}
       <button className="button button--primary local-start" onClick={onAgain} type="button">{copy.newGame}</button>
-      <div className="result-secondary-actions"><button onClick={() => setResultVisible(false)} type="button">{gameCopy.viewBoard}</button><button onClick={onExit} type="button">{copy.back}</button></div>
+      <div className="result-secondary-actions">
+        <Link className="button button--secondary result-home-action" href={href("/")} replace>
+          <Home aria-hidden="true" size={18} />
+          {gameCopy.home}
+        </Link>
+        <button className="result-view-board" onClick={() => setResultVisible(false)} type="button">{gameCopy.viewBoard}</button>
+      </div>
     </ModalDialog>
   </main>;
 }

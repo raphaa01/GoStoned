@@ -75,6 +75,8 @@ html[data-mobile-app="true"] .local-play-screen .time-selector button.is-selecte
 .local-result-modal .result-modal-header::after { display: none; }
 .local-result-modal .result-modal-header h2 { font-size: 30px; }
 .local-result-modal .local-score { margin: 16px 20px; }
+.local-result-modal .local-score > span { font-size: var(--result-font-small); }
+.local-result-modal .local-score strong { font-size: 1rem; }
 .local-result-modal .local-start { margin: 8px 20px 0; width: calc(100% - 40px); }
 .go-clock-face {
   position: fixed;
