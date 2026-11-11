@@ -26,6 +26,7 @@ export function Navbar() {
   const learnHref = useAccountFeatureHref("/learn");
   const reviewHref = useAccountFeatureHref("/review");
   const menuId = useId();
+  const header = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const links = [
     { destination: href("/play"), path: "/play", label: dictionary.nav.play, icon: Gamepad2 },
@@ -40,14 +41,24 @@ export function Navbar() {
 
   useEffect(() => {
     if (!open) return;
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Node && !header.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
       setOpen(false);
       menuButton.current?.focus();
     }
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   }, [open]);
 
   async function signOut() {
@@ -64,11 +75,11 @@ export function Navbar() {
   return (
     <header
       className="mobile-nav"
+      ref={header}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
-        if (!open || (nextTarget instanceof Node && event.currentTarget.contains(nextTarget))) return;
+        if (!open || !(nextTarget instanceof HTMLElement) || event.currentTarget.contains(nextTarget)) return;
         setOpen(false);
-        if (!(nextTarget instanceof HTMLElement)) return;
         window.requestAnimationFrame(() => {
           if (!nextTarget.isConnected || document.activeElement !== nextTarget) return;
           const bounds = nextTarget.getBoundingClientRect();
@@ -123,7 +134,7 @@ export function Navbar() {
           ))}
           {!user ? <Link href={href("/register")} onClick={() => setOpen(false)}>{dictionary.nav.createAccount}</Link> : null}
           <Link href={href("/impressum")} onClick={() => setOpen(false)}>{dictionary.nav.legal}</Link>
-          <LanguageSwitcher />
+          {open ? <LanguageSwitcher /> : null}
           {user ? (
             <button onClick={signOut} type="button"><LogOut size={18} /> {dictionary.nav.logout}</button>
           ) : null}

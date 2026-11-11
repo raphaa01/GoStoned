@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import type { GameState, Stone, StoredMove } from "../../lib/game/types";
 import { scoreChineseAgreement, toggleDeadGroup } from "../../lib/game/scoring";
-import { ky } from "../../lib/i18n/catalogs/ky";
-import { getFriendsCopy } from "../../lib/i18n/friends";
+import { LOCALES } from "../../lib/i18n/config";
+import { getDictionary } from "../../lib/i18n/dictionary";
 
 const ORIGIN = "http://127.0.0.1:3100";
 const EXPECTED_PLAYER_HEADER = "x-gostone-expected-player";
@@ -1693,7 +1693,7 @@ for (const locale of ["en", "de"] as const) {
 for (const locale of ["en", "de"] as const) {
   test(`${locale.toUpperCase()} mobile disclosure follows real keyboard focus`, async ({ page }) => {
     const width = page.viewportSize()?.width ?? Number.POSITIVE_INFINITY;
-    test.skip(width > 840, "The desktop projects use the persistent sidebar.");
+    test.skip(width > 1366, "The desktop project uses the inline navigation.");
     await page.setViewportSize({ width, height: 360 });
     const harness = await installApiHarness(page);
     const localeCopy = copy[locale];
@@ -1798,16 +1798,17 @@ for (const locale of ["en", "de"] as const) {
 
 test("language switch preserves the play route, query, and fragment", async ({ page }, testInfo) => {
   test.skip(
-    !["chromium-320-touch", "chromium-1024"].includes(testInfo.project.name),
+    !["chromium-320-touch", "chromium-1440"].includes(testInfo.project.name),
     "One touch and one desktop project cover the real locale switch.",
   );
   const harness = await installApiHarness(page, { realLocaleMutation: true });
 
   await page.goto("/play?size=19&source=browser#queue");
   let languageMenu = page.getByRole("button", { name: "Choose language: English" });
-  if ((page.viewportSize()?.width ?? 0) <= 840) {
+  const menuButton = page.locator(".mobile-nav > .icon-button");
+  if (await menuButton.isVisible()) {
     const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
-    await page.locator(".mobile-nav > .icon-button").click();
+    await menuButton.click();
     await expect(mobileNavigation).toBeVisible();
     languageMenu = mobileNavigation.getByRole("button", { name: "Choose language: English" });
   }
@@ -1827,41 +1828,76 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   await expectCleanHarness(harness);
 });
 
-test("Kyrgyz play keeps the desktop navigation visible at 1024 px", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "chromium-1024", "The 1024 px project covers the desktop navigation breakpoint.");
+test("tablet navigation keeps Friends, Tournaments, and languages in a compact panel", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "One project covers the tablet sizes.");
   const harness = await installApiHarness(page);
-  const friends = getFriendsCopy("ky");
+  await page.goto("/de/play");
 
-  await page.goto("/ky/play");
-  await expect(page.locator("html")).toHaveAttribute("lang", "ky");
-  await expect(page.getByRole("button", { name: ky.play.findOpponent, exact: true })).toBeVisible();
+  const toggle = page.locator(".mobile-nav > .icon-button");
+  const navigation = page.getByRole("navigation", { name: copy.de.mobileNavigation });
+  const language = navigation.getByRole("button", { name: /Deutsch/ });
+  for (const width of [1024, 1280, 1366]) {
+    await page.setViewportSize({ width, height: 768 });
+    await expect(page.locator(".sidebar")).toBeHidden();
+    await expect(navigation).toBeHidden();
+    await toggle.click();
 
-  const desktopHeader = page.locator(".sidebar");
-  const navigation = desktopHeader.getByRole("navigation", { name: ky.nav.mainLabel });
-  await expect(desktopHeader).toBeVisible();
-  await expect(page.locator(".mobile-nav")).toBeHidden();
-  const friendsLink = navigation.getByRole("link", { name: friends.nav, exact: true });
-  const language = desktopHeader.getByRole("button", {
-    name: `${ky.language.switcherLabel}: Кыргызча`,
-    exact: true,
-  });
-  await expect(friendsLink).toBeVisible();
+    await expect(navigation.getByRole("link", { name: "Freunde", exact: true })).toHaveAttribute("href", "/de/friends");
+    await expect(navigation.getByRole("link", { name: "Turniere", exact: true })).toHaveAttribute("href", "/de/tournaments");
+    await expectControlInsideViewport(page, navigation, false);
+    const [panel, button] = await Promise.all([navigation.boundingBox(), toggle.boundingBox()]);
+    expect(panel!.width).toBeLessThanOrEqual(320);
+    expect(panel!.y).toBeGreaterThanOrEqual(button!.y + button!.height);
+    expect(panel!.x + panel!.width).toBeCloseTo(button!.x + button!.width, 0);
+    await toggle.click();
+  }
+
+  await toggle.click();
   await language.click();
-  const popover = desktopHeader.getByRole("menu", { name: ky.language.switcherLabel });
-  await expect(popover).toBeVisible();
-  const [friendsBox, languageBox, popoverBox] = await Promise.all([
-    friendsLink.boundingBox(),
-    language.boundingBox(),
-    popover.boundingBox(),
-  ]);
-  expect(friendsBox).not.toBeNull();
-  expect(languageBox).not.toBeNull();
-  expect(popoverBox).not.toBeNull();
-  expect(friendsBox!.y).toBeGreaterThanOrEqual(languageBox!.y + languageBox!.height - 1);
-  expect(popoverBox!.y).toBeGreaterThanOrEqual(languageBox!.y + languageBox!.height - 1);
-  await expectNoDocumentOverflow(page);
+  await expect(navigation.getByRole("menuitemradio", { name: "Deutsch" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(navigation.getByRole("menu")).toBeHidden();
+  await expect(language).toBeFocused();
+  await expect(navigation).toBeVisible();
+  await page.locator(".play-board-preview").click();
+  await expect(navigation).toBeHidden();
+
+  await toggle.click();
+  await navigation.getByRole("link", { name: "Turniere", exact: true }).click();
+  await expect(page).toHaveURL(`${ORIGIN}/de/register?returnTo=%2Ftournaments`);
+  await expect(navigation).toBeHidden();
   await expectCleanHarness(harness);
 });
+
+for (const { code, nativeName } of LOCALES) {
+  test(`desktop navigation fits beside the account controls in ${code}`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-1440", "One project covers the minimum desktop width.");
+    const harness = await installApiHarness(page);
+    await page.setViewportSize({ width: 1367, height: 900 });
+    await page.goto(code === "en" ? "/play" : `/${code}/play`);
+    const { language, nav } = getDictionary(code);
+    const header = page.locator(".sidebar");
+    await expect(page.locator(".mobile-nav")).toBeHidden();
+    await expect(header.getByRole("navigation", { name: nav.mainLabel }).getByRole("link")).toHaveCount(7);
+    await expect(header.getByRole("button", { name: `${language.switcherLabel}: ${nativeName}` })).toBeVisible();
+    await expect(header.getByRole("link", { name: nav.createAccount, exact: true })).toBeVisible();
+
+    const bounds = await header.locator(".brand, .nav-link, .sidebar-bottom > :is(a, .language-menu)").evaluateAll(
+      (controls) => controls.map((control) => {
+        const { left, right, top, bottom } = control.getBoundingClientRect();
+        return { left, right, top, bottom };
+      }),
+    );
+    for (const [index, control] of bounds.entries()) {
+      expect(control.left, code).toBeGreaterThanOrEqual(bounds[index - 1]?.right ?? 0);
+      expect(control.right, code).toBeLessThanOrEqual(1367);
+      expect(control.top, code).toBeLessThan(41);
+      expect(control.bottom, code).toBeGreaterThan(41);
+    }
+    await expectNoDocumentOverflow(page);
+    await expectCleanHarness(harness);
+  });
+}
 
 test("locale preference survives a rejected oversized mutation", async ({ page }, testInfo) => {
   test.skip(
