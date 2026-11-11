@@ -57,6 +57,13 @@ test("resignation confirms the current color and replay starts an empty game", a
   await page.getByRole("dialog").getByRole("button", { name: "Noch einmal spielen", exact: true }).click();
   await expect(page.locator(".local-turn")).toHaveText("Schwarz am Zug");
   await expect(page.locator(".go-board .stone")).toHaveCount(0);
+  await page.getByRole("button", { name: "Aufgeben", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Aufgeben", exact: true }).click();
+  const home = page.getByRole("dialog").getByRole("link", { name: "Zur Startseite", exact: true });
+  await expect(home).toHaveClass(/button--secondary/);
+  await home.click();
+  await expect(page).toHaveURL(/\/de\/?$/);
+  await expect(page.locator(".mobile-home")).toBeVisible();
 });
 
 test("scoring edits clear agreement; failed requests can retry and play can resume", async ({ page }, info) => {

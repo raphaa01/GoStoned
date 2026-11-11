@@ -27,10 +27,13 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(page.locator(".game-pass-notice")).toHaveCount(0);
   });
 
-  test("the result dialog creates a selectable public share link", async ({ page }) => {
+  test("the result dialog supports sharing and returning to the localized home page", async ({ page }) => {
     const state = await installHarness(page);
     state.game = { ...gameFor(9, "friendly"), status: "finished", winnerKey: USER.playerKey,
       result: "B+R", finishReason: "resignation", finishedAt: new Date().toISOString(), turn: null };
+    await page.route("**/api/matchmaking", (route) => route.fulfill({ json: {
+      ok: true, actor: USER.playerKey, matchmaking: { status: "idle" },
+    } }));
     await page.route(`**/api/games/${GAME_ID}/share`, async (route) => {
       expect(route.request().method()).toBe("POST");
       expect(route.request().headers()["x-gostone-expected-player"]).toBe(USER.playerKey);
@@ -47,6 +50,12 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(dialog.getByRole("textbox", { name: "Partie teilen" })).toHaveValue(/^https:\/\/gostone\.app\/de\/shared-game\//);
     await expect(dialog.getByRole("alert")).toHaveCount(0);
     await assertNoOverflow(page);
+    const home = dialog.getByRole("button", { name: "Zur Startseite", exact: true });
+    await expect(home).toHaveClass(/button--secondary/);
+    await expect(home).toHaveCSS("min-height", "46px");
+    await home.click();
+    await expect(page).toHaveURL(/\/de\/?$/);
+    await expect(page.locator(mobile ? ".mobile-home" : ".home-experience")).toBeVisible();
   });
 
   test("puzzle undo removes the failed branch and continues at the last correct decision", async ({ page }) => {

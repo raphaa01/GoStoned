@@ -80,6 +80,10 @@ test("returning to daily puzzle, leaderboard, review and profile reuses reads; m
   const requests = await installCompactFixture(page);
   await page.goto("/");
   await expect(page.getByText("AutumnGoban3", { exact: true })).toBeVisible();
+  const headingSize = await page.locator(".mobile-home-section h2").first().evaluate((heading) => getComputedStyle(heading).fontSize);
+  for (const title of await page.locator(".mobile-home-action strong").all()) {
+    await expect(title).toHaveCSS("font-size", headingSize);
+  }
   // Both destinations are warm before the first tab click, not just on return.
   await expect.poll(() => requests.puzzles).toBe(1);
   await expect.poll(() => requests.stats).toBe(1);
