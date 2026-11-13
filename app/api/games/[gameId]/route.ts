@@ -45,7 +45,7 @@ export async function GET(
     consumeEphemeralPolicyRateLimit(request, RATE_LIMIT_POLICIES.gameRead, playerKey);
     const knownVersion = query.kind === "full" ? null : query.knownVersion;
     const result = await pollGameState(gameId, playerKey, knownVersion);
-    return noStoreJson(gamePollResponseBody(result));
+    return noStoreJson(gamePollResponseBody(result, playerKey));
   } catch (error) {
     return apiError(error);
   }

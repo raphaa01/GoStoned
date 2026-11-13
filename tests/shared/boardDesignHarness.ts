@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { BOARD_DESIGNS, type BoardDesignId } from "../../lib/boardDesign";
 import { EXPECTED_PLAYER_HEADER } from "../../lib/auth/playerBinding";
+import { gamePollResponseBody } from "../../lib/game/gamePolling";
 import type { BoardSize, GameState } from "../../lib/game/types";
 
 export const USER = {
@@ -58,7 +59,7 @@ export async function installHarness(page: Page) {
     }
     if (pathname === `/api/games/${GAME_ID}`) {
       state.game.clock.serverNow = new Date().toISOString();
-      return json(route, { ok: true, actor: USER.playerKey, game: state.game });
+      return json(route, gamePollResponseBody({ game: state.game }, USER.playerKey));
     }
     if (pathname === `/api/games/${GAME_ID}/chat`) return json(route, { ok: true, actor: USER.playerKey, available: true, messages: [] });
     if (pathname === `/api/games/${GAME_ID}/block`) return json(route, { ok: true, actor: USER.playerKey, blocked: false });

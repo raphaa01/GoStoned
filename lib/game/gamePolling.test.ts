@@ -244,16 +244,17 @@ test("a verified terminal state cannot regress to active", () => {
   }), null);
 });
 
-test("route payloads keep the legacy full shape and add a distinct heartbeat", () => {
+test("full and heartbeat payloads include the verified actor", () => {
   const game = gameState();
-  assert.deepEqual(gamePollResponseBody({ unchanged: false, game }), { ok: true, game });
+  const actor = game.blackPlayerKey;
+  assert.deepEqual(gamePollResponseBody({ unchanged: false, game }, actor), { ok: true, actor, game });
   const heartbeat = {
     unchanged: true as const,
     gameId: game.id,
     version: game.version,
     clock: game.clock,
   };
-  assert.deepEqual(gamePollResponseBody(heartbeat), { ok: true, ...heartbeat });
+  assert.deepEqual(gamePollResponseBody(heartbeat, actor), { ok: true, actor, ...heartbeat });
 });
 
 test("an inconsistent newer board is ignored and a subsequent valid snapshot recovers without losing stones", () => {
