@@ -338,7 +338,7 @@ export const ko = {
     "clock": "시계",
     "rules": "규칙",
     "chinese": "중국어",
-    "lookingForPlayer": "{board} · {time}: 다른 플레이어를 찾는 중…",
+    "lookingForPlayer": "다른 플레이어를 찾는 중…",
     "cancelSearch": "검색 취소",
     "retrySession": "플레이어 세션 재시도",
     "preparingGuest": "게스트 준비 중…",

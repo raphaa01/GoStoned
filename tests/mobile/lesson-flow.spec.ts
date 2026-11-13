@@ -26,26 +26,26 @@ for (const id of ["s4-ladder", "s4-net", "s4-snapback", "s2-ko", "s3-challenge"]
     for (const [index, step] of lesson.steps.entries()) {
       await expect(player).toHaveAttribute("data-step-id", step.id);
       if (step.kind === "info") {
-        await expect(player.locator('.learn-player__step-mode[data-mode="info"]')).toBeVisible();
+        await expect(player).toHaveAttribute("data-mode", "info");
         await page.getByRole("button", { name: "Weiter", exact: true }).click();
         continue;
       }
-      await expect(player.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+      await expect(player).toHaveAttribute("data-mode", "action");
       if (step.kind === "play" || step.kind === "illegal") {
         await expect(player).toHaveAttribute("data-player-color", learnerColor!);
-        await expect(player.locator(".learn-player__step-mode")).toContainText(learnerColor === "black" ? "Du spielst Schwarz." : "Du spielst Weiß.");
+        await expect(player.locator(".learn-teacher__task")).toHaveText(step.task ? line(step.task, "de") : learnerColor === "black" ? "Du spielst Schwarz." : "Du spielst Weiß.");
       }
       const count = step.kind === "select" ? step.selectionCount ?? step.targets!.length : 1;
       for (const point of step.targets!.slice(0, count)) await page.getByRole("gridcell").nth(point.y * step.size! + point.x).click();
       await expect(page.getByRole("button", { name: /^Nächsten Zug zeigen/ })).toHaveCount(0);
       if (continuesOwnTurn(step, lesson.steps[index + 1])) {
         await expect(player).toHaveAttribute("data-step-id", lesson.steps[index + 1].id);
-        await expect(player.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+        await expect(player).toHaveAttribute("data-mode", "action");
         await expect(player.locator(".learn-player__next")).toBeDisabled();
         await expect(player.locator(".learn-teacher__speech")).toContainText(line(step.success!, "de"));
       } else {
         await expect(player).toHaveAttribute("data-step-id", step.id);
-        await expect(player.locator('.learn-player__step-mode[data-mode="solved"]')).toBeVisible();
+        await expect(player).toHaveAttribute("data-mode", "solved");
         const next = page.getByRole("button", { name: index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact: true });
         await expect(next).toBeEnabled();
         await next.click();
@@ -70,7 +70,7 @@ test("commented game shows the first opponent reply, then exactly one trainer pl
     await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount((index + 1) * 2);
     for (let reply = 1; reply < step.replies!.length; reply++) {
       await expect(reveal).toHaveText(new RegExp(`${reply + 1}/${step.replies!.length}`));
-      await expect(page.locator('.learn-player__step-mode[data-mode="info"]')).toBeVisible();
+      await expect(page.locator(".learn-player")).toHaveAttribute("data-mode", "info");
       const stones = await page.locator(".interactive-learn-board__point.has-stone").count();
       await reveal.click();
       await expect(page.locator(".interactive-learn-board__point.has-stone")).toHaveCount(stones + Number(step.replies![reply] !== null));

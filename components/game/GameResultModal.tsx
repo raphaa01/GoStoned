@@ -115,41 +115,43 @@ export function GameResultModal({
         ) : null}
 
         <button
-          className="button button--primary result-primary"
+          className="button button--primary result-primary result-home-action"
           disabled={exiting}
-          onClick={() => void exitResult(onPlayAgain)}
-          ref={playAgainButton}
+          onClick={() => void exitResult(onHome)}
           type="button"
         >
-          {copy.findAnother}
+          <Home aria-hidden="true" size={18} />
+          {copy.home}
         </button>
-        <button
-          className="result-analysis-action"
-          disabled={exiting}
-          onClick={() => void exitResult(onAnalyze)}
-          type="button"
-        >
-          <Search aria-hidden="true" size={18} />
-          {dictionary.analysisReview.analyze}
-        </button>
-        <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
-          {exiting ? dictionary.common.pleaseWait : ""}
-        </span>
         <div className="result-secondary-actions">
           <button
-            className="button button--secondary result-home-action"
+            className="button button--secondary result-play-action"
             disabled={exiting}
-            onClick={() => void exitResult(onHome)}
+            onClick={() => void exitResult(onPlayAgain)}
+            ref={playAgainButton}
             type="button"
           >
-            <Home aria-hidden="true" size={18} />
-            {copy.home}
+            {copy.findAnother}
           </button>
+          <button
+            className="button button--secondary result-analysis-action"
+            disabled={exiting}
+            onClick={() => void exitResult(onAnalyze)}
+            type="button"
+          >
+            <Search aria-hidden="true" size={18} />
+            {dictionary.analysisReview.analyze}
+          </button>
+          <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+            {exiting ? dictionary.common.pleaseWait : ""}
+          </span>
+        </div>
+        <div className="result-details-actions">
           <button className="result-view-board" disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">
             {copy.viewBoard}
           </button>
+          <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
         </div>
-        <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
     </ModalDialog>
   );
 }

@@ -34,7 +34,7 @@ export function registerLessonReplyTests(mobile: boolean) {
     await stone.click();
     await expect(stone).toHaveClass(/has-stone is-black/);
     await expect(player).toHaveAttribute("data-step-id", "throw-0");
-    await expect(player.locator(".learn-player__step-mode")).toHaveAttribute("data-mode", "reply");
+    await expect(player).toHaveAttribute("data-mode", "reply");
     await expect(player.locator(".learn-player__next")).toBeDisabled();
     await expect(player.locator('[role="gridcell"][aria-disabled="false"]')).toHaveCount(0);
     // A second pointer event during the pause cannot add or consume another move.
@@ -50,12 +50,12 @@ export function registerLessonReplyTests(mobile: boolean) {
     await expect(stone).not.toHaveClass(/has-stone/);
     await expect(reply).toHaveClass(/has-stone is-white/);
     await expect(player).toHaveAttribute("data-step-id", "throw-1");
-    await expect(player.locator(".learn-player__step-mode")).toHaveAttribute("data-mode", "action");
+    await expect(player).toHaveAttribute("data-mode", "action");
     await page.screenshot({ path: `${artifact}-after.png`, fullPage: true, animations: "disabled" });
     // This decision has no authored reply, so no additional delay is introduced.
     await stone.click();
     await expect(stone).toHaveClass(/has-stone is-black/);
-    await expect(player.locator(".learn-player__step-mode")).toHaveAttribute("data-mode", "solved");
+    await expect(player).toHaveAttribute("data-mode", "solved");
     await expect(player.locator(".learn-player__next")).toBeEnabled();
   });
 
@@ -69,7 +69,7 @@ export function registerLessonReplyTests(mobile: boolean) {
     await restart.click();
     await page.clock.runFor(1_000);
     await expect(stone).not.toHaveClass(/has-stone/);
-    await expect(player.locator(".learn-player__step-mode")).toHaveAttribute("data-mode", "action");
+    await expect(player).toHaveAttribute("data-mode", "action");
     await stone.click();
     await page.clock.runFor(1_000);
     await expect(stone).toHaveClass(/has-stone is-black/);
@@ -78,7 +78,7 @@ export function registerLessonReplyTests(mobile: boolean) {
     await page.clock.runFor(3_000);
     await expect(stone).not.toHaveClass(/has-stone/);
     await expect(player).toHaveAttribute("data-step-id", "throw-0");
-    await expect(player.locator(".learn-player__step-mode")).toHaveAttribute("data-mode", "action");
+    await expect(player).toHaveAttribute("data-mode", "action");
     await stone.click();
     await page.clock.runFor(2_000);
     await expect(player).toHaveAttribute("data-step-id", "throw-1");

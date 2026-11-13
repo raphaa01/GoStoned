@@ -158,7 +158,6 @@ html[data-mobile-app="true"] .intersection { min-height: 0; min-width: 0; }
 }
 .mobile-learn-screen .learn-experience { padding-top: 0; }
 .mobile-learn-screen .learn-overview__header h1 { font-size: clamp(28px, 7.8vw, 38px); }
-.mobile-learn-screen .learn-player__heading { padding-block: 18px 14px; }
 
 .mobile-tab-bar {
   align-items: stretch;
@@ -428,9 +427,6 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-app-content .leaderboard-table tr > td:last-child { display: grid; font-size: 13px; justify-items: end; }
 .mobile-app-content .leaderboard-table .rank { font-size: 11px; min-width: 30px; }
 .mobile-app-content .leaderboard-viewer { border-radius: var(--mobile-radius-sm) !important; }
-.mobile-puzzle-screen [class*="hero"] h1 { font-size: 28px !important; }
-.mobile-puzzle-screen [class*="workspace"] { grid-template-columns: 1fr !important; }
-.mobile-puzzle-screen [class*="catalog"] { border-radius: var(--mobile-radius-md) !important; padding: 16px !important; }
 .mobile-review-screen [class*="hub"] { gap: 18px !important; }
 .mobile-review-screen [class*="hero"] { margin: 0 !important; }
 .mobile-review-screen [class*="gamePicker"] { border-radius: var(--mobile-radius-md) !important; padding: 14px !important; }
@@ -463,7 +459,6 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
   .mobile-app-content .play-board-column { position: sticky; top: 18px; }
   .mobile-app-content .friends-grid { grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr) !important; }
   .mobile-review-screen [class*="reviewWorkspace"] { grid-template-columns: minmax(0, 1.25fr) minmax(310px, .75fr) !important; }
-  .mobile-puzzle-screen [class*="workspace"] { grid-template-columns: minmax(0, 1fr) minmax(290px, 360px) !important; }
 }
 
 @media (max-width: 370px) {
@@ -556,39 +551,7 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 .mobile-app-content .match-error { font-size: 12px; margin-block: var(--space-2) 0; }
 
 /* Puzzle hierarchy: title, mode, turn, board and task stay together. */
-.mobile-puzzle-screen > div { gap: var(--space-3) !important; padding: 0 0 var(--space-4) !important; }
-.mobile-puzzle-screen [class*="hero"] { padding: 0 0 var(--space-3) !important; }
-.mobile-puzzle-screen [class*="hero"] h1 { font-size: 25px !important; }
-.mobile-puzzle-screen [class*="tabs"] { gap: var(--space-6) !important; }
-.mobile-puzzle-screen [class*="tabs"] button { min-height: 42px !important; padding-bottom: var(--space-2) !important; }
-.mobile-puzzle-screen [class*="workspace"] { gap: var(--space-3) !important; }
-.mobile-puzzle-screen [class*="boardColumn"] { margin-inline: 0 !important; }
-.mobile-puzzle-screen [class*="positionMeta"] { margin: 0 0 var(--space-2) !important; padding-inline: 0 !important; }
-.mobile-puzzle-screen [class*="boardColumn"] .go-board-shell {
-  margin-inline: auto;
-  max-width: min(calc(100vw - var(--mobile-page-inline) - var(--mobile-page-inline)), calc(100dvh - 330px), 430px);
-}
-.mobile-puzzle-screen [class*="taskPrompt"] {
-  margin: var(--space-2) 0 0 !important;
-  padding-top: var(--space-2) !important;
-}
-.mobile-puzzle-screen [class*="panel"] {
-  gap: var(--space-2) !important;
-  min-height: 0 !important;
-  padding: var(--space-3) 0 0 !important;
-}
-.mobile-puzzle-screen [class*="catalog"] { background: transparent !important; border-radius: 0 !important; padding: 0 !important; }
-.mobile-puzzle-screen [class*="catalogHeader"] { padding: var(--space-3) 0 var(--space-2) !important; }
-.mobile-puzzle-screen [class*="catalogHeader"] h2 { font-size: 19px !important; }
-.mobile-puzzle-screen [class*="catalogHeader"] p { display: none; }
-.mobile-puzzle-screen [class*="categoryGrid"] { grid-template-columns: 1fr !important; }
-.mobile-puzzle-screen [class*="categoryGrid"] > button {
-  border-right: 0 !important;
-  min-height: 58px !important;
-  padding: var(--space-3) 0 !important;
-}
-.mobile-puzzle-screen [class*="categoryGrid"] > button > span > span { display: none; }
-.mobile-puzzle-screen [class*="categoryGrid"] strong { font-size: 15px !important; }
+.mobile-puzzle-screen > div { padding: 0; }
 
 /* Learning is a course list, not a game map. */
 .mobile-app-content .learning-guide { gap: var(--space-3) !important; }
@@ -672,15 +635,16 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 
 .mobile-profile-screen { gap: var(--space-4); }
 .mobile-app-content .profile-header {
-  align-items: flex-start !important;
+  align-items: center !important;
   display: flex !important;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3) !important;
   min-height: 0 !important;
   padding: var(--space-2) 0 var(--space-4) !important;
 }
-.mobile-app-content .profile-header__primary { align-items: center; display: flex; gap: var(--space-3); max-width: 100%; }
+.mobile-app-content .profile-header__primary { align-items: center; display: flex; gap: var(--space-3); min-width: 0; }
 .mobile-app-content .profile-header__primary > .profile-avatar-trigger { flex: 0 0 auto; }
 .mobile-app-content .profile-header__identity { text-align: left; }
 .mobile-app-content .profile-header__identity .section-kicker { display: none; }
@@ -738,11 +702,9 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
   .mobile-app-content .play-board-preview,
   .mobile-app-content .play-board-column .size-selector { width: min(40vw, 42dvh, 390px) !important; }
   .mobile-app-content .play-pace-column { padding-top: var(--space-3) !important; }
-  .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(56vw, calc(100dvh - 230px), 680px); }
 }
 
 /* Sections use spacing and one divider instead of nested card frames. */
-.mobile-puzzle-screen [class*="workspace"],
 .mobile-learn-screen .learn-practice-entry,
 .mobile-learn-screen .learning-chapters,
 .mobile-learn-screen .learn-chapter,
@@ -751,7 +713,6 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-tab-screen .leaderboard-card,
 .mobile-pushed-screen .friends-page .player-search,
 .mobile-pushed-screen .friends-page .friends-card,
-.mobile-pushed-screen .profile-board-placement,
 .mobile-pushed-screen .profile-history,
 .mobile-pushed-screen .training-game {
   background: transparent;
@@ -760,12 +721,6 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
   box-shadow: none;
 }
 
-.mobile-puzzle-screen [class*="workspace"] { padding: 0 !important; }
-.mobile-puzzle-screen [class*="boardColumn"] { margin-inline: 0 !important; }
-.mobile-puzzle-screen [class*="inlineIncorrect"] { margin-bottom: var(--space-2); padding: 7px 10px; }
-.mobile-puzzle-screen [class*="feedbackActions"] { gap: var(--space-2); margin-top: var(--space-2); }
-.mobile-puzzle-screen [class*="feedbackActions"] button { font-size: 13px; min-height: 42px; }
-
 .mobile-learn-screen .learn-practice-entry,
 .mobile-learn-screen .learning-chapters,
 .mobile-learn-screen .learn-chapter,
@@ -774,7 +729,6 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-tab-screen .leaderboard-card,
 .mobile-pushed-screen .friends-page .player-search,
 .mobile-pushed-screen .friends-page .friends-card,
-.mobile-pushed-screen .profile-board-placement,
 .mobile-pushed-screen .profile-history,
 .mobile-pushed-screen .training-game { padding: var(--space-3) 0 !important; }
 
@@ -782,15 +736,11 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 .mobile-pushed-screen .friends-page .player-search { border-bottom: 1px solid var(--mobile-border) !important; }
 .mobile-pushed-screen .friends-page .friends-card { border: 0 !important; border-radius: 0 !important; }
 .mobile-pushed-screen .profile-history { margin-top: var(--space-2) !important; }
-.mobile-pushed-screen .settings-page { gap: 18px; }
+.mobile-pushed-screen .settings-page { gap: 14px; }
 .mobile-pushed-screen .settings-page .profile-board-placement { margin: 0; }
 .mobile-pushed-screen .settings-page .settings-back { display: none; }
 .mobile-pushed-screen .profile-performance { background: transparent; border: 0 !important; padding: 0; }
 .mobile-pushed-screen .profile-rating-band { margin-inline: 0; }
-
-@media (max-width: 370px) {
-  .mobile-puzzle-screen [class*="feedbackActions"] button { gap: 5px; padding-inline: 6px; }
-}
 
 /* Native safe areas and every shared game surface use the selected palette. */
 html[data-mobile-app="true"] body {
@@ -838,7 +788,6 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   width: calc(100% - var(--mobile-page-inline) - var(--mobile-page-inline) - var(--mobile-safe-left) - var(--mobile-safe-right));
   z-index: 79;
 }
-.mobile-app-content .play-pace-column { margin-top: 12px; }
 .mobile-app-content .play-pace-heading { border-top: 0; }
 .mobile-app-content .leaderboard-table tr > td:last-child { min-width: 0; text-align: right; }
 .mobile-app-content .leaderboard-table tr > td:last-child strong { font-size: 12px; white-space: nowrap; }
@@ -919,8 +868,6 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   .mobile-app-content .time-selector strong { font-size: 17px !important; }
   .mobile-app-content .time-selector-copy span { font-size: 12px; }
   .mobile-app-content .profile-performance__main { align-items: center; gap: 28px; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr) !important; }
-  .mobile-puzzle-screen [class*="boardColumn"] .go-board-shell { max-width: min(100%, calc(100dvh - 240px), 680px); }
-  .mobile-puzzle-screen [class*="categoryGrid"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; column-gap: 28px; }
   .mobile-review-screen [class*="reviewMain"] { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 }
 @media (max-width: 359px) {
@@ -959,3 +906,28 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
 .mobile-coach-scorebar { height:9px; overflow:hidden; border:1px solid #9b9b96; border-radius:99px; background:#ecece6; margin:.8rem 0; }
 .mobile-coach-scorebar span { display:block; height:100%; background:#333633; transition:width .2s ease; }
 .mobile-coach-estimate p { margin:.5rem 0; }
+
+@media (max-width: 759px) {
+  .mobile-app-content .play-board-preview {
+    width: min(100%, 28dvh, 270px) !important;
+  }
+  .mobile-app-content .play-board-column .size-selector { width: 100% !important; }
+  .mobile-app-content .play-experience[data-waiting="true"] .play-board-column,
+  .mobile-app-content .play-experience[data-waiting="true"] .play-pace-heading,
+  .mobile-app-content .play-experience[data-waiting="true"] .time-selector { display: none !important; }
+  .mobile-app-content .play-matchmaking[data-waiting="true"] .play-match-status { margin: 0; }
+  .mobile-app-content .play-pace-column .time-selector button { justify-content: space-between; }
+  .mobile-app-content .play-pace-column .time-selector button.is-selected {
+    background: var(--mobile-surface-raised) !important;
+    box-shadow: none !important;
+    padding-left: var(--space-3) !important;
+  }
+  .mobile-app-content .profile-header__identity h1 { overflow-wrap: anywhere; }
+  .mobile-pushed-screen:has(.play-experience) :is(.local-play-entry, .mobile-coach-entry) {
+    border-radius: 10px;
+    margin-block: 6px;
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .mobile-learn-screen .learn-player__heading { padding-block: 8px 10px; }
+}

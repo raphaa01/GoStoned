@@ -37,18 +37,6 @@ import styles from "./puzzles.module.css";
 type PuzzleApiResponse = PuzzleHub & { actor: string };
 type Feedback = "correct" | "incorrect" | "continue" | null;
 
-function PuzzleLoading({ label }: { label: string }) {
-  return (
-    <div aria-busy="true" className={styles.loadingWorkspace} role="status">
-      <span className="sr-only">{label}</span>
-      <div aria-hidden="true" className={styles.loadingBoard} />
-      <div aria-hidden="true" className={styles.loadingPanel}>
-        <i /><b /><i /><i /><span />
-      </div>
-    </div>
-  );
-}
-
 function lineBoard(base: PuzzleHub["puzzles"][number]["board"], line: readonly PuzzlePly[]) {
   let board = base;
   for (const ply of line) {
@@ -82,7 +70,8 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
   const [pendingMove, setPendingMove] = useState<(Position & { color: Stone }) | null>(null);
-  const puzzles = useMemo(() => hubOwner === playerKey ? hub?.puzzles ?? [] : [], [hub?.puzzles, hubOwner, playerKey]);
+  const currentHub = hubOwner === playerKey ? hub : null;
+  const puzzles = useMemo(() => currentHub?.puzzles ?? [], [currentHub]);
 
   const redirectAccountFailure = useCallback((requestError: unknown) => {
     if (
@@ -287,7 +276,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   function changeMode(nextMode: PuzzleKind) {
-    if (busy) return;
+    if (busy || hintBusy) return;
     if (nextMode === mode) return;
     if (nextMode === "practice" && !user) {
       if (!authLoading) {
@@ -296,7 +285,8 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       return;
     }
     setMode(nextMode);
-    setHub(null);
+    setHub(playerKey ? routeSnapshot<PuzzleHub>(puzzleRouteKey(nextMode, playerKey)) ?? null : null);
+    setHubOwner(playerKey);
     setSelectedPuzzleId(null);
     clearTransientState();
   }
@@ -309,10 +299,13 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
-  const explanation = puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en;
+  const explanation = (puzzle?.solution?.explanation[locale] ?? puzzle?.solution?.explanation.en)?.trim();
+  const solutionNote = explanation && !/^(Goal reached|Ziel erreicht|Correct|Richtig)[.!]?$/i.test(explanation) ? explanation : null;
   const lastPly = visibleLine[visibleLine.length - 1] ?? null;
-  const expected = puzzles.length;
-  const dailyCycleLength = hub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH;
+  const progress = copy.problemProgress
+    .replace("{current}", String(mode === "daily" ? puzzle?.collectionOrder ?? 1 : selectedProblemIndex + 1))
+    .replace("{total}", String(mode === "daily" ? currentHub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH : puzzles.length));
+  const showNext = mode === "daily" ? puzzle?.solved : puzzles.length > 1;
 
   return (
     <div className={styles.page}>
@@ -321,112 +314,89 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       </header>
 
       <div aria-label={copy.title} className={styles.tabs} role="tablist">
-        <button aria-selected={mode === "daily"} className={mode === "daily" ? styles.activeTab : ""} disabled={busy} onClick={() => changeMode("daily")} role="tab" type="button">
+        <button aria-selected={mode === "daily"} className={mode === "daily" ? styles.activeTab : ""} disabled={busy || hintBusy} onClick={() => changeMode("daily")} role="tab" type="button">
           <strong>{copy.daily}</strong>
         </button>
-        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading || busy} onClick={() => changeMode("practice")} role="tab" type="button">
+        <button aria-selected={mode === "practice"} className={mode === "practice" ? styles.activeTab : ""} disabled={authLoading || busy || hintBusy} onClick={() => changeMode("practice")} role="tab" type="button">
           <strong>{copy.practice}</strong>
         </button>
       </div>
 
-      {identityLoading ? (
-        <PuzzleLoading label={copy.loading} />
-      ) : identityError ? (
+      {identityError ? (
         <div className={styles.state} role="alert"><p>{copy.identityError}</p><button className="button button--secondary" onClick={retry} type="button">{copy.retry}</button></div>
-      ) : error && !hub ? (
+      ) : error && !currentHub ? (
         <div className={styles.state} role="alert"><p>{error}</p><button className="button button--secondary" onClick={() => void load()} type="button">{copy.retry}</button></div>
-      ) : mode === "practice" && !hub ? (
-        <PuzzleLoading label={copy.loading} />
-      ) : !puzzle || !displayBoard ? (
-        <PuzzleLoading label={copy.generating} />
+      ) : identityLoading || !puzzle || !displayBoard ? (
+        <p aria-busy="true" className={styles.loading} role="status">{copy.loading}</p>
       ) : (
-        <>
-          <section className={styles.workspace} aria-label={copy.title} aria-busy={busy}>
-            <div className={styles.boardColumn}>
-              <div className={styles.positionMeta}>
-                <span className={styles.colorStone} data-color={puzzle.toPlay} />
+        <section className={styles.workspace} aria-label={mode === "daily" ? copy.daily : copy.practice} aria-busy={busy}>
+          <div className={styles.positionMeta}>
+            <div>
+              <div className={styles.turn}>
+                <span aria-hidden="true" className={styles.colorStone} data-color={puzzle.toPlay} />
                 <strong>{copy.toPlay.replace("{color}", colorLabel)}</strong>
                 <span>{puzzle.rankKyu ? copy.approximateRank.replace("{rank}", String(puzzle.rankKyu)) : difficultyLabel}</span>
               </div>
-              <div className={styles.taskPrompt}>
-                <div>
-                  <span className={styles.problemLabel}>{mode === "daily"
-                    ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
-                    : `${copy.practice} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
-                </div>
-                {!puzzle.solved && !branchLine ? (
-                  <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
-                    <CircleHelp size={20} />
-                  </button>
-                ) : null}
+              <div className={styles.prompt}>
+                <span>{progress}</span>
+                {puzzle.goal ? <p>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
               </div>
-              {feedback === "incorrect" ? (
-                <div className={styles.inlineIncorrect} role="status">
-                  <strong>{copy.incorrect}</strong>
-                </div>
-              ) : null}
-              {puzzle.goal ? <p className={styles.goal}>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
-              <GoBoard
-                boardSize={puzzle.boardSize}
-                boardState={displayBoard}
-                disabled={busy || puzzle.solved || branchLine !== null}
-                lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
-                hintMove={hintMove}
-                onIntersectionClick={submitMove}
-                pendingMove={pendingMove}
-                previewColor={puzzle.toPlay}
-                precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
-                viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
-                targetStones={puzzle.targetStones}
-              />
-              {!puzzle.solved ? (
-                <div className={styles.feedbackActions}>
-                  <button className="button button--secondary" disabled={busy || branchLine !== null} onClick={() => void submitMove(0, 0, "pass")} type="button">{dictionary.game.pass}</button>
-                  <button className="button button--primary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
-                    <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
-                  </button>
-                  <button className="button button--secondary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={undoPuzzleMove} type="button">
-                    <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
-                  </button>
-                </div>
-              ) : null}
             </div>
+            {!puzzle.solved && !branchLine ? (
+              <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
+                <CircleHelp aria-hidden="true" size={20} />
+              </button>
+            ) : null}
+          </div>
 
-            <aside className={styles.panel}>
-              <div className={styles.panelPrompt}>
-                <div>
-                  <span className={styles.problemLabel}>{mode === "daily"
-                    ? `${copy.daily} · ${copy.problemProgress.replace("{current}", String(puzzle.collectionOrder ?? 1)).replace("{total}", String(dailyCycleLength))}`
-                    : `${copy.practice} · ${copy.problemNumber.replace("{number}", String(selectedProblemIndex + 1))}`}</span>
-                </div>
-                {!puzzle.solved && !branchLine ? (
-                  <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
-                    <CircleHelp size={20} />
-                  </button>
-                ) : null}
+          {feedback === "incorrect" ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
+          <div className={styles.boardColumn}>
+            <GoBoard
+              boardSize={puzzle.boardSize}
+              boardState={displayBoard}
+              disabled={busy || puzzle.solved || branchLine !== null}
+              lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
+              hintMove={hintMove}
+              onIntersectionClick={submitMove}
+              pendingMove={pendingMove}
+              previewColor={puzzle.toPlay}
+              precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
+              viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
+              targetStones={puzzle.targetStones}
+            />
+          </div>
+
+          <div className={styles.controls}>
+            {puzzle.solved ? (
+              <p className={styles.solution} role="status">
+                <Check aria-hidden="true" size={18} /> {puzzle.firstAttemptCorrect ? copy.firstTry : copy.solved}
+              </p>
+            ) : (
+              <div className={styles.feedbackActions}>
+                <button className="button button--secondary" disabled={busy || branchLine !== null} onClick={() => void submitMove(0, 0, "pass")} type="button">{dictionary.game.pass}</button>
+                <button className="button button--secondary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
+                  <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+                </button>
+                <button className="button button--secondary" disabled={busy || (!branchLine && !puzzle.variationProgress.length)} onClick={undoPuzzleMove} type="button">
+                  <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
+                </button>
               </div>
-              {branchFeedback ? <p className={styles.continue} role="status">{branchFeedback}</p> : null}
-              {puzzle.solved ? (
-                <div className={styles.solution} role="status">
-                  <span><Check size={18} /> {feedback === "correct" ? copy.correct : copy.solved}</span>
-                  {puzzle.firstAttemptCorrect ? <small>{copy.firstTry}</small> : null}
-                  <h3>{copy.explanation}</h3>
-                  <p>{explanation}</p>
-                </div>
-              ) : null}
-              {error ? <p className={styles.error} role="alert">{error}</p> : null}
-
-              {mode === "practice" && puzzles.length > 1 ? (
-                <div className={styles.pager}>
-                  <span>{copy.problemProgress.replace("{current}", String(selectedProblemIndex + 1)).replace("{total}", String(expected))}</span>
-                  <div>
-                    <button aria-label={copy.next} disabled={busy} onClick={changeProblem} type="button"><ArrowRight size={18} /></button>
-                  </div>
-                </div>
-              ) : null}
-            </aside>
-          </section>
-        </>
+            )}
+            {showNext ? (
+              <button className="button button--primary" disabled={busy || hintBusy || (mode === "daily" && authLoading)} onClick={mode === "daily" ? () => changeMode("practice") : changeProblem} type="button">
+                {mode === "daily" ? copy.practice : copy.next} <ArrowRight aria-hidden="true" size={18} />
+              </button>
+            ) : null}
+          </div>
+          {feedback !== "incorrect" && !puzzle.solved && branchFeedback ? <p className={styles.message} role="status">{branchFeedback}</p> : null}
+          {puzzle.solved && solutionNote ? (
+            <details className={styles.explanation}>
+              <summary>{copy.explanation}</summary>
+              <p>{solutionNote}</p>
+            </details>
+          ) : null}
+          {error ? <p className={styles.error} role="alert">{error}</p> : null}
+        </section>
       )}
     </div>
   );

@@ -14,14 +14,15 @@ const styles = readFileSync(
 test("mobile puzzles put the problem label and hint directly before a viewport-bound board", () => {
   assert.match(
     styles,
-    /@media \(max-width: 900px\)[\s\S]*?\.workspace \{ grid-template-columns: minmax\(0, 1fr\); \}/,
+    /\.workspace \{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*100dvh/,
   );
   assert.match(
     styles,
     /\.boardColumn :global\(\.go-board\[data-size="13"\]\)[\s\S]*?width: 100%;/,
   );
+  const prompt = workspace.indexOf("className={styles.positionMeta}");
   assert.ok(
-    workspace.indexOf(`className={styles.taskPrompt}`) < workspace.indexOf("<GoBoard"),
+    prompt >= 0 && prompt < workspace.indexOf("<GoBoard"),
     "the compact task prompt must render before the board on mobile",
   );
   assert.match(workspace, /CircleHelp/);

@@ -58,27 +58,28 @@ export function MatchmakingPanel({
   const statusAnnouncement = presentedConnectionDescription
     ? `${presentedConnectionLabel}. ${presentedConnectionDescription}`
     : presentedConnectionLabel;
-  const waitingDescription = copy.lookingForPlayer
-    .replace("{board}", `${boardSize}×${boardSize}`)
-    .replace("{time}", selectedTime.name);
   const showConnectionState = waiting || Boolean(error) || terminal || connectionKind === "reconnecting";
 
   return (
-    <section className="play-matchmaking">
+    <section className="play-matchmaking" data-waiting={waiting}>
       <div className="matchmaking-summary" aria-label={`${boardSize}×${boardSize}, ${selectedTime.name}`}>
         <div><span>{copy.boardSize}</span><strong>{boardSize}×{boardSize}</strong></div>
         <div><span>{copy.timeControl}</span><strong>{selectedTime.name}</strong><small>{selectedTime.shortLabel}</small></div>
       </div>
       <p
         aria-atomic="true"
-        aria-label={statusAnnouncement}
+        aria-label={waiting && !terminal && connectionKind !== "reconnecting" ? copy.lookingForPlayer : statusAnnouncement}
         aria-live="polite"
         className={showConnectionState ? "play-match-status" : "sr-only"}
         data-state={connectionKind}
         role="status"
       >
-        {waiting ? (
-          <><Search aria-hidden="true" className="spin" size={18} /> <span>{waitingDescription}</span></>
+        {waiting && !terminal && connectionKind !== "reconnecting" ? (
+          <>
+            <Search aria-hidden="true" size={17} />
+            <strong>{copy.lookingForPlayer}</strong>
+            <span className="play-match-format">{boardSize}×{boardSize} · {selectedTime.name}</span>
+          </>
         ) : (
           <>
             <strong>{presentedConnectionLabel}</strong>
