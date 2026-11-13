@@ -10164,7 +10164,6 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 }
 
 .learn-overview__header {
-  border-bottom: 1px solid var(--color-line);
   display: grid;
   gap: 18px 28px;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 330px);
@@ -10203,7 +10202,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .learn-next-dock {
   align-items: center;
   background: var(--color-canvas);
-  border-top: 1px solid var(--color-line);
+  border-radius: 12px;
   bottom: 0;
   display: flex;
   gap: 16px;
@@ -10245,78 +10244,77 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
   overflow: hidden;
 }
 
-.learn-overview__meter span,
-.learn-player__progress span {
+.learn-overview__meter span {
   background: var(--color-moss-strong);
   display: block;
   height: 100%;
   transition: width 180ms ease;
 }
 
-.learn-route { margin: 36px auto 0; max-width: 360px; }
+.learn-route { display: grid; gap: 16px; margin: 22px auto 0; max-width: 620px; }
 .puzzle-target-mark { border: 1.5px solid; border-radius: 50%; height: 24%; left: 38%; pointer-events: none; position: absolute; top: 38%; width: 24%; z-index: 2; }
 .puzzle-target-mark--black { border-color: rgba(255,255,255,.75); }
 .puzzle-target-mark--white { border-color: rgba(0,0,0,.65); }
-.learn-path-stage { padding-bottom: 24px; }
-.learn-path-stage__header { border-top: 1px solid var(--color-line); display: grid; gap: 8px; padding: 24px 12px 32px; }
-.learn-path-stage__header small { align-items: center; color: var(--color-moss-strong); display: flex; font-size: 11px; gap: 8px; letter-spacing: .1em; text-transform: uppercase; }
-.learn-path-stage__header h2 { font-size: 22px; line-height: 1.2; margin: 0; }
-.learn-path-stage__header > span { color: var(--color-text-muted); font-size: 12px; }
-.learn-path-stage.is-locked .learn-path-stage__header { color: var(--color-text-muted); border-top-style: dashed; }
-.learn-path-stage.is-locked .learn-path-stage__header small { color: var(--color-text-muted); }
-.learn-stage { position: relative; }
-.learn-route-track { height: 100%; inset: 0; pointer-events: none; position: absolute; width: 100%; }
-.learn-route-track path { fill: none; stroke: var(--color-line-strong); stroke-width: 3; }
-.learn-stage__nodes { list-style: none; margin: 0; padding: 0; position: relative; }
-.learn-stage__nodes li { height: 140px; position: relative; }
-.learn-route-stop-1 { transform: translateX(-16.6667%); }
-.learn-route-stop-3 { transform: translateX(16.6667%); }
-
+.learn-path-stage {
+  background: var(--color-surface);
+  border-radius: 14px;
+  padding: 12px;
+}
+.learn-path-stage__header {
+  align-items: center;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 2px 2px 12px;
+}
+.learn-path-stage__header small {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: .75rem;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+.learn-path-stage__header h2 { font-size: 1.125rem; line-height: 1.25; margin: 0; }
+.learn-path-stage__header > span { color: var(--color-text-muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.learn-stage__nodes {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .learn-route-node {
   align-items: center;
-  background: transparent;
+  background: var(--color-surface-raised);
   border: 0;
+  border-radius: 9px;
   color: var(--color-ink);
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  margin-inline: auto;
-  padding: 0;
-  position: relative;
-  text-align: center;
-  width: min(66.6667%, 230px);
+  display: flex;
+  gap: 9px;
+  height: 100%;
+  min-height: 44px;
+  padding: 7px 10px;
+  text-align: start;
+  width: 100%;
 }
-.learn-route-node:hover:not(:disabled) .learn-route-node__copy strong,
-.learn-route-node:focus-visible .learn-route-node__copy strong { color: var(--color-moss-strong); }
-.learn-route-node:disabled { cursor: default; }
-
+.learn-route-node:hover:not(:disabled) { background: var(--color-canvas-deep); }
+.learn-route-node:disabled { background: var(--color-canvas); color: var(--color-text-muted); cursor: default; }
 .learn-route-node__mark {
   align-items: center;
-  background: var(--color-canvas);
-  border: 2px solid var(--color-line-strong);
-  border-radius: 50%;
-  color: var(--color-text-subtle);
-  display: flex;
-  height: 64px;
-  justify-content: center;
-  position: relative;
-  width: 64px;
-  z-index: 1;
+  border-radius: 6px;
+  display: grid;
+  flex: 0 0 28px;
+  height: 28px;
+  justify-items: center;
 }
-.learn-route-node__copy { background: var(--color-canvas); display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; padding: 2px 7px; }
-.learn-route-node__copy strong { font-size: 15px; font-weight: 610; transition: color 130ms ease; }
-.learn-route-node__copy small { color: var(--color-text-subtle); font-size: 10px; }
-.learn-route-node > svg { color: var(--color-text-subtle); }
-.learn-stage__nodes li.is-current .learn-route-node__mark { outline: 3px solid var(--color-moss-strong); outline-offset: 5px; }
-.learn-stage__nodes li.is-current .learn-route-node__mark,
-.learn-stage__nodes li.is-complete .learn-route-node__mark {
-  background: var(--color-moss-strong);
-  border-color: var(--color-moss-strong);
-  color: white;
-}
-.learn-stage__nodes li.is-challenge .learn-route-node__mark { border-radius: 12px; }
-.learn-route-node:focus-visible { outline: 2px solid var(--color-moss-strong); outline-offset: 7px; }
-.learn-stage__nodes li.is-locked .learn-route-node { color: var(--color-text-subtle); opacity: .58; }
+.learn-route-node__copy { min-width: 0; overflow-wrap: anywhere; }
+.learn-route-node__copy strong { font-size: .875rem; font-weight: 650; }
+.learn-route-node[aria-current="step"] { background: var(--color-moss-soft); color: var(--color-ink); }
+.learn-route-node[aria-current="step"] .learn-route-node__mark,
+.learn-stage__nodes .is-complete .learn-route-node__mark { color: var(--color-moss-strong); }
+.learn-route-node:focus-visible { outline: 2px solid var(--color-moss-strong); outline-offset: 2px; }
 
 .learn-future {
   border-block: 1px solid var(--color-line);
@@ -10331,10 +10329,9 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .learn-player { margin-inline: auto; max-width: 920px; }
 .learn-player__topbar {
   align-items: center;
-  border-bottom: 1px solid var(--color-line);
   display: flex;
   justify-content: space-between;
-  min-height: 54px;
+  min-height: 44px;
 }
 .learn-player__topbar > span { color: var(--color-text-subtle); font-size: 11px; font-variant-numeric: tabular-nums; }
 .learn-text-button {
@@ -10348,7 +10345,6 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
   padding: 8px 0;
 }
 .learn-text-button:hover { color: var(--color-ink); }
-.learn-player__progress { background: var(--color-line); height: 2px; }
 .learn-player__heading { max-width: 680px; padding: 30px 0 22px; }
 .learn-player__heading h1 {
   font-size: clamp(30px, 4vw, 44px);
@@ -10589,8 +10585,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .learn-overview__meter span,
-  .learn-player__progress span { transition: none; }
+  .learn-overview__meter span { transition: none; }
 }
 
 /* Compact matchmaking, game room and lessons */

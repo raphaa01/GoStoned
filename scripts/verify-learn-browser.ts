@@ -348,7 +348,7 @@ async function run() {
         assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,120);
         await freshDevice.close();
       }
-      await page.getByRole("button", {name:"Das Go-Brett 2 Min.", exact:true}).click();
+      await page.getByRole("button", {name:"Das Go-Brett", exact:true}).click();
       await expect(page.getByRole("heading", {name:"Das Go-Brett", exact:true})).toBeVisible();
       await page.getByRole("button", {name:"Lernpfad", exact:true}).click();
       await expect(page.getByText("120 von 120 Lektionen abgeschlossen", {exact:true})).toBeVisible();
@@ -367,21 +367,21 @@ async function run() {
         const box = await page.locator(".learn-next-dock").boundingBox();
         assert.ok(box && box.y+box.height <= 844-(mobile ? width===390 ? 49:64:0), "Lesson button overlaps navigation");
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-${width}-${colorScheme}.png`});
-        await page.getByRole("button",{name:"Schlagen 4 Min.",exact:true}).click();
+        await page.getByRole("button",{name:"Schlagen",exact:true}).click();
         await expect(page.locator('.learn-player[data-mode="action"]')).toBeVisible();
         await verifyBoardGeometry(page);
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth), "Lesson or task notice overflows horizontally");
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-capture-${width}-${colorScheme}.png`,fullPage:true});
         await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         if (width === 390) {
-          await page.getByRole("button",{name:"Gruppen 3 Min.",exact:true}).click();
+          await page.getByRole("button",{name:"Gruppen",exact:true}).click();
           await expect(page.locator('.learn-player[data-mode="info"]')).toBeVisible();
           await expect(page.getByRole("button",{name:"Weiter",exact:true})).toBeEnabled();
           await verifyBoardGeometry(page);
           await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-explanation-${colorScheme}.png`,fullPage:true});
           await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         }
-        await page.getByRole("button",{name:"Worum geht es? 3 Min.",exact:true}).click();
+        await page.getByRole("button",{name:"Worum geht es?",exact:true}).click();
         await verifyBoardGeometry(page);
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-9x9-${width}-${colorScheme}.png`,fullPage:true});
         await page.getByRole("button",{name:"Lernpfad",exact:true}).click();

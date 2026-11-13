@@ -150,9 +150,10 @@ html[data-mobile-app="true"] .intersection { min-height: 0; min-width: 0; }
 
 /* The lesson action stays above Android's web tabs and iOS's native tabs. */
 .mobile-learn-screen .learn-next-dock {
-  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom));
+  background: var(--mobile-surface);
+  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + 6px);
   max-width: var(--mobile-content-max);
-  padding: 10px 0;
+  padding: 8px 10px;
   width: calc(100% - var(--mobile-page-inline) - var(--mobile-page-inline));
   z-index: 70;
 }
@@ -774,20 +775,58 @@ html[data-mobile-app="true"] .result-modal,
 html[data-mobile-app="true"] .game-chat,
 html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surface); border-color: var(--mobile-border); color: var(--mobile-text); }
 
-/* The current step can always advance without scrolling behind the tab bar. */
-.mobile-learn-screen .learn-player { padding-bottom: 76px; }
-.mobile-learn-screen .learn-player__next {
-  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 8px);
-  box-shadow: 0 0 0 8px var(--mobile-bg);
-  left: 50%;
-  margin: 0;
-  max-width: calc(var(--mobile-content-max) - var(--mobile-page-inline) - var(--mobile-page-inline));
-  min-height: 48px;
-  position: fixed;
-  transform: translateX(-50%);
-  width: calc(100% - var(--mobile-page-inline) - var(--mobile-page-inline) - var(--mobile-safe-left) - var(--mobile-safe-right));
-  z-index: 79;
+/* Reserve the tab bar before sizing the lesson, so the board and actions stay in flow. */
+.mobile-app-content:has(.learn-player[data-board-step="true"]) {
+  padding-bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 8px);
 }
+.mobile-learn-screen:has(.learn-player[data-board-step="true"]) .learn-experience { padding-bottom: 0; }
+.mobile-learn-screen .learn-player[data-board-step="true"] {
+  --lesson-viewport: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - var(--mobile-tab-height) - var(--mobile-dock-gap) - 20px);
+  display: grid;
+  grid-template-rows: auto auto minmax(170px, 1fr) auto auto;
+  height: var(--lesson-viewport);
+}
+.mobile-learn-screen .learn-player[data-board-step="true"] .learn-player__workspace { display: contents; }
+.mobile-learn-screen .learn-player__board-area {
+  container-type: size;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+}
+.mobile-learn-screen .learn-player__board-area .interactive-learn-board-frame {
+  max-width: min(100%, 440px);
+  width: min(100%, 100cqh, 440px);
+}
+.mobile-learn-screen .learn-player__board-area .interactive-learn-board-frame:has(.learn-board-zoom) {
+  width: min(100%, max(140px, calc(100cqh - 48px)), 440px);
+}
+.mobile-learn-screen .learn-board-zoom { margin-bottom: 4px; }
+.mobile-learn-screen .learn-player__board-area .is-enlarged .learn-board-viewport {
+  max-height: max(100px, calc(100cqh - 48px)) !important;
+}
+.mobile-learn-screen .learn-player[data-board-step="true"] .learn-game__actions { grid-column: 1; }
+.mobile-learn-screen .learn-player__controls {
+  align-content: end;
+  align-items: center;
+  background: var(--mobile-bg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 0 0;
+}
+.mobile-learn-screen .learn-player__tools { gap: 10px; min-height: 0; }
+.mobile-learn-screen .learn-player__next {
+  flex: 1 1 160px;
+  margin: 0;
+  min-height: 46px;
+  width: auto;
+}
+.mobile-learn-screen .learn-player__workspace.is-game .learn-player__controls {
+  bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom) + var(--mobile-dock-gap) + 4px);
+  position: sticky;
+  z-index: 6;
+}
+
 .mobile-app-content .play-pace-heading { border-top: 0; }
 .mobile-app-content .leaderboard-table tr > td:last-child { min-width: 0; text-align: right; }
 .mobile-app-content .leaderboard-table tr > td:last-child strong { font-size: 12px; white-space: nowrap; }
@@ -945,3 +984,94 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   .mobile-app-content .time-selector-copy > span { text-align: center; }
   .mobile-app-content .time-selector-mark { display: none; }
 }
+
+/* Separate content with the same rounded surfaces as the home shortcuts. */
+.mobile-home-section {
+  background: var(--mobile-surface);
+  border: 0;
+  border-radius: var(--mobile-radius-md);
+  padding: 12px;
+}
+.mobile-game-list { gap: 4px; }
+.mobile-game-list > a {
+  background: var(--mobile-surface-secondary);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  padding-inline: 8px;
+}
+.mobile-settings {
+  background: var(--mobile-surface);
+  border: 0;
+  border-radius: var(--mobile-radius-md);
+  padding: 10px 12px;
+}
+.mobile-app-content .settings-options { gap: 4px; }
+.mobile-app-content .settings-option,
+.mobile-app-content .settings-section .settings-options .settings-option:has(input:checked) {
+  background: var(--mobile-surface-secondary);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  padding-inline: 8px;
+}
+.mobile-app-content .settings-option[aria-pressed="true"],
+.mobile-app-content .settings-section .settings-options .settings-option:has(input:checked) {
+  background: var(--mobile-selected);
+}
+.mobile-legal-links { border: 0; gap: 4px; }
+.mobile-legal-links a {
+  background: var(--mobile-surface-secondary);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  padding-inline: 9px;
+}
+.mobile-app-content .profile-header {
+  background: var(--mobile-surface) !important;
+  border: 0 !important;
+  border-radius: var(--mobile-radius-md) !important;
+  padding: 10px 12px !important;
+}
+.mobile-app-content .profile-performance .profile-metrics { border: 0; gap: 6px; }
+.mobile-app-content .profile-performance .profile-metrics article {
+  background: var(--mobile-surface);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  padding-inline: 10px !important;
+}
+.mobile-pushed-screen .profile-history { border: 0 !important; }
+.mobile-app-content .history-game { background: var(--mobile-surface); border: 0; border-radius: var(--mobile-radius-sm); margin-block: 4px; }
+.mobile-review-screen [class*="gameRow"] {
+  background: var(--mobile-surface);
+  border: 0 !important;
+  border-radius: var(--mobile-radius-sm);
+  margin-block: 4px;
+  padding-inline: 8px !important;
+}
+.mobile-app-content .leaderboard-table tbody tr {
+  background: var(--mobile-surface);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  margin-bottom: 4px;
+  padding-inline: 8px;
+}
+.mobile-app-content .friends-page :is(.player-search, .friends-card) {
+  background: var(--mobile-surface);
+  border: 0 !important;
+  border-radius: var(--mobile-radius-md) !important;
+  padding: 10px 12px !important;
+}
+.mobile-app-content .friends-page .friend-row {
+  background: var(--mobile-surface-secondary);
+  border: 0;
+  border-radius: var(--mobile-radius-sm);
+  margin-block: 4px;
+  padding-inline: 8px;
+}
+html[data-mobile-app="true"] :is(.game-topbar, .game-player-panel .game-actions, .chat-panel > header, .chat-form) { border: 0; }
+.mobile-learn-screen .learn-teacher__speech { background: var(--mobile-surface); border: 0; }
+.mobile-learn-screen .learn-teacher__speech::before { background: var(--mobile-surface); border: 0; }
+.mobile-learn-screen .learn-teacher__speech :is(.learn-player__feedback, .learn-player__hint):not(:first-child) { border: 0; }
+
+.mobile-app-content .friends-card > header,
+.mobile-app-content .leaderboard-title,
+.mobile-review-screen :is([class*="sectionHeading"], [class*="gameList"]) { border: 0; }
+.mobile-review-screen [class*="gameRow"] { margin-inline: 0; }

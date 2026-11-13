@@ -138,7 +138,8 @@ test("solved daily puzzle leads straight to practice within the phone viewport",
   await page.goto("/puzzles");
   await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
   await expect(page.getByText("Problem 37 of 61", { exact: true })).toBeVisible();
-  await expect(page.getByText("Solved on the first try", { exact: true })).toBeVisible();
+  await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Solved on the first try", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Goal reached.", { exact: true })).toHaveCount(0);
   const next = page.getByRole("button", { name: "More problems" });
   const nextBox = (await next.boundingBox())!;
@@ -231,7 +232,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
           const actions = (await page.locator(".mobile-home-actions").boundingBox())!;
           expect(actions.height).toBeLessThan(210);
         }
-        if (["/", "/play", "/profile", "/review"].includes(route)) await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });
+        await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });
       }
     }
     expect(errors).toEqual([]);

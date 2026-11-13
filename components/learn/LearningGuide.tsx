@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronRight, Circle, Flag, Lock } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Flag, Lock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -116,23 +116,14 @@ export function LearningGuide() {
               <h2>{line(stage.title, locale)}</h2><span>{done} / {stage.lessons.length}</span>
             </header>
           <div className="learn-stage">
-            <svg aria-hidden="true" className="learn-route-track" preserveAspectRatio="none" viewBox={`0 0 360 ${stage.lessons.length * 140}`}>
-              <path d={stage.lessons.map((_, index) => {
-                const x = [180, 120, 180, 240][index % 4];
-                const y = index * 140 + 32;
-                if (index === 0) return `M ${x} ${y}`;
-                const previousX = [180, 120, 180, 240][(index - 1) % 4];
-                return `C ${previousX} ${y - 70}, ${x} ${y - 70}, ${x} ${y}`;
-              }).join(" ")} />
-            </svg>
             <ol className="learn-stage__nodes">
-              {[...stage.lessons].reverse().map((lesson, nodeIndex) => {
+              {[...stage.lessons].reverse().map((lesson) => {
                 const index = LEARN_LESSONS.findIndex((candidate) => candidate.id === lesson.id);
                 const complete = progress.completedLessonIds.includes(lesson.id);
                 const current = lesson.id === firstIncomplete.id;
                 const unlocked = canOpenLearnLesson(complete, index, currentIndex, developerAccess);
                 return (
-                  <li className={`${complete ? "is-complete" : ""}${current ? " is-current" : ""}${!unlocked ? " is-locked" : ""}${lesson.challenge ? " is-challenge" : ""} learn-route-stop-${nodeIndex % 4}`} key={lesson.id}>
+                  <li className={`${complete ? "is-complete" : ""}${current ? " is-current" : ""}${!unlocked ? " is-locked" : ""}${lesson.challenge ? " is-challenge" : ""}`} key={lesson.id}>
                     <button
                       aria-current={current ? "step" : undefined}
                       className="learn-route-node"
@@ -142,11 +133,10 @@ export function LearningGuide() {
                       type="button"
                     >
                       <span className="learn-route-node__mark">
-                        {complete ? <Check aria-hidden="true" size={17} /> : !unlocked ? <Lock aria-hidden="true" size={14} /> : lesson.challenge ? <Flag aria-hidden="true" size={16} /> : <Circle aria-hidden="true" fill="currentColor" size={12} />}
+                        {complete ? <Check aria-hidden="true" size={17} /> : !unlocked ? <Lock aria-hidden="true" size={14} /> : lesson.challenge ? <Flag aria-hidden="true" size={16} /> : <BookOpen aria-hidden="true" size={17} />}
                       </span>
                       <span className="learn-route-node__copy">
                         <strong>{line(lesson.title, locale)}</strong>
-                        <small>{formatLearn(copy.minutes, { minutes: lesson.minutes })}{lesson.challenge ? ` · ${copy.checkpoint}` : ""}</small>
                       </span>
                     </button>
                   </li>

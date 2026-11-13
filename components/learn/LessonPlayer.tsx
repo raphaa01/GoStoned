@@ -216,7 +216,6 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   };
 
   const canAdvance = step.kind === "info" || solved;
-  const stepProgress = ((stepIndex + Number(solved || step.kind === "info")) / lesson.steps.length) * 100;
   const presentation = lessonBoardPresentation(step, {
     solved, wrong, hint, failedAttempts, lastMove: position?.moves.at(-1)?.position ?? null,
   });
@@ -232,13 +231,11 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     : gameMode ? copy.practiceGameHelp : null;
 
   return (
-    <article className="learn-player" data-mode={stepMode} data-step-id={step.id} data-player-color={step.toPlay ?? "black"}>
+    <article className="learn-player" data-board-step={Boolean(board && !gameMode)} data-mode={stepMode} data-step-id={step.id} data-player-color={step.toPlay ?? "black"}>
       <header className="learn-player__topbar">
         <button className="learn-text-button" onClick={() => { cancelReply(); onBack(); }} type="button"><ArrowLeft aria-hidden="true" size={17} /> {copy.learningPath}</button>
         <span>{stepIndex + 1} / {lesson.steps.length}</span>
       </header>
-
-      <div aria-hidden="true" className="learn-player__progress"><span style={{ width: `${stepProgress}%` }} /></div>
 
       <div className="learn-player__heading">
         <h1>{line(lesson.title, locale)}</h1>
@@ -273,20 +270,22 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             }}
           />
         ) : board ? (
-          <InteractiveLearnBoard
-            board={board}
-            disabled={!interactive || solved || waitingForReply || Boolean(continuation)}
-            emphasis={presentation.emphasis}
-            group={presentation.group}
-            interaction={boardInteraction}
-            lastMove={presentation.lastMove}
-            liberties={step.kind === "select" && solved ? targets : []}
-            locale={locale}
-            onPoint={handlePoint}
-            previewColor={step.toPlay ?? "black"}
-            selected={selected}
-            territory={presentation.territory}
-          />
+          <div className="learn-player__board-area">
+            <InteractiveLearnBoard
+              board={board}
+              disabled={!interactive || solved || waitingForReply || Boolean(continuation)}
+              emphasis={presentation.emphasis}
+              group={presentation.group}
+              interaction={boardInteraction}
+              lastMove={presentation.lastMove}
+              liberties={step.kind === "select" && solved ? targets : []}
+              locale={locale}
+              onPoint={handlePoint}
+              previewColor={step.toPlay ?? "black"}
+              selected={selected}
+              territory={presentation.territory}
+            />
+          </div>
         ) : null}
 
         <div className="learn-player__controls">
