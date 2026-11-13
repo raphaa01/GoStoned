@@ -15,6 +15,8 @@ import type { GoStoneBotMove } from "@/lib/bot/modelV1";
 type Phase = "setup" | "human" | "analysis" | "reply" | "retry" | "ended" | "resigned" | "error";
 type Comment = { text: CoachText | null; evidence: CoachEvidence };
 type Baseline = { position: TrainingPosition; controller: AbortController; promise: Promise<TrainerPositionAnalysis> };
+type Preparation = "loading" | "ready" | "katago" | "model";
+const PREPARATION_TIMEOUT_MS = 45_000;
 
 export function MobileCoach() {
   const { rating, ratingLoading } = useAuth();
@@ -23,8 +25,8 @@ export function MobileCoach() {
   const [size, setSize] = useState<BoardSize>(9);
   const [position, setPosition] = useState(() => createTrainingPosition(9));
   const [phase, setPhase] = useState<Phase>("setup");
-  const [ready, setReady] = useState(false);
-  const [preparing, setPreparing] = useState(true);
+  const [preparation, setPreparation] = useState<Preparation>("loading");
+  const [preparationAttempt, setPreparationAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState<Comment | null>(null);
   const [hint, setHint] = useState<Position | null>(null);
@@ -68,25 +70,55 @@ export function MobileCoach() {
   }
 
   useEffect(() => {
-    let mounted = true;
-    const sessionState = live.current;
-    const warmController = new AbortController();
-    const client = createCoachClient(); decoder.current = client;
-    const nativeReady = trainerKataGo.status().then(async status => {
-      if (status.available && !warmController.signal.aborted) await scan(createTrainingPosition(9), warmController, 2, .1);
-      return status;
-    });
-    void Promise.all([nativeReady, client.warm()]).then(([status]) => {
-      if (!mounted) return;
-      setReady(status.available); setPreparing(false);
-    }).catch(() => { if (mounted) { setError(copy.error); setPreparing(false); } });
-    return () => {
-      mounted = false; sessionState.revision++;
-      warmController.abort();
-      operation.current?.abort(); baseline.current?.controller.abort(); client.dispose();
+    const controller = new AbortController();
+    const { signal } = controller;
+    const client = createCoachClient();
+    decoder.current = client;
+    let nativeReady = false;
+    const failPreparation = (part: "katago" | "model", cause: unknown) => {
+      if (signal.aborted) return;
+      console.warn(`[GoStone Coach] ${part} startup failed`, cause);
+      setPreparation(part);
+      controller.abort();
+      client.dispose();
     };
-  // Language affects UI copy only; the supplied decoder is German.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = window.setTimeout(() => {
+      failPreparation(nativeReady ? "model" : "katago", new Error("Coach preparation timed out."));
+    }, PREPARATION_TIMEOUT_MS);
+    const warmKataGo = async () => {
+      try {
+        const status = await trainerKataGo.status();
+        signal.throwIfAborted();
+        if (!status.available) throw new Error(status.reason || "KataGo is unavailable.");
+        const emptyBoard = createTrainingPosition(9);
+        const input = trainerAnalysisInput(emptyBoard, gameId.current, live.current.revision);
+        const result = await trainerKataGo.analyze(input, { visits: 2, maxTime: 1, signal });
+        trainerBestMove(emptyBoard, result);
+        nativeReady = true;
+      } catch (cause) {
+        failPreparation("katago", cause);
+      }
+    };
+    void Promise.all([
+      warmKataGo(),
+      client.warm(signal).catch(cause => failPreparation("model", cause)),
+    ]).then(() => {
+      if (!signal.aborted) setPreparation("ready");
+    }).finally(() => window.clearTimeout(timer));
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      client.dispose();
+    };
+  }, [preparationAttempt]);
+
+  useEffect(() => {
+    const sessionState = live.current;
+    return () => {
+      sessionState.revision++;
+      operation.current?.abort();
+      baseline.current?.controller.abort();
+    };
   }, []);
 
   function fail(controller: AbortController, revision: number, again: () => void) {
@@ -204,9 +236,16 @@ export function MobileCoach() {
       <fieldset><legend>{copy.size}</legend><div className="mobile-coach-sizes">{([9, 13, 19] as const).map(value => <button aria-pressed={size === value} className="button" key={value} onClick={() => setSize(value)} type="button">{value} × {value}</button>)}</div></fieldset>
       <p>{copy.rating}: {profile.rating}</p><p className="mobile-coach-muted">{copy.ratingApproximate}</p>
       {locale !== "de" ? <p className="mobile-coach-muted">{copy.language}</p> : null}
-      {preparing ? <p role="status">{copy.preparing}</p> : !ready ? <p role="status">{copy.unavailable}</p> : null}
+      {preparation === "loading" ? <p role="status">{copy.preparing}</p> : null}
+      {preparation === "katago" || preparation === "model" ? <>
+        <p role="alert">{preparation === "katago" ? copy.unavailable : copy.modelUnavailable}</p>
+        <button className="button" onClick={() => {
+          setPreparation("loading");
+          setPreparationAttempt(attempt => attempt + 1);
+        }} type="button">{copy.retryPreparation}</button>
+      </> : null}
       {error ? <p role="alert">{error}</p> : null}
-      <button className="button button--primary" disabled={!ready || preparing || ratingLoading} onClick={start} type="button">{copy.start}</button>
+      <button className="button button--primary" disabled={preparation !== "ready" || ratingLoading} onClick={start} type="button">{copy.start}</button>
     </div> : <>
       <LearnTeacher announce tone={tone}>
         <p>{comment?.text?.text ?? (phase === "analysis" ? copy.analysing : comment ? copy.noComment : copy.initial)}</p>

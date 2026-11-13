@@ -2,12 +2,12 @@ import { expect, test, type Page } from "@playwright/test";
 import { installHarness, USER, assertNoOverflow } from "../shared/boardDesignHarness";
 import { MOBILE_KATAGO } from "../../lib/mobile/katagoContract";
 
-async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android", replyDelay: number | "hold" = 300) {
+async function harness(page: Page, native = true, enabled = true, blunder = false, platform: "android" | "ios" = "android", replyDelay: number | "hold" = 300, hangFirstStatus = false) {
   await installHarness(page);
   const entitlement = { enabled };
   await page.route("**/api/auth/session", route => route.fulfill({ json: { ok: true, user: { ...USER, coachBetaEnabled: entitlement.enabled } } }));
   await page.route("**/api/matchmaking", route => route.fulfill({ json: { ok: true, actor: USER.playerKey, matchmaking: { status: "idle" } } }));
-  await page.addInitScript(({ native, blunder, identity, platform, replyDelay }) => {
+  await page.addInitScript(({ native, blunder, identity, platform, replyDelay, hangFirstStatus }) => {
     if (!native) return;
     const calls: { method: string; options: Record<string, unknown> }[] = [];
     const pendingReplies: (() => void)[] = [];
@@ -24,7 +24,12 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
       nativePromise: async (plugin: string, method: string, options: Record<string, unknown>) => {
         if (plugin !== "GoStoneKataGo") return {};
         calls.push({ method, options });
-        if (method === "getStatus") return { available: true, ...identity };
+        if (method === "getStatus") {
+          if (hangFirstStatus && calls.filter(call => call.method === "getStatus").length === 1) {
+            return new Promise(() => undefined);
+          }
+          return { available: true, ...identity };
+        }
         if (method === "cancel") { pendingReplies.splice(0).forEach(resolve => resolve()); return {}; }
         const input = options.input as { boardSize: number; moves: { move: string; color: string }[] };
         const moveCount = input.moves.length;
@@ -39,7 +44,7 @@ async function harness(page: Page, native = true, enabled = true, blunder = fals
         return { turn: { turnNumber: moveCount, rootInfo: { currentPlayer: player, visits: 32, winrate: .5, scoreLead }, moveInfos: [{ move, order: 0, visits: 30, winrate: .5, scoreLead, pv: [move] }], ...(options.includeOwnership ? { ownership: Array.from({ length: input.boardSize ** 2 }, (_, i) => i % 2 ? .8 : -.8) } : {}) } };
       },
     } });
-  }, { native, blunder, platform, replyDelay, identity: { engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 } });
+  }, { native, blunder, platform, replyDelay, hangFirstStatus, identity: { engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 } });
   return entitlement;
 }
 
@@ -115,6 +120,35 @@ test("disabled mobile accounts cannot see or open the coach", async ({ page }) =
   await expect(page.locator(".mobile-coach-entry")).toHaveCount(0);
   await page.goto("/de/play/coach");
   await expect(page.getByText("Diese Beta ist für dein Konto noch nicht freigeschaltet.")).toBeVisible();
+});
+
+test("a silent native bridge times out and Coach can be prepared again", async ({ page }) => {
+  await harness(page, true, true, false, "ios", 300, true);
+  await page.clock.install();
+  await page.goto("/de/play/coach");
+  await expect(page.getByText("Coach wird vorbereitet …")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const { coachNativeCalls } = window as unknown as { coachNativeCalls: { method: string }[] };
+    return coachNativeCalls.filter(call => call.method === "getStatus").length;
+  })).toBe(1);
+  await page.clock.fastForward(46_000);
+  await expect(page.getByRole("alert")).toHaveText("Lokales KataGo konnte nicht gestartet werden.");
+  await expect(page.getByRole("button", { name: "Spiel starten" })).toBeDisabled();
+  await page.getByRole("button", { name: "Erneut versuchen" }).click();
+  await expect(page.getByRole("button", { name: "Spiel starten" })).toBeEnabled({ timeout: 20_000 });
+});
+
+test("Coach loads the real model with a blob worker and retries after a missing bundled asset", async ({ page }) => {
+  await harness(page, true, true, false, "ios");
+  const workerUrls: string[] = [];
+  page.on("worker", worker => workerUrls.push(worker.url()));
+  const wasm = "**/bot-runtime/**/ort-wasm-simd-threaded.wasm";
+  await page.route(wasm, route => route.fulfill({ status: 404, body: "Missing" }), { times: 1 });
+  await page.goto("/de/play/coach");
+  await expect(page.getByRole("alert")).toHaveText("Das lokale Modell für Coach-Kommentare konnte nicht geladen werden.");
+  await page.getByRole("button", { name: "Erneut versuchen" }).click();
+  await expect(page.getByRole("button", { name: "Spiel starten" })).toBeEnabled({ timeout: 20_000 });
+  expect(workerUrls).toEqual([expect.stringMatching(/^blob:/)]);
 });
 
 for (const platform of ["android", "ios"] as const) {
