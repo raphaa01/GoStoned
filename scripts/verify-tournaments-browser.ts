@@ -20,6 +20,15 @@ import {
 import { resignGame } from "../lib/game/gameService";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
+function tournamentAction(page: Page, action: "start" | "ready") {
+  return page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === "POST" &&
+      new URL(response.url()).pathname === "/api/tournaments" &&
+      request.postDataJSON()?.action === action;
+  });
+}
+
 async function main() {
   assert.ok(isUnambiguousLocalDatabase(getDatabaseUrl()));
   await assertSmokeDatabaseIdentity(getPool());
@@ -161,9 +170,11 @@ async function main() {
       );
     }
     await host.setViewportSize({ width: 1440, height: 1000 });
-    await host
-      .getByRole("button", { name: "Turnier starten", exact: true })
-      .click();
+    const [started] = await Promise.all([
+      tournamentAction(host, "start"),
+      host.getByRole("button", { name: "Turnier starten", exact: true }).click(),
+    ]);
+    assert.equal(started.status(), 200);
     await expect(
       host.getByText("Jeder gegen jeden", { exact: false }).first(),
     ).toBeVisible();
@@ -290,7 +301,11 @@ async function main() {
     await expect(
       host.getByRole("button", { name: "Bereit", exact: true }),
     ).toBeVisible();
-    await host.getByRole("button", { name: "Bereit", exact: true }).click();
+    const [hostReady] = await Promise.all([
+      tournamentAction(host, "ready"),
+      host.getByRole("button", { name: "Bereit", exact: true }).click(),
+    ]);
+    assert.equal(hostReady.status(), 200);
     const opponent =
       classicPair.blackId === users[0]
         ? classicPair.whiteId!
