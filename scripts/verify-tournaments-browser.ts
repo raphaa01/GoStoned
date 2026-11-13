@@ -290,7 +290,15 @@ async function main() {
     await expect(
       host.getByRole("button", { name: "Bereit", exact: true }),
     ).toBeVisible();
+    const checkIn = host.waitForResponse((response) => {
+      const request = response.request();
+      return new URL(response.url()).pathname === "/api/tournaments"
+        && request.method() === "POST"
+        && request.postDataJSON()?.action === "ready";
+    });
     await host.getByRole("button", { name: "Bereit", exact: true }).click();
+    const checkInResponse = await checkIn;
+    assert.equal(checkInResponse.status(), 200, "Host check-in must succeed before the opponent checks in");
     const opponent =
       classicPair.blackId === users[0]
         ? classicPair.whiteId!
