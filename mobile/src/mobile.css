@@ -931,3 +931,17 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   }
   .mobile-learn-screen .learn-player__heading { padding-block: 8px 10px; }
 }
+
+@media (max-width: 759px) and (max-height: 740px) {
+  .mobile-app-content .time-selector { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .mobile-app-content .play-pace-column .time-selector button {
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    padding: 6px 3px !important;
+    text-align: center;
+  }
+  .mobile-app-content .play-pace-column .time-selector button.is-selected { padding-inline: 3px !important; }
+  .mobile-app-content .time-selector-copy > span { text-align: center; }
+  .mobile-app-content .time-selector-mark { display: none; }
+}

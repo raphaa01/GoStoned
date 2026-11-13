@@ -175,8 +175,15 @@ test("matchmaking and live game actions fit on a short phone", async ({ page }, 
   });
   await page.goto("/play");
   await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  await page.locator("html").evaluate((root) => {
+    root.style.setProperty("--mobile-safe-top", "24px");
+    root.style.setProperty("--mobile-safe-bottom", "12px");
+  });
   const find = page.getByRole("button", { name: "Find an opponent" });
   await expect(find).toBeInViewport({ ratio: 1 });
+  const localPlay = (await page.getByRole("link", { name: "Play on one device" }).boundingBox())!;
+  const tabs = (await page.locator(".mobile-tab-bar").boundingBox())!;
+  expect(localPlay.y + localPlay.height).toBeLessThanOrEqual(tabs.y);
   await find.click();
   await expect(page.getByText("Finding an opponent…", { exact: true })).toBeVisible();
   await expect(page.getByText("9×9 · Blitz", { exact: true })).toBeVisible();
