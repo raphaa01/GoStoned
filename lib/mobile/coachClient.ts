@@ -78,14 +78,20 @@ export function createCoachClient() {
         const target = new CoachWorker();
         worker = target;
         target.onmessage = (event: MessageEvent<{ id: string; comment: CoachText | null; error?: string }>) => {
+          if (worker !== target) return;
           const task = pending.get(event.data.id);
           if (!task) return;
+          if (event.data.error) {
+            stop(new Error(event.data.error));
+            return;
+          }
           pending.delete(event.data.id);
           task.cleanup();
-          if (event.data.error) task.reject(new Error(event.data.error));
-          else task.resolve(event.data.comment);
+          task.resolve(event.data.comment);
         };
-        target.onerror = (event) => stop(new Error(event.message || "Coach runtime unavailable."));
+        target.onerror = (event) => {
+          if (worker === target) stop(new Error(event.message || "Coach runtime unavailable."));
+        };
         return await send(target, { assets: { model, vocabulary, schema, manifest, wasm } }, undefined, [model, vocabulary, schema, manifest, wasm]);
       } catch (error) {
         if (assetLoad === controller) dispose();

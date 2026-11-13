@@ -19,7 +19,7 @@ type Preparation = "loading" | "ready" | "katago" | "model";
 const PREPARATION_TIMEOUT_MS = 45_000;
 
 export function MobileCoach() {
-  const { rating, ratingLoading } = useAuth();
+  const { rating } = useAuth();
   const { locale } = useI18n();
   const copy = getCoachCopy(locale);
   const [size, setSize] = useState<BoardSize>(9);
@@ -87,13 +87,12 @@ export function MobileCoach() {
     }, PREPARATION_TIMEOUT_MS);
     const warmKataGo = async () => {
       try {
-        const status = await trainerKataGo.status();
+        const status = await trainerKataGo.status(signal);
         signal.throwIfAborted();
         if (!status.available) throw new Error(status.reason || "KataGo is unavailable.");
         const emptyBoard = createTrainingPosition(9);
         const input = trainerAnalysisInput(emptyBoard, gameId.current, live.current.revision);
-        const result = await trainerKataGo.analyze(input, { visits: 2, maxTime: 1, signal });
-        trainerBestMove(emptyBoard, result);
+        await trainerKataGo.analyze(input, { visits: 2, maxTime: 1, signal });
         nativeReady = true;
       } catch (cause) {
         failPreparation("katago", cause);
@@ -245,7 +244,7 @@ export function MobileCoach() {
         }} type="button">{copy.retryPreparation}</button>
       </> : null}
       {error ? <p role="alert">{error}</p> : null}
-      <button className="button button--primary" disabled={preparation !== "ready" || ratingLoading} onClick={start} type="button">{copy.start}</button>
+      <button className="button button--primary" disabled={preparation !== "ready"} onClick={start} type="button">{copy.start}</button>
     </div> : <>
       <LearnTeacher announce tone={tone}>
         <p>{comment?.text?.text ?? (phase === "analysis" ? copy.analysing : comment ? copy.noComment : copy.initial)}</p>

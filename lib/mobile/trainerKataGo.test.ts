@@ -3,7 +3,7 @@ import test from "node:test";
 import { trainerAnalysisInput, type TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import { createTrainingPosition } from "@/lib/learn/trainingGame";
 import { MOBILE_KATAGO } from "./katagoContract";
-import { createTrainerKataGoClient, validateTrainerAnalysis, type TrainerKataGoPlugin } from "./trainerKataGo";
+import { createTrainerKataGoClient, TRAINER_TIMEOUT_MS, validateTrainerAnalysis, type TrainerKataGoPlugin } from "./trainerKataGo";
 import { createNativeKataGoQueue } from "./nativeKataGoQueue";
 
 const input = trainerAnalysisInput(createTrainingPosition(9), "test", 1);
@@ -107,6 +107,34 @@ test("cancelled native work cannot return a stale result or overlap a queued req
   await rejected;
   assert.deepEqual(await second, turn);
   assert.deepEqual(events, ["start", "cancel", "finish", "start", "finish"]);
+});
+
+test("a hung trainer request and cancellation release the queue after their deadlines", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const queue = createNativeKataGoQueue();
+  let markStarted!: () => void;
+  let markCancelling!: () => void;
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  const cancelling = new Promise<void>(resolve => { markCancelling = resolve; });
+  const client = createTrainerKataGoClient({
+    getStatus: async () => available,
+    analyzePosition: async () => {
+      markStarted();
+      return new Promise(() => undefined);
+    },
+    cancel: async () => {
+      markCancelling();
+      return new Promise(() => undefined);
+    },
+  }, true, queue);
+  const failure = assert.rejects(client.analyze(input, { visits: 2, signal: new AbortController().signal }), /training position in time/);
+  await started;
+  const next = queue(async () => turn);
+  context.mock.timers.tick(TRAINER_TIMEOUT_MS);
+  await cancelling;
+  context.mock.timers.tick(5_000);
+  await failure;
+  assert.equal(await next, turn);
 });
 
 test("missing native engines fail closed, without invoking another opponent", async () => {
