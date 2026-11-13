@@ -27,7 +27,7 @@
     "benchmark:game-polls": "tsx scripts/benchmark-game-polls.ts",
     "mvp:check": "tsx scripts/check-mvp.ts",
     "check:production-schema": "tsx scripts/check-production-schema.ts",
-    "test": "tsx --test lib/*.test.ts lib/analysis/*.test.ts lib/bot/*.test.ts lib/deployment/*.test.ts lib/puzzles/*.test.ts lib/game/*.test.ts lib/learn/*.test.ts lib/rating/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/friends/*.test.ts lib/katago/*.test.ts lib/mobile/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts lib/stats/*.test.ts",
+    "test": "tsx --test lib/*.test.ts lib/analysis/*.test.ts lib/bot/*.test.ts lib/deployment/*.test.ts lib/puzzles/*.test.ts lib/game/*.test.ts lib/learn/*.test.ts lib/rating/*.test.ts lib/auth/*.test.ts lib/client/*.test.ts lib/friends/*.test.ts lib/katago/*.test.ts lib/mobile/*.test.ts lib/moderation/*.test.ts lib/i18n/*.test.ts lib/matchmaking/*.test.ts lib/stats/*.test.ts tools/puzzle-lab/*.test.mjs",
     "test:auth": "tsx scripts/smoke-auth-chat.ts",
     "test:clock": "tsx scripts/smoke-clock.ts",
     "test:bot-local": "tsx scripts/smoke-katago-bot.ts",
@@ -58,7 +58,14 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "deletion:requests": "tsx scripts/account-deletion-requests.ts",
     "worker:katago": "tsx workers/katago/index.ts",
-    "worker:katago:once": "tsx workers/katago/once.ts"
+    "worker:katago:once": "tsx workers/katago/once.ts",
+    "puzzles:lab": "node tools/puzzle-lab/server.mjs",
+    "puzzles:lab:test": "tsx --test tools/puzzle-lab/*.test.mjs",
+    "puzzles:lab:generate": "node tools/puzzle-lab/cli.mjs generate",
+    "puzzles:lab:verify": "node tools/puzzle-lab/cli.mjs verify",
+    "puzzles:lab:benchmark": "node tools/puzzle-lab/benchmark.mjs",
+    "puzzles:lab:audit": "tsx tools/puzzle-lab/audit.mjs",
+    "puzzles:lab:visual": "node tools/puzzle-lab/visual-review.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
