@@ -34,7 +34,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
 
   test("practice opens directly, plays the whole wrong branch, undoes it, and advances to an unsolved puzzle", async({page})=>{
     await installHarness(page);
-    const source=IMPORTED_PUZZLES.find((puzzle)=>puzzle.paths[1].line.length===6 && puzzle.paths[1].line.some((ply)=>ply.move==="pass" && ply.color===puzzle.toPlay))!;
+    const source=IMPORTED_PUZZLES.find((puzzle)=>puzzle.paths[1].line.length===6 && puzzle.paths[1].line.every((ply)=>ply.move!=="pass"))!;
     const wrong=source.paths[1].line;
     let progress:PuzzlePly[]=[];
     let revision=0;
@@ -54,8 +54,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
         else {
           if(!progress.length)activeWrong=move.x===wrong[0].x&&move.y===wrong[0].y;
           const line=activeWrong?wrong:source.paths[0].line;
-          if (move.action === "pass") expect(line[progress.length].move).toBe("pass");
-          else expect({x:move.x,y:move.y}).toEqual({x:line[progress.length].x,y:line[progress.length].y});
+          expect({x:move.x,y:move.y}).toEqual({x:line[progress.length].x,y:line[progress.length].y});
           progress=line.slice(0,progress.length+2);displayLine=progress;
           if(progress.length===line.length) {outcome=activeWrong?"retry":"solved";solved=!activeWrong;if(activeWrong)progress=[];}
         }
@@ -69,8 +68,9 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     const board=page.locator(".go-board");
     await expect(board).toBeVisible();
     await expect(page.getByText("Choose a category",{exact:true})).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Pass", exact: true })).toHaveCount(0);
     const play=async(ply:PuzzlePly)=>{
-      await Promise.all([page.waitForResponse((response)=>response.url().endsWith("/attempt")),ply.move === "pass" ? page.getByRole("button", {name:"Pass",exact:true}).click() : board.getByRole("gridcell").nth(ply.y*source.viewportSize+ply.x).click()]);
+      await Promise.all([page.waitForResponse((response)=>response.url().endsWith("/attempt")),board.getByRole("gridcell").nth(ply.y*source.viewportSize+ply.x).click()]);
       await expect(page.getByRole("region",{name:"Find the strongest move.",exact:true})).toHaveAttribute("aria-busy","false");
     };
     await play(wrong[0]);
@@ -83,6 +83,8 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     await expect(page.getByText("Not quite.",{exact:true})).toHaveCount(0);
     for(const ply of source.paths[0].line.filter((ply)=>ply.color===source.toPlay))await play(ply);
     await expect.poll(()=>solved).toBe(true);
+    await expect(page.getByRole("button", { name: "Try again", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
     await page.getByRole("button",{name:"Next problem",exact:true}).click();
     await expect(page.getByText("about 5 kyu",{exact:true}).first()).toBeVisible();
     await assertNoOverflow(page);

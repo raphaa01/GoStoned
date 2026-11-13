@@ -94,10 +94,11 @@ export async function attemptImportedPuzzle(id: string, playerKey: string, selec
         const reply = chosen.line[nextProgress.length];
         if (reply && reply.color !== puzzle.toPlay) nextProgress.push(reply);
         replayPuzzleLine(puzzle.board, nextProgress);
-        displayLine = nextProgress;
-        if (nextProgress.length === chosen.line.length) {
+        const needsPlayerPass = !chosen.solved && chosen.line[nextProgress.length]?.move === "pass";
+        displayLine = needsPlayerPass ? chosen.line : nextProgress;
+        if (needsPlayerPass || nextProgress.length === chosen.line.length) {
           outcome = chosen.solved ? "solved" : "retry";
-          feedback = chosen.explanation;
+          feedback = chosen.solved ? null : chosen.explanation;
           if (!chosen.solved) {
             failed = true;
             // Keep the position before the first losing decision. Undo/retry

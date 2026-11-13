@@ -15,15 +15,18 @@
 }
 
 .tabs {
-  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 10px;
   display: flex;
-  gap: 20px;
+  gap: 4px;
+  padding: 3px;
 }
 
 .tabs button {
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 8px;
+  flex: 1;
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: .95rem;
@@ -32,7 +35,7 @@
 }
 
 .tabs .activeTab {
-  border-bottom-color: var(--color-moss-strong);
+  background: var(--color-moss-soft);
   color: var(--color-ink);
 }
 
@@ -48,8 +51,11 @@
 .positionMeta {
   align-items: center;
   display: flex;
+  background: var(--color-surface);
+  border-radius: 10px;
   gap: 8px;
   justify-content: space-between;
+  padding: 7px 10px;
 }
 
 .turn,
@@ -103,6 +109,7 @@
 }
 
 .controls { justify-content: space-between; }
+.controls > button { flex: 1 1 auto; }
 .feedbackActions { flex: 1 1 auto; }
 
 .controls button {
@@ -116,9 +123,7 @@
 .feedbackActions button { flex: 1 1 auto; }
 .solution { align-items: center; display: flex; font-size: .875rem; font-weight: 650; gap: 6px; margin: 0; }
 .solution svg { color: var(--color-moss-strong); flex-shrink: 0; }
-.explanation, .message, .error, .loading, .state { color: var(--color-text-muted); font-size: .875rem; line-height: 1.45; margin: 0; }
-.explanation summary { cursor: pointer; padding-block: 8px; }
-.explanation p { margin: 0; }
+.message, .error, .loading, .state { color: var(--color-text-muted); font-size: .875rem; line-height: 1.45; margin: 0; }
 .error, .state[role="alert"] { color: var(--color-danger); }
 .loading, .state { padding: 12px 0; }
 
