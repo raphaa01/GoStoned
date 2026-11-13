@@ -10413,6 +10413,12 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .learn-player__hint { align-items: flex-start; color: var(--color-text-muted); display: flex; font-size: 12px; gap: 7px; line-height: 1.45; margin: 0; }
 .learn-player__tools { display: flex; flex-wrap: wrap; gap: 16px; min-height: 34px; }
 .learn-player__next { justify-content: center; margin-top: 6px; width: 100%; }
+.learn-player__next:disabled {
+  background: var(--color-canvas-deep);
+  border-color: var(--color-line);
+  color: var(--color-text-muted);
+  opacity: 1;
+}
 
 .game-player-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 6px; }
 .developer-tag { background: var(--color-moss-soft); border: 1px solid var(--color-moss); border-radius: 4px; color: var(--color-moss-strong); display: inline-block; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; letter-spacing: .05em; line-height: 1.4; margin-inline-start: 5px; padding: 1px 4px; vertical-align: middle; }
