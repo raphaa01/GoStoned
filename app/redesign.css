@@ -10493,10 +10493,10 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .interactive-learn-board__point:focus-visible { outline: 2px solid var(--color-moss-strong); outline-offset: 1px; }
 .interactive-learn-board__stone {
   border-radius: 50%;
-  height: 89%;
+  height: 92%;
   pointer-events: none;
   position: absolute;
-  width: 89%;
+  width: 92%;
 }
 .interactive-learn-board__point.is-emphasis:not(.has-stone)::before { border-color: var(--color-oxide); height: 38%; width: 38%; }
 .interactive-learn-board__point.is-selected:not(.has-stone)::before,
