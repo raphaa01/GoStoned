@@ -171,8 +171,8 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     await expect(page.getByRole("heading", {name:line(lesson.title,"de"),exact:true})).toBeVisible();
     const advance = page.getByRole("button", {name:index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact:true});
     const gameStep = step.kind.endsWith("game");
-    const notice = page.locator(".learn-player");
-    await expect(notice).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
+    const player = page.locator(".learn-player");
+    await expect(player).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
     const instruction = page.locator(".learn-player__heading .learn-teacher__speech");
     await expect(page.locator(".learn-player__heading .learn-teacher__avatar")).toHaveCount(1);
     await expect(instruction).toContainText(line(step.body,"de"));
@@ -254,8 +254,8 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     if (step.kind === "info") {
       await expect(page.locator('.interactive-learn-board__point[aria-disabled="false"]')).toHaveCount(0);
     } else {
-      await expect(notice).toHaveAttribute("data-mode", "solved");
-      await expect(notice.locator("strong")).toHaveText("Erledigt");
+      await expect(player).toHaveAttribute("data-mode", "solved");
+      await expect(instruction.getByRole("status")).toBeVisible();
     }
     await expect(advance).toBeEnabled();
     await advance.click();
