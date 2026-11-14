@@ -81,6 +81,43 @@ test("an expired review session can be refreshed before trying the game again", 
   await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
 });
 
+test("a recovered session resumes the native review automatically", async ({ page }) => {
+  await nativeReview(page, "ios", "partial");
+  await page.route(`**/api/games/${GAME_ID}`, route =>
+    route.fulfill({ status: 401, json: { ok: false, code: "session_expired" } }), { times: 1 });
+  await page.goto(`/de/review/${GAME_ID}`);
+  await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
+});
+
+test("a stalled initial session check becomes retryable", async ({ page }) => {
+  await nativeReview(page, "ios", "partial");
+  await page.clock.install();
+  let requested = false;
+  const stalled = () => { requested = true; };
+  await page.route("**/api/auth/session", stalled);
+  await page.goto(`/de/review/${GAME_ID}`);
+  await expect.poll(() => requested).toBe(true);
+  await page.clock.fastForward(13_000);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.unroute("**/api/auth/session", stalled);
+  await page.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+  await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
+});
+
+test("a finished game opens review even with the older iOS signal API and a broken queue endpoint", async ({ page }) => {
+  await nativeReview(page, "ios", "partial");
+  await page.addInitScript(() => { Reflect.deleteProperty(AbortSignal, "any"); });
+  const queueChanges: string[] = [];
+  await page.route("**/api/matchmaking", route => {
+    queueChanges.push(route.request().method());
+    return route.fulfill({ status: 401, json: { ok: false, code: "session_expired" } });
+  });
+  await page.goto(`/de/game/${GAME_ID}`);
+  await page.locator(".result-analysis-action").click();
+  await expect(page.locator("[data-review-player] nav button")).toHaveCount(2);
+  expect(queueChanges).toEqual([]);
+});
+
 test("an empty finished game explains why it cannot be analysed", async ({ page }) => {
   await nativeReview(page, "android");
   const game = { ...gameFor(9, "friendly"), status: "finished", turn: null, moves: [], moveCount: 0 };

@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import CapApp_SPM
 import WebKit
 
 @objc(GoStoneSharePlugin)
@@ -59,6 +60,9 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
     private var canGoBack = true
 
     override func capacitorDidLoad() {
+        if bridge?.plugin(withName: "GoStoneKataGo") == nil {
+            bridge?.registerPluginInstance(makeGoStoneKataGoPlugin())
+        }
         bridge?.registerPluginInstance(GoStoneSharePlugin())
         bridge?.registerPluginInstance(GoStoneClockPlugin())
     }

@@ -31,6 +31,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 @CapacitorPlugin(name = "GoStoneKataGo")
@@ -86,11 +87,13 @@ public class GoStoneKataGoPlugin extends Plugin {
     }
 
     private static final class WarmSession {
+        final int boardSize;
         final Process process;
         final BufferedWriter writer;
         final BufferedReader reader;
 
-        WarmSession(Process process) {
+        WarmSession(Process process, int boardSize) {
+            this.boardSize = boardSize;
             this.process = process;
             this.writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
             this.reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
@@ -111,7 +114,7 @@ public class GoStoneKataGoPlugin extends Plugin {
     public void getStatus(PluginCall call) {
         analysisExecutor.execute(() -> {
             try {
-                ensureWarmSession(ensureRuntime());
+                ensureRuntime();
                 call.resolve(status(true, null));
             } catch (Exception exception) {
                 call.resolve(status(false, safeMessage(exception)));
@@ -171,9 +174,10 @@ public class GoStoneKataGoPlugin extends Plugin {
             if (thermalStatus() >= PowerManager.THERMAL_STATUS_SEVERE) {
                 throw new IllegalStateException("The device is too warm to start local analysis.");
             }
-            WarmSession session = ensureWarmSession(ensureRuntime());
+            WarmSession session = ensureWarmSession(ensureRuntime(), requireBoardSize(input));
             job.process = session.process;
             job.writer = session.writer;
+            if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
             timeout = timeoutExecutor.schedule(() -> {
                 job.timedOut.set(true);
                 stop(job, false);
@@ -263,9 +267,10 @@ public class GoStoneKataGoPlugin extends Plugin {
                 throw new IllegalStateException("The device is too warm to start local analysis.");
             }
             RuntimeFiles runtime = ensureRuntime();
-            WarmSession session = ensureWarmSession(runtime);
+            WarmSession session = ensureWarmSession(runtime, requireBoardSize(input));
             job.process = session.process;
             job.writer = session.writer;
+            if (job.cancelled.get()) throw new IllegalStateException("Local analysis was cancelled.");
             timeout = timeoutExecutor.schedule(() -> {
                 if (session.process.isAlive()) {
                     job.timedOut.set(true);
@@ -278,8 +283,10 @@ public class GoStoneKataGoPlugin extends Plugin {
             int chunkStart = 0;
             int chunkIndex = 0;
             while (chunkStart < totalPositions && !job.cancelled.get() && !job.timedOut.get()) {
-                int chunkSize = chunkIndex == 0 ? INITIAL_PREVIEW_POSITIONS : PREVIEW_CHUNK_POSITIONS;
-                int chunkEnd = Math.min(totalPositions, chunkStart + chunkSize);
+                // Complete the first playable move before scheduling the rest of the preview.
+                int chunkLimit = chunkIndex == 0 ? 2 : chunkIndex == 1
+                    ? INITIAL_PREVIEW_POSITIONS : chunkStart + PREVIEW_CHUNK_POSITIONS;
+                int chunkEnd = Math.min(totalPositions, chunkLimit);
                 JSONArray chunkTurns = turnRange(chunkStart, chunkEnd);
                 JSONObject previewRequest = buildRequest(
                     job.id + ":preview:" + chunkIndex,
@@ -323,7 +330,13 @@ public class GoStoneKataGoPlugin extends Plugin {
                     qualityComplete = true;
                 }
             }
+            timeout.cancel(false);
             keepWarm = previewComplete && !job.timedOut.get();
+            if (keepWarm) {
+                synchronized (activeLock) {
+                    if (activeAnalysis == job) activeAnalysis = null;
+                }
+            }
             resolveAnalysis(
                 call,
                 bestTurns,
@@ -373,7 +386,10 @@ public class GoStoneKataGoPlugin extends Plugin {
             if (response.has("error")) {
                 throw new IllegalStateException("KataGo rejected the analysis: " + response.optString("error"));
             }
-            if (response.optBoolean("isDuringSearch", false) || response.optBoolean("noResults", false)) continue;
+            if (response.optBoolean("isDuringSearch", false)) continue;
+            if (response.optBoolean("noResults", false)) {
+                throw new IllegalStateException("KataGo stopped before returning a result.");
+            }
             validateTurn(response);
             int turnNumber = response.getInt("turnNumber");
             phaseTurns.put(turnNumber, response);
@@ -415,6 +431,14 @@ public class GoStoneKataGoPlugin extends Plugin {
         return Math.max(PREVIEW_VISITS, Math.min(requestedVisits, budgetedVisits));
     }
 
+    private static int requireBoardSize(JSObject input) throws JSONException {
+        int boardSize = input.getInt("boardSize");
+        if (boardSize != 9 && boardSize != 13 && boardSize != 19) {
+            throw new IllegalArgumentException("Unsupported board size.");
+        }
+        return boardSize;
+    }
+
     private JSONObject buildRequest(
         String id,
         JSObject input,
@@ -426,10 +450,7 @@ public class GoStoneKataGoPlugin extends Plugin {
         if (sourceMoves == null || sourceMoves.length() > MAX_MOVES) {
             throw new IllegalArgumentException("The game move list is invalid or too large.");
         }
-        int boardSize = input.getInt("boardSize");
-        if (boardSize != 9 && boardSize != 13 && boardSize != 19) {
-            throw new IllegalArgumentException("Unsupported board size.");
-        }
+        int boardSize = requireBoardSize(input);
         JSONArray moves = new JSONArray();
         for (int index = 0; index < sourceMoves.length(); index++) {
             JSONObject move = sourceMoves.getJSONObject(index);
@@ -560,17 +581,18 @@ public class GoStoneKataGoPlugin extends Plugin {
         return verifiedRuntime;
     }
 
-    private synchronized WarmSession ensureWarmSession(RuntimeFiles runtime) throws Exception {
-        if (warmSession != null && warmSession.process.isAlive()) return warmSession;
+    private synchronized WarmSession ensureWarmSession(RuntimeFiles runtime, int boardSize) throws Exception {
+        if (warmSession != null && warmSession.boardSize == boardSize && warmSession.process.isAlive()) return warmSession;
         discardWarmSession(null);
         Process process = new ProcessBuilder(
             runtime.executable.getAbsolutePath(),
             "analysis",
             "-model", runtime.model.getAbsolutePath(),
             "-config", runtime.config.getAbsolutePath(),
+            "-override-config", "maxBoardSizeForNNBuffer=" + boardSize,
             "-quit-without-waiting"
         ).start();
-        warmSession = new WarmSession(process);
+        warmSession = new WarmSession(process, boardSize);
         drainStderr(process);
         return warmSession;
     }

@@ -186,7 +186,8 @@ test("a worker inference error restarts the model on retry", async ({ page }) =>
   await page.getByRole("button", { name: "Spiel starten" }).click({ timeout: 20_000 });
   await place(page, 2, 6);
   await page.getByRole("button", { name: "Erneut berechnen" }).click();
-  await expect(page.locator(".go-board .stone")).toHaveCount(2);
+  await expect(page.getByRole("gridcell", { name: /Schwarzer Stein bei C3/ })).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: /Weißer Stein bei G7/ })).toBeVisible();
   expect(workerUrls).toHaveLength(2);
 });
 

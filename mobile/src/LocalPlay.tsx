@@ -1,3 +1,4 @@
+import { requestTimeout } from "@/lib/client/requestTimeout";
 import { ArrowLeft, Check, ChevronRight, Clock3, Flag, Home } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
@@ -98,7 +99,7 @@ function LocalGameView({ boardSize, timeControl, onAgain, onExit }: {
     void (async () => {
       const response = await fetch("/api/local-game/score", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+        signal: requestTimeout(15_000, controller.signal),
         body: JSON.stringify({ boardSize, moves: game.moves.map((move) => move.isPass ? null : { x: move.x, y: move.y }),
           deadStones: dead, neutralRegionSeeds: neutral, blackAgreed: agreement.black, whiteAgreed: agreement.white }),
       });

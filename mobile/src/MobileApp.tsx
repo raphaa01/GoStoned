@@ -37,6 +37,7 @@ import { MobileSplash } from "./MobileSplash";
 import { MobileCoachEntry, MobileCoachGate } from "./MobileCoachAccess";
 import { LocalPlay, LocalPlayEntry } from "./LocalPlay";
 import { GoClock } from "./GoClock";
+import { setMobileLocale } from "./localePreference";
 import { updateNativeChrome } from "./nativeChrome";
 import { useHashScroll, usePathname, useRouter, useSearchParams } from "./next-navigation";
 import { MobileThemeProvider } from "./theme";
@@ -99,7 +100,7 @@ function MobileRoute() {
   let showPlayAction = false;
   if (tournament) {
     content = <PushedScreen><MobileAccountGate returnTo={route} title={getTournamentsCopy(locale).title}>
-      <TournamentHub id={tournament[1]} mobile />
+      <TournamentHub id={tournament[1]} key={tournament[1] ?? "index"} mobile />
     </MobileAccountGate></PushedScreen>;
   } else switch (route) {
     case "/":
@@ -144,7 +145,7 @@ export function MobileApp() {
   const locale = useMemo(() => routeFor(pathname).locale, [pathname]);
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   return (
-    <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
+    <I18nProvider changeLocale={setMobileLocale} dictionary={getDictionary(locale)} locale={locale}>
       <AuthProvider>
         <MobileSessionRefresh />
         <BoardDesignProvider><BoardPlacementProvider><MobileThemeProvider><MobileRoot /></MobileThemeProvider></BoardPlacementProvider></BoardDesignProvider>

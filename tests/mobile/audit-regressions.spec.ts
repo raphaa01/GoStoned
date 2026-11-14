@@ -24,6 +24,29 @@ test("the app document language follows the current locale", async ({ page }) =>
   }
 });
 
+test("app language changes work offline and survive back navigation and a cold entry", async ({ page }) => {
+  await installHarness(page);
+  await page.route("**/api/locale", route => route.abort());
+  await page.goto("/profile");
+  await page.locator(".profile-settings-link").click();
+  await page.locator(".language-menu-trigger").click();
+  await page.getByRole("menuitemradio", { name: "Deutsch" }).click();
+  await expect(page).toHaveURL(/\/de\/profile\/settings$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/de\/profile$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/de$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await page.goto("/profile/settings");
+  await page.locator(".language-menu-trigger").click();
+  await page.getByRole("menuitemradio", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.reload();
+  await expect(page).toHaveURL(/\/profile\/settings$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+});
+
 test("long legal headings and links fit a narrow phone", async ({ page }, info) => {
   await installHarness(page);
   await page.setViewportSize({ width: 320, height: 740 });

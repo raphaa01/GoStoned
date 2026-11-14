@@ -164,7 +164,7 @@ export async function runNativeKataGoAnalysis(
   onProgress?: (value: AnalysisJobView) => void,
   signal?: AbortSignal,
 ): Promise<AnalysisJobView> {
-  return queueNativeKataGo(() => runNativeKataGoAnalysisWork(game, onProgress, signal));
+  return queueNativeKataGo(() => runNativeKataGoAnalysisWork(game, onProgress, signal), signal);
 }
 
 async function runNativeKataGoAnalysisWork(
@@ -186,11 +186,21 @@ async function runNativeKataGoAnalysisWork(
   let lastPublishedRefined = 0;
   let lastPersistedMoves = 0;
   let lastPersistedRefined = 0;
-  let persistence = Promise.resolve();
   const persist = (result: GameAnalysisResult) =>
     withDeadline(storeResult(game, result), CACHE_TIMEOUT_MS, "Local review cache write timed out.").catch(() => undefined);
+  let persistence: Promise<void> | null = null;
+  let latestCacheResult: GameAnalysisResult | undefined;
   const queuePersistence = (result: GameAnalysisResult) => {
-    persistence = persistence.then(() => persist(result));
+    latestCacheResult = result;
+    if (persistence) return;
+    persistence = (async () => {
+      while (latestCacheResult) {
+        const next = latestCacheResult;
+        latestCacheResult = undefined;
+        await persist(next);
+      }
+      persistence = null;
+    })();
   };
   const publish = (force: boolean) => {
     if (!latestProgress || signal?.aborted) return;
@@ -205,8 +215,9 @@ async function runNativeKataGoAnalysisWork(
     const refinedMoves = latestProgress.phase === "quality"
       ? Math.min(input.moves.length, Math.max(0, latestProgress.completedTurns))
       : 0;
-    const previewThreshold = Math.min(10, input.moves.length);
-    if (!force && !revealElapsed && completedMoves < previewThreshold) return;
+    const firstMoveReady = latestProgress.phase === "preview" && latestProgress.completedTurns === 2 && completedMoves === 1;
+    const initialBatchSize = Math.min(10, input.moves.length);
+    if (!force && !revealElapsed && !firstMoveReady && completedMoves < initialBatchSize) return;
     if (!force && completedMoves === lastPublishedMoves && refinedMoves - lastPublishedRefined < 2) return;
     lastPublishedMoves = completedMoves;
     lastPublishedRefined = refinedMoves;
@@ -216,10 +227,11 @@ async function runNativeKataGoAnalysisWork(
       refinedMoves,
       totalMoves: input.moves.length,
     }));
-    const firstPreviewReady = lastPersistedMoves === 0 && completedMoves >= previewThreshold;
+    const firstPreviewReady = lastPersistedMoves === 0;
+    const initialBatchReady = lastPersistedMoves < initialBatchSize && completedMoves >= initialBatchSize;
     const previewChunkReady = completedMoves - lastPersistedMoves >= PREVIEW_PERSIST_INTERVAL;
     const qualityChunkReady = refinedMoves - lastPersistedRefined >= QUALITY_PERSIST_INTERVAL;
-    if (force || firstPreviewReady || previewChunkReady || qualityChunkReady) {
+    if (force || firstPreviewReady || initialBatchReady || previewChunkReady || qualityChunkReady) {
       lastPersistedMoves = completedMoves;
       lastPersistedRefined = refinedMoves;
       queuePersistence(result);
@@ -274,8 +286,7 @@ async function runNativeKataGoAnalysisWork(
     );
     if (!partial) throw analysisError;
     acceptingProgress = false;
-    await persistence;
-    await persist(partial);
+    queuePersistence(partial);
     return job(game, partial)!;
   } finally {
     acceptingProgress = false;
@@ -293,7 +304,6 @@ async function runNativeKataGoAnalysisWork(
     visitsPerTurn: response.visitsPerTurn,
   }, undefined, { allowRootOnly: true });
   if (!result) throw new Error("KataGo did not finish enough positions for a review.");
-  await persistence;
-  await persist(result);
+  queuePersistence(result);
   return job(game, result)!;
 }

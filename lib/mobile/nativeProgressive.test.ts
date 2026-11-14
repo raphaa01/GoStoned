@@ -102,9 +102,10 @@ test("native root-only stream opens ten moves, keeps later chunks and survives o
   };
   const pending = runNativeKataGoAnalysis(game, (update) => updates.push(update));
   await ready;
-  assert.equal(updates.length, 1);
+  assert.equal(updates.length, 2);
   assert.equal(updates[0].status, "running");
-  assert.equal(updates[0].result?.moves.length, 10);
+  assert.equal(updates[0].result?.moves.length, 1);
+  assert.equal(updates[1].result?.moves.length, 10);
   assert.equal(updates[0].result?.moves[0].bestMove, null);
   const analysisId = updates[0].id.replace("local:running:", "");
   for (let i = 11; i <= 30; i++) emit(analysisId, turn(i), i + 1);
@@ -127,8 +128,8 @@ test("native preview becomes usable at ten seconds even when fewer than ten move
   const ready = new Promise<void>((resolve) => { started = resolve; });
   analyze = async ({ analysisId }) => {
     emit(analysisId, turn(1), 1);
-    emit(analysisId, turn(0), 2);
-    emit(analysisId, turn(2), 3);
+    emit(analysisId, turn(2), 2);
+    emit(analysisId, turn(0), 3);
     started();
     return new Promise((_resolve, reject) => { rejectAnalysis = reject; });
   };

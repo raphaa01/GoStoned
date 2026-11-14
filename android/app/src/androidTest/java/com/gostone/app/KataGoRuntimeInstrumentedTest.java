@@ -55,6 +55,7 @@ public class KataGoRuntimeInstrumentedTest {
             "analysis",
             "-model", model.getAbsolutePath(),
             "-config", config.getAbsolutePath(),
+            "-override-config", "maxBoardSizeForNNBuffer=9",
             "-quit-without-waiting"
         ).redirectErrorStream(true).start();
         try {
@@ -69,8 +70,7 @@ public class KataGoRuntimeInstrumentedTest {
                 .put(new JSONArray().put("W").put("E6"))
                 .put(new JSONArray().put("B").put("D5"))
                 .put(new JSONArray().put("W").put("E4"));
-            JSONArray analyzeTurns = new JSONArray();
-            for (int turn = 0; turn <= moves.length(); turn++) analyzeTurns.put(turn);
+            int expectedPositions = moves.length() + 1;
             JSONObject request = new JSONObject()
                 .put("id", "android-instrumentation")
                 .put("moves", moves)
@@ -80,7 +80,7 @@ public class KataGoRuntimeInstrumentedTest {
                 .put("boardYSize", 9)
                 .put("maxVisits", 2)
                 .put("analysisPVLen", 3)
-                .put("analyzeTurns", analyzeTurns);
+                .put("analyzeTurns", new JSONArray().put(0).put(1));
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
                 process.getOutputStream(),
                 StandardCharsets.UTF_8
@@ -120,13 +120,18 @@ public class KataGoRuntimeInstrumentedTest {
                                 firstReviewAt = System.nanoTime() - startedAt;
                                 android.util.Log.i("GoStonePreviewTest", "First usable recommendation: "
                                     + TimeUnit.NANOSECONDS.toMillis(firstReviewAt) + "ms");
+                                JSONArray remaining = new JSONArray();
+                                for (int turn = 2; turn <= moves.length(); turn++) remaining.put(turn);
+                                writer.write(request.put("analyzeTurns", remaining).toString());
+                                writer.newLine();
+                                writer.flush();
                             }
-                            if (results == analyzeTurns.length()) break;
+                            if (results == expectedPositions) break;
                         }
                     }
                     assertTrue("No analysis result. KataGo output:\n" + diagnostics, result != null);
                     assertFalse(result.optString("error"), result.has("error"));
-                    assertEquals(analyzeTurns.length(), results);
+                    assertEquals("KataGo output:\n" + diagnostics, expectedPositions, results);
                     assertTrue("First usable recommendation exceeded 15 seconds",
                         firstReviewAt > 0 && firstReviewAt <= TimeUnit.SECONDS.toNanos(15));
                     assertTrue("Preview exceeded 35 seconds", System.nanoTime() - startedAt <= TimeUnit.SECONDS.toNanos(35));

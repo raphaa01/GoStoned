@@ -1,9 +1,21 @@
+import { withDeadline } from "./withDeadline";
+
+const ENGINE_QUEUE_TIMEOUT_MS = 45_000;
+
 export function createNativeKataGoQueue() {
   let pending: Promise<unknown> = Promise.resolve();
-  return <T>(work: () => Promise<T>): Promise<T> => {
-    const result = pending.then(work, work);
-    pending = result.catch(() => undefined);
-    return result;
+  return async <T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    const previous = pending;
+    let release!: () => void;
+    const slot = new Promise<void>(resolve => { release = resolve; });
+    pending = previous.then(() => slot);
+    try {
+      await withDeadline(previous, ENGINE_QUEUE_TIMEOUT_MS, "The local KataGo engine is still busy.", signal);
+      signal?.throwIfAborted();
+      return await work();
+    } finally {
+      release();
+    }
   };
 }
 
