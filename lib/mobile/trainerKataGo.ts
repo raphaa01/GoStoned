@@ -2,9 +2,11 @@ import { Capacitor } from "@capacitor/core";
 import type { AnalysisInput } from "@/lib/analysis/types";
 import type { TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import { MOBILE_KATAGO } from "./katagoContract";
-import { NativeKataGo, assertNativeKataGoStatus, type NativeKataGoStatus } from "./nativeKataGo";
+import { NativeKataGo, assertNativeKataGoStatus, finishKataGoBridgeWork, readKataGoStatus, type NativeKataGoStatus } from "./nativeKataGo";
 import { createNativeKataGoQueue, queueNativeKataGo } from "./nativeKataGoQueue";
+import { withDeadline } from "./withDeadline";
 
+export const TRAINER_TIMEOUT_MS = 35_000;
 export interface TrainerKataGoPlugin {
   getStatus(): Promise<NativeKataGoStatus>;
   analyzePosition(options: { analysisId: string; input: AnalysisInput; visits: number; includeOwnership: boolean; maxTime: number }): Promise<{ turn: TrainerPositionAnalysis }>;
@@ -34,11 +36,14 @@ export function validateTrainerAnalysis(turn: TrainerPositionAnalysis, input: An
 // revisit the same move count, so every request has a fresh id and UI revision.
 export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAvailable = true, enqueue = createNativeKataGoQueue()) {
   return {
-    async status(): Promise<NativeKataGoStatus> {
+    async status(signal?: AbortSignal): Promise<NativeKataGoStatus> {
       if (!nativeAvailable) return { available: false, engineVersion: MOBILE_KATAGO.engineVersion, modelSha256: MOBILE_KATAGO.modelSha256 };
-      const status = await plugin.getStatus();
-      if (status.available) assertNativeKataGoStatus(status);
-      return status;
+      return enqueue(async () => {
+        signal?.throwIfAborted();
+        const status = await readKataGoStatus(() => plugin.getStatus(), signal);
+        if (status.available) assertNativeKataGoStatus(status);
+        return status;
+      });
     },
     analyze(input: AnalysisInput, options: { visits: number; ownership?: boolean; maxTime?: number; signal: AbortSignal }): Promise<TrainerPositionAnalysis> {
       const execute = async () => {
@@ -46,20 +51,20 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
         if (options.signal.aborted) throw aborted();
         const analysisId = `trainer:${input.gameId}:${input.gameVersion}:${crypto.randomUUID()}`;
         let cancellation: Promise<void> | undefined;
-        const onAbort = () => { cancellation = plugin.cancel({ analysisId }).catch(() => undefined); };
+        const onAbort = () => { cancellation ??= finishKataGoBridgeWork(plugin.cancel({ analysisId })); };
         options.signal.addEventListener("abort", onAbort, { once: true });
         try {
-          const response = await plugin.analyzePosition({
+          const response = await withDeadline(plugin.analyzePosition({
             analysisId, input,
             visits: Math.max(2, Math.min(MOBILE_KATAGO.maximumVisitsPerTurn, Math.round(options.visits))),
             includeOwnership: options.ownership ?? false,
             maxTime: Number.isFinite(options.maxTime) ? Math.max(.1, Math.min(8, options.maxTime!)) : 5,
-          });
+          }), TRAINER_TIMEOUT_MS, "KataGo did not finish the training position in time.");
           if (options.signal.aborted) throw aborted();
           validateTrainerAnalysis(response.turn, input);
           return response.turn;
         } catch (analysisError) {
-          cancellation ??= plugin.cancel({ analysisId }).catch(() => undefined);
+          onAbort();
           throw analysisError;
         } finally {
           options.signal.removeEventListener("abort", onAbort);

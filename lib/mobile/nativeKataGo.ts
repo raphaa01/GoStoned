@@ -1,11 +1,12 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
-import { buildGameAnalysis, buildProgressiveGameAnalysis } from "@/lib/analysis/evaluate";
+import { buildProgressiveGameAnalysis } from "@/lib/analysis/evaluate";
 import { gameAnalysisInput } from "@/lib/analysis/input";
 import type { AnalysisInput, AnalysisJobView, GameAnalysisResult, KataGoTurnResult } from "@/lib/analysis/types";
 import type { TrainerPositionAnalysis } from "@/lib/learn/aiTrainer";
 import type { GameState } from "@/lib/game/types";
 import { MOBILE_KATAGO, type MobileKataGoProgress } from "./katagoContract";
 import { queueNativeKataGo } from "./nativeKataGoQueue";
+import { withDeadline } from "./withDeadline";
 
 export type NativeKataGoStatus = {
   available: boolean;
@@ -34,6 +35,18 @@ const DATABASE_NAME = "gostone-mobile-analysis-v1";
 const STORE_NAME = "analyses";
 const PREVIEW_PERSIST_INTERVAL = 16;
 const QUALITY_PERSIST_INTERVAL = 4;
+const STATUS_TIMEOUT_MS = 15_000;
+const REVIEW_TIMEOUT_MS = 100_000;
+const BRIDGE_CLEANUP_TIMEOUT_MS = 5_000;
+const CACHE_TIMEOUT_MS = 1_500;
+
+export function readKataGoStatus(getStatus: () => Promise<NativeKataGoStatus>, signal?: AbortSignal) {
+  return withDeadline(getStatus(), STATUS_TIMEOUT_MS, "KataGo did not answer its status request.", signal);
+}
+
+export function finishKataGoBridgeWork(work: Promise<void>): Promise<void> {
+  return withDeadline(work, BRIDGE_CLEANUP_TIMEOUT_MS, "KataGo cleanup timed out.").catch(() => undefined);
+}
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -42,7 +55,15 @@ function openDatabase(): Promise<IDBDatabase> {
       request.result.createObjectStore(STORE_NAME, { keyPath: "key" });
     };
     request.onerror = () => reject(request.error ?? new Error("Local analysis storage failed."));
-    request.onsuccess = () => resolve(request.result);
+    let blocked = false;
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error("Local analysis storage is busy."));
+    };
+    request.onsuccess = () => {
+      if (blocked) request.result.close();
+      else resolve(request.result);
+    };
   });
 }
 
@@ -113,7 +134,8 @@ export function assertNativeKataGoStatus(status: NativeKataGoStatus): void {
 }
 
 export async function readNativeKataGoAnalysis(game: GameState): Promise<AnalysisJobView | null> {
-  return job(game, await storedResult(game).catch(() => null));
+  const saved = await withDeadline(storedResult(game), CACHE_TIMEOUT_MS, "Local review cache read timed out.").catch(() => null);
+  return job(game, saved);
 }
 
 function runningJob(
@@ -151,7 +173,7 @@ async function runNativeKataGoAnalysisWork(
   signal?: AbortSignal,
 ): Promise<AnalysisJobView> {
   signal?.throwIfAborted();
-  const status = await NativeKataGo.getStatus();
+  const status = await readKataGoStatus(() => NativeKataGo.getStatus(), signal);
   signal?.throwIfAborted();
   assertNativeKataGoStatus(status);
   const input = gameAnalysisInput(game);
@@ -165,10 +187,10 @@ async function runNativeKataGoAnalysisWork(
   let lastPersistedMoves = 0;
   let lastPersistedRefined = 0;
   let persistence = Promise.resolve();
+  const persist = (result: GameAnalysisResult) =>
+    withDeadline(storeResult(game, result), CACHE_TIMEOUT_MS, "Local review cache write timed out.").catch(() => undefined);
   const queuePersistence = (result: GameAnalysisResult) => {
-    persistence = persistence
-      .then(() => storeResult(game, result))
-      .catch(() => undefined);
+    persistence = persistence.then(() => persist(result));
   };
   const publish = (force: boolean) => {
     if (!latestProgress || signal?.aborted) return;
@@ -203,12 +225,20 @@ async function runNativeKataGoAnalysisWork(
       queuePersistence(result);
     }
   };
-  const listener = await NativeKataGo.addListener("progress", (progress) => {
-    if (progress.analysisId !== analysisId) return;
+  let acceptingProgress = true;
+  const subscription = NativeKataGo.addListener("progress", (progress) => {
+    if (!acceptingProgress || progress.analysisId !== analysisId) return;
     latestProgress = progress;
     latestVisitsPerTurn = progress.visitsPerTurn;
     if (progress.turn) turns.set(progress.turn.turnNumber, progress.turn);
     publish(false);
+  });
+  const listener = await withDeadline(subscription, BRIDGE_CLEANUP_TIMEOUT_MS, "KataGo progress subscription timed out.", signal).catch(() => {
+    acceptingProgress = false;
+    // Reviews can still use the final result if the progress bridge is absent.
+    void subscription.then(handle => finishKataGoBridgeWork(handle.remove())).catch(() => undefined);
+    signal?.throwIfAborted();
+    return null;
   });
   const revealTimer = window.setTimeout(() => {
     revealElapsed = true;
@@ -216,21 +246,20 @@ async function runNativeKataGoAnalysisWork(
   }, 10_000);
   let response: Awaited<ReturnType<GoStoneKataGoPlugin["analyze"]>>;
   let cancellation: Promise<void> | undefined;
-  const onAbort = () => { cancellation = NativeKataGo.cancel({ analysisId }).catch(() => undefined); };
-  signal?.addEventListener("abort", onAbort, { once: true });
+  const cancel = () => finishKataGoBridgeWork(NativeKataGo.cancel({ analysisId }));
   try {
     signal?.throwIfAborted();
-    response = await NativeKataGo.analyze({
+    response = await withDeadline(NativeKataGo.analyze({
       analysisId,
       input,
       visitsPerTurn: MOBILE_KATAGO.defaultVisitsPerTurn,
-    });
+    }), REVIEW_TIMEOUT_MS, "KataGo did not finish the review in time.", signal);
     if (response.complete === false) {
-      cancellation ??= NativeKataGo.cancel({ analysisId }).catch(() => undefined);
+      cancellation = cancel();
     }
     signal?.throwIfAborted();
   } catch (analysisError) {
-    cancellation ??= NativeKataGo.cancel({ analysisId }).catch(() => undefined);
+    cancellation ??= cancel();
     signal?.throwIfAborted();
     const partial = buildProgressiveGameAnalysis(
       input,
@@ -244,30 +273,27 @@ async function runNativeKataGoAnalysisWork(
       { allowRootOnly: true },
     );
     if (!partial) throw analysisError;
-    await persistence.catch(() => undefined);
-    await storeResult(game, partial).catch(() => undefined);
+    acceptingProgress = false;
+    await persistence;
+    await persist(partial);
     return job(game, partial)!;
   } finally {
-    signal?.removeEventListener("abort", onAbort);
+    acceptingProgress = false;
     window.clearTimeout(revealTimer);
-    await listener.remove().catch(() => undefined);
-    await cancellation;
+    await Promise.all([
+      listener && finishKataGoBridgeWork(listener.remove()),
+      cancellation,
+    ]);
   }
   for (const turn of response.turns) turns.set(turn.turnNumber, turn);
   const ordered = [...turns.values()].sort((left, right) => left.turnNumber - right.turnNumber);
-  const result = response.complete === false
-    ? buildProgressiveGameAnalysis(input, ordered, {
-        version: MOBILE_KATAGO.engineVersion,
-        model: MOBILE_KATAGO.modelName,
-        visitsPerTurn: response.visitsPerTurn,
-      }, undefined, { allowRootOnly: true })
-    : buildGameAnalysis(input, ordered, {
-        version: MOBILE_KATAGO.engineVersion,
-        model: MOBILE_KATAGO.modelName,
-        visitsPerTurn: response.visitsPerTurn,
-      }, undefined, { allowRootOnly: true });
+  const result = buildProgressiveGameAnalysis(input, ordered, {
+    version: MOBILE_KATAGO.engineVersion,
+    model: MOBILE_KATAGO.modelName,
+    visitsPerTurn: response.visitsPerTurn,
+  }, undefined, { allowRootOnly: true });
   if (!result) throw new Error("KataGo did not finish enough positions for a review.");
-  await persistence.catch(() => undefined);
-  await storeResult(game, result).catch(() => undefined);
+  await persistence;
+  await persist(result);
   return job(game, result)!;
 }

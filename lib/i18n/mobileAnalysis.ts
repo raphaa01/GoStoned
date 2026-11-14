@@ -1,6 +1,7 @@
 import type { Locale } from "./config";
 
 const english = {
+  noMoves: "This game has no moves to analyse.",
   preview: "Quick review",
   quality: "Improving details",
   previewNote: "The first moves are ready. KataGo continues locally in the background.",
@@ -15,6 +16,7 @@ const english = {
 const copies: Record<Locale, typeof english> = {
   en: english,
   de: {
+    noMoves: "Diese Partie enthält keine Züge für die Analyse.",
     preview: "Schnellauswertung",
     quality: "Details werden verbessert",
     previewNote: "Die ersten Züge sind bereit. KataGo rechnet lokal im Hintergrund weiter.",

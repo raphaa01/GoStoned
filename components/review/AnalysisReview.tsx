@@ -31,6 +31,8 @@ import {
   runNativeKataGoAnalysis,
   usesNativeKataGoAnalysis,
 } from "@/lib/mobile/nativeKataGo";
+import { withDeadline } from "@/lib/mobile/withDeadline";
+import { safeAccountReturnPath } from "@/lib/auth/returnPath";
 import { AnalysisBoard } from "./AnalysisBoard";
 import styles from "./review.module.css";
 
@@ -38,9 +40,15 @@ type ResponseBody = { actor: string; game: GameState; analysis: AnalysisJobView 
 type PriceVoteResponse = { actor: string; monthlyPriceEur: AnalysisPriceOption | null };
 
 export function AnalysisReview({ gameId }: { gameId: string }) {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
+  return <PlayerAnalysisReview gameId={gameId} key={`${gameId}:${user?.playerKey ?? ""}`} />;
+}
+
+function PlayerAnalysisReview({ gameId }: { gameId: string }) {
+  const { user, loading, refresh } = useAuth();
   const playerKey = user?.playerKey;
   const requestController = useRef<AbortController | null>(null);
+  const mounted = useRef(false);
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
   const progressiveCopy = getMobileAnalysisCopy(locale);
@@ -52,6 +60,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const [analysis, setAnalysis] = useState<AnalysisJobView | null>(null);
   const [selectedMove, setSelectedMove] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [reauthenticate, setReauthenticate] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [quotaRetryAt, setQuotaRetryAt] = useState<Date | null>(null);
   const [supportPrice, setSupportPrice] = useState<AnalysisPriceOption | null>(null);
@@ -127,17 +136,22 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
       setRequesting(true);
       setError(null);
     }
+    setReauthenticate(false);
     try {
       if (nativeAnalysis) {
-        const response = await fetch(`/api/games/${gameId}`, {
+        const loadGame = fetch(`/api/games/${gameId}`, {
           cache: "no-store",
           headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
           signal: controller.signal,
-        });
-        const body = await readApi<{ actor: string; game: GameState }>(response);
+        }).then(readApi<{ actor: string; game: GameState }>);
+        const body = await withDeadline(loadGame, 15_000, "Could not load the game in time.", controller.signal);
         assertResponseActor(body.actor, playerKey);
         if (!isCurrent()) return;
         setGame(body.game);
+        if (body.game.moves.length === 0) {
+          setError(null);
+          return;
+        }
         const saved = method === "POST" ? null : await readNativeKataGoAnalysis(body.game);
         if (!isCurrent()) return;
         if (method === "POST" || (method === "OPEN" && !saved)) {
@@ -203,25 +217,35 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
         void loadSupportPrice();
         return;
       }
-      setError(localizedApiError(dictionary, requestError, copy.failed));
+      if (requestError instanceof ApiRequestError && (
+        requestError.status === 401 || requestError.code === "identity_changed"
+      )) {
+        setError(null);
+        setReauthenticate(true);
+      } else {
+        setError(localizedApiError(dictionary, requestError, copy.failed));
+      }
     } finally {
       if (isCurrent()) setRequesting(false);
+      controller.abort();
     }
   }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, playerKey]);
 
   useEffect(() => {
+    mounted.current = true;
     const timer = window.setTimeout(() => void load("OPEN"), 0);
     return () => {
+      mounted.current = false;
       window.clearTimeout(timer);
       requestController.current?.abort();
     };
   }, [load]);
   useEffect(() => {
-    if (nativeAnalysis) return;
+    if (nativeAnalysis || reauthenticate) return;
     if (analysis?.status !== "queued" && analysis?.status !== "running") return;
     const timer = window.setInterval(() => void load(), 2_500);
     return () => window.clearInterval(timer);
-  }, [analysis?.status, load, nativeAnalysis]);
+  }, [analysis?.status, load, nativeAnalysis, reauthenticate]);
 
   const result = analysis?.result ?? null;
   const availableMoves = result?.moves.length ?? 0;
@@ -267,6 +291,7 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
   const quotaReset = quotaRetryAt
     ? new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(quotaRetryAt)
     : null;
+  const loginPath = href(`/login?returnTo=${encodeURIComponent(safeAccountReturnPath(`/review/${gameId}`) ?? "/review")}`);
   return (
     <div className={`${styles.reviewWorkspace} review-workspace`}>
       <header className={styles.reviewHeader}>
@@ -278,8 +303,19 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
           : game ? `${game.boardSize}×${game.boardSize}` : ""}</span>
       </header>
 
-      {loading || !user ? (
+      {loading ? (
         <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
+      ) : !user || reauthenticate ? (
+        <div className={styles.reviewStatus}>
+          <p role="status">{copy.signIn}</p>
+          <Link className="button button--primary" href={loginPath}>{dictionary.auth.login}</Link>
+          {reauthenticate && user ? <button className="button button--secondary" disabled={requesting} onClick={() => {
+            setRequesting(true);
+            void withDeadline(refresh({ silent: true }), 15_000, "Session check timed out.")
+              .then(() => { if (mounted.current) return load("OPEN"); })
+              .catch(() => { if (mounted.current) setRequesting(false); });
+          }} type="button">{copy.retry}</button> : null}
+        </div>
       ) : error && !game ? (
         <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load("OPEN")} type="button">{copy.retry}</button></div>
       ) : !game || !board ? (
@@ -327,6 +363,8 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
           </fieldset>
           <Link className={styles.quotaBack} href={href("/review")}><ArrowLeft size={17} /> {copy.back}</Link>
         </section>
+      ) : nativeAnalysis && game.moves.length === 0 ? (
+        <section className={styles.reviewStatus}><p>{progressiveCopy.noMoves}</p></section>
       ) : !analysis ? (
         <section className={styles.reviewStatus}>
           <LoaderCircle className={styles.spin} size={38} />
@@ -365,6 +403,13 @@ export function AnalysisReview({ gameId }: { gameId: string }) {
               .replace("{done}", String(result.moves.length)).replace("{total}", String(game.moveCount))}` : ""}</p>
             <div className={styles.summaryActions}>
               <button onClick={() => setShowSummary(false)} type="button">{experienceCopy.returnToAnalysis}</button>
+              {nativeAnalysis && analysis.status === "completed" && result.moves.length < game.moveCount ? (
+                <button onClick={() => {
+                  setShowSummary(false);
+                  setSelectedMove(1);
+                  void load("POST");
+                }} type="button">{copy.retry}</button>
+              ) : null}
               <button className={styles.nextMove} onClick={exitReview} type="button">{experienceCopy.done}</button>
             </div>
           </main>

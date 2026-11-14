@@ -2,7 +2,8 @@ import type { Locale } from "./config";
 const de = {
   title: "Spiele gegen Coach", beta: "Beta", size: "Brettgröße", start: "Spiel starten", ready: "Wähle die Brettgröße. Du spielst Schwarz.",
   rating: "Der Gegner orientiert sich an deiner Spielstärke", ratingApproximate: "Die Stärkeanpassung ist noch eine Näherung.",
-  preparing: "Coach wird vorbereitet …", unavailable: "Lokales KataGo ist auf diesem Gerät nicht verfügbar.", blocked: "Diese Beta ist für dein Konto noch nicht freigeschaltet.",
+  preparing: "Coach wird vorbereitet …", unavailable: "Lokales KataGo konnte nicht gestartet werden.", blocked: "Diese Beta ist für dein Konto noch nicht freigeschaltet.",
+  modelUnavailable: "Das lokale Modell für Coach-Kommentare konnte nicht geladen werden.", retryPreparation: "Erneut versuchen",
   initial: "Setze deinen ersten Stein. Ich schaue mir deine Züge an.", analysing: "Ich schaue mir deinen Zug an …", thinking: "Coach überlegt …", yourTurn: "Du bist am Zug", noComment: "Für diesen Zug habe ich keinen sicheren Kommentar.",
   help: "Hilfe", undo: "Zug zurück", pass: "Passen", resign: "Aufgeben", estimate: "Punkteschätzung", estimateNote: "KataGo-Schätzung, keine endgültige Wertung. Flächen zeigen voraussichtlichen Einfluss.",
   black: "Schwarz", white: "Weiß", even: "Ausgeglichen", points: "Punkte", retry: "Nochmal", continue: "Weiterspielen", show: "Zeigen", hide: "Ausblenden",
@@ -14,7 +15,8 @@ const de = {
 const en: typeof de = {
   title: "Play against Coach", beta: "Beta", size: "Board size", start: "Start game", ready: "Choose a board size. You play Black.",
   rating: "The opponent adapts to your playing strength", ratingApproximate: "Strength matching is currently approximate.",
-  preparing: "Preparing Coach …", unavailable: "Local KataGo is unavailable on this device.", blocked: "This beta has not been enabled for your account yet.",
+  preparing: "Preparing Coach …", unavailable: "Local KataGo could not start.", blocked: "This beta has not been enabled for your account yet.",
+  modelUnavailable: "The local model for Coach comments could not load.", retryPreparation: "Try again",
   initial: "Place your first stone. I'll look at your moves.", analysing: "Looking at your move …", thinking: "Coach is thinking …", yourTurn: "Your turn", noComment: "I have no reliable comment for this move.",
   help: "Hint", undo: "Undo move", pass: "Pass", resign: "Resign", estimate: "Score estimate", estimateNote: "KataGo estimate, not a final score. Areas show estimated influence.",
   black: "Black", white: "White", even: "Even", points: "points", retry: "Try again", continue: "Continue", show: "Show", hide: "Hide",

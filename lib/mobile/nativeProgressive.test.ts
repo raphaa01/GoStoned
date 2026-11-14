@@ -12,6 +12,7 @@ let analyze: (options: { analysisId: string }) => Promise<{
   complete: boolean;
 }>;
 let removals = 0;
+let cancelled = 0;
 
 // Exercise the actual shared iOS/Android client through Capacitor's public JS
 // implementation boundary, including native events, fallback and persistence.
@@ -23,6 +24,7 @@ registerPlugin("GoStoneKataGo", {
       modelSha256: MOBILE_KATAGO.modelSha256,
     }),
     analyze: (options: { analysisId: string }) => analyze(options),
+    cancel: async () => { cancelled += 1; },
     addListener: async (_name: string, listener: typeof progressListener) => {
       progressListener = listener;
       return { remove: async () => { removals += 1; progressListener = undefined; } };
@@ -186,4 +188,42 @@ test("two-visit native preview already includes the best move and a provisional 
     return { turns: Array.from({ length: 31 }, (_, i) => candidateTurn(i)), visitsPerTurn: 2, complete: true };
   };
   assert.equal((await runNativeKataGoAnalysis(game, (update) => updates.push(update))).result?.moves.length, 30);
+});
+
+test("an unresponsive review returns its available preview and releases the engine queue", async (context) => {
+  const { runNativeKataGoAnalysis } = await nativeClient;
+  installBrowser(context);
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = cancelled;
+  let begin!: () => void;
+  const started = new Promise<void>(resolve => { begin = resolve; });
+  analyze = async ({ analysisId }) => {
+    emit(analysisId, turn(0), 1);
+    emit(analysisId, turn(1), 2);
+    begin();
+    return new Promise(() => undefined);
+  };
+  const pending = runNativeKataGoAnalysis(game);
+  await started;
+  context.mock.timers.tick(100_000);
+  assert.equal((await pending).result?.moves.length, 1);
+  assert.equal(cancelled, before + 1);
+  assert.equal(progressListener, undefined);
+});
+
+test("a silent IndexedDB cache falls back to fresh analysis", async (context) => {
+  const { readNativeKataGoAnalysis } = await nativeClient;
+  installBrowser(context);
+  Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: { open: () => ({}) } });
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const pending = readNativeKataGoAnalysis(game);
+  context.mock.timers.tick(1_500);
+  assert.equal(await pending, null);
+});
+
+test("a native result marked complete can still preserve a contiguous preview with missing turns", async (context) => {
+  const { runNativeKataGoAnalysis } = await nativeClient;
+  installBrowser(context);
+  analyze = async () => ({ turns: [turn(0), turn(1), turn(3)], visitsPerTurn: 2, complete: true });
+  assert.equal((await runNativeKataGoAnalysis(game)).result?.moves.length, 1);
 });
