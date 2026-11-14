@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BookOpen,
   CircleUserRound,
+  ChevronRight,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +27,9 @@ import { puzzleRouteKey, readRouteData, routeCacheKey } from "@/lib/client/route
 import { assertResponseActor } from "@/lib/client/identityAuthority";
 import type { PuzzleHub } from "@/lib/puzzles/types";
 import { parsePublicLeaderboardSnapshot } from "@/lib/stats/leaderboardContract";
+import { tournamentDates } from "@/components/tournaments/RapidOverview";
+import { getTournamentsCopy } from "@/lib/i18n/tournaments";
+import { monthlyWindow } from "@/lib/tournaments/policy";
 
 type HomeData = {
   playerKey: string | null;
@@ -34,6 +38,28 @@ type HomeData = {
 };
 
 const EMPTY_DATA: HomeData = { playerKey: null, friends: null, matchmaking: null };
+
+function HomeTournaments({ playerKey }: { playerKey: string | null }) {
+  const { href, locale } = useI18n();
+  const copy = getTournamentsCopy(locale);
+  const load = useCallback(() => fetch("/api/tournaments?view=home", {
+    cache: "no-store", headers: playerKey ? { [EXPECTED_PLAYER_HEADER]: playerKey } : undefined,
+    signal: AbortSignal.timeout(20_000),
+  }).then(readApi<{ rapid: { startsAt: string; endsAt: string; joined: boolean } }>), [playerKey]);
+  const resource = useRouteResource(playerKey ? routeCacheKey("tournament-home", playerKey) : null, load);
+  const window = monthlyWindow();
+  const rapid = resource.data?.rapid;
+  return <section className="mobile-home-section mobile-home-tournaments">
+    <Link href={href("/tournaments")} className="mobile-home-tournament-link">
+      <div>
+        <h2>{copy.title}</h2>
+        <p>{copy.rapid} · {tournamentDates(rapid?.startsAt ?? window.startsAt.toISOString(), rapid?.endsAt ?? window.endsAt.toISOString(), locale)}</p>
+        {rapid ? <p>{rapid.joined ? copy.registered : copy.notRegistered}</p> : null}
+      </div>
+      <ChevronRight aria-hidden="true" size={20} />
+    </Link>
+  </section>;
+}
 
 function signed(value: number) {
   const rounded = Math.round(value);
@@ -167,6 +193,8 @@ export function MobileHome() {
           </dl>
         </section>
       ) : null}
+
+      <HomeTournaments playerKey={playerKey} />
 
       {user ? (
         <section className="mobile-home-section">

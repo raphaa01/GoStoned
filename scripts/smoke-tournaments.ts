@@ -225,13 +225,14 @@ async function main() {
     )!;
     events.push(...dashboard.monthly.map((t) => t.id));
     const leaguePlayers = [host, a, b, c, d, e];
+    for (let i = 0; i < 5; i++) leaguePlayers.push(await newUser());
     for (const user of leaguePlayers)
       await tournaments.joinTournament(user, { id: monthly.id });
     await query(
       "UPDATE tournaments SET starts_at=statement_timestamp()-interval '1 hour',ends_at=statement_timestamp()+interval '1 hour' WHERE id=$1",
       [monthly.id],
     );
-    // A missing opponent must never consume one of the five rated games.
+    // A missing opponent must never consume one of the ten rated games.
     await tournaments.queueMonthly(host, monthly.id, true);
     await tournaments.queueMonthly(a, monthly.id, true);
     let league = await tournaments.getTournamentDetail(host, monthly.id);
@@ -269,7 +270,7 @@ async function main() {
         await tournaments.getTournamentDetail(black, monthly.id);
       }
     league = await tournaments.getTournamentDetail(host, monthly.id);
-    assert(league.standings.every((r) => r.played === 5));
+    assert(league.standings.every((r) => r.played === 10));
     await assert.rejects(tournaments.queueMonthly(host, monthly.id, true), {
       code: "tournament_game_limit",
     });
@@ -332,8 +333,22 @@ async function main() {
     await tournaments.displayTrophy(winner, monthly.id, false);
     assert.equal((await tournaments.getTrophies(winner, false)).length, 0);
     assert.equal((await tournaments.getTrophies(winner, true)).length, 1);
+    const leaderboards = await tournaments.getRapidLeaderboards(winner);
+    assert.equal(
+      leaderboards.worldwide.find((row) => row.userId === winner)?.points,
+      (4 - awards.rows[0].place) * 2,
+    );
+    assert(leaderboards.friends.some((row) => row.userId === winner));
+    assert(
+      (await tournaments.getTournamentHistory(winner, true)).some(
+        (entry) =>
+          entry.tournament.id === monthly.id &&
+          entry.standing.place === awards.rows[0].place &&
+          entry.standing.played === 10,
+      ),
+    );
     console.log(
-      "Monthly queue, no-show recovery, 15 rated games, five-game cap, deadline, idempotent awards and profile display passed.",
+      "Monthly queue, no-show recovery, 55 rated games, ten-game cap, deadline, idempotent awards and profile display passed.",
     );
 
     // Rapid rankings are local; the search pool still spans the category.

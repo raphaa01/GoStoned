@@ -27,6 +27,7 @@ export type Tournament = {
   startsAt: string;
   endsAt: string | null;
   memberCount: number;
+  gameLimit?: number;
 };
 export type Standing = {
   userId: string;
@@ -38,6 +39,7 @@ export type Standing = {
   draws: number;
   played: number;
   tiebreak: number;
+  margin?: number;
   place: number;
 };
 export type TournamentMatch = {
@@ -85,4 +87,23 @@ export type TournamentTrophy = {
   category: number | null;
   place: number;
   displayed: boolean;
+  monthlyMode?: Tournament["monthlyMode"];
+};
+
+export type TournamentLeaderboardEntry = {
+  userId: string;
+  name: string;
+  points: number;
+  place: number;
+};
+
+export type TournamentLeaderboards = {
+  worldwide: TournamentLeaderboardEntry[];
+  friends: TournamentLeaderboardEntry[];
+};
+
+export type TournamentHistoryEntry = {
+  tournament: Tournament;
+  standing: Standing;
+  group: number;
 };

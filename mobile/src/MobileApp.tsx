@@ -6,6 +6,8 @@ import { useEffect, useMemo } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { OAuthUsernameForm } from "@/components/auth/OAuthUsernameForm";
 import { FriendsHub } from "@/components/friends/FriendsHub";
+import { TournamentHub } from "@/components/tournaments/TournamentHub";
+import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 import { GameRoom } from "@/components/game/GameRoom";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { BoardDesignProvider } from "@/components/game/BoardDesignProvider";
@@ -76,9 +78,10 @@ function MobileRoute() {
   const game = route.match(/^\/game\/([0-9a-f-]+)$/i);
   const review = route.match(/^\/review\/([0-9a-f-]+)$/i);
   const sharedGame = route.match(/^\/shared-game\/([0-9a-f-]+)$/i);
+  const tournament = route.match(/^\/tournaments(?:\/([0-9a-f-]+))?$/i);
   const size = Number(search.get("size"));
 
-  if (game) return <NativeChromeHidden><GameRoom gameId={game[1]} /></NativeChromeHidden>;
+  if (game) return <NativeChromeHidden><GameRoom key={game[1]} gameId={game[1]} tournamentNavigation="mobile" /></NativeChromeHidden>;
   if (route === "/play/local") return <NativeChromeHidden><LocalPlay /></NativeChromeHidden>;
   if (route === "/play/clock") return <NativeChromeHidden><GoClock /></NativeChromeHidden>;
   if (sharedGame) return <NativeChromeHidden><SharedGameView token={sharedGame[1]} /></NativeChromeHidden>;
@@ -94,7 +97,11 @@ function MobileRoute() {
 
   let content: React.ReactNode;
   let showPlayAction = false;
-  switch (route) {
+  if (tournament) {
+    content = <PushedScreen><MobileAccountGate returnTo={route} title={getTournamentsCopy(locale).title}>
+      <TournamentHub id={tournament[1]} mobile />
+    </MobileAccountGate></PushedScreen>;
+  } else switch (route) {
     case "/":
       content = <MobileHome />;
       showPlayAction = true;
@@ -103,7 +110,7 @@ function MobileRoute() {
     case "/play/coach": content = <PushedScreen><MobileCoachGate /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
     case "/profile/settings": content = <PushedScreen><MobileAccountGate returnTo="/profile/settings" title={getSettingsCopy(locale).title}><MobileSettings /></MobileAccountGate></PushedScreen>; break;
-    case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub /></MobileAccountGate></PushedScreen>; break;
+    case "/friends": content = <PushedScreen><MobileAccountGate returnTo="/friends" title={copy.friends}><FriendsHub tournamentTrophies="mobile" /></MobileAccountGate></PushedScreen>; break;
     case "/learn": content = <div className="mobile-tab-screen mobile-learn-screen"><MobileAccountGate returnTo="/learn" title={dictionary.nav.learn}><LearningGuide /></MobileAccountGate></div>; break;
     case "/learn/ai": content = <PushedScreen><TrainingGame /></PushedScreen>; break;
     case "/review": content = <div className="mobile-tab-screen mobile-review-screen"><MobileAccountGate returnTo="/review" title={dictionary.nav.review}><ReviewGuide /></MobileAccountGate></div>; break;

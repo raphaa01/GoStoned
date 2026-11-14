@@ -4,6 +4,7 @@ import { consumeEphemeralIpPolicyRateLimit, consumePolicyRateLimit, RATE_LIMIT_P
 import { requireRequestUser } from "@/lib/auth/requestAuth";
 import { assertExpectedPlayer } from "@/lib/auth/playerBindingServer";
 import { getFriendProfile } from "@/lib/friends/friendService";
+import { getTournamentWins } from "@/lib/tournaments/service";
 import { assertUuid, friendRequestError } from "@/lib/friends/request";
 import { friendRouteError } from "@/lib/friends/route";
 
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ use
     await consumePolicyRateLimit(request, RATE_LIMIT_POLICIES.friendsRead, user.playerKey);
     const { userId } = await context.params;
     assertUuid(userId);
-    return noStoreJson({ ok: true, profile: await getFriendProfile(user.id, userId) });
+    const profile = await getFriendProfile(user.id, userId);
+    return noStoreJson({ ok: true, profile: { ...profile, tournamentWins: await getTournamentWins(userId) } });
   } catch (error) {
     return friendRouteError(error);
   }

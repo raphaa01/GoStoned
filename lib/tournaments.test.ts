@@ -5,6 +5,7 @@ import {
   monthlyWindow,
   parseTournamentSettings,
   rankStandings,
+  rankRapidStandings,
   roundRobin,
   tournamentCategory,
   classicEligible,
@@ -29,6 +30,30 @@ test("monthly window includes exactly the last seven calendar days, including le
       7 * 86400000,
     );
   }
+});
+
+test("Rapid ranks played entries by wins and then net score margin", () => {
+  const player = {
+    name: "Player",
+    rating: 1200,
+    points: 0,
+    tiebreak: 0,
+    losses: 0,
+    draws: 0,
+    played: 5,
+    place: 1,
+  };
+  const results = rankRapidStandings([
+    { ...player, userId: "best-margin", wins: 3, margin: 14 - 5 },
+    { ...player, userId: "most-wins", wins: 4, margin: -2 },
+    { ...player, userId: "lower-margin", wins: 3, margin: 5 },
+    { ...player, userId: "inactive", wins: 0, margin: 0, played: 0 },
+    { ...player, userId: "played", wins: 0, margin: -6.5 },
+  ]);
+  assert.deepEqual(
+    results.map((row) => row.userId),
+    ["most-wins", "best-margin", "lower-margin", "played", "inactive"],
+  );
 });
 
 test("Classic uses the displayed 10 kyu boundary and five fixed daily slots", () => {

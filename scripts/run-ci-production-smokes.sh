@@ -294,6 +294,7 @@ curl --fail --silent --show-error --max-time 10 \
 npm run test:auth
 npx tsx scripts/verify-developer-browser.ts
 TOURNAMENT_BROWSER_URL=http://127.0.0.1:3101 npx tsx scripts/verify-tournaments-browser.ts
+GOSTONE_TEST_WEBKIT=1 TOURNAMENT_BROWSER_URL=http://127.0.0.1:3101 npx tsx scripts/verify-mobile-tournaments.ts
 npm run test:live
 npm run test:clock
 npm run test:scoring-races

@@ -4981,6 +4981,10 @@ body {
   border-right: 0;
 }
 
+@media (min-width: 900px) {
+  .profile-performance .profile-metrics.has-tournament-wins { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .profile-performance .profile-metrics svg {
   color: var(--color-moss-strong);
 }

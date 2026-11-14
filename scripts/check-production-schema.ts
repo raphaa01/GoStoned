@@ -233,12 +233,13 @@ async function checkProductionSchema(): Promise<void> {
           AND p.policyname='gostone_app_server_access' AND pg_has_role(current_user,'gostone_app','USAGE')))
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='public' AND c.relname=required.name),false)
-  ) AND (SELECT COUNT(*)=8 FROM information_schema.columns
+  ) AND (SELECT COUNT(*)=10 FROM information_schema.columns
     WHERE table_schema='public' AND (table_name,column_name) IN (
       ('tournaments','monthly_mode'),('tournaments','schedule_hour'),
       ('tournament_members','leaderboard_group'),('tournament_members','no_shows'),
       ('tournament_members','withdrawn'),('tournament_matches','scheduled_at'),
-      ('tournament_matches','attendance_recorded'),('tournament_settings','monthly_classic_enabled'))) AS ready`);
+      ('tournament_matches','attendance_recorded'),('tournament_settings','monthly_classic_enabled'),
+      ('tournaments','rapid_game_limit'),('tournament_members','final_standing'))) AS ready`);
   validateProductionSchemaContract({
     tournamentStorageReady: tournamentStorage.rows[0]?.ready === true,
     gameRulesDefault: row.game_rules_default,

@@ -1,0 +1,18 @@
+.mobile-home-tournament-link {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+.mobile-home-tournament-link > div { min-width: 0; }
+.mobile-home-tournament-link > svg { flex: 0 0 auto; color: var(--mobile-muted); }
+.mobile-app-content .tournaments { max-width: 840px; padding: 10px 0 24px; min-width: 0; }
+.mobile-app-content .tournaments h1 { font: 680 clamp(24px, 5vw, 34px) / 1.15 var(--font-sans); }
+.mobile-app-content .tournaments h2 { font: 680 19px / 1.25 var(--font-sans); }
+.mobile-app-content .tournament-rapid-heading > .button { width: 100%; }
+.mobile-app-content .tournaments :is(.tournament-heading, .tournament-ready, .tournament-code) { flex-wrap: wrap; }
+.mobile-app-content .tournaments :is(input, select, .tournament-row > span, .tournament-heading > div) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.mobile-app-content .tournaments .rapid-standings :is(th, td) { padding: 9px 5px; }
+.mobile-app-content .tournaments .rapid-standings th[scope="col"] { font-size: 11px; }
+.mobile-app-content .tournament-search .button { width: 100%; }

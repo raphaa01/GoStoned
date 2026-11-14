@@ -9,7 +9,16 @@ import { readApi } from "@/lib/client/api";
 import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 import "./tournaments.css";
 
-export function TournamentNotice() {
+export function TournamentNotice({
+  mobile = false,
+}: { mobile?: boolean } = {}) {
+  const { user } = useAuth();
+  return user ? (
+    <TournamentNoticeForPlayer key={user.playerKey} mobile={mobile} />
+  ) : null;
+}
+
+function TournamentNoticeForPlayer({ mobile }: { mobile: boolean }) {
   const { user } = useAuth();
   const { href, locale } = useI18n();
   const pathname = usePathname();
@@ -17,6 +26,7 @@ export function TournamentNotice() {
     tournamentId: string;
     gameId: string | null;
     name: string;
+    currentRapid?: boolean;
   } | null>(null);
   useEffect(() => {
     if (!user) return;
@@ -26,11 +36,14 @@ export function TournamentNotice() {
       if (document.hidden || pending) return;
       pending = true;
       try {
-        const result = await fetch("/api/tournaments?view=notice", {
-          cache: "no-store",
-          headers: { [EXPECTED_PLAYER_HEADER]: user!.playerKey },
-          signal: controller.signal,
-        }).then(readApi<{ notice: typeof notice }>);
+        const result = await fetch(
+          `/api/tournaments?view=notice${mobile ? "&client=mobile" : ""}`,
+          {
+            cache: "no-store",
+            headers: { [EXPECTED_PLAYER_HEADER]: user!.playerKey },
+            signal: controller.signal,
+          },
+        ).then(readApi<{ notice: typeof notice }>);
         if (!controller.signal.aborted) setNotice(result.notice);
       } catch {
         /* The lobby remains the authority; a failed background read retries. */
@@ -44,11 +57,12 @@ export function TournamentNotice() {
       controller.abort();
       clearInterval(timer);
     };
-  }, [user]);
+  }, [user, mobile]);
   if (
     !user ||
     !notice ||
-    pathname.endsWith(`/tournaments/${notice.tournamentId}`)
+    pathname.endsWith(`/tournaments/${notice.tournamentId}`) ||
+    (mobile && /\/tournaments\/?$/.test(pathname) && notice.currentRapid)
   )
     return null;
   const copy = getTournamentsCopy(locale);
@@ -61,7 +75,9 @@ export function TournamentNotice() {
         href={href(
           notice.gameId
             ? `/game/${notice.gameId}`
-            : `/tournaments/${notice.tournamentId}`,
+            : mobile && notice.currentRapid
+              ? "/tournaments"
+              : `/tournaments/${notice.tournamentId}`,
         )}
       >
         {notice.gameId ? copy.play : copy.ready}
@@ -73,36 +89,63 @@ export function TournamentNotice() {
 export function TournamentGameLink({
   gameId,
   finished = false,
+  mobile = false,
 }: {
   gameId: string;
   finished?: boolean;
+  mobile?: boolean;
+}) {
+  const { user } = useAuth();
+  return user ? (
+    <TournamentGameLinkForPlayer
+      key={`${user.playerKey}:${gameId}`}
+      gameId={gameId}
+      finished={finished}
+      mobile={mobile}
+    />
+  ) : null;
+}
+
+function TournamentGameLinkForPlayer({
+  gameId,
+  finished,
+  mobile,
+}: {
+  gameId: string;
+  finished: boolean;
+  mobile: boolean;
 }) {
   const { user } = useAuth();
   const { href, locale } = useI18n();
   const router = useRouter();
-  const [id, setId] = useState<string | null>(null);
+  const [destination, setDestination] = useState<string | null>(null);
   useEffect(() => {
     if (!user) return;
     const controller = new AbortController();
     void fetch(
-      `/api/tournaments?view=game&gameId=${encodeURIComponent(gameId)}`,
+      `/api/tournaments?view=game&gameId=${encodeURIComponent(gameId)}${mobile ? "&client=mobile" : ""}`,
       {
         headers: { [EXPECTED_PLAYER_HEADER]: user.playerKey },
         signal: controller.signal,
       },
     )
-      .then(readApi<{ tournamentId: string }>)
+      .then(readApi<{ tournamentId: string; currentRapid?: boolean }>)
       .then((r) => {
-        if (!controller.signal.aborted) setId(r.tournamentId);
+        if (!controller.signal.aborted)
+          setDestination(
+            mobile && r.currentRapid
+              ? "/tournaments"
+              : `/tournaments/${r.tournamentId}`,
+          );
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [gameId, user]);
+  }, [gameId, user, mobile]);
   useEffect(() => {
-    if (id && finished) router.replace(href(`/tournaments/${id}`));
-  }, [id, finished, router, href]);
-  return id ? (
-    <Link className="tournament-game-link" href={href(`/tournaments/${id}`)}>
+    if (destination && finished) router.replace(href(destination));
+  }, [destination, finished, router, href]);
+  return destination ? (
+    <Link className="tournament-game-link" href={href(destination)}>
       {getTournamentsCopy(locale).backLobby}
     </Link>
   ) : null;

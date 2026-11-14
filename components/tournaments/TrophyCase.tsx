@@ -11,7 +11,13 @@ import { CATEGORY_LABELS } from "@/lib/tournaments/policy";
 import type { TournamentTrophy } from "@/lib/tournaments/types";
 import "./tournaments.css";
 
-export function TrophyCase({ userId }: { userId?: string }) {
+export function TrophyCase({
+  userId,
+  mobile = false,
+}: {
+  userId?: string;
+  mobile?: boolean;
+}) {
   const { user } = useAuth();
   const { locale, href } = useI18n();
   const copy = getTournamentsCopy(locale);
@@ -24,7 +30,7 @@ export function TrophyCase({ userId }: { userId?: string }) {
     async (signal?: AbortSignal) => {
       if (!identity) return;
       const result = await fetch(
-        `/api/tournaments?view=trophies${userId ? `&userId=${encodeURIComponent(userId)}` : ""}`,
+        `/api/tournaments?view=trophies${userId ? `&userId=${encodeURIComponent(userId)}` : ""}${mobile ? "&client=mobile" : ""}`,
         {
           cache: "no-store",
           headers: { [EXPECTED_PLAYER_HEADER]: identity },
@@ -36,7 +42,7 @@ export function TrophyCase({ userId }: { userId?: string }) {
         setError(false);
       }
     },
-    [identity, userId],
+    [identity, userId, mobile],
   );
   useEffect(() => {
     const controller = new AbortController();

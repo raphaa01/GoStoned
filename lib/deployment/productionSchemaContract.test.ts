@@ -55,7 +55,7 @@ test("accepts the current Japanese matchmaking schema", () => {
 });
 
 test("rejects missing tournament storage before website deployment", () => {
-  assert.throws(() => validateProductionSchemaContract({...currentSnapshot,tournamentStorageReady:false}), /migration 059/);
+  assert.throws(() => validateProductionSchemaContract({...currentSnapshot,tournamentStorageReady:false}), /migration.*062/);
 });
 
 test("rejects missing or inaccessible game share storage before deployment", () => {
