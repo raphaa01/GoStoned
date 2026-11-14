@@ -1,13 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  ArrowRight, BarChart3, ChevronRight, GraduationCap, Home, Moon, Puzzle, Sun, Trophy, UsersRound, Wifi, X,
+  ArrowRight, BookOpen, BarChart3, ChevronRight, GraduationCap, Home, Moon, Puzzle, Sun, Trophy, UsersRound, Wifi, X,
 } from "lucide-react";
 import darkLogo from "../../app/icons/gostone-sculpted-dark.svg?url";
 import lightLogo from "../../app/icons/gostone-sculpted-light.svg?url";
 import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
 import { getMobileCopy } from "../../lib/i18n/mobile";
-import { dailyPuzzleAt } from "../../lib/puzzles/dailyCatalog";
+import { FacetedStone } from "./FacetedStone";
 import { presentRating } from "../../lib/rating/rankPolicy";
 import "./styles.css";
 
@@ -42,9 +42,6 @@ function initialTheme(): Theme {
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-// Show the lower-left corner of a fixed sample from the GoStone daily rotation.
-const puzzleRows = dailyPuzzleAt(1).board.slice(7, 13).map((row) => row.slice(0, 9));
-
 function GoLink({ path, className, label, children }: {
   path: string;
   className?: string;
@@ -77,54 +74,24 @@ function StatusBar() {
   );
 }
 
-function PuzzleBoard() {
-  const step = 12;
-  const x = (column: number) => 10 + column * step;
-  const y = (row: number) => 8 + row * step;
-  const columns = puzzleRows[0].length;
-
-  return (
-    <svg className="puzzle-board" viewBox="0 0 120 78" aria-hidden="true">
-      <g className="board-grid">
-        {puzzleRows.map((_, row) => <path key={row} d={`M${x(0)} ${y(row)}H114`} />)}
-        {Array.from({ length: columns }, (_, column) => (
-          <path key={column} d={`M${x(column)} 0V${y(puzzleRows.length - 1)}`} />
-        ))}
-      </g>
-      {puzzleRows.flatMap((row, rowIndex) => row.map((stone, column) => stone && (
-        <circle
-          className={`board-stone ${stone}`}
-          key={`${column}-${rowIndex}`}
-          cx={x(column)}
-          cy={y(rowIndex)}
-          r="4.95"
-        />
-      )))}
-    </svg>
-  );
-}
-
 function Practice() {
   return (
     <div className="practice">
-      <GoLink className="practice-link puzzle-link" path="/puzzles">
-        <span className="practice-heading">
-          <strong>{copy.dailyPuzzle}</strong>
-          <ChevronRight size={16} aria-hidden="true" />
-        </span>
-        <span className="practice-visual"><PuzzleBoard /></span>
-        <span className="practice-caption">Black to play</span>
-      </GoLink>
-      <GoLink className="practice-link learn-link" path="/learn" label={`${copy.continueLearning}, ${learned} of ${total} lessons complete`}>
-        <span className="practice-heading">
-          <strong>{copy.continueLearning}</strong>
-          <ChevronRight size={16} aria-hidden="true" />
-        </span>
-        <span className="practice-visual" aria-hidden="true">
-          <span className="lesson-count"><b>{learned}</b><span> / {total}</span></span>
+      <div className="tournament-tile">
+        <FacetedStone />
+        <GoLink className="tournament-link" path="/tournaments">
+          <strong>Tournaments</strong>
+          <ArrowRight size={17} aria-hidden="true" />
+        </GoLink>
+      </div>
+      <GoLink className="learn-link" path="/learn" label={`${copy.continueLearning}, ${learned} of ${total} lessons complete`}>
+        <BookOpen className="lesson-icon" size={29} strokeWidth={1.45} aria-hidden="true" />
+        <strong>{copy.continueLearning}</strong>
+        <span className="lesson-progress" aria-hidden="true">
           <progress max={100} value={percentage} />
+          <span className="lesson-count">{learned} / {total}</span>
+          <ArrowRight size={17} aria-hidden="true" />
         </span>
-        <span className="practice-caption">Lessons complete</span>
       </GoLink>
     </div>
   );

@@ -6,54 +6,44 @@
 .preview {
   color-scheme: dark;
   min-height: 100dvh;
-  color: #f1f1f5;
-  background: #16171b;
-  --page: #24252b;
-  --surface: #2f3038;
-  --learn: #353443;
-  --board: #444751;
-  --grid: #858997;
-  --black: #202129;
-  --black-rim: #17181e;
-  --white: #eaebf2;
-  --white-rim: #cfd2de;
-  --muted: #bdbec9;
-  --accent: #c5b9fc;
-  --active-wash: #c5b9fc26;
-  --progress-track: #57546a;
-  --negative: #f2afb8;
-  --result: #44343e;
-  --line: #ffffff0d;
-  --dock: #2a2b32;
-  --action: #c8bafa;
-  --action-ink: #28213d;
-  --indicator: #f1f1f5;
+  color: #f0f1f2;
+  background: #171819;
+  --page: #202122;
+  --surface: #2b2e31;
+  --learn: #293440;
+  --muted: #b6bec6;
+  --accent: #aac6e5;
+  --active-wash: #a4c5eb20;
+  --progress-track: #ffffff29;
+  --negative: #eeb0ae;
+  --result: #473638;
+  --line: #ffffff11;
+  --dock: #2a2d30;
+  --action: #405970;
+  --action-ink: #f7f9fc;
+  --indicator: #f0f1f2;
+  --stone-shadow: #0008;
 }
 
 .preview[data-theme="light"] {
   color-scheme: light;
-  color: #262631;
-  background: #e8e8ef;
-  --page: #f7f7fa;
-  --surface: #ededf3;
-  --learn: #ebe7f8;
-  --board: #dee0e9;
-  --grid: #898d9f;
-  --black: #2e303d;
-  --black-rim: #222430;
-  --white: #fafafd;
-  --white-rim: #a5a9b8;
-  --muted: #5f6072;
-  --accent: #584596;
-  --active-wash: #6d58b41a;
-  --progress-track: #cfc7e7;
-  --negative: #963751;
-  --result: #f3e3ea;
-  --line: #29254712;
-  --dock: #f0eff5;
-  --action: #6651aa;
-  --action-ink: #fff;
-  --indicator: #282832;
+  color: #222830;
+  background: #e4e8ed;
+  --page: #f5f7f9;
+  --surface: #e8edf2;
+  --learn: #e4edf7;
+  --muted: #556473;
+  --accent: #365c83;
+  --active-wash: #497aad20;
+  --progress-track: #b7c8da;
+  --negative: #a23945;
+  --result: #f1dfe3;
+  --line: #263e5b17;
+  --dock: #e9eef3;
+  --action: #3c5670;
+  --action-ink: #f7f9fc;
+  --indicator: #263341;
+  --stone-shadow: #31445b34;
 }
 
 * { box-sizing: border-box; }
@@ -159,42 +149,59 @@ h1, h2, h3, p, dl, dd, ul { margin: 0; }
 
 main { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; padding: 15px 18px 18px; }
 .practice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.practice-link {
+.tournament-tile, .learn-link {
   display: grid;
-  grid-template-rows: minmax(30px, auto) 90px auto;
+  grid-template-rows: 1fr auto;
   min-width: 0;
-  align-content: start;
-  padding: 13px 13px 14px;
-  border-radius: 21px;
-  background: var(--surface);
+  min-height: 182px;
 }
-.learn-link { background: var(--learn); }
-.practice-heading {
+.tournament-tile { align-items: center; }
+.stone-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 3px;
-  min-width: 0;
-}
-.practice-heading strong { font-size: 15px; line-height: 1.16; font-weight: 650; letter-spacing: -.025em; }
-.practice-heading svg { color: var(--muted); }
-.practice-visual { display: grid; align-content: center; justify-items: center; min-width: 0; }
-.puzzle-board {
-  display: block;
-  width: min(100%, 129px);
-  border-radius: 11px;
-  background: var(--board);
-}
-.board-grid { fill: none; stroke: var(--grid); stroke-width: .64; }
-.board-stone.black { fill: var(--black); stroke: var(--black-rim); stroke-width: .64; }
-.board-stone.white { fill: var(--white); stroke: var(--white-rim); stroke-width: .64; }
-.learn-link .practice-visual { justify-items: stretch; align-content: center; gap: 8px; padding-inline: 3px; }
-.lesson-count { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.lesson-count b { font-size: 33px; font-weight: 620; line-height: 1; letter-spacing: -.06em; }
-.lesson-count span { color: var(--muted); font-size: 14px; }
-.learn-link progress {
+  place-items: center;
   width: 100%;
-  height: 6px;
+  min-height: 126px;
+  border-radius: 18px;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+}
+.stone-control:active { cursor: grabbing; }
+.stone-control:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.stone-control svg { display: block; width: min(100%, 124px); overflow: visible; }
+.stone-shadow { fill: var(--stone-shadow); filter: blur(3px); }
+.tournament-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 14px;
+}
+.tournament-link svg, .lesson-icon, .lesson-progress svg { color: var(--accent); flex-shrink: 0; }
+.tournament-link strong { font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+.learn-link {
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: 17px 15px 14px;
+  border-radius: 20px;
+  background: var(--learn);
+}
+.learn-link strong {
+  align-self: center;
+  max-width: 8ch;
+  font-size: 18px;
+  line-height: 1.13;
+  font-weight: 620;
+  letter-spacing: -.025em;
+}
+.lesson-progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 5px; }
+.lesson-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.learn-link progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 5px;
   border: 0;
   border-radius: 100px;
   overflow: hidden;
@@ -205,10 +212,9 @@ main { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; padding: 1
 .learn-link progress::-webkit-progress-bar { background: var(--progress-track); }
 .learn-link progress::-webkit-progress-value { background: var(--accent); border-radius: 100px; }
 .learn-link progress::-moz-progress-bar { background: var(--accent); border-radius: 100px; }
-.practice-caption { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.2; }
 
 h2 { font-size: 19px; font-weight: 650; letter-spacing: -.035em; line-height: 1.2; }
-.statistics { margin-top: 27px; }
+.statistics { margin-top: 24px; }
 .stats {
   display: grid;
   grid-template-columns: 1.13fr 1fr 1fr;
@@ -234,7 +240,7 @@ h2 { font-size: 19px; font-weight: 650; letter-spacing: -.035em; line-height: 1.
 .stats dd small { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
 .negative { color: var(--negative); }
 
-.recent { margin-top: 24px; }
+.recent { margin-top: 18px; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .section-heading a {
   display: inline-flex;
@@ -256,7 +262,7 @@ h2 { font-size: 19px; font-weight: 650; letter-spacing: -.035em; line-height: 1.
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 9px;
   align-items: center;
-  min-height: 64px;
+  min-height: 57px;
   border: 0;
   padding: 0 1px;
   text-align: start;
@@ -285,8 +291,8 @@ h2 { font-size: 19px; font-weight: 650; letter-spacing: -.035em; line-height: 1.
   flex: 0 0 auto;
   padding: 9px 13px max(8px, env(safe-area-inset-bottom));
   border-radius: 22px 22px 0 0;
-  background: var(--dock);
-  box-shadow: 0 -7px 22px #1b18250a, inset 0 1px 0 var(--line);
+  background: var(--page);
+  box-shadow: 0 -7px 22px #1b18250a;
 }
 .play {
   display: flex;
@@ -310,7 +316,7 @@ h2 { font-size: 19px; font-weight: 650; letter-spacing: -.035em; line-height: 1.
   background: currentColor;
 }
 
-.tab-bar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 8px; }
+.tab-bar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 16px; padding: 3px; border-radius: 21px; background: var(--dock); }
 .tab {
   min-height: 53px;
   display: grid;
@@ -358,8 +364,8 @@ dialog a { margin-top: 4px; }
 
 @media (max-width: 355px) {
   main, .top-bar { padding-inline: 14px; }
-  .practice-link { padding-inline: 10px; }
-  .practice-heading strong { font-size: 14px; }
+  .learn-link { padding-inline: 12px; }
+  .tournament-link { padding-inline: 6px; }
   .stats { padding-inline: 10px; gap: 6px; }
   .stats dd { font-size: 21px; }
   .tab { font-size: 9.5px; }
