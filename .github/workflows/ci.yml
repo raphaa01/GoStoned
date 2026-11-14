@@ -199,8 +199,11 @@ jobs:
       - name: Build production application
         run: npm run build
 
-      - name: Install Chromium for authenticated learning-path verification
-        run: npx playwright install --with-deps chromium
+      - name: Build shared app client for tournament integration
+        run: npm run mobile:build
+
+      - name: Install Chromium and WebKit for authenticated client verification
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Verify production-server cleanup fault paths
         shell: bash

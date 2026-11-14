@@ -77,6 +77,7 @@ export type FriendProfile = {
   ratedGames: number;
   friendlyGames: number;
   sharedFriendlyGames: number;
+  tournamentWins?: number;
   friendshipId: string | null;
   friendshipStatus: FriendshipStatus;
 };

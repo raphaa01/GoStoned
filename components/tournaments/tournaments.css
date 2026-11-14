@@ -459,3 +459,52 @@ a.tournament-row:hover strong {
   margin-top: 0.25rem;
   flex: 0 0 auto;
 }
+.tournament-rapid-heading {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.tournament-rapid-heading :is(h1, p) {
+  margin: 0;
+}
+.tournament-countdown,
+.tournament-activity {
+  color: var(--muted);
+}
+.tournament-countdown {
+  margin-block: 24px;
+}
+.tournament-history {
+  border-block: 1px solid var(--line);
+  margin-block: 24px;
+  padding-block: 16px;
+}
+.tournament-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.tournaments .rapid-standings {
+  table-layout: auto;
+  min-width: 0;
+  width: 100%;
+}
+.rapid-standings th {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.tournament-standings .rapid-standings th:nth-child(2) {
+  width: auto;
+}
+.rapid-standings th[scope="col"]:not(:nth-child(2)) {
+  white-space: nowrap;
+  width: 1%;
+}
+.rapid-standings :is(th, td):not(:nth-child(2)) {
+  text-align: end;
+}
+.rapid-standings td {
+  font-variant-numeric: tabular-nums;
+}
+.tournament-live {
+  min-width: 0;
+}

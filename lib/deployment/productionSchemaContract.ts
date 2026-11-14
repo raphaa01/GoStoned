@@ -45,7 +45,7 @@ export function validateProductionSchemaContract(
   snapshot: ProductionSchemaSnapshot,
 ): void {
   if (!snapshot.tournamentStorageReady) {
-    throw new Error("Production database schema is stale: tournament storage or server permissions; run migration 059 and 060.");
+    throw new Error("Production database schema is stale: tournament storage or server permissions; run migrations 059, 060 and 062.");
   }
   if (!snapshot.gameShareRls || !snapshot.gameShareAccessible) {
     throw new Error("Production database schema is stale: game sharing access; run migration 055.");

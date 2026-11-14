@@ -11,10 +11,13 @@ import {
   lockPlayerPair,
 } from "@/lib/moderation/playerBlockService";
 import { containsBannedChatContent } from "@/lib/moderation/chatModeration";
+import { goRankRatingRange } from "@/lib/rating/rankPolicy";
 import {
   monthlyWindow,
   tournamentCategory,
   MONTHLY_GAMES,
+  RAPID_GAMES,
+  rankRapidStandings,
   REQUIRED_RATED_GAMES,
   READY_WINDOW_MS,
   QUEUE_LEASE_MS,
@@ -39,6 +42,8 @@ import type {
   TournamentDashboard,
   Standing,
   TournamentTrophy,
+  TournamentLeaderboards,
+  TournamentHistoryEntry,
 } from "./types";
 
 type TournamentRow = {
@@ -51,6 +56,7 @@ type TournamentRow = {
   category: number | null;
   monthly_mode: "rapid" | "classic";
   schedule_hour: number;
+  rapid_game_limit: number;
   format: Tournament["format"];
   board_size: Tournament["boardSize"];
   time_control: Tournament["timeControl"];
@@ -107,6 +113,12 @@ function serialize(row: TournamentRow): Tournament {
     startsAt: row.starts_at.toISOString(),
     endsAt: row.ends_at?.toISOString() ?? null,
     memberCount: Number(row.member_count ?? 0),
+    gameLimit:
+      row.kind === "monthly"
+        ? row.monthly_mode === "rapid"
+          ? row.rapid_game_limit
+          : MONTHLY_GAMES
+        : undefined,
   };
 }
 
@@ -184,11 +196,16 @@ async function standings(
     draws: string;
     played: string;
     tiebreak: string;
+    margin: string;
+    final_standing: Standing | null;
   }>(
     `WITH results AS (
       SELECT p.user_id,CASE WHEN m.black_id=p.user_id THEN m.white_id ELSE m.black_id END AS opponent,
         CASE WHEN m.winner_id=p.user_id THEN 1.0 WHEN m.winner_id IS NULL AND m.result<>'no_show' THEN 0.5 ELSE 0 END AS points,
-        m.winner_id
+        m.winner_id,
+        CASE WHEN m.result ~ '^[BW][+][0-9]+([.][0-9]+)?$'
+          THEN substring(m.result FROM 3)::numeric * CASE WHEN m.winner_id=p.user_id THEN 1 ELSE -1 END
+          ELSE 0 END AS margin
       FROM tournament_members p JOIN tournament_matches m ON m.tournament_id=p.tournament_id
         AND p.user_id IN (m.black_id,m.white_id)
       WHERE p.tournament_id=$1 AND (m.status='finished' OR ($3 AND m.result='no_show'))
@@ -199,12 +216,12 @@ async function standings(
         COUNT(*) FILTER (WHERE r.winner_id=p.user_id) AS wins,
         COUNT(*) FILTER (WHERE (r.winner_id IS NOT NULL AND r.winner_id<>p.user_id) OR (r.opponent IS NOT NULL AND r.points=0 AND r.winner_id IS NULL)) AS losses,
         COUNT(*) FILTER (WHERE r.opponent IS NOT NULL AND r.winner_id IS NULL AND r.points=0.5) AS draws,
-        COUNT(r.user_id) AS played
+        COUNT(r.user_id) AS played,COALESCE(SUM(r.margin),0) AS margin
       FROM tournament_members p LEFT JOIN results r ON r.user_id=p.user_id
       WHERE p.tournament_id=$1 GROUP BY p.user_id
     ) SELECT p.user_id,COALESCE(NULLIF(u.display_name,''),u.username) AS name,
       p.rating_snapshot::text AS rating,totals.points::text,totals.wins::text,totals.losses::text,
-      totals.draws::text,totals.played::text,
+      totals.draws::text,totals.played::text,totals.margin::text,p.final_standing,
       COALESCE((SELECT SUM(o.points) FROM results r JOIN totals o ON o.user_id=r.opponent
         WHERE r.user_id=p.user_id),0)::text AS tiebreak
     FROM tournament_members p JOIN users u ON u.id=p.user_id JOIN totals ON totals.user_id=p.user_id
@@ -226,8 +243,18 @@ async function standings(
       draws: Number(r.draws),
       played: Number(r.played),
       tiebreak: Number(r.tiebreak),
+      margin: Number(r.margin),
     })),
   );
+  if (
+    t.status === "finished" &&
+    result.rows.length &&
+    result.rows.every((r) => r.final_standing)
+  ) {
+    return result.rows
+      .map((r) => ({ ...r.final_standing!, name: r.name }))
+      .sort((a, b) => a.place - b.place || a.userId.localeCompare(b.userId));
+  }
   if (t.kind === "monthly") {
     const membership = await client.query<{
       user_id: string;
@@ -247,9 +274,11 @@ async function standings(
       );
       const active = members.filter((r) => !groups.get(r.userId)?.withdrawn);
       const ranked =
-        t.status === "finished"
-          ? finalMonthlyStandings(active)
-          : rankStandings(active);
+        t.monthly_mode === "rapid" && t.rapid_game_limit === RAPID_GAMES
+          ? rankRapidStandings(active)
+          : t.status === "finished"
+            ? finalMonthlyStandings(active)
+            : rankStandings(active);
       output.push(
         ...ranked,
         ...rankStandings(
@@ -294,6 +323,22 @@ async function standings(
       place = i + 1;
     return { ...r, place };
   });
+}
+
+async function saveFinalStandings(
+  client: PoolClient,
+  id: string,
+  rows: Standing[],
+) {
+  await client.query(
+    `UPDATE tournament_members p SET final_standing=result.standing
+     FROM jsonb_each($2::jsonb) AS result(user_id,standing)
+     WHERE p.tournament_id=$1 AND p.user_id=result.user_id::uuid AND p.final_standing IS NULL`,
+    [
+      id,
+      JSON.stringify(Object.fromEntries(rows.map((row) => [row.userId, row]))),
+    ],
+  );
 }
 
 async function insertPairs(
@@ -380,16 +425,16 @@ async function advance(client: PoolClient, t: TournamentRow): Promise<void> {
         [t.id],
       );
       t.status = "finished";
-      const completed = (await standings(client, t)).filter(
-        (r) => r.played === MONTHLY_GAMES,
+      const final = await standings(client, t);
+      await saveFinalStandings(client, t.id, final);
+      await client.query(
+        `INSERT INTO tournament_trophies (tournament_id,user_id,place,group_no)
+         SELECT tournament_id,user_id,(final_standing->>'place')::int,leaderboard_group
+         FROM tournament_members WHERE tournament_id=$1
+         AND (final_standing->>'place')::int <= 3 AND (final_standing->>'played')::int > 0
+         AND ($2=10 OR (final_standing->>'played')::int=$2) ON CONFLICT DO NOTHING`,
+        [t.id, t.rapid_game_limit],
       );
-      for (const row of completed.filter((r) => r.place <= 3)) {
-        await client.query(
-          `INSERT INTO tournament_trophies (tournament_id,user_id,place,group_no)
-          SELECT $1,$2,$3,leaderboard_group FROM tournament_members WHERE tournament_id=$1 AND user_id=$2 ON CONFLICT DO NOTHING`,
-          [t.id, row.userId, row.place],
-        );
-      }
     }
     return;
   }
@@ -441,6 +486,7 @@ async function advance(client: PoolClient, t: TournamentRow): Promise<void> {
     [t.id],
   );
   t.status = "finished";
+  await saveFinalStandings(client, t.id, await standings(client, t));
 }
 
 async function advanceClassic(client: PoolClient, t: TournamentRow) {
@@ -625,12 +671,12 @@ async function advanceClassic(client: PoolClient, t: TournamentRow) {
   }
 }
 
-async function reconcileMonthly(userId: string) {
+async function reconcileMonthly(userId: string, expiredOnly = false) {
   const ids = await query<{ id: string }>(
     `SELECT t.id FROM tournaments t JOIN tournament_members p ON p.tournament_id=t.id
     WHERE p.user_id=$1 AND t.kind='monthly' AND t.starts_at<=statement_timestamp() AND t.status NOT IN ('finished','cancelled')
-    ORDER BY t.ends_at LIMIT 12`,
-    [userId],
+    AND (NOT $2 OR t.ends_at<=statement_timestamp()) ORDER BY t.ends_at LIMIT 12`,
+    [userId, expiredOnly],
   );
   for (const { id } of ids.rows) {
     await refreshGames(id, userId);
@@ -638,8 +684,156 @@ async function reconcileMonthly(userId: string) {
   }
 }
 
+export async function getRapidLeaderboards(
+  userId: string,
+): Promise<TournamentLeaderboards> {
+  // Close expired Rapid pools even when a podium player has not returned yet.
+  const expired = await query<{ id: string }>(
+    `SELECT id FROM tournaments WHERE kind='monthly' AND monthly_mode='rapid'
+     AND status IN ('lobby','running') AND ends_at<=statement_timestamp() ORDER BY ends_at LIMIT 16`,
+  );
+  for (const { id } of expired.rows) {
+    await withTransaction(async (client) =>
+      advance(client, await lockTournament(client, id)),
+    );
+  }
+  const rows = await query<{
+    scope: "worldwide" | "friends";
+    user_id: string;
+    name: string;
+    points: string;
+    place: string;
+  }>(
+    `WITH scores AS (
+      SELECT a.user_id, COALESCE(NULLIF(u.display_name,''),u.username) AS name,
+        SUM((4-a.place)*(t.category+1)) AS points
+      FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
+      JOIN users u ON u.id=a.user_id
+      WHERE t.kind='monthly' AND t.monthly_mode='rapid'
+      GROUP BY a.user_id,u.id
+    ), friends AS (
+      SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS user_id
+      FROM friendships WHERE status='accepted' AND $1 IN (requester_id,addressee_id)
+      AND NOT EXISTS (SELECT 1 FROM player_blocks b WHERE
+        (b.blocker_key='user:'||requester_id::text AND b.blocked_key='user:'||addressee_id::text)
+        OR (b.blocker_key='user:'||addressee_id::text AND b.blocked_key='user:'||requester_id::text))
+      UNION SELECT $1::uuid
+    ), ranked AS (
+      SELECT 'worldwide' AS scope, *, rank() OVER (ORDER BY points DESC) AS place FROM scores
+      UNION ALL
+      SELECT 'friends', u.id, COALESCE(NULLIF(u.display_name,''),u.username), COALESCE(s.points,0),
+        rank() OVER (ORDER BY COALESCE(s.points,0) DESC)
+      FROM friends f JOIN users u ON u.id=f.user_id LEFT JOIN scores s ON s.user_id=f.user_id
+    ), numbered AS (
+      SELECT *,row_number() OVER (PARTITION BY scope ORDER BY place,user_id) AS row_number FROM ranked
+    ) SELECT * FROM numbered WHERE row_number<=20 OR user_id=$1 ORDER BY scope,place,user_id`,
+    [userId],
+  );
+  const result: TournamentLeaderboards = { worldwide: [], friends: [] };
+  for (const r of rows.rows)
+    result[r.scope].push({
+      userId: r.user_id,
+      name: r.name,
+      points: Number(r.points),
+      place: Number(r.place),
+    });
+  return result;
+}
+
+export async function getRapidActivity(): Promise<number | null> {
+  const result = await query<{ count: string | null }>(
+    `WITH events AS (
+      SELECT id FROM tournaments WHERE month=$1 AND kind='monthly' AND monthly_mode='rapid'
+      AND starts_at<=statement_timestamp() AND ends_at>statement_timestamp() AND status IN ('lobby','running')
+    ), active AS (
+      SELECT p.user_id FROM tournament_members p JOIN events t ON t.id=p.tournament_id WHERE p.queue_until>statement_timestamp()
+      UNION
+      SELECT p.user_id FROM tournament_matches m JOIN events t ON t.id=m.tournament_id
+      JOIN games g ON g.id=m.game_id AND g.status='active'
+      CROSS JOIN LATERAL (VALUES (m.black_id),(m.white_id)) p(user_id)
+      WHERE m.status='playing' AND p.user_id IS NOT NULL
+    ) SELECT CASE WHEN EXISTS(SELECT 1 FROM events) THEN COUNT(*)::text END AS count FROM active`,
+    [monthlyWindow().month],
+  );
+  const count = result.rows[0].count;
+  return count === null ? null : Number(count);
+}
+
+export async function getTournamentHistory(
+  userId: string,
+  mobile: boolean,
+): Promise<TournamentHistoryEntry[]> {
+  await reconcileMonthly(userId);
+  return withTransaction(async (client) => {
+    const events = await client.query<
+      TournamentRow & {
+        leaderboard_group: number;
+        final_standing: Standing | null;
+      }
+    >(
+      `SELECT t.*,p.leaderboard_group,p.final_standing FROM tournament_members p JOIN tournaments t ON t.id=p.tournament_id
+       WHERE p.user_id=$1 AND t.status='finished' AND (NOT $2 OR t.monthly_mode='rapid')
+       ORDER BY t.ends_at DESC LIMIT 30`,
+      [userId, mobile],
+    );
+    const history: TournamentHistoryEntry[] = [];
+    for (const event of events.rows) {
+      const standing =
+        event.final_standing ??
+        (await standings(client, event)).find((row) => row.userId === userId);
+      if (standing)
+        history.push({
+          tournament: serialize(event),
+          standing,
+          group: event.leaderboard_group,
+        });
+    }
+    return history;
+  });
+}
+
+export async function getTournamentWins(userId: string): Promise<number> {
+  await reconcileMonthly(userId, true);
+  return withTransaction(async (client) => {
+    const awards = await client.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM tournament_trophies WHERE user_id=$1 AND place=1",
+      [userId],
+    );
+    const events = await client.query<
+      TournamentRow & { final_standing: Standing | null }
+    >(
+      `SELECT t.*,p.final_standing FROM tournament_members p JOIN tournaments t ON t.id=p.tournament_id
+       WHERE p.user_id=$1 AND t.kind='private' AND t.status='finished'`,
+      [userId],
+    );
+    let wins = Number(awards.rows[0].count);
+    for (const event of events.rows) {
+      const row =
+        event.final_standing ??
+        (await standings(client, event)).find((row) => row.userId === userId);
+      if (row?.place === 1 && row.wins > 0) wins++;
+    }
+    return wins;
+  });
+}
+
+export async function getRapidHome(userId: string) {
+  const { month, startsAt, endsAt } = monthlyWindow();
+  const membership = await query(
+    `SELECT 1 FROM tournament_members p JOIN tournaments t ON t.id=p.tournament_id
+     WHERE p.user_id=$1 AND t.month=$2 AND t.kind='monthly' AND t.monthly_mode='rapid' LIMIT 1`,
+    [userId, month],
+  );
+  return {
+    startsAt: startsAt.toISOString(),
+    endsAt: endsAt.toISOString(),
+    joined: Boolean(membership.rowCount),
+  };
+}
+
 export async function getTournamentDashboard(
   userId: string,
+  mobile = false,
 ): Promise<TournamentDashboard> {
   await reconcileMonthly(userId);
   return withTransaction(async (client) => {
@@ -661,7 +855,7 @@ export async function getTournamentDashboard(
           ],
         );
     }
-    if (rights.eligible && rights.classicEnabled) {
+    if (!mobile && rights.eligible && rights.classicEnabled) {
       for (const category of [2, 3])
         for (const hour of CLASSIC_HOURS) {
           const start = new Date(window.startsAt);
@@ -693,11 +887,11 @@ export async function getTournamentDashboard(
       (SELECT COUNT(*) FROM tournament_members p WHERE p.tournament_id=t.id)::text AS member_count,
       EXISTS(SELECT 1 FROM tournament_members p WHERE p.tournament_id=t.id AND p.user_id=$1) AS joined,
       EXISTS(SELECT 1 FROM tournament_invitations i WHERE i.tournament_id=t.id AND i.user_id=$1) AS invited
-      FROM tournaments t WHERE (t.month=$2 AND t.kind='monthly')
+      FROM tournaments t WHERE (NOT $3 OR t.monthly_mode='rapid') AND ((t.month=$2 AND t.kind='monthly')
         OR EXISTS(SELECT 1 FROM tournament_members p WHERE p.tournament_id=t.id AND p.user_id=$1)
-        OR (t.status='lobby' AND EXISTS(SELECT 1 FROM tournament_invitations i WHERE i.tournament_id=t.id AND i.user_id=$1))
+        OR (t.status='lobby' AND EXISTS(SELECT 1 FROM tournament_invitations i WHERE i.tournament_id=t.id AND i.user_id=$1)))
       ORDER BY t.created_at DESC LIMIT 100`,
-      [userId, window.month],
+      [userId, window.month, mobile],
     );
     return {
       eligible: rights.eligible,
@@ -870,11 +1064,14 @@ async function refreshGames(id: string, userId: string) {
 export async function getTournamentDetail(
   userId: string,
   id: string,
+  mobile = false,
 ): Promise<TournamentDetail> {
   await refreshGames(id, userId);
   return withTransaction(async (client) => {
     await access(client, userId);
     const t = await lockTournament(client, id);
+    if (mobile && t.monthly_mode === "classic")
+      fail("tournament_not_found", 404);
     let participation = await member(client, id, userId);
     if (t.kind === "private" && !participation)
       fail("tournament_not_found", 404);
@@ -1155,12 +1352,18 @@ export async function queueMonthly(
       [id, userId],
     );
     if (own.rows[0].busy) return;
-    if (Number(own.rows[0].count) >= MONTHLY_GAMES)
+    if (Number(own.rows[0].count) >= t.rapid_game_limit)
       fail("tournament_game_limit");
     await client.query(
       "UPDATE tournament_members SET queue_until=$3 WHERE tournament_id=$1 AND user_id=$2",
       [id, userId, new Date(Date.now() + QUEUE_LEASE_MS)],
     );
+    const entrant = await client.query<{ rating_snapshot: string }>(
+      "SELECT rating_snapshot FROM tournament_members WHERE tournament_id=$1 AND user_id=$2",
+      [id, userId],
+    );
+    const rating = Number(entrant.rows[0].rating_snapshot);
+    const [lowerRank, upperRank] = goRankRatingRange(rating);
     const opponents = await client.query<{ user_id: string }>(
       `SELECT p.user_id FROM tournament_members p
       WHERE p.tournament_id=$1 AND p.user_id<>$2 AND p.queue_until>statement_timestamp()
@@ -1169,8 +1372,12 @@ export async function queueMonthly(
         AND (m.status IN ('pending','playing') OR $2 IN (m.black_id,m.white_id)))
       AND (SELECT COUNT(*) FROM tournament_matches m WHERE m.tournament_id=$1 AND p.user_id IN (m.black_id,m.white_id)
         AND m.status='finished')<$3
-      ORDER BY p.queue_until,p.user_id LIMIT 20`,
-      [id, userId, MONTHLY_GAMES],
+      AND NOT EXISTS(SELECT 1 FROM player_blocks b WHERE
+        (b.blocker_key='user:'||$2::uuid::text AND b.blocked_key='user:'||p.user_id::text)
+        OR (b.blocker_key='user:'||p.user_id::text AND b.blocked_key='user:'||$2::uuid::text))
+      ORDER BY (p.rating_snapshot >= $4::numeric AND p.rating_snapshot < $5::numeric) DESC,
+        ABS(p.rating_snapshot-$6::numeric),p.queue_until,p.user_id LIMIT 20`,
+      [id, userId, t.rapid_game_limit, lowerRank, upperRank, rating],
     );
     for (const candidate of opponents.rows) {
       // The event row serializes tournament pairings. Try the other player's
@@ -1270,28 +1477,41 @@ export async function tournamentGame(
   userId: string,
   gameId: string,
   watch = false,
+  mobile = false,
 ) {
-  const result = await query<{ tournament_id: string; black_id: string }>(
-    `SELECT m.tournament_id,m.black_id
+  const result = await query<{
+    tournament_id: string;
+    black_id: string;
+    kind: Tournament["kind"];
+    monthly_mode: Tournament["monthlyMode"];
+    current_month: boolean;
+  }>(
+    `SELECT m.tournament_id,m.black_id,t.kind,t.monthly_mode,t.month=$5 AS current_month
     FROM tournament_matches m JOIN tournament_members p ON p.tournament_id=m.tournament_id AND p.user_id=$1
-    WHERE m.game_id=$2 AND ($3 OR $1 IN (m.black_id,m.white_id))`,
-    [userId, gameId, watch],
+    JOIN tournaments t ON t.id=m.tournament_id
+    WHERE m.game_id=$2 AND ($3 OR $1 IN (m.black_id,m.white_id)) AND (NOT $4 OR t.monthly_mode='rapid')`,
+    [userId, gameId, watch, mobile, monthlyWindow().month],
   );
   const row = result.rows[0];
   if (!row) fail("tournament_game_not_found", 404);
   return {
     tournamentId: row.tournament_id,
+    currentRapid:
+      row.kind === "monthly" &&
+      row.monthly_mode === "rapid" &&
+      row.current_month,
     ...(watch && row.black_id
       ? { game: await getGameState(gameId, key(row.black_id)) }
       : {}),
   };
 }
 
-export async function getTournamentNotice(userId: string) {
+export async function getTournamentNotice(userId: string, mobile = false) {
   const active = await query<{ id: string }>(
     `SELECT t.id FROM tournaments t JOIN tournament_members p ON p.tournament_id=t.id
-    WHERE p.user_id=$1 AND (t.status='running' OR (t.kind='monthly' AND t.monthly_mode='classic' AND t.status='lobby' AND t.starts_at<=statement_timestamp())) ORDER BY t.created_at LIMIT 10`,
-    [userId],
+    WHERE p.user_id=$1 AND (NOT $2 OR t.monthly_mode='rapid')
+    AND (t.status='running' OR (t.kind='monthly' AND t.monthly_mode='classic' AND t.status='lobby' AND t.starts_at<=statement_timestamp())) ORDER BY t.created_at LIMIT 10`,
+    [userId, mobile],
   );
   for (const { id } of active.rows) {
     await refreshGames(id, userId);
@@ -1305,15 +1525,17 @@ export async function getTournamentNotice(userId: string) {
     game_id: string | null;
     status: string;
     name: string;
+    current_rapid: boolean;
   }>(
     `SELECT
-    m.tournament_id,m.id AS match_id,m.game_id,m.status,t.name FROM tournament_matches m
+    m.tournament_id,m.id AS match_id,m.game_id,m.status,t.name,
+    (t.kind='monthly' AND t.monthly_mode='rapid' AND t.month=$3) AS current_rapid FROM tournament_matches m
     JOIN tournaments t ON t.id=m.tournament_id
     JOIN tournament_members p ON p.tournament_id=t.id AND p.user_id=$1
-    WHERE $1 IN (m.black_id,m.white_id) AND t.status='running'
+    WHERE $1 IN (m.black_id,m.white_id) AND t.status='running' AND (NOT $2 OR t.monthly_mode='rapid')
       AND (m.status='playing' OR (m.status='pending' AND m.ready_deadline>statement_timestamp()))
     ORDER BY m.ready_deadline NULLS LAST LIMIT 1`,
-    [userId],
+    [userId, mobile, monthlyWindow().month],
   );
   return result.rows[0]
     ? {
@@ -1322,6 +1544,7 @@ export async function getTournamentNotice(userId: string) {
         gameId: result.rows[0].game_id,
         status: result.rows[0].status,
         name: result.rows[0].name,
+        currentRapid: result.rows[0].current_rapid,
       }
     : null;
 }
@@ -1338,9 +1561,10 @@ export async function getTrophies(
     category: number | null;
     place: number;
     displayed: boolean;
+    monthly_mode: Tournament["monthlyMode"];
   }>(
     `SELECT
-    a.tournament_id,t.name || CASE WHEN t.kind='monthly' THEN ' · #'||a.group_no::text ELSE '' END AS name,t.month,t.category,a.place,a.displayed FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
+    a.tournament_id,t.name || CASE WHEN t.kind='monthly' THEN ' · #'||a.group_no::text ELSE '' END AS name,t.month,t.category,a.place,a.displayed,t.monthly_mode FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
     WHERE a.user_id=$1 AND ($2 OR a.displayed) ORDER BY a.awarded_at DESC LIMIT 50`,
     [userId, own],
   );
@@ -1351,6 +1575,7 @@ export async function getTrophies(
     category: r.category,
     place: r.place,
     displayed: r.displayed,
+    monthlyMode: r.monthly_mode,
   }));
 }
 export async function displayTrophy(

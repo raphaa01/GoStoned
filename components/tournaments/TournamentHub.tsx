@@ -16,8 +16,14 @@ import { Button } from "@/components/ui/Button";
 import { GoBoard } from "@/components/game/GoBoard";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { ApiRequestError, readApi } from "@/lib/client/api";
+import { invalidateRouteData, routeCacheKey } from "@/lib/client/routeCache";
 import { getTournamentsCopy } from "@/lib/i18n/tournaments";
-import { CATEGORY_LABELS, MONTHLY_GAMES } from "@/lib/tournaments/policy";
+import {
+  CATEGORY_LABELS,
+  MONTHLY_GAMES,
+  RAPID_GAMES,
+  monthlyWindow,
+} from "@/lib/tournaments/policy";
 import { TIME_CONTROLS } from "@/lib/game/timeControls";
 import type { GameState } from "@/lib/game/types";
 import type { FriendSummary, FriendsDashboard } from "@/lib/friends/types";
@@ -28,6 +34,14 @@ import type {
   TournamentSettings,
 } from "@/lib/tournaments/types";
 import { ClassicRegistration, ClassicSchedule } from "./ClassicRegistration";
+import {
+  RapidActivity,
+  RapidCountdown,
+  RapidLeaderboards,
+  RapidStandings,
+  TournamentHistory,
+  tournamentDates,
+} from "./RapidOverview";
 import "./tournaments.css";
 
 const DEFAULT_SETTINGS: TournamentSettings = {
@@ -44,12 +58,7 @@ function errorText(error: unknown, copy: CopyText): string {
     : copy.error;
 }
 function dateRange(t: Tournament, locale: string) {
-  const date = new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
-  return `${date.format(new Date(t.startsAt))} – ${date.format(new Date(new Date(t.endsAt!).getTime() - 1))} · UTC`;
+  return tournamentDates(t.startsAt, t.endsAt!, locale);
 }
 
 function SettingsForm({
@@ -154,17 +163,35 @@ function SettingsForm({
   );
 }
 
-export function TournamentHub({ id }: { id?: string }) {
+export function TournamentHub({
+  id,
+  mobile = false,
+  embedded = false,
+}: {
+  id?: string;
+  mobile?: boolean;
+  embedded?: boolean;
+}) {
   const { user } = useAuth();
   return (
     <TournamentHubBody
       key={`${user?.playerKey ?? "none"}:${id ?? "index"}`}
       id={id}
+      mobile={mobile}
+      embedded={embedded}
     />
   );
 }
 
-function TournamentHubBody({ id }: { id?: string }) {
+function TournamentHubBody({
+  id,
+  mobile,
+  embedded,
+}: {
+  id?: string;
+  mobile: boolean;
+  embedded: boolean;
+}) {
   const { user } = useAuth();
   const { locale, href } = useI18n();
   const router = useRouter();
@@ -183,6 +210,7 @@ function TournamentHubBody({ id }: { id?: string }) {
   const [watchGame, setWatchGame] = useState<GameState | null>(null);
   const [now, setNow] = useState(Date.now);
   const mutation = useRef(false);
+  const loadVersion = useRef(0);
   const identity = user?.playerKey;
   const identityRef = useRef(identity);
   useEffect(() => {
@@ -194,23 +222,30 @@ function TournamentHubBody({ id }: { id?: string }) {
   );
   const load = useCallback(async () => {
     if (!identity) return;
-    const result = await fetch(
-      `/api/tournaments${id ? `?id=${encodeURIComponent(id)}` : ""}`,
-      { cache: "no-store", headers: headers() },
-    ).then(
+    const version = ++loadVersion.current;
+    const params = new URLSearchParams();
+    if (id) params.set("id", id);
+    if (mobile) params.set("client", "mobile");
+    const result = await fetch(`/api/tournaments?${params}`, {
+      cache: "no-store",
+      headers: headers(),
+      signal: AbortSignal.timeout(20_000),
+    }).then(
       readApi<{ dashboard?: TournamentDashboard; detail?: TournamentDetail }>,
     );
-    if (identityRef.current !== identity) return;
+    if (identityRef.current !== identity || loadVersion.current !== version)
+      return;
     if (result.detail) setDetail(result.detail);
     if (result.dashboard) setDashboard(result.dashboard);
     setError(null);
-  }, [id, identity, headers, setError]);
+  }, [id, identity, headers, mobile, setError]);
   const post = useCallback(
     async (body: Record<string, unknown>) => {
       return fetch("/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers() },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20_000),
       }).then(readApi<{ id?: string; gameId?: string | null }>);
     },
     [headers],
@@ -296,7 +331,7 @@ function TournamentHubBody({ id }: { id?: string }) {
       pending = true;
       try {
         const result = await fetch(
-          `/api/tournaments?view=watch&gameId=${encodeURIComponent(watchId)}`,
+          `/api/tournaments?view=watch&gameId=${encodeURIComponent(watchId)}${mobile ? "&client=mobile" : ""}`,
           { cache: "no-store", headers: headers(), signal: controller.signal },
         ).then(readApi<{ game: GameState }>);
         setWatchGame(result.game);
@@ -312,7 +347,7 @@ function TournamentHubBody({ id }: { id?: string }) {
       controller.abort();
       clearInterval(timer);
     };
-  }, [watchId, headers]);
+  }, [watchId, headers, mobile]);
   async function act(
     body: Record<string, unknown>,
     options: { navigate?: boolean; queue?: boolean } = {},
@@ -324,6 +359,8 @@ function TournamentHubBody({ id }: { id?: string }) {
     try {
       const result = await post(body);
       if (identityRef.current !== identity) return;
+      if (body.action === "join" && identity)
+        invalidateRouteData(routeCacheKey("tournament-home", identity));
       if (options.queue !== undefined) setWaiting(options.queue);
       if (result.gameId) router.push(href(`/game/${result.gameId}`));
       else if (options.navigate && result.id)
@@ -377,10 +414,11 @@ function TournamentHubBody({ id }: { id?: string }) {
     const monthly = dashboard.monthly.find(
       (t) => t.category === dashboard.category && t.monthlyMode === "rapid",
     );
+    const window = monthlyWindow(new Date(now));
     const joinedMonthly = dashboard.mine.find(
       (t) =>
         t.kind === "monthly" &&
-        t.month === monthly?.month &&
+        t.month === window.month &&
         t.monthlyMode === "rapid",
     );
     const classic = dashboard.monthly.filter(
@@ -392,12 +430,44 @@ function TournamentHubBody({ id }: { id?: string }) {
         t.month === monthly?.month &&
         t.monthlyMode === "classic",
     );
+    const rapid = joinedMonthly ?? monthly;
+    const startsAt = rapid?.startsAt ?? window.startsAt.toISOString();
+    const endsAt = rapid?.endsAt ?? window.endsAt.toISOString();
+    const live =
+      now >= Date.parse(startsAt) &&
+      now < Date.parse(endsAt) &&
+      rapid?.status !== "finished";
     return (
       <section className="tournaments">
-        <header className="tournament-heading">
-          <h1>{copy.title}</h1>
-        </header>
+        {!mobile ? (
+          <header className="tournament-heading">
+            <h1>{copy.title}</h1>
+          </header>
+        ) : null}
         {errorNotice}
+        {mobile ? (
+          <header className="tournament-rapid-heading">
+            <h1>{copy.rapid}</h1>
+            <p>{tournamentDates(startsAt, endsAt, locale)}</p>
+            {live ? <RapidActivity month={window.month} /> : null}
+            <details className="tournament-rules">
+              <summary>{copy.format}</summary>
+              <p>{copy.monthlyDetails}</p>
+            </details>
+            {joinedMonthly ? (
+              <p>
+                {copy.registered} · {CATEGORY_LABELS[joinedMonthly.category!]}
+              </p>
+            ) : monthly && dashboard.eligible ? (
+              <Button
+                disabled={busy || monthly.status === "finished"}
+                onClick={() => void act({ action: "join", id: monthly.id })}
+              >
+                {copy.register}
+              </Button>
+            ) : null}
+          </header>
+        ) : null}
         {!dashboard.eligible ? (
           <div className="tournament-qualification">
             <h2>{copy.requirement}</h2>
@@ -408,88 +478,99 @@ function TournamentHubBody({ id }: { id?: string }) {
           </div>
         ) : (
           <>
-            <section className="tournament-monthly">
-              <div>
-                <span className="section-kicker">{copy.rapid}</span>
-                <h2>
-                  {new Intl.DateTimeFormat(locale, {
-                    month: "long",
-                    year: "numeric",
-                    timeZone: "UTC",
-                  }).format(now)}
-                </h2>
-                <p>{copy.monthlyRules}</p>
-                {monthly ? (
-                  <p>
-                    {dateRange(monthly, locale)} ·{" "}
-                    {
-                      CATEGORY_LABELS[
-                        joinedMonthly?.category ?? dashboard.category
-                      ]
+            {!mobile ? (
+              <section className="tournament-monthly">
+                <div>
+                  <span className="section-kicker">{copy.rapid}</span>
+                  <h2>
+                    {new Intl.DateTimeFormat(locale, {
+                      month: "long",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    }).format(now)}
+                  </h2>
+                  <p>{copy.monthlyRules}</p>
+                  {monthly ? (
+                    <p>
+                      {dateRange(monthly, locale)} ·{" "}
+                      {
+                        CATEGORY_LABELS[
+                          joinedMonthly?.category ?? dashboard.category
+                        ]
+                      }
+                    </p>
+                  ) : null}
+                </div>
+                {joinedMonthly ? (
+                  <Link
+                    className="button button--primary"
+                    href={href(`/tournaments/${joinedMonthly.id}`)}
+                  >
+                    {copy.view}
+                  </Link>
+                ) : monthly ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() =>
+                      void act(
+                        { action: "join", id: monthly.id },
+                        { navigate: true },
+                      )
                     }
-                  </p>
+                  >
+                    {copy.join}
+                  </Button>
                 ) : null}
-              </div>
-              {joinedMonthly ? (
-                <Link
-                  className="button button--primary"
-                  href={href(`/tournaments/${joinedMonthly.id}`)}
-                >
-                  {copy.view}
-                </Link>
-              ) : monthly ? (
-                <Button
-                  disabled={busy}
-                  onClick={() =>
-                    void act(
-                      { action: "join", id: monthly.id },
-                      { navigate: true },
-                    )
-                  }
-                >
-                  {copy.join}
-                </Button>
-              ) : null}
-              <details className="tournament-rules">
-                <summary>{copy.format}</summary>
-                <p>{copy.monthlyDetails}</p>
-              </details>
-            </section>
-            <section className="tournament-monthly">
-              <div>
-                <h2>{copy.classic}</h2>
-                <p>{copy.classicRules}</p>
-              </div>
-              {joinedClassic ? (
-                <Link
-                  className="button button--primary"
-                  href={href(`/tournaments/${joinedClassic.id}`)}
-                >
-                  {copy.view}
-                </Link>
-              ) : !dashboard.classicEligible ? (
-                <p>{copy.tournament_classic_rank_required}</p>
-              ) : dashboard.classicBlockedMonth ? (
-                <p>{copy.tournament_classic_suspended}</p>
-              ) : (
-                <ClassicRegistration
-                  events={classic}
-                  busy={busy}
-                  now={now}
-                  onJoin={(id) =>
-                    void act(
-                      { action: "join", id, acceptSchedule: true },
-                      { navigate: true },
-                    )
-                  }
-                />
-              )}
-              <p>{copy.classicMinimum}</p>
-              <details className="tournament-rules">
-                <summary>{copy.format}</summary>
-                <p>{copy.classicDetails}</p>
-              </details>
-            </section>
+                <details className="tournament-rules">
+                  <summary>{copy.format}</summary>
+                  <p>{copy.monthlyDetails}</p>
+                </details>
+              </section>
+            ) : null}
+            {mobile && live && joinedMonthly ? (
+              <TournamentHub id={joinedMonthly.id} mobile embedded />
+            ) : null}
+            <RapidLeaderboards
+              countdown={<RapidCountdown startsAt={startsAt} now={now} />}
+            />
+            <TournamentHistory mobile={mobile} />
+            {!mobile ? (
+              <section className="tournament-monthly">
+                <div>
+                  <h2>{copy.classic}</h2>
+                  <p>{copy.classicRules}</p>
+                </div>
+                {joinedClassic ? (
+                  <Link
+                    className="button button--primary"
+                    href={href(`/tournaments/${joinedClassic.id}`)}
+                  >
+                    {copy.view}
+                  </Link>
+                ) : !dashboard.classicEligible ? (
+                  <p>{copy.tournament_classic_rank_required}</p>
+                ) : dashboard.classicBlockedMonth ? (
+                  <p>{copy.tournament_classic_suspended}</p>
+                ) : (
+                  <ClassicRegistration
+                    events={classic}
+                    busy={busy}
+                    now={now}
+                    onJoin={(id) =>
+                      void act(
+                        { action: "join", id, acceptSchedule: true },
+                        { navigate: true },
+                      )
+                    }
+                  />
+                )}
+                <p>{copy.classicMinimum}</p>
+                <details className="tournament-rules">
+                  <summary>{copy.format}</summary>
+                  <p>{copy.classicDetails}</p>
+                </details>
+              </section>
+            ) : null}
             <section className="tournament-private">
               <header className="tournament-heading">
                 <h2>{copy.private}</h2>
@@ -563,7 +644,8 @@ function TournamentHubBody({ id }: { id?: string }) {
                 ))}
               </section>
             ) : null}
-            {dashboard.mine.some(
+            {!mobile &&
+            dashboard.mine.some(
               (t) =>
                 t.kind === "monthly" &&
                 t.id !== joinedMonthly?.id &&
@@ -591,6 +673,8 @@ function TournamentHubBody({ id }: { id?: string }) {
       <section className="tournaments">{errorNotice ?? copy.loading}</section>
     );
   const t = detail.tournament;
+  const rapid = t.kind === "monthly" && t.monthlyMode === "rapid";
+  const gameLimit = t.gameLimit ?? (rapid ? RAPID_GAMES : MONTHLY_GAMES);
   const own = detail.standings.find((r) => r.userId === detail.userId);
   const isHost = t.hostId === detail.userId;
   const ready =
@@ -612,28 +696,32 @@ function TournamentHubBody({ id }: { id?: string }) {
     format: t.format === "knockout" ? "knockout" : "round_robin",
   };
   return (
-    <section className="tournaments">
-      <Link className="tournament-back" href={href("/tournaments")}>
-        <ArrowLeft size={16} />
-        {copy.back}
-      </Link>
-      <header className="tournament-heading">
-        <div>
-          <h1>{t.name}</h1>
-          <p>
-            {t.boardSize}×{t.boardSize} ·{" "}
-            {t.monthlyMode === "classic"
-              ? copy.classicTime
-              : TIME_CONTROLS.find((v) => v.id === t.timeControl)
-                  ?.shortLabel}{" "}
-            · {copy[t.format]} ·{" "}
-            {t.kind === "private" ? copy.unranked : copy.rated}
-          </p>
-        </div>
-        <span className="tournament-state" data-state={t.status}>
-          {copy[t.status]}
-        </span>
-      </header>
+    <section className={embedded ? "tournament-live" : "tournaments"}>
+      {!mobile && !embedded ? (
+        <Link className="tournament-back" href={href("/tournaments")}>
+          <ArrowLeft size={16} />
+          {copy.back}
+        </Link>
+      ) : null}
+      {!embedded ? (
+        <header className="tournament-heading">
+          <div>
+            <h1>{t.name}</h1>
+            <p>
+              {t.boardSize}×{t.boardSize} ·{" "}
+              {t.monthlyMode === "classic"
+                ? copy.classicTime
+                : TIME_CONTROLS.find((v) => v.id === t.timeControl)
+                    ?.shortLabel}{" "}
+              · {copy[t.format]} ·{" "}
+              {t.kind === "private" ? copy.unranked : copy.rated}
+            </p>
+          </div>
+          <span className="tournament-state" data-state={t.status}>
+            {copy[t.status]}
+          </span>
+        </header>
+      ) : null}
       {errorNotice}
       {t.kind === "monthly" ? (
         <div className="tournament-meta">
@@ -642,16 +730,18 @@ function TournamentHubBody({ id }: { id?: string }) {
             {dateRange(t, locale)}
           </span>
           <span>
-            {own?.played ?? 0} / {MONTHLY_GAMES} {copy.games}
+            {own?.played ?? 0} / {gameLimit} {copy.games}
           </span>
-          <details className="tournament-rules">
-            <summary>{copy.format}</summary>
-            <p>
-              {t.monthlyMode === "classic"
-                ? copy.classicDetails
-                : copy.monthlyDetails}
-            </p>
-          </details>
+          {!embedded ? (
+            <details className="tournament-rules">
+              <summary>{copy.format}</summary>
+              <p>
+                {t.monthlyMode === "classic"
+                  ? copy.classicDetails
+                  : copy.monthlyDetails}
+              </p>
+            </details>
+          ) : null}
         </div>
       ) : null}
       {t.monthlyMode === "classic" ? (
@@ -713,7 +803,7 @@ function TournamentHubBody({ id }: { id?: string }) {
       !ownMatch &&
       detail.joined ? (
         <div className="tournament-search">
-          {(own?.played ?? 0) >= MONTHLY_GAMES ? (
+          {(own?.played ?? 0) >= gameLimit ? (
             <p>{copy.completed}</p>
           ) : (
             <>
@@ -877,47 +967,53 @@ function TournamentHubBody({ id }: { id?: string }) {
           </span>
         </div>
       ) : null}
-      <section className="tournament-standings">
-        <h2>{copy.standings}</h2>
-        <div className="tournament-table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">{copy.player}</th>
-                <th scope="col">{copy.points}</th>
-                <th scope="col">{copy.wins}</th>
-                <th scope="col">{copy.losses}</th>
-                <th scope="col">{copy.draws}</th>
-                <th scope="col">{copy.games}</th>
-                <th scope="col" title={copy.tiebreak}>
-                  {copy.tiebreak}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.standings.map((p) => (
-                <tr key={p.userId} data-self={p.userId === detail.userId}>
-                  <td>{p.place}</td>
-                  <th scope="row">
-                    {p.name}
-                    {p.userId === t.hostId ? <small>{copy.host}</small> : null}
+      {rapid && gameLimit === RAPID_GAMES ? (
+        <RapidStandings rows={detail.standings} userId={detail.userId} />
+      ) : (
+        <section className="tournament-standings">
+          <h2>{copy.standings}</h2>
+          <div className="tournament-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{copy.player}</th>
+                  <th scope="col">{copy.points}</th>
+                  <th scope="col">{copy.wins}</th>
+                  <th scope="col">{copy.losses}</th>
+                  <th scope="col">{copy.draws}</th>
+                  <th scope="col">{copy.games}</th>
+                  <th scope="col" title={copy.tiebreak}>
+                    {copy.tiebreak}
                   </th>
-                  <td>{p.points}</td>
-                  <td>{p.wins}</td>
-                  <td>{p.losses}</td>
-                  <td>{p.draws}</td>
-                  <td>{p.played}</td>
-                  <td>{p.tiebreak}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!detail.standings.length ? (
-          <p className="tournament-empty">{copy.noPlayers}</p>
-        ) : null}
-      </section>
+              </thead>
+              <tbody>
+                {detail.standings.map((p) => (
+                  <tr key={p.userId} data-self={p.userId === detail.userId}>
+                    <td>{p.place}</td>
+                    <th scope="row">
+                      {p.name}
+                      {p.userId === t.hostId ? (
+                        <small>{copy.host}</small>
+                      ) : null}
+                    </th>
+                    <td>{p.points}</td>
+                    <td>{p.wins}</td>
+                    <td>{p.losses}</td>
+                    <td>{p.draws}</td>
+                    <td>{p.played}</td>
+                    <td>{p.tiebreak}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!detail.standings.length ? (
+            <p className="tournament-empty">{copy.noPlayers}</p>
+          ) : null}
+        </section>
+      )}
       {watchId ? (
         <section className="tournament-watch">
           <header className="tournament-heading">

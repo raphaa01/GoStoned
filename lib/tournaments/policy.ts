@@ -3,6 +3,7 @@ import { GameServiceError } from "@/lib/game/gameServiceError";
 import { deriveGoRank } from "@/lib/rating/rankPolicy";
 
 export const MONTHLY_GAMES = 5;
+export const RAPID_GAMES = 10;
 export const RAPID_GROUP_SIZE = 24;
 export const CLASSIC_HOURS = [8, 16, 20] as const;
 export const CLASSIC_READY_MS = 300_000;
@@ -211,6 +212,28 @@ export function rankStandings(rows: Omit<Standing, "place">[]): Standing[] {
       (previous.points !== row.points ||
         previous.tiebreak !== row.tiebreak ||
         previous.wins !== row.wins)
+    )
+      place = index + 1;
+    return { ...row, place };
+  });
+}
+
+export function rankRapidStandings(rows: Standing[]): Standing[] {
+  const sorted = [...rows].sort(
+    (a, b) =>
+      Number(b.played > 0) - Number(a.played > 0) ||
+      b.wins - a.wins ||
+      (b.margin ?? 0) - (a.margin ?? 0) ||
+      a.userId.localeCompare(b.userId),
+  );
+  let place = 1;
+  return sorted.map((row, index) => {
+    const previous = sorted[index - 1];
+    if (
+      previous &&
+      (previous.played > 0 !== row.played > 0 ||
+        previous.wins !== row.wins ||
+        (previous.margin ?? 0) !== (row.margin ?? 0))
     )
       place = index + 1;
     return { ...row, place };

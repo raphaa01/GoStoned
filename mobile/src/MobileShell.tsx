@@ -2,6 +2,7 @@ import { BarChart3, GraduationCap, Home, Puzzle, Trophy } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { TournamentNotice } from "@/components/tournaments/TournamentNotice";
 import { getMobileCopy } from "@/lib/i18n/mobile";
 import { usePathname } from "./next-navigation";
 import { updateNativeChrome } from "./nativeChrome";
@@ -42,7 +43,7 @@ export function MobileShell({ children, showPlayAction = false }: {
 
   return (
     <div className={`mobile-app-shell${showPlayAction ? " has-play-action" : ""}`}>
-      <main className="mobile-app-content" id="main-content" tabIndex={-1}>{children}</main>
+      <main className="mobile-app-content" id="main-content" tabIndex={-1}><TournamentNotice mobile />{children}</main>
       {showPlayAction ? (
         <div className="mobile-play-dock">
           <Link className="mobile-play-action" href={href("/play")}>

@@ -1,4 +1,4 @@
-# Website tournaments
+# GoStone tournaments
 
 ## Monthly Rapid
 
@@ -9,21 +9,29 @@
   Each entrant receives a stable leaderboard group of up to 24 players, assigned
   on entry. A final overflow group can be smaller. Groups affect ranks and
   trophies, while all available players in a category share one queue.
-- Five games per player; 13×13, Rapid, Japanese rules. Monthly games are rated.
+- Up to ten games per player on 13×13 with Rapid time and 6.5 komi.
+  App and website entrants use the same rated queue. Pairing prefers the same
+  rank at registration and then the closest rating within the category.
   Players request a game when available; a pairing requires two live queue leases
   and a separate ready confirmation from each player before clocks start.
 - No repeat opponents. If nobody is available, the player can leave the queue
   and return later. We never invent an opponent or silently change categories.
-- Wins = 1, draws = ½, losses = 0. Tiebreak: sum of opponents' points, then wins.
-  Exact ties share a place. All five completed games are required for a podium
-  trophy; unfinished runs follow qualified players in the final standings.
+- Standings sort by wins, then by total signed score margin from games that
+  ended in scoring. Resignations and timeouts count as wins/losses with zero
+  margin. Exact ties share a place. Players with no completed games rank last.
+- Podium finishers with at least one completed game earn a trophy. Career Rapid
+  points are (4 − place) × (category + 1). The global and friends lists use the
+  same points, including historical Rapid trophies.
+- Completed events keep their original results. New Rapid and private finishes
+  save final standings for the history view. Profile tournament wins count
+  first-place monthly trophies and winning finishes in private tournaments.
 - Only games completed before the deadline count. Games already running may
   finish normally and still affect ratings. Final results and trophy awards are
   reconciled transactionally on the next tournament/profile request; no open
   browser, paid worker, cron setup or permanently running process is required.
 
 The queue approach borrows the availability-based pairing of Lichess arenas,
-with a five-game cap instead of speed/grinding bonuses:
+with a ten-game cap instead of speed/grinding bonuses:
 https://lichess.org/tournament/help?system=arena
 Swiss rounds wait for all players and are less suitable for a week-long event:
 https://lichess.org/swiss
@@ -105,5 +113,6 @@ existing `active-game-player:v1:` locks and checks active games and matchmaking
 queues. Membership, eligibility, host rights, account binding, origin, moderation
 restrictions, blocks and request limits are checked on the server.
 
-Only website routes/navigation are introduced. No native routes, store builds,
-native assets or app release are part of this change.
+The shared iOS and Android app client displays Monthly Rapid and private
+tournaments. Monthly Classic registration is on the website. Apply additive
+migration 062 before deploying the updated API.

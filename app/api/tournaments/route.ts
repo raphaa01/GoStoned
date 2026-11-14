@@ -73,16 +73,21 @@ export async function GET(request: NextRequest) {
     const user = await actor(request, false);
     const params = request.nextUrl.searchParams;
     const view = params.get("view");
+    const mobile = params.get("client") === "mobile";
+    if (params.has("client") && !mobile) invalidTournament();
     const expected =
       view === "trophies"
         ? ["view", ...(params.has("userId") ? ["userId"] : [])]
         : view === "game" || view === "watch"
           ? ["view", "gameId"]
-          : view === "notice"
+          : ["notice", "home", "leaderboards", "activity", "history"].includes(
+                view ?? "",
+              )
             ? ["view"]
             : params.has("id")
               ? ["id"]
               : [];
+    if (mobile) expected.push("client");
     if (
       [...params.keys()].length !== expected.length ||
       [...params.keys()].some((k) => !expected.includes(k))
@@ -90,14 +95,30 @@ export async function GET(request: NextRequest) {
       invalidTournament();
     if (view === "notice")
       return noStoreJson({
-        notice: await tournaments.getTournamentNotice(user.id),
+        notice: await tournaments.getTournamentNotice(user.id, mobile),
+      });
+    if (view === "home")
+      return noStoreJson({ rapid: await tournaments.getRapidHome(user.id) });
+    if (view === "activity")
+      return noStoreJson({
+        activePlayers: await tournaments.getRapidActivity(),
+      });
+    if (view === "leaderboards")
+      return noStoreJson({
+        leaderboards: await tournaments.getRapidLeaderboards(user.id),
+      });
+    if (view === "history")
+      return noStoreJson({
+        history: await tournaments.getTournamentHistory(user.id, mobile),
       });
     if (view === "trophies") {
       const target = params.has("userId")
         ? uuid(params.get("userId"))
         : user.id;
       return noStoreJson({
-        trophies: await tournaments.getTrophies(target, target === user.id),
+        trophies: (
+          await tournaments.getTrophies(target, target === user.id)
+        ).filter((t) => !mobile || t.monthlyMode === "rapid"),
       });
     }
     if (view === "game" || view === "watch")
@@ -106,6 +127,7 @@ export async function GET(request: NextRequest) {
           user.id,
           uuid(params.get("gameId")),
           view === "watch",
+          mobile,
         ),
       );
     if (view !== null) invalidTournament();
@@ -115,9 +137,15 @@ export async function GET(request: NextRequest) {
             detail: await tournaments.getTournamentDetail(
               user.id,
               uuid(params.get("id")),
+              mobile,
             ),
           }
-        : { dashboard: await tournaments.getTournamentDashboard(user.id) },
+        : {
+            dashboard: await tournaments.getTournamentDashboard(
+              user.id,
+              mobile,
+            ),
+          },
     );
   } catch (error) {
     return routeError(error);

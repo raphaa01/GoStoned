@@ -84,7 +84,7 @@ function rememberScoringHelpHidden(playerKey: string) {
   }
 }
 
-export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: string; tournamentNavigation?: boolean }) {
+export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: string; tournamentNavigation?: boolean | "mobile" }) {
   const router = useRouter();
   const { refreshRating } = useAuth();
   const { dictionary, href } = useI18n();
@@ -1352,7 +1352,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
           {connectionLabel}
         </span>
         <LanguageSwitcher />
-        {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink gameId={game.id} finished={game.status === "finished"} /> : null}
+        {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink key={game.id} gameId={game.id} finished={game.status === "finished"} mobile={tournamentNavigation === "mobile"} /> : null}
         <button
           className="game-exit"
           disabled={busy && gameInteractionAllowed}

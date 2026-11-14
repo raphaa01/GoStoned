@@ -35,6 +35,7 @@ import type {
   RecentGame,
 } from "@/lib/stats/statsService";
 import { getRecentGameRatingPresentation } from "@/lib/stats/ratingPresentation";
+import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 import { TrophyCase } from "@/components/tournaments/TrophyCase";
 
 export type ProfileResponse = {
@@ -42,6 +43,7 @@ export type ProfileResponse = {
   preferences?: PublicRatingPreferences;
   history?: RatingHistoryEntry[];
   recentGames?: RecentGame[];
+  tournamentWins?: number;
 };
 
 function signedRating(value: number) {
@@ -57,14 +59,14 @@ function formatDate(value: string, locale: Locale) {
   }).format(new Date(value));
 }
 
-export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies?: boolean } = {}) {
+export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies?: boolean | "mobile" } = {}) {
   const { user, loading, refresh } = useAuth();
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.profile;
   const settingsCopy = getSettingsCopy(locale);
   const loadProfile = useCallback(() => fetch("/api/profile", { cache: "no-store" }).then(readApi<ProfileResponse>), []);
   const resource = useRouteResource(user ? routeCacheKey("profile", user.playerKey) : null, loadProfile);
-  const { rating, preferences, history = [], recentGames = [] } = resource.data ?? {};
+  const { rating, preferences, history = [], recentGames = [], tournamentWins } = resource.data ?? {};
   const loaded = resource.loaded;
   const error = resource.error ? localizedApiError(dictionary, resource.error, copy.loadFailed) : null;
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
@@ -132,7 +134,6 @@ export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies
     !== user.username.trim().toLocaleLowerCase();
   return <>
     {profileStatus}
-    {tournamentTrophies ? <TrophyCase /> : null}
     <header className="profile-header">
       <div className="profile-header__primary">
         <button
@@ -245,14 +246,16 @@ export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies
             <RatingHistoryChart currentRating={rating.rating} history={history} preference={preferences.displayPreference} />
           </div>
         </div>
-        <div className="profile-metrics">
+        <div className={`profile-metrics${tournamentWins !== undefined ? " has-tournament-wins" : ""}`}>
           <article><Trophy size={18} /><span>{copy.personalBest}</span><RatingLabel rating={rating.highestRating} preference={preferences.displayPreference} locale={locale} /></article>
           <article>{change > 0 ? <ArrowUpRight size={18} /> : change < 0 ? <ArrowDownRight size={18} /> : <Minus size={18} />}<span>{copy.ratingChange}</span><strong className={change > 0 ? "is-positive" : change < 0 ? "is-negative" : ""}>{signedRating(change)}</strong></article>
+          {tournamentWins !== undefined ? <article><Trophy size={18} /><span>{getTournamentsCopy(locale).tournamentWins}</span><strong>{tournamentWins}</strong></article> : null}
           <article><CalendarDays size={18} /><span>{copy.recentForm}</span><div className="recent-form" aria-label={copy.recentFormLabel}>{recentForm.length ? recentForm.map((game) => <i className={`result-dot result-dot--${game.result}`} key={game.gameId}>{game.result === "win" ? copy.winShort : game.result === "loss" ? copy.lossShort : game.result === "draw" ? copy.drawShort : copy.noResultShort}</i>) : <strong>—</strong>}</div></article>
         </div>
       </section>
     </> : null}
 
+    {tournamentTrophies ? <TrophyCase mobile={tournamentTrophies === "mobile"} /> : null}
     <BoardDesignPicker />
     <section className="profile-history" id="game-history">
       <div className="profile-history__heading"><h2>{copy.recentGames}</h2><span>{recentGames.length} {copy.shown}</span></div>

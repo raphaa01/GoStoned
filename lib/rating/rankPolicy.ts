@@ -54,6 +54,19 @@ export function deriveGoRank(rating: number): GoRank {
   });
 }
 
+/** Lower inclusive and upper exclusive rating bounds of the displayed rank. */
+export function goRankRatingRange(rating: number): [number, number] {
+  const rank = deriveGoRank(rating);
+  if (rank.kind === "kyu") return [
+    rank.value === 30 ? -Infinity : KYU_CEILING_RATING - rank.value * KYU_RATING_STEP,
+    KYU_CEILING_RATING - (rank.value - 1) * KYU_RATING_STEP,
+  ];
+  return [
+    KYU_CEILING_RATING + (rank.value - 1) * DAN_RATING_STEP,
+    rank.value === 9 ? Infinity : KYU_CEILING_RATING + rank.value * DAN_RATING_STEP,
+  ];
+}
+
 export function formatGoRank(
   rank: Pick<GoRank, "kind" | "value">,
   locale: RatingPresentationLocale,
