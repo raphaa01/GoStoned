@@ -1,5 +1,6 @@
 "use client";
 
+import { requestTimeout } from "@/lib/client/requestTimeout";
 import { TournamentGameLink } from "@/components/tournaments/TournamentNotice";
 
 import { Calculator, Check, LogIn, LogOut, RefreshCw, ShieldCheck, Undo2, Wifi, WifiOff, X } from "lucide-react";
@@ -435,7 +436,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
       }
       let requestError: unknown = null;
       const guardSignal = gameGuard.start();
-      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
+      const signal = requestTimeout(10_000, guardSignal);
       try {
         const accepted = await refreshGame(signal, requestIdentity, expectedPlayerKey);
         if (accepted && gameGuard.isCurrent(guardSignal)) {
@@ -487,7 +488,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
       let requestError: unknown = null;
       const accessGeneration = chatAccessGeneration.current;
       const guardSignal = chatGuard.start();
-      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
+      const signal = requestTimeout(10_000, guardSignal);
       try {
         const snapshot = await refreshChat(
           signal,
@@ -649,10 +650,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
         const response = await fetch(`/api/games/${gameId}/block`, {
           cache: "no-store",
           headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(10_000),
-          ]),
+          signal: requestTimeout(10_000, controller.signal),
         });
         const data = await readApi<unknown>(response);
         if (
@@ -1628,7 +1626,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
       <GameResultModal
         finalFocusRef={boardStatus}
         game={game}
-        onAnalyze={() => clearFinishedGame(`/review/${game.id}`)}
+        onAnalyze={() => router.replace(href(`/review/${game.id}`))}
         onHome={() => clearFinishedGame("/")}
         onPlayAgain={() => clearFinishedGame("/play")}
         onViewBoard={() => setShowResult(false)}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hashPassword, normalizeUsername, validatePassword, verifyPassword } from "./password";
+import { hashPassword, validatePassword, verifyPassword } from "./password";
+import { normalizeUsername } from "./username";
 
 test("hashes and verifies passwords without storing the original password", async () => {
   const password = "correct-horse-42";
@@ -14,6 +15,9 @@ test("validates usernames and password length", () => {
   assert.equal(normalizeUsername(" Stone_Player "), "Stone_Player");
   assert.equal(normalizeUsername("no spaces"), null);
   assert.equal(normalizeUsername("ab"), null);
+  assert.equal(normalizeUsername("a".repeat(16)), "a".repeat(16));
+  assert.equal(normalizeUsername("a".repeat(17)), null);
+  assert.equal(normalizeUsername("a".repeat(20), { existing: true }), "a".repeat(20));
   assert.equal(validatePassword("short"), "Password must contain at least 8 characters.");
   assert.equal(validatePassword("long-enough"), null);
 });

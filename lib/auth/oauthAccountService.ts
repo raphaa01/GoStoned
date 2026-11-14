@@ -18,7 +18,7 @@ import {
   GLICKO2_INITIAL_VOLATILITY,
 } from "@/lib/rating/ratingFinalizer";
 import { AuthError, registrationDatabaseError } from "./accountService";
-import { normalizeUsername } from "./password";
+import { NEW_USERNAME_MAX_LENGTH, normalizeUsername } from "./username";
 import { acceptCommunityRules } from "@/lib/moderation/communityService";
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
@@ -172,7 +172,7 @@ export async function completeOAuthRegistration(
   const username = normalizeUsername(usernameValue);
   if (!username) {
     throw new AuthError(
-      "Username must contain 3–20 letters, numbers, or underscores.",
+      `Username must contain 3–${NEW_USERNAME_MAX_LENGTH} letters, numbers, or underscores.`,
       400,
       "invalid_username",
     );

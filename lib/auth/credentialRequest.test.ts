@@ -7,6 +7,7 @@ import {
   MAX_CREDENTIAL_REQUEST_BODY_BYTES,
   readCredentialRequest,
   readOAuthRegistrationRequest,
+  readRegistrationRequest,
 } from "./credentialRequest";
 
 function credentialRequest(body: BodyInit, headers: Record<string, string> = {}) {
@@ -122,6 +123,26 @@ test("credential body bounds preserve maximum valid inputs and multibyte text", 
     }))),
     { username: "multibyte_user", password: multibytePassword },
   );
+});
+
+test("new password and social registrations share the cap while legacy usernames can sign in", async () => {
+  const preferences = { startingStrength: "unspecified", knownRank: null, boardPlacement: "direct" };
+  for (const length of [16, 17, 20]) {
+    const username = "u".repeat(length);
+    const password = "Test-password-42";
+    const passwordRegistration = readRegistrationRequest(credentialRequest(JSON.stringify({
+      username, password, email: "player@example.test", ...preferences,
+    })));
+    const socialRegistration = readOAuthRegistrationRequest(credentialRequest(JSON.stringify({ username, ...preferences })));
+    if (length === 16) {
+      assert.equal((await passwordRegistration).username, username);
+      assert.equal((await socialRegistration).username, username);
+    } else {
+      await Promise.all([passwordRegistration, socialRegistration].map(request =>
+        assert.rejects(request, { code: "invalid_username" })));
+    }
+    assert.equal((await readCredentialRequest(credentialRequest(JSON.stringify({ username, password })))).username, username);
+  }
 });
 
 test("auth mutation guard rejects non-JSON and cross-origin credential requests", async () => {

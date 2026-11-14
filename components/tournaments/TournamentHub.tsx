@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { GoBoard } from "@/components/game/GoBoard";
 import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 import { ApiRequestError, readApi } from "@/lib/client/api";
+import { requestTimeout } from "@/lib/client/requestTimeout";
 import { invalidateRouteData, routeCacheKey } from "@/lib/client/routeCache";
 import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 import {
@@ -280,21 +281,32 @@ function TournamentHubBody({
   useEffect(() => {
     if (!waiting || !id) return;
     let pending = false;
+    const controller = new AbortController();
     const renew = async () => {
-      if (pending || document.hidden || mutation.current) return;
+      if (controller.signal.aborted || pending || document.hidden || mutation.current) return;
       pending = true;
       try {
         await post({ action: "queue", id, waiting: true });
+        if (controller.signal.aborted) return;
         await load();
       } catch (e) {
-        setWaiting(false);
-        setError(e);
+        if (!controller.signal.aborted) {
+          setWaiting(false);
+          setError(e);
+        }
       } finally {
         pending = false;
       }
     };
     const timer = setInterval(() => void renew(), 10000);
-    return () => clearInterval(timer);
+    document.addEventListener("visibilitychange", renew);
+    window.addEventListener("online", renew);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", renew);
+      window.removeEventListener("online", renew);
+    };
   }, [waiting, id, post, load]);
   const ownMatch = detail?.matches.find(
     (m) =>
@@ -332,9 +344,9 @@ function TournamentHubBody({
       try {
         const result = await fetch(
           `/api/tournaments?view=watch&gameId=${encodeURIComponent(watchId)}${mobile ? "&client=mobile" : ""}`,
-          { cache: "no-store", headers: headers(), signal: controller.signal },
+          { cache: "no-store", headers: headers(), signal: requestTimeout(15_000, controller.signal) },
         ).then(readApi<{ game: GameState }>);
-        setWatchGame(result.game);
+        if (!controller.signal.aborted) setWatchGame(result.game);
       } catch (e) {
         if (!controller.signal.aborted) setError(e);
       } finally {

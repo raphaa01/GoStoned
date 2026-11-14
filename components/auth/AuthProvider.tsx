@@ -11,6 +11,7 @@ import {
 } from "react";
 import { invalidateRouteData } from "@/lib/client/routeCache";
 import { readApi } from "@/lib/client/api";
+import { withDeadline } from "@/lib/mobile/withDeadline";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import type { AuthUser } from "@/lib/auth/types";
@@ -23,7 +24,7 @@ type AuthContextValue = {
   error: string | null;
   rating: CurrentRatingIdentity | null;
   ratingLoading: boolean;
-  refresh: (options?: { silent?: boolean }) => Promise<void>;
+  refresh: (options?: { silent?: boolean }) => Promise<AuthUser | null | undefined>;
   refreshRating: () => Promise<void>;
   logout: () => Promise<void>;
   clearSession: () => void;
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { dictionary } = useI18n();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [rating, setRating] = useState<CurrentRatingIdentity | null>(null);
   const [ratingLoading, setRatingLoading] = useState(false);
   const ratingRequestGeneration = useRef(0);
@@ -45,34 +46,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
     const generation = ++sessionRequestGeneration.current;
     if (!options?.silent) setLoading(true);
+    const controller = new AbortController();
     try {
-      const response = await fetch("/api/auth/session", { cache: "no-store" });
-      const body = (await response.json()) as {
-        ok: boolean;
-        code?: string;
-        user?: AuthUser | null;
-      };
-      if (!response.ok || !body.ok) {
-        throw new Error(localizedAuthError(dictionary, body.code, "session_failed"));
-      }
+      const request = fetch("/api/auth/session", {
+        cache: "no-store",
+        signal: controller.signal,
+      }).then(readApi<{ user: AuthUser | null }>);
+      const body = await withDeadline(request, 12_000, "Session lookup timed out.");
       if (sessionRequestGeneration.current !== generation) return;
       const nextOwner = body.user?.playerKey ?? null;
       if (cacheOwner.current !== nextOwner) invalidateRouteData();
       cacheOwner.current = nextOwner;
       setUser(body.user ?? null);
-      setError(null);
+      setErrorCode(null);
+      return body.user ?? null;
     } catch (requestError) {
       if (sessionRequestGeneration.current !== generation) return;
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : dictionary.auth.errors.session_failed,
-      );
+      // A transient background failure must not hide an authenticated screen
+      // or unmount an ongoing game. A successful anonymous reply clears it.
+      if (!options?.silent || !cacheOwner.current) setErrorCode("session_failed");
       throw requestError;
     } finally {
+      controller.abort();
       if (sessionRequestGeneration.current === generation) setLoading(false);
     }
-  }, [dictionary]);
+  }, []);
 
   const refreshRating = useCallback(async (options?: { invalidate?: boolean }) => {
     const playerKey = user?.emailRequired ? undefined : user?.playerKey;
@@ -108,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
     setRating(null);
     setRatingLoading(false);
-    setError(null);
+    setErrorCode(null);
   }, []);
 
   const logout = useCallback(async () => {
@@ -116,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const body = (await response.json()) as { ok: boolean; code?: string };
     if (!response.ok || !body.ok) {
       const logoutError = new Error(localizedAuthError(dictionary, body.code, "logout_failed"));
-      setError(logoutError.message);
+      setErrorCode(body.code ?? "logout_failed");
       throw logoutError;
     }
     clearSession();
@@ -143,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearTimeout(timeout);
   }, [loading, refreshRating]);
 
+  const error = errorCode ? localizedAuthError(dictionary, errorCode, "session_failed") : null;
   const value = useMemo(
     () => ({
       user,

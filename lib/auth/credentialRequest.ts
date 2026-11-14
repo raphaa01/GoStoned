@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { readBoundedJsonObject } from "@/lib/api/boundedJson";
 import { AuthError, validateCredentials } from "./accountService";
-import { normalizeUsername, validatePasswordIssue } from "./password";
+import { validatePasswordIssue } from "./password";
+import { NEW_USERNAME_MAX_LENGTH, normalizeUsername } from "./username";
 import { requireEmail } from "./email";
 import { usesLegacyAccountContract } from "./clientContract";
 import { parseStartingStrength } from "@/lib/rating/preferences";
@@ -131,7 +132,7 @@ export async function readCredentialRequest(request: NextRequest) {
     if (issue) throw new AuthError(issue.message, 400, issue.code);
     return { username: identifier, password: body.password as string };
   }
-  return validateCredentials(identifier, body.password);
+  return validateCredentials(identifier, body.password, { existing: true });
 }
 
 export async function readRegistrationRequest(request: NextRequest) {
@@ -191,7 +192,7 @@ export async function readOAuthRegistrationRequest(request: NextRequest) {
   const username = normalizeUsername(body.username);
   if (!username) {
     throw new AuthError(
-      "Username must contain 3–20 letters, numbers, or underscores.",
+      `Username must contain 3–${NEW_USERNAME_MAX_LENGTH} letters, numbers, or underscores.`,
       400,
       "invalid_username",
     );

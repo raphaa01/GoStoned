@@ -164,7 +164,7 @@ export async function runNativeKataGoAnalysis(
   onProgress?: (value: AnalysisJobView) => void,
   signal?: AbortSignal,
 ): Promise<AnalysisJobView> {
-  return queueNativeKataGo(() => runNativeKataGoAnalysisWork(game, onProgress, signal));
+  return queueNativeKataGo(() => runNativeKataGoAnalysisWork(game, onProgress, signal), signal);
 }
 
 async function runNativeKataGoAnalysisWork(
@@ -186,11 +186,21 @@ async function runNativeKataGoAnalysisWork(
   let lastPublishedRefined = 0;
   let lastPersistedMoves = 0;
   let lastPersistedRefined = 0;
-  let persistence = Promise.resolve();
   const persist = (result: GameAnalysisResult) =>
     withDeadline(storeResult(game, result), CACHE_TIMEOUT_MS, "Local review cache write timed out.").catch(() => undefined);
+  let persistence: Promise<void> | null = null;
+  let latestCacheResult: GameAnalysisResult | undefined;
   const queuePersistence = (result: GameAnalysisResult) => {
-    persistence = persistence.then(() => persist(result));
+    latestCacheResult = result;
+    if (persistence) return;
+    persistence = (async () => {
+      while (latestCacheResult) {
+        const next = latestCacheResult;
+        latestCacheResult = undefined;
+        await persist(next);
+      }
+      persistence = null;
+    })();
   };
   const publish = (force: boolean) => {
     if (!latestProgress || signal?.aborted) return;
@@ -274,8 +284,7 @@ async function runNativeKataGoAnalysisWork(
     );
     if (!partial) throw analysisError;
     acceptingProgress = false;
-    await persistence;
-    await persist(partial);
+    queuePersistence(partial);
     return job(game, partial)!;
   } finally {
     acceptingProgress = false;
@@ -293,7 +302,6 @@ async function runNativeKataGoAnalysisWork(
     visitsPerTurn: response.visitsPerTurn,
   }, undefined, { allowRootOnly: true });
   if (!result) throw new Error("KataGo did not finish enough positions for a review.");
-  await persistence;
-  await persist(result);
+  queuePersistence(result);
   return job(game, result)!;
 }
