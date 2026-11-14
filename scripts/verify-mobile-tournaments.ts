@@ -193,8 +193,7 @@ async function run() {
       fullPage: true,
     });
     await phone.locator('.mobile-tab-bar a[href="/de"]').click();
-    await expect(homeLink).toContainText(/\bAngemeldet\b/);
-    await expect(homeLink).not.toContainText("Nicht angemeldet");
+    await expect(homeLink.getByText("Angemeldet", { exact: true })).toBeVisible();
 
     await web.goto(`${api}/de/tournaments/${rapid.id}`);
     await web.getByRole("button", { name: "Beitreten", exact: true }).click();
