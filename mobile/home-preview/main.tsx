@@ -1,11 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  ArrowRight, BarChart3, ChevronRight, GraduationCap, Home, Puzzle, Trophy, UsersRound, Wifi, X,
+  ArrowRight, BarChart3, ChevronRight, GraduationCap, Home, Moon, Puzzle, Sun, Trophy, UsersRound, Wifi, X,
 } from "lucide-react";
 import darkLogo from "../../app/icons/gostone-sculpted-dark.svg?url";
+import lightLogo from "../../app/icons/gostone-sculpted-light.svg?url";
 import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
 import { getMobileCopy } from "../../lib/i18n/mobile";
+import { dailyPuzzleAt } from "../../lib/puzzles/dailyCatalog";
 import { presentRating } from "../../lib/rating/rankPolicy";
 import "./styles.css";
 
@@ -29,16 +31,19 @@ const tabs = [
   { label: "Leaderboard", icon: Trophy, path: "/leaderboard" },
 ] as const;
 
-// The preview shows a corner position. The link opens the current puzzle hub.
-const stones = [
-  { x: 52, y: 23, white: false },
-  { x: 80, y: 23, white: true },
-  { x: 52, y: 51, white: false },
-  { x: 80, y: 51, white: true },
-  { x: 108, y: 51, white: true },
-  { x: 80, y: 79, white: false },
-  { x: 136, y: 79, white: false },
-] as const;
+type Theme = "light" | "dark";
+
+const params = new URLSearchParams(window.location.search);
+const showThemeControls = !params.has("capture");
+
+function initialTheme(): Theme {
+  const requested = params.get("theme");
+  if (requested === "light" || requested === "dark") return requested;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+// Show the lower-left corner of a fixed sample from the GoStone daily rotation.
+const puzzleRows = dailyPuzzleAt(1).board.slice(7, 13).map((row) => row.slice(0, 9));
 
 function GoLink({ path, className, label, children }: {
   path: string;
@@ -73,41 +78,28 @@ function StatusBar() {
 }
 
 function PuzzleBoard() {
-  return (
-    <svg className="puzzle-board" viewBox="0 0 180 112" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#a8845c" />
-          <stop offset=".64" stopColor="#c19e72" />
-          <stop offset="1" stopColor="#af895f" />
-        </linearGradient>
-      </defs>
-      <rect width="180" height="112" fill="url(#wood)" />
-      <g fill="none" stroke="#65492f" strokeOpacity=".62">
-        <path d="M24 23H180M24 51H180M24 79H180M24 107H180M24 23V112M52 23V112M80 23V112M108 23V112M136 23V112M164 23V112" />
-      </g>
-      <circle cx="108" cy="79" r="2" fill="#65492f" />
-      {stones.map(({ x, y, white }) => (
-        <g key={`${x}-${y}`}>
-          <circle cx={x} cy={y + 2} r="10.4" fill="#442a20" opacity=".25" />
-          <circle cx={x} cy={y} r="10.3" fill={white ? "#f0e4ce" : "#302b25"} stroke={white ? "#f7ead1" : "#41362b"} />
-        </g>
-      ))}
-      <circle cx="108" cy="79" r="8" fill="none" stroke="#553a2e" strokeWidth="1.2" strokeDasharray="2 2.2" />
-    </svg>
-  );
-}
+  const step = 12;
+  const x = (column: number) => 10 + column * step;
+  const y = (row: number) => 8 + row * step;
+  const columns = puzzleRows[0].length;
 
-function LearningPath() {
-  const path = "M22 77H56C77 77 72 36 94 36H155";
   return (
-    <svg className="learning-path" viewBox="0 0 180 112" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <path className="learning-line" d={path} pathLength="100" />
-      <path className="learning-line is-complete" d={path} pathLength="100" strokeDasharray={`${percentage} 100`} />
-      <circle cx="22" cy="77" r="6" fill="#e3d7a5" />
-      <circle cx="64" cy="74" r="6" fill="#e3d7a5" />
-      <circle cx="108" cy="36" r="6" fill="#3d4232" stroke="#929676" strokeWidth="2" />
-      <circle cx="155" cy="36" r="6" fill="#3d4232" stroke="#929676" strokeWidth="2" />
+    <svg className="puzzle-board" viewBox="0 0 120 78" aria-hidden="true">
+      <g className="board-grid">
+        {puzzleRows.map((_, row) => <path key={row} d={`M${x(0)} ${y(row)}H114`} />)}
+        {Array.from({ length: columns }, (_, column) => (
+          <path key={column} d={`M${x(column)} 0V${y(puzzleRows.length - 1)}`} />
+        ))}
+      </g>
+      {puzzleRows.flatMap((row, rowIndex) => row.map((stone, column) => stone && (
+        <circle
+          className={`board-stone ${stone}`}
+          key={`${column}-${rowIndex}`}
+          cx={x(column)}
+          cy={y(rowIndex)}
+          r="4.95"
+        />
+      )))}
     </svg>
   );
 }
@@ -115,21 +107,24 @@ function LearningPath() {
 function Practice() {
   return (
     <div className="practice">
-      <GoLink className="practice-link" path="/puzzles">
-        <span className="practice-art"><PuzzleBoard /></span>
-        <span className="practice-details">
+      <GoLink className="practice-link puzzle-link" path="/puzzles">
+        <span className="practice-heading">
           <strong>{copy.dailyPuzzle}</strong>
-          <span>Black to play</span>
+          <ChevronRight size={16} aria-hidden="true" />
         </span>
-        <ChevronRight className="practice-chevron" size={18} aria-hidden="true" />
+        <span className="practice-visual"><PuzzleBoard /></span>
+        <span className="practice-caption">Black to play</span>
       </GoLink>
-      <GoLink className="practice-link" path="/learn" label={`${copy.continueLearning}, ${learned} of ${total} lessons complete`}>
-        <span className="practice-art learning-art"><LearningPath /></span>
-        <span className="practice-details">
+      <GoLink className="practice-link learn-link" path="/learn" label={`${copy.continueLearning}, ${learned} of ${total} lessons complete`}>
+        <span className="practice-heading">
           <strong>{copy.continueLearning}</strong>
-          <span>{learned} / {total} lessons</span>
+          <ChevronRight size={16} aria-hidden="true" />
         </span>
-        <ChevronRight className="practice-chevron" size={18} aria-hidden="true" />
+        <span className="practice-visual" aria-hidden="true">
+          <span className="lesson-count"><b>{learned}</b><span> / {total}</span></span>
+          <progress max={100} value={percentage} />
+        </span>
+        <span className="practice-caption">Lessons complete</span>
       </GoLink>
     </div>
   );
@@ -206,7 +201,7 @@ function Dock() {
         {tabs.map(({ label, icon: Icon, path }) => {
           const labelWithIcon = <><span className="tab-icon"><Icon size={22} strokeWidth={1.9} aria-hidden="true" /></span><span>{label}</span></>;
           return path === "/" ? (
-            <a className="tab" aria-current="page" href="" key={path}>{labelWithIcon}</a>
+            <a className="tab" aria-current="page" href="#home" key={path}>{labelWithIcon}</a>
           ) : (
             <GoLink className="tab" path={path} key={path}>{labelWithIcon}</GoLink>
           );
@@ -218,28 +213,42 @@ function Dock() {
 }
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+
   return (
-    <div className="phone">
-      <StatusBar />
-      <header className="top-bar">
-        <GoLink className="profile" path="/profile" label="Profile: komi">
-          <ProfileAvatar size="sm" style="urushi-mon" /><span>komi</span>
-        </GoLink>
-        <h1>
-          {/* eslint-disable-next-line @next/next/no-img-element -- The Vite preview bundles the approved SVG master. */}
-          <img src={darkLogo} alt="" width={29} height={29} />
-          GoStone
-        </h1>
-        <GoLink className="friends" path="/friends" label={copy.friends}>
-          <UsersRound size={22} strokeWidth={1.85} aria-hidden="true" />
-        </GoLink>
-      </header>
-      <main>
-        <Practice />
-        <Statistics />
-        <RecentGames />
-      </main>
-      <Dock />
+    <div className="preview" data-theme={theme} data-controls={showThemeControls}>
+      {showThemeControls && (
+        <div className="theme-switch" role="group" aria-label="Preview appearance">
+          <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
+            <Sun size={16} aria-hidden="true" /> Light
+          </button>
+          <button type="button" aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
+            <Moon size={16} aria-hidden="true" /> Dark
+          </button>
+        </div>
+      )}
+      <div className="phone" id="home">
+        <StatusBar />
+        <header className="top-bar">
+          <GoLink className="profile" path="/profile" label="Profile: komi">
+            <ProfileAvatar size="sm" style="urushi-mon" /><span>komi</span>
+          </GoLink>
+          <h1>
+            {/* eslint-disable-next-line @next/next/no-img-element -- The Vite preview bundles the approved SVG masters. */}
+            <img src={theme === "dark" ? darkLogo : lightLogo} alt="" width={29} height={29} />
+            GoStone
+          </h1>
+          <GoLink className="friends" path="/friends" label={copy.friends}>
+            <UsersRound size={22} strokeWidth={1.85} aria-hidden="true" />
+          </GoLink>
+        </header>
+        <main>
+          <Practice />
+          <Statistics />
+          <RecentGames />
+        </main>
+        <Dock />
+      </div>
     </div>
   );
 }

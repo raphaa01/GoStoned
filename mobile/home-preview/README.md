@@ -1,11 +1,11 @@
 # GoStone iPhone home preview
 
-![GoStone home at 402 × 874](GoStone-iPhone.png)
+[Light](GoStone-light.png) · [Dark](GoStone-dark.png) · [Side by side](GoStone-Vergleich-Light-Dark.png)
 
-Warm charcoal surfaces, a wood board crop and one honey-colored primary action. The two practice modules share a common layout. Statistics sit in one compact group, followed by the recent games and the fixed Play and navigation area.
+One signed-in layout in two appearances. The Daily Puzzle tile shows a corner from the first position in the GoStone daily rotation. Continue Learning shows the sample lesson count and the corresponding completion bar. Both appearances use the same hierarchy, dock and tab order.
 
-Run `npx vite --config vite.home-preview.config.mts` to open the standalone preview. `npx vite build --config vite.home-preview.config.mts` outputs to `dist/home-preview`.
+Run `npx vite --config vite.home-preview.config.mts` to open the standalone preview. Use the Light and Dark buttons above the phone. The initial appearance follows the system unless a `?theme=light` or `?theme=dark` parameter is specified. The `capture` parameter hides the appearance switch for screenshots.
 
-The signed-in preview uses fictitious names, sample data and an illustrative board position. The game rows open sample details. The other links point to the corresponding GoStone website routes.
+The signed-in preview uses fictitious names and sample data. The puzzle tile opens the live puzzle hub. Game rows open sample details. Other links point to the corresponding GoStone website routes.
 
-Verified in Chromium and WebKit at 402 × 874, 360 × 740 and 320 × 640. The screenshot comes from a browser on Windows at twice the logical resolution. iPhone system chrome is simulated.
+Verified in Chromium and WebKit at 402 × 874, 360 × 740 and 320 × 640. The screenshots come from a browser on Windows. iPhone system chrome is simulated.

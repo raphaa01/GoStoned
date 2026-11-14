@@ -6,6 +6,7 @@ export default defineConfig({
   root: fileURLToPath(new URL("./mobile/home-preview", import.meta.url)),
   base: "./",
   plugins: [react()],
+  resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   build: {
     outDir: fileURLToPath(new URL("./dist/home-preview", import.meta.url)),
     emptyOutDir: true,
