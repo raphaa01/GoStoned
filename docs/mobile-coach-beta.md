@@ -21,16 +21,19 @@ restart puzzle loading or an active review.
 ## Bundle and inference
 
 `assets/coach/` contains the user-supplied v5 epoch-840 ONNX model, manifest,
-schema, tokenizer and original integration notes. `COACH_MODEL` pins hashes;
-the mobile asset builder and worker both verify the four runtime files. The
-runtime bundle adds approximately **7.6 MB**. `weights.pt` is deliberately
+schema, tokenizer and original integration notes. The mobile asset builder
+and document both verify the four runtime files against `COACH_MODEL`.
+The model adds approximately **7.6 MB**. The document transfers the model
+files and the bundled WASM binary to a blob worker, which checks the schema
+and ONNX tensor contract before reporting readiness. `weights.pt` is
 omitted: it duplicates the ONNX weights and is only needed for Python training.
 The existing ONNX Runtime 1.27 WASM runtime is reused; no language teacher or
 external model service is required. Model assets are outside `public/` and are
 copied only into `.mobile-assets` for mobile builds.
 
-The coach worker loads once on entry. Native KataGo is also warmed with a
-two-visit position request while board size is being selected. The human plays
+The coach worker loads on entry. Native KataGo is also warmed with a
+two-visit position request while board size is being selected. Preparation
+reports which component failed and allows a fresh attempt. The human plays
 Black, with Japanese normal-play legality and 6.5 komi. Only the human's move
 invokes the commentator. The opponent's move leaves the human comment intact.
 

@@ -74,8 +74,8 @@ export function gameStateFromPoll(
   };
 }
 
-export function gamePollResponseBody(response: GamePollResponse) {
+export function gamePollResponseBody(response: GamePollResponse, actor: string) {
   return "game" in response
-    ? { ok: true as const, game: response.game }
-    : { ok: true as const, ...response };
+    ? { ok: true as const, actor, game: response.game }
+    : { ok: true as const, actor, ...response };
 }

@@ -12,6 +12,7 @@ import "../globals.css";
 import "../redesign.css";
 import "../settings.css";
 import "../board-designs.css";
+import "../web-product.css";
 
 export const metadata: Metadata = rootMetadata("en");
 

@@ -1,0 +1,281 @@
+/* Rounded product surfaces for the website. The native bundle has its own shell. */
+.app-shell {
+  --web-header-height: 82px;
+  --web-card-radius: 14px;
+  --web-row-radius: 9px;
+}
+
+.app-main { padding-top: var(--web-header-height); }
+
+@media (max-width: 1366px) {
+  .app-shell { --web-header-height: 60px; }
+}
+
+.home-feature-list {
+  border: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.home-feature-list .home-feature-link {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-card-radius);
+  min-height: 88px;
+  padding: 14px clamp(12px, 3vw, 24px);
+}
+.home-feature-list .home-feature-link:hover { background: var(--color-surface-raised); }
+
+.home-feature-icon {
+  background: var(--color-moss-soft);
+  border: 0;
+  border-radius: var(--web-row-radius);
+}
+
+.profile-header {
+  align-items: center;
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-card-radius);
+  box-shadow: none;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 0;
+  padding: clamp(12px, 3vw, 24px);
+}
+
+.profile-header__primary {
+  align-items: center;
+  display: flex;
+  gap: clamp(10px, 2vw, 22px);
+  min-width: 0;
+}
+.profile-header__primary > .profile-avatar-trigger { flex-shrink: 0; }
+.profile-header__identity { text-align: start; }
+.profile-header__identity h1 {
+  font-size: clamp(21px, 4vw, 38px);
+  margin: 0;
+}
+.profile-header__handle { overflow-wrap: anywhere; }
+.profile-header__actions { flex: 0 0 auto; }
+
+.profile-performance .profile-metrics { border: 0; gap: 8px; }
+.profile-performance .profile-metrics article,
+.profile-history .history-game {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-row-radius);
+  padding-inline: clamp(10px, 2vw, 20px);
+}
+.profile-history { border: 0; }
+.profile-history__list { display: grid; gap: 6px; }
+
+.settings-section .settings-options { gap: 5px; }
+.settings-section .settings-options .settings-option {
+  background: var(--color-canvas-deep);
+  border: 0;
+  border-radius: var(--web-row-radius);
+  padding-inline: 10px;
+}
+.settings-section .settings-options .settings-option:is([aria-pressed="true"], :has(input:checked)) {
+  background: var(--color-moss-soft);
+}
+
+.friends-page :is(.player-search, .friends-card) {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-card-radius);
+  padding: clamp(12px, 2vw, 20px);
+}
+.friends-page :is(.friends-card > header, .friends-empty) { border: 0; }
+.friends-page :is(.friend-row, .friend-request, .game-invite) {
+  background: var(--color-canvas-deep);
+  border: 0;
+  border-radius: var(--web-row-radius);
+  margin-top: 5px;
+}
+
+.leaderboard-title,
+.leaderboard-table { border: 0; }
+.leaderboard-table table { border-collapse: separate; border-spacing: 0 5px; }
+.leaderboard-table :is(th, td) { border: 0; }
+.leaderboard-table tbody tr { background: var(--color-surface); }
+.leaderboard-table tbody tr > :first-child {
+  border-start-start-radius: var(--web-row-radius);
+  border-end-start-radius: var(--web-row-radius);
+  padding-inline-start: 12px;
+}
+.leaderboard-table tbody tr > :last-child {
+  border-start-end-radius: var(--web-row-radius);
+  border-end-end-radius: var(--web-row-radius);
+  padding-inline-end: 12px;
+}
+
+.play-experience:not(.play-experience--active) .play-pace-column {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-card-radius);
+  padding: clamp(12px, 3vw, 24px);
+}
+
+.play-pace-column .play-pace-heading h1 {
+  font-size: clamp(19px, 3vw, 30px);
+  margin: 0;
+}
+
+.play-pace-column .time-selector { gap: 5px; }
+.play-pace-column .time-selector button,
+.play-pace-column .time-selector button.is-selected {
+  border: 0;
+  border-radius: var(--web-row-radius);
+  box-shadow: none;
+  min-height: 48px;
+  padding: 8px 12px;
+}
+.play-pace-column .time-selector button { background: var(--color-canvas-deep); }
+.play-pace-column .time-selector button.is-selected { background: var(--color-moss-soft); }
+
+.play-pace-column .matchmaking-summary { display: none; }
+.play-pace-column .play-matchmaking { margin-top: 10px; }
+.play-pace-column .play-match-action {
+  border-radius: var(--web-row-radius);
+  font-size: 1rem;
+  min-height: 48px;
+}
+.play-pace-column .play-matchmaking[data-waiting="true"] {
+  background: var(--color-canvas-deep);
+  border: 0;
+}
+.play-match-status .play-match-format { margin-inline-start: 0; }
+
+.game-topbar,
+.game-player-panel :is(.game-actions, .game-meta-strip),
+.chat-panel > header,
+.chat-form { border: 0; }
+
+.app-content:has(.learn-player) { padding-block: 10px 16px; }
+.learn-experience:has(.learn-player) { padding-block: 0; }
+.learn-player__heading { padding-block: 8px 12px; }
+.learn-player__heading h1 { margin: 0 0 8px; }
+.learn-teacher__speech { background: var(--color-surface); border: 0; }
+.learn-teacher__speech::before { background: var(--color-surface); border: 0; }
+.learn-teacher__speech :is(.learn-player__feedback, .learn-player__hint):not(:first-child) { border: 0; }
+.learn-player .button.learn-player__next:disabled {
+  background: var(--color-canvas-deep);
+  border-color: var(--color-line);
+  color: var(--color-text-muted);
+}
+.learn-next-dock {
+  background: var(--color-surface);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  padding: 8px 12px;
+}
+
+.learn-player[data-board-step="true"] .interactive-learn-board-frame {
+  max-width: min(100%, max(180px, calc(100dvh - var(--web-header-height) - 205px)));
+}
+
+@media (max-width: 960px) {
+  .app-content:has(.play-experience) { padding-inline: clamp(12px, 4vw, 24px); }
+  .app-content .play-experience {
+    gap: 10px;
+    max-width: 560px;
+    min-height: 0;
+    padding: 12px 0 24px;
+  }
+  .play-board-column { gap: 8px; }
+  .play-board-column .play-board-preview { width: min(100%, 29dvh, 330px); }
+  .play-board-column .size-selector { width: 100%; }
+  .play-board-column .size-selector button { min-height: 44px; }
+  .play-experience[data-waiting="true"] :is(.play-board-column, .play-pace-heading, .time-selector) { display: none; }
+  .play-pace-column .time-selector {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .play-pace-column .time-selector button,
+  .play-pace-column .time-selector button.is-selected {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 5px;
+    text-align: center;
+  }
+  .play-pace-column .time-selector-copy {
+    align-items: center;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .play-pace-column .time-selector strong { font-size: .875rem; }
+  .play-pace-column .time-selector-copy > span { font-size: .75rem; text-align: center; }
+  .play-pace-column .time-selector-mark { display: none; }
+}
+
+@media (max-width: 760px) {
+  .app-content .profile-header { padding: 10px 12px; }
+  .profile-performance .profile-metrics article { border: 0; }
+  .profile-header__primary .profile-avatar-trigger { width: clamp(46px, 14vw, 74px); }
+  .profile-header__primary .profile-avatar-trigger > .profile-symbol { width: 100%; height: auto; aspect-ratio: 1; }
+
+  .learn-player[data-board-step="true"] {
+    display: grid;
+    grid-template-rows: auto auto minmax(170px, 1fr) auto auto;
+    height: calc(100dvh - var(--web-header-height) - 24px - env(safe-area-inset-bottom, 0px));
+  }
+  .learn-player[data-board-step="true"] .learn-player__workspace { display: contents; }
+  .learn-player__board-area {
+    container-type: size;
+    display: grid;
+    justify-items: center;
+    min-width: 0;
+  }
+  .learn-player[data-board-step="true"] .interactive-learn-board-frame {
+    max-width: min(100%, 440px);
+    width: min(100%, 100cqh, 440px);
+  }
+  .learn-player__board-area .interactive-learn-board-frame:has(.learn-board-zoom) {
+    width: min(100%, max(140px, calc(100cqh - 48px)), 440px);
+  }
+  .learn-player__board-area .learn-board-zoom { margin-bottom: 4px; }
+  .learn-player__board-area .is-enlarged .learn-board-viewport {
+    max-height: max(100px, calc(100cqh - 48px)) !important;
+  }
+  .learn-player__controls {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding: 8px 0 0;
+  }
+  .learn-player__tools { gap: 10px; min-height: 0; }
+  .learn-player__next { flex: 1 1 160px; margin: 0; width: auto; }
+  .learn-player__workspace.is-game .learn-player__controls {
+    background: var(--color-canvas);
+    bottom: env(safe-area-inset-bottom, 0px);
+    position: sticky;
+    z-index: 6;
+  }
+}
+
+@media (max-width: 460px) {
+  .profile-header__actions { gap: 6px; }
+  .profile-header__actions .profile-play-link {
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    width: 44px;
+  }
+  .profile-play-link span { display: none; }
+}
+
+@media (max-width: 620px) {
+  .leaderboard-table table { min-width: 0; table-layout: auto; }
+  .leaderboard-table :is(th, td):is(:nth-child(3), :nth-child(4)) { display: none; }
+  .leaderboard-table :is(th, td):first-child { width: 38px; }
+  .leaderboard-table :is(th, td):last-child { width: auto; text-align: end; }
+  .leaderboard-table tbody th { overflow-wrap: anywhere; }
+  .leaderboard-player-stats {
+    color: var(--color-text-muted);
+    display: block;
+    font-size: .6875rem;
+    font-weight: 400;
+  }
+}

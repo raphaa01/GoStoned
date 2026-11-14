@@ -266,6 +266,16 @@ test("full reads lock while version polls first reach lightweight participant ve
   }
 });
 
+test("a matching actor can load the full game used by native review", async () => {
+  const { pool } = heartbeatPool();
+  const response = await withPool(pool, () => readGame(request(), context()));
+
+  assertPrivateResponse(response, 200);
+  const body = await response.json();
+  assert.equal(body.actor, actor);
+  assert.equal(body.game.id, gameId);
+});
+
 test("a matching actor receives the current version heartbeat without persistent rate writes", async () => {
   const { pool, statements } = heartbeatPool();
   const response = await withPool(
@@ -276,6 +286,7 @@ test("a matching actor receives the current version heartbeat without persistent
   assertPrivateResponse(response, 200);
   const body = await response.json();
   assert.equal(body.ok, true);
+  assert.equal(body.actor, actor);
   assert.equal(body.unchanged, true);
   assert.equal(body.gameId, gameId);
   assert.equal(body.version, 7);

@@ -1,5 +1,30 @@
 # Mobile store release
 
+## Review and Coach verification for the next update
+
+Deploy the game-read API fix to `https://gostone.app` before device testing.
+An authenticated request to `GET /api/games/<finished-game-id>` must return
+`actor` equal to the session's `user.playerKey`. The production API update also
+repairs this failure for existing installs.
+
+Build from the commit containing the fixes with `npm ci` and
+`npm run mobile:ios:release` on the Mac. Use the existing Apple team and
+App Store provisioning profile, a new App Store version and an unused build
+number. The release script builds the pinned KataGo XCFramework before
+Capacitor sync. It verifies the archived core and plugin registration,
+the KataGo model/config, and the bundled Coach model and WASM files.
+
+Use a physical iPhone to test the exact signed update via TestFlight. With
+a production account, finish a game and open its review from the result and
+again from history. Check that the move-by-move analysis opens, advances and
+can be closed and reopened. Use a Coach-enabled account and verify on a cold
+start that a 9×9 game starts, a human move receives a German model comment
+on a suitable opening move, White replies and Hint works. After opening the
+Coach, repeat a move and reply with the network disabled. The Coach WASM
+runtime requires WebAssembly SIMD, available on iOS 16.4 and later. Repeat
+the same flow with the Play internal build on Android. Record the build
+numbers, tested devices and outcomes before submitting the update for review.
+
 ## iOS 1.0, build 2 (2026-10-08)
 
 Build 2 uses main commit `59e36c7`, including the mobile beta fixes, compact
