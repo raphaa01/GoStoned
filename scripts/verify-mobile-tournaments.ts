@@ -22,8 +22,10 @@ import {
   submitMove,
 } from "../lib/game/gameService";
 import {
+  getRapidActivity,
   getTournamentDashboard,
   getTournamentDetail,
+  joinTournament,
 } from "../lib/tournaments/service";
 
 const api = process.env.TOURNAMENT_BROWSER_URL ?? "http://127.0.0.1:3101";
@@ -165,6 +167,10 @@ async function run() {
       "UPDATE tournaments SET status='lobby',starts_at=statement_timestamp()+interval '2 days',ends_at=statement_timestamp()+interval '9 days' WHERE id=$1",
       [rapid.id],
     );
+    for (let i = 0; i < 6; i++) {
+      const entrant = await account(`Group Player ${i + 1}`);
+      await joinTournament(entrant.id, { id: rapid.id });
+    }
     await phone.goto(`${app}/de`);
     const homeLink = phone.locator(".mobile-home-tournament-link");
     await expect(homeLink).toContainText("Nicht angemeldet");
@@ -203,6 +209,13 @@ async function run() {
     await expect(phone.getByText("0 / 10 Partien")).toBeVisible();
     await expect(phone.locator(".tournament-activity")).toBeVisible();
     await expect(phone.locator(".tournament-countdown")).toHaveCount(0);
+    const groupTable = phone.locator(".tournament-live .rapid-standings tbody");
+    await expect(groupTable.locator("tr")).not.toHaveCount(8);
+    await phone.getByRole("button", { name: "Ganze Gruppe anzeigen" }).click();
+    await expect(groupTable.locator("tr")).toHaveCount(8);
+    await phone
+      .getByRole("button", { name: "Weniger Spieler anzeigen" })
+      .click();
     await phone
       .getByRole("button", { name: "Partie suchen", exact: true })
       .click();
@@ -218,6 +231,7 @@ async function run() {
     const gameId = new URL(phone.url()).pathname.split("/").at(-1)!;
     assert(web.url().endsWith(gameId));
     await expect(phone.getByRole("gridcell")).toHaveCount(169);
+    assert.equal(await getRapidActivity(), 2);
     const game = await getGameState(gameId, `user:${alice.id}`);
     assert.equal(game.komi, 6.5);
     const firstPass = await submitMove(gameId, game.blackPlayerKey, {
@@ -258,6 +272,14 @@ async function run() {
       scored.winnerKey === `user:${alice.id}` ? "App Player" : "Web Player";
     await expect(
       tablet.getByRole("row", { name: new RegExp(`${winner}.*9`) }).first(),
+    ).toBeVisible();
+    const friends = tablet
+      .locator(".tournament-standings")
+      .filter({
+        has: tablet.getByRole("heading", { name: "Freunde", exact: true }),
+      });
+    await expect(
+      friends.getByRole("row", { name: new RegExp(`${winner}.*9`) }),
     ).toBeVisible();
     await tablet.getByText("Turnierhistorie", { exact: true }).click();
     await expect(tablet.locator(".tournament-history")).toContainText(
