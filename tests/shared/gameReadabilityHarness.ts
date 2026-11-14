@@ -31,6 +31,9 @@ export function registerGameReadabilityTests() {
       await page.goto(`/de/game/${GAME_ID}`);
       const running = page.locator(".player-clock.is-running");
       await expect(running).toBeVisible();
+      await expect(page.locator(".game-panel-player.is-to-play")).toHaveCount(1);
+      await expect(page.locator(".game-panel-player.is-to-play .player-clock")).toHaveClass(/is-running/);
+      await expect(page.locator(".focused-board-status strong")).toHaveCount(0);
       expect(await contrast(running.locator("strong"), running)).toBeGreaterThanOrEqual(4.5);
       expect(await contrast(running.locator("span"), running)).toBeGreaterThanOrEqual(4.5);
       const idle = page.locator(".player-clock:not(.is-running)");

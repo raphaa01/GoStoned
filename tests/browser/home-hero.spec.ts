@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("keeps the primary homepage action visible and proportionally anchored", async ({ page }) => {
   await page.goto("/");
 
-  const hero = page.locator(".home-hero");
+  const hero = page.locator(".web-home__main");
   const startPlay = page.getByRole("link", { name: "Start a game" });
 
   await expect(hero).toBeVisible();
@@ -23,28 +23,21 @@ test("keeps the primary homepage action visible and proportionally anchored", as
   expect(buttonBox.y).toBeGreaterThanOrEqual(heroBox.y);
   expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(viewport.height);
 
-  const relativeButtonTop = (buttonBox.y - heroBox.y) / heroBox.height;
-  expect(relativeButtonTop).toBeGreaterThan(0.6);
-  expect(relativeButtonTop).toBeLessThan(0.9);
+  const shortcuts = (await page.locator('.home-shortcuts').boundingBox())!;
+  expect(buttonBox.y).toBeGreaterThanOrEqual(shortcuts.y + shortcuts.height);
 });
 
-test("matches the play and progress heading sizes on the German home page", async ({ page }) => {
-  await page.route("**/api/games", (route) => route.fulfill({ json: {
-    summary: { unfinishedGames: 0, gamesStartedLast24Hours: "under_5", recentlyWaitingPlayers: 0, observedAt: new Date().toISOString() },
-  } }));
+test("puts tournaments and learning next to each other on the German home page", async ({ page }) => {
   await page.goto("/de");
-  const play = page.getByRole("heading", { name: "Online Go spielen", exact: true });
-  const progress = page.getByRole("heading", { name: "Partien und Wertung im Blick", exact: true });
-  await expect(progress).toBeVisible();
-  await expect(progress).toHaveCSS("font-size", await play.evaluate((heading) => getComputedStyle(heading).fontSize));
-  const sizes = await page.locator(".home-experience *").evaluateAll((elements) =>
-    [...new Set(elements.filter((element) =>
-      element instanceof HTMLElement && element.getClientRects().length > 0
-      && !element.closest(".sr-only")
-      && [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()),
-    ).map((element) => getComputedStyle(element).fontSize))],
-  );
-  expect(sizes).toHaveLength(3);
+  const tournaments = page.locator(".home-tournament");
+  const learning = page.locator(".home-learning");
+  await expect(tournaments).toHaveAttribute("href", "/de/tournaments");
+  await expect(learning.locator("progress")).toHaveAttribute("max", /\d+/);
+  const left = (await tournaments.boundingBox())!;
+  const right = (await learning.boundingBox())!;
+  expect(left.y).toBe(right.y);
+  expect(left.x + left.width).toBeLessThan(right.x);
+  await expect(page.locator("main a[href*='/puzzles']")).toHaveCount(0);
 });
 
 test("links from the German home page to GoStone in the App Store on iPhone", async ({ page }) => {

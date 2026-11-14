@@ -37,7 +37,7 @@
 html[data-mobile-app="true"] .local-play-screen .time-selector button { background: var(--mobile-surface); border: 1px solid var(--mobile-border); box-shadow: none; color: var(--mobile-text); }
 html[data-mobile-app="true"] .local-play-screen .time-selector button.is-selected { background: var(--mobile-selected); border-color: var(--mobile-accent); color: var(--mobile-text); }
 .local-start { width: 100%; min-height: 50px; margin-top: 24px; }
-.local-clock-entry { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 26px; border-top: 1px solid var(--mobile-border); padding: 22px 0 6px; font-size: 15px; font-weight: 550; }
+.local-clock-entry { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; padding: 10px; background: var(--mobile-surface); border-radius: var(--mobile-radius-md); font-size: 15px; font-weight: 550; }
 .local-clock-entry > svg:last-child { margin-left: auto; }
 .local-clock-entry > svg:first-child { margin-right: auto; }
 .local-clock-setup > header { margin-bottom: 32px; }
@@ -47,7 +47,8 @@ html[data-mobile-app="true"] .local-play-screen .time-selector button.is-selecte
 .local-icon-button { display: grid; place-items: center; border: 0; background: none; min-width: 44px; min-height: 44px; margin-left: -10px; }
 .local-player-clocks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
 .local-player-clocks > div { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 4px 8px; padding: 14px; background: var(--mobile-surface); border: 1px solid var(--mobile-border); border-radius: 11px; }
-.local-player-clocks > .is-active { border-color: var(--mobile-accent); background: var(--mobile-selected); }
+.local-player-clocks > .is-active { border-color: var(--mobile-accent-strong); box-shadow: inset 0 0 0 1px var(--mobile-accent-strong); }
+.local-player-clocks:has(+ .sr-only) { margin-bottom: 10px; }
 .local-player-clocks .player-stone { width: 19px; height: 19px; }
 .local-player-clocks > div > span:nth-child(2) { font-size: 13px; }
 .local-player-clocks strong { grid-column: 1 / -1; font-size: 29px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
@@ -84,14 +85,14 @@ html[data-mobile-app="true"] .local-play-screen .time-selector button.is-selecte
   z-index: 100;
   width: 100dvw;
   height: 100dvh;
-  background: #20231f;
+  background: var(--color-stone-black);
   color: #f8f6ef;
   overflow: hidden;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
-.go-clock-face--white { background: #f3f0e7; color: #20231f; }
+.go-clock-face--white { background: var(--color-stone-white); color: var(--color-stone-black); }
 .go-clock-tap { position: absolute; inset: 0; width: 100%; height: 100%; padding: max(18px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) max(70px, env(safe-area-inset-bottom)) max(32px, env(safe-area-inset-left)); display: flex; flex-direction: column; border: 0; border-radius: 0; background: none; color: inherit; cursor: pointer; text-align: center; }
 .go-clock-tap:disabled { opacity: 1; cursor: default; }
 .go-clock-totals { display: flex; justify-content: space-between; width: 100%; text-align: left; }

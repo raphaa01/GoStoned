@@ -47,7 +47,6 @@ html[data-mobile-theme="dark"] .brand-mark--artwork .brand-mark__dark { display:
   align-items: center;
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--color-line);
   border-radius: 0;
   box-shadow: none;
   color: var(--color-ink);
@@ -73,36 +72,11 @@ html[data-mobile-theme="dark"] .brand-mark--artwork .brand-mark__dark { display:
 /* Override palette tokens; stones and wooden boards keep their playing colors. */
 html[data-theme="dark"] {
   color-scheme: dark;
-  --color-canvas: #111310;
-  --color-canvas-deep: #20231f;
-  --color-surface: #181b17;
-  --color-surface-raised: #272b26;
-  --color-ink: #f3f2ec;
-  --color-ink-soft: #c1c4bc;
-  --color-text-muted: #a9aca4;
-  --color-text-subtle: #999d95;
-  --color-line: #343a32;
-  --color-line-strong: #596153;
-  --color-moss: #8ab49f;
-  --color-moss-strong: #a1cab6;
-  --color-moss-soft: #263a32;
-  --color-oxide: #e0a19b;
-  --color-oxide-strong: #efbdb7;
-  --color-oxide-soft: #402623;
-  --color-warning: #dfba7e;
-  --color-warning-soft: #3d3020;
-  --panel-soft: #20231f;
-  --panel-raised: #272b26;
-  --line: rgb(255 255 255 / .12);
-  --line-strong: rgb(255 255 255 / .22);
-  --green-dark: #a1cab6;
   --shadow-hairline: 0 1px 2px rgb(0 0 0 / .15);
   --shadow-soft: 0 16px 48px rgb(0 0 0 / .24);
   --shadow-float: 0 24px 70px rgb(0 0 0 / .36);
 }
 
-html[data-theme="dark"] .button--primary { background: var(--color-moss); border-color: var(--color-moss); color: #111310; }
-html[data-theme="dark"] .button--primary:hover { background: var(--color-moss-strong); }
 html[data-theme="dark"] .profile-rating-band { background: var(--color-canvas-deep); color: var(--color-ink); }
 html[data-theme="dark"] .profile-header,
 html[data-theme="dark"] .profile-avatar-picker,
@@ -189,7 +163,7 @@ html[data-theme="dark"] .auth-social-button { border-color: var(--color-line-str
 .profile-period { background: transparent; border: 0; padding: 0; }
 .profile-rating-plot .rating-chart { margin: 20px 0 0; min-width: 0; width: 100%; }
 .profile-rating-plot .rating-chart svg { display: block; height: auto; max-width: 100%; width: 100%; }
-.profile-performance .profile-metrics { border: 0; border-top: 1px solid var(--color-line); margin-top: 20px; }
+.profile-performance .profile-metrics { border: 0; margin-top: 20px; }
 .profile-performance .profile-metrics article { background: transparent; column-gap: 12px; min-height: 86px; padding: 20px; }
 .profile-performance .profile-metrics article > :last-child { max-width: 100%; }
 .recent-form { flex-wrap: wrap; }
@@ -200,7 +174,7 @@ html[data-theme="dark"] .auth-social-button { border-color: var(--color-line-str
   .profile-rating-band { min-height: 0; padding: 22px; }
   .profile-rating-plot { padding: 16px 0; }
   .profile-performance .profile-metrics { grid-template-columns: 1fr; }
-  .profile-performance .profile-metrics article { align-items: center; border: 0; border-bottom: 1px solid var(--color-line); display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; min-height: 64px; padding: 16px 0; }
+  .profile-performance .profile-metrics article { align-items: center; border: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; min-height: 64px; padding: 16px 0; }
   .profile-performance .profile-metrics article > :last-child { font-size: 18px; margin: 0; }
   .profile-performance .recent-form { gap: 4px; justify-content: flex-end; max-width: 180px; }
   .profile-performance .result-dot { height: 22px; width: 22px; }

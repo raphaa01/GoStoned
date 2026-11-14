@@ -172,8 +172,8 @@ async function run() {
       await joinTournament(entrant.id, { id: rapid.id });
     }
     await phone.goto(`${app}/de`);
-    const homeLink = phone.locator(".mobile-home-tournament-link");
-    await expect(homeLink).toContainText("Nicht angemeldet");
+    const homeLink = phone.locator(".home-tournament");
+    await expect(homeLink).toHaveAttribute("href", "/de/tournaments");
     await homeLink.click();
     await expect(
       phone.getByRole("heading", { name: "Monthly Rapid", exact: true }),

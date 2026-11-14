@@ -55,7 +55,7 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(home).toHaveCSS("min-height", "50px");
     await home.click();
     await expect(page).toHaveURL(/\/de\/?$/);
-    await expect(page.locator(mobile ? ".mobile-home" : ".home-experience")).toBeVisible();
+    await expect(page.locator(mobile ? ".mobile-home" : ".web-home")).toBeVisible();
   });
 
   test("puzzle undo removes the failed branch and continues at the last correct decision", async ({ page }) => {

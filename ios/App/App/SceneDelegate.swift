@@ -57,6 +57,8 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
     private let symbols = ["house", "puzzlepiece", "graduationcap", "chart.bar", "trophy"]
     private var tabDefinitions: [[String: String]] = []
     private var canGoBack = true
+    private var tabsVisible = false
+    private var modalOpen = false
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(GoStoneSharePlugin())
@@ -77,11 +79,11 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        canGoBack
+        canGoBack && !modalOpen
     }
 
     @objc private func goBack(_ gesture: UIScreenEdgePanGestureRecognizer) {
-        guard canGoBack, gesture.state == .ended,
+        guard canGoBack, !modalOpen, gesture.state == .ended,
               gesture.translation(in: view).x > 70 else { return }
         bridge?.webView?.evaluateJavaScript("window.gostoneBackFromNative?.();")
     }
@@ -94,7 +96,7 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
         nativeTabBar.delegate = self
         nativeTabBar.isTranslucent = true
         nativeTabBar.itemPositioning = .fill
-        nativeTabBar.tintColor = UIColor(red: 0.25, green: 0.43, blue: 0.36, alpha: 1)
+        nativeTabBar.tintColor = UIColor(red: 118/255, green: 82/255, blue: 37/255, alpha: 1)
         nativeTabBar.unselectedItemTintColor = .secondaryLabel
         nativeTabBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(nativeTabBar)
@@ -115,18 +117,23 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
             let dark = body["dark"] as? Bool ?? false
             overrideUserInterfaceStyle = dark ? .dark : .light
             let background = dark
-                ? UIColor(red: 17/255, green: 19/255, blue: 16/255, alpha: 1)
-                : UIColor(red: 245/255, green: 242/255, blue: 235/255, alpha: 1)
+                ? UIColor(red: 48/255, green: 46/255, blue: 39/255, alpha: 1)
+                : UIColor(red: 245/255, green: 241/255, blue: 233/255, alpha: 1)
             view.backgroundColor = background
             bridge?.webView?.backgroundColor = background
             bridge?.webView?.scrollView.backgroundColor = background
             nativeTabBar.tintColor = dark
-                ? UIColor(red: 0.57, green: 0.71, blue: 0.65, alpha: 1)
-                : UIColor(red: 0.25, green: 0.43, blue: 0.36, alpha: 1)
+                ? UIColor(red: 228/255, green: 184/255, blue: 127/255, alpha: 1)
+                : UIColor(red: 118/255, green: 82/255, blue: 37/255, alpha: 1)
             return
         }
         if body["type"] as? String == "navigation" {
             canGoBack = body["canGoBack"] as? Bool ?? false
+            return
+        }
+        if body["type"] as? String == "modal" {
+            modalOpen = body["open"] as? Bool ?? false
+            updateTabBarVisibility()
             return
         }
         guard body["type"] as? String == "state" else { return }
@@ -154,8 +161,12 @@ final class GoStoneBridgeViewController: CAPBridgeViewController, UITabBarDelega
             nativeTabBar.selectedItem = nil
         }
 
-        let visible = body["visible"] as? Bool ?? false
-        nativeTabBar.isHidden = !visible
+        tabsVisible = body["visible"] as? Bool ?? false
+        updateTabBarVisibility()
+    }
+
+    private func updateTabBarVisibility() {
+        nativeTabBar.isHidden = !tabsVisible || modalOpen
     }
 
     func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {

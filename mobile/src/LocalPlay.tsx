@@ -154,8 +154,8 @@ function LocalGameView({ boardSize, timeControl, onAgain, onExit }: {
       <button aria-label={copy.back} className="local-icon-button" onClick={() => game.phase === "finished" ? onExit() : setConfirm("exit")} type="button"><ArrowLeft aria-hidden="true" size={22} /></button>
       <span>{copy.title}</span><small>{copy.subtitle}</small>
     </header>
-    <LocalPlayerClocks clock={game.clock} />
-    <div className="local-turn" role="status">{game.phase === "play" ? `${colorName(game.clock.turn)} ${copy.toPlay}` : game.phase === "scoring" ? gameCopy.scoring : title}</div>
+    <LocalPlayerClocks active={game.phase === "play"} clock={game.clock} />
+    <div className={game.phase === "play" ? "local-turn sr-only" : "local-turn"} role="status">{game.phase === "play" ? `${colorName(game.clock.turn)} ${copy.toPlay}` : game.phase === "scoring" ? gameCopy.scoring : title}</div>
     <div className="local-game-board"><GoBoard boardSize={boardSize} boardState={game.board}
       onIntersectionClick={(x, y) => game.phase === "scoring" ? mark(x, y) : setGame((current) => playLocalTurn(current, { x, y }, Date.now()))}
       disabled={game.phase === "finished" || busy || Boolean(confirm)} previewColor={game.clock.turn}
@@ -214,7 +214,7 @@ function LocalGameView({ boardSize, timeControl, onAgain, onExit }: {
   </main>;
 }
 
-function LocalPlayerClocks({ clock }: { clock: LocalClock }) {
+function LocalPlayerClocks({ active, clock }: { active: boolean; clock: LocalClock }) {
   const { dictionary } = useI18n();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -225,7 +225,7 @@ function LocalPlayerClocks({ clock }: { clock: LocalClock }) {
   }, []);
   return <div className="local-player-clocks">{(["black", "white"] as const).map((color) => {
     const reading = localClockReading(clock, color, now);
-    return <div className={clock.running && clock.turn === color ? "is-active" : ""} key={color}>
+    return <div className={active && clock.turn === color ? "is-active" : ""} key={color}>
       <span className={`player-stone player-stone--${color}`} /><span>{color === "black" ? dictionary.game.black : dictionary.game.white}</span>
       <strong>{formatLocalClock(reading.displayTimeMs)}</strong>
       <small>{reading.periodsRemaining} × {getTimeControl(clock.control).byoYomiSeconds}s</small>
