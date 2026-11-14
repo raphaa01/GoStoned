@@ -167,7 +167,7 @@ async function run() {
       "UPDATE tournaments SET status='lobby',starts_at=statement_timestamp()+interval '2 days',ends_at=statement_timestamp()+interval '9 days' WHERE id=$1",
       [rapid.id],
     );
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const entrant = await account(`Group Player ${i + 1}`);
       await joinTournament(entrant.id, { id: rapid.id });
     }
@@ -209,9 +209,9 @@ async function run() {
     await expect(phone.locator(".tournament-activity")).toBeVisible();
     await expect(phone.locator(".tournament-countdown")).toHaveCount(0);
     const groupTable = phone.locator(".tournament-live .rapid-standings tbody");
-    await expect(groupTable.locator("tr")).not.toHaveCount(8);
+    await expect(groupTable.locator("tr")).not.toHaveCount(10);
     await phone.getByRole("button", { name: "Ganze Gruppe anzeigen" }).click();
-    await expect(groupTable.locator("tr")).toHaveCount(8);
+    await expect(groupTable.locator("tr")).toHaveCount(10);
     await phone
       .getByRole("button", { name: "Weniger Spieler anzeigen" })
       .click();
