@@ -14,6 +14,7 @@ import "../globals.css";
 import "../redesign.css";
 import "../settings.css";
 import "../board-designs.css";
+import "../web-product.css";
 
 export function generateStaticParams() {
   return LOCALES.filter(({ code }) => code !== "en").map(({ code }) => ({ locale: code }));

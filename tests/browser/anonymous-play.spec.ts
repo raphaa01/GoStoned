@@ -1523,6 +1523,7 @@ for (const locale of ["en", "de"] as const) {
 for (const locale of ["en", "de"] as const) {
   test(`${locale.toUpperCase()} anonymous 19x19 play is responsive and operable`, async ({ page }, testInfo) => {
     const harness = await installApiHarness(page);
+    if (testInfo.project.name === "chromium-320-touch") await page.setViewportSize({ width: 320, height: 640 });
     const localeCopy = copy[locale];
     const playPath = locale === "en" ? "/play?size=19" : "/de/play?size=19";
     const gamePath = locale === "en" ? `/game/${GAME_ID}` : `/de/game/${GAME_ID}`;
@@ -1547,7 +1548,7 @@ for (const locale of ["en", "de"] as const) {
     await expect(boardPreview.locator(".play-board-center-stone")).toHaveAttribute("cy", "50");
     await size19.click();
     await expect(previewGrid).toBeVisible();
-    await expectControlInsideViewport(page, findOpponent);
+    await expectControlInsideViewport(page, findOpponent, false, 44);
     await expectNoDocumentOverflow(page);
 
     await findOpponent.click();

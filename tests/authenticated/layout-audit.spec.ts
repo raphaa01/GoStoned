@@ -33,6 +33,28 @@ for (const theme of ["light", "dark"]) test(`authenticated website layout audit 
         const box = element.getBoundingClientRect();
         return box.left < -1 || box.right > innerWidth + 1;
       }).length)).toBe(0);
+      if (info.project.use.hasTouch) await page.setViewportSize({ width: 320, height: 640 });
+      await page.locator(".learn-next-dock__button").click();
+      const board = page.getByRole("grid");
+      const next = page.getByRole("button", { name: "Weiter", exact: true });
+      await expect(board).toBeInViewport({ ratio: 1 });
+      await expect(next).toBeInViewport({ ratio: 1 });
+      const boardBox = (await board.boundingBox())!;
+      const nextBox = (await next.boundingBox())!;
+      const navigation = page.locator(info.project.use.hasTouch ? ".mobile-nav" : ".sidebar");
+      const navigationBox = (await navigation.boundingBox())!;
+      expect(boardBox.y).toBeGreaterThanOrEqual(navigationBox.y + navigationBox.height);
+      expect(boardBox.y + boardBox.height <= nextBox.y || boardBox.x + boardBox.width <= nextBox.x).toBe(true);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await page.screenshot({ path: `.cache/visual-audit/audit-web-lesson-${theme}-${info.project.name}.png`, animations: "disabled" });
+      await expect(next).toBeDisabled();
+      await board.getByRole("gridcell", { name: /A5$/ }).click();
+      await expect(next).toBeEnabled();
+      await expect(next).toBeInViewport({ ratio: 1 });
+      await next.click();
+      await expect(page.locator(".learn-player")).toHaveAttribute("data-step-id", "not-enough");
+      await page.getByRole("button", { name: "Lernpfad", exact: true }).click();
+      await page.setViewportSize(info.project.use.viewport!);
     }
     if (route === "learn/ai") {
       for (const selector of [".training-time-selector button.is-selected", ".training-setting .size-selector button.is-selected"]) {
