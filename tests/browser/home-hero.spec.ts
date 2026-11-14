@@ -48,6 +48,7 @@ test("matches the play and progress heading sizes on the German home page", asyn
 });
 
 test("links from the German home page to GoStone in the App Store on iPhone", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" });
   });
@@ -56,6 +57,7 @@ test("links from the German home page to GoStone in the App Store on iPhone", as
   const appStoreUrl = "https://apps.apple.com/de/app/gostone-lerne-und-spiele-go/id6819760816";
   const banner = page.getByRole("link", { name: "In der GoStone-App spielen App Store" });
   await expect(banner).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("link", { name: "Partie starten" })).toBeInViewport({ ratio: 1 });
   await page.route(appStoreUrl, (route) => route.fulfill({ body: "GoStone App Store" }));
   await banner.click();
   await expect(page).toHaveURL(appStoreUrl);
