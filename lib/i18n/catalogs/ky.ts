@@ -83,6 +83,8 @@ export const ky = {
   "home": {
     "heroJapanese": "一手一世界",
     "heroWorlds": "Go онлайн ойноңуз",
+    "playInApp": "GoStone колдонмосунда ойноңуз",
+    "appStore": "App Store",
     "startPlay": "Оюн баштоо",
     "edgeLeft": "9×9 · 13×13 · 19×19",
     "edgeRight": "BADUK · WEIQI · GO",

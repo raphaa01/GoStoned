@@ -80,6 +80,8 @@ export const zh = {
   "home": {
     "heroJapanese": "一手一世界",
     "heroWorlds": "在线下围棋。",
+    "playInApp": "在 GoStone 应用中下棋",
+    "appStore": "App Store",
     "startPlay": "开始游戏",
     "edgeLeft": "9×9 · 13×13 · 19×19",
     "edgeRight": "BADUK · WEIQI · GO",

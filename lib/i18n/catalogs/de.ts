@@ -47,6 +47,8 @@ export const de = {
   home: {
     heroJapanese: "一手一世界",
     heroWorlds: "Go online spielen",
+    playInApp: "In der GoStone-App spielen",
+    appStore: "App Store",
     startPlay: "Partie starten",
     edgeLeft: "9×9 · 13×13 · 19×19",
     edgeRight: "BADUK · WEIQI · GO",

@@ -80,6 +80,8 @@ export const ja = {
   "home": {
     "heroJapanese": "一手一世界",
     "heroWorlds": "オンラインで囲碁を打つ。",
+    "playInApp": "GoStoneアプリで囲碁を打つ",
+    "appStore": "App Store",
     "startPlay": "プレイ開始",
     "edgeLeft": "9×9 · 13×13 · 19×19",
     "edgeRight": "BADUK · WEIQI · GO",
