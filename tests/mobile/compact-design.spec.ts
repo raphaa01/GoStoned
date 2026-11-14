@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installHarness, USER, GAME_ID, assertNoOverflow } from "../shared/boardDesignHarness";
+import { gameFor, installHarness, USER, GAME_ID, assertNoOverflow } from "../shared/boardDesignHarness";
 import { installLearningFixture } from "../shared/betaFixHarness";
 
 async function installCompactFixture(page: Page, puzzleGate?: Promise<void>) {
@@ -113,6 +113,95 @@ test("returning to daily puzzle, leaderboard, review and profile reuses reads; m
   expect(requests.stats).toBe(1);
 });
 
+test("solved daily puzzle leads straight to practice within the phone viewport", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile-390-touch", "This layout check uses the phone tab bar.");
+  await page.setViewportSize({ width: 320, height: 640 });
+  await installCompactFixture(page);
+  const move = { x: 2, y: 2, color: "black", move: "C7" };
+  const daily = {
+    id: GAME_ID, kind: "daily", collectionOrder: 37, rankKyu: 28, boardSize: 9,
+    toPlay: "black", board: Array.from({ length: 9 }, () => Array(9).fill(null)),
+    goal: { en: "Make two eyes." }, difficulty: "beginner", attemptCount: 1, solved: true,
+    firstAttemptCorrect: true, variationProgress: [], variationRevision: 1,
+    solution: { ...move, line: [move], explanation: { en: "Goal reached." } },
+  };
+  const hub = { ok: true, actor: USER.playerKey, status: "ready", dailyCycleLength: 61 };
+  await page.route("**/api/puzzles?mode=daily", (route) => route.fulfill({ json: { ...hub, mode: "daily", puzzles: [daily] } }));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/puzzles?mode=practice", async (route) => {
+    await gate;
+    const practice = { ...daily, kind: "practice", solved: false, solution: null, attemptCount: 0, variationRevision: 0 };
+    await route.fulfill({ json: { ...hub, mode: "practice", puzzles: [practice, { ...practice, id: "practice-2" }] } });
+  });
+
+  await page.goto("/puzzles");
+  await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.getByText("Problem 37 of 61", { exact: true })).toBeVisible();
+  await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Solved on the first try", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Goal reached.", { exact: true })).toHaveCount(0);
+  const next = page.getByRole("button", { name: "More problems" });
+  const nextBox = (await next.boundingBox())!;
+  const tabsBox = (await page.locator(".mobile-tab-bar").boundingBox())!;
+  expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(tabsBox.y);
+
+  try {
+    await next.click();
+    await expect(page.getByRole("tab", { name: "More problems" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('.go-board, [class*="loadingBoard"]')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.locator(".go-board")).toBeVisible();
+  const nextProblem = page.getByRole("button", { name: "Next problem" });
+  await expect(nextProblem).toBeInViewport({ ratio: 1 });
+  await nextProblem.click();
+  await expect(page.getByText("Problem 2 of 2", { exact: true })).toBeVisible();
+});
+
+test("matchmaking and live game actions fit on a short phone", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile-390-touch", "This check exercises the phone layout.");
+  await page.setViewportSize({ width: 320, height: 640 });
+  const state = await installHarness(page);
+  let waiting = false;
+  await page.route("**/api/matchmaking", (route) => {
+    const method = route.request().method();
+    if (method === "POST") waiting = true;
+    if (method === "DELETE") waiting = false;
+    return route.fulfill({ json: {
+      ok: true, actor: USER.playerKey,
+      matchmaking: waiting ? { status: "waiting", boardSize: 9, timeControl: "blitz" } : { status: "idle" },
+    } });
+  });
+  await page.goto("/play");
+  await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  await page.locator("html").evaluate((root) => {
+    root.style.setProperty("--mobile-safe-top", "24px");
+    root.style.setProperty("--mobile-safe-bottom", "12px");
+  });
+  const find = page.getByRole("button", { name: "Find an opponent" });
+  await expect(find).toBeInViewport({ ratio: 1 });
+  const localPlay = (await page.getByRole("link", { name: "Play on one device" }).boundingBox())!;
+  const tabs = (await page.locator(".mobile-tab-bar").boundingBox())!;
+  expect(localPlay.y + localPlay.height).toBeLessThanOrEqual(tabs.y);
+  await find.click();
+  await expect(page.getByText("Finding an opponent…", { exact: true })).toBeVisible();
+  await expect(page.getByText("9×9 · Blitz", { exact: true })).toBeVisible();
+  await expect(page.locator(".time-selector")).toBeHidden();
+  const cancel = page.getByRole("button", { name: "Cancel search" });
+  await expect(cancel).toBeInViewport({ ratio: 1 });
+  await cancel.click();
+  await expect(find).toBeEnabled();
+
+  state.game = gameFor(13, "matchmaking");
+  await page.goto(`/game/${GAME_ID}`);
+  await expect(page.getByRole("button", { name: "Pass", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("button", { name: "Resign", exact: true })).toBeInViewport({ ratio: 1 });
+  const board = page.locator(".go-board");
+  expect(await board.evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+});
+
 for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 1366 }, { width: 1366, height: 1024 }]) {
   test(`all app destinations fit ${viewport.width}×${viewport.height} in light and dark`, async ({ page }, info) => {
     test.skip(info.project.name !== "mobile-390-touch", "One touch-device sweep covers phone and tablet orientations.");
@@ -143,7 +232,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
           const actions = (await page.locator(".mobile-home-actions").boundingBox())!;
           expect(actions.height).toBeLessThan(210);
         }
-        if (["/", "/play", "/profile", "/review"].includes(route)) await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });
+        await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });
       }
     }
     expect(errors).toEqual([]);

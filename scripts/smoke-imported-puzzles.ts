@@ -60,10 +60,16 @@ async function main() {
     const undone=await attemptImportedPuzzle(puzzle.id,player,{x:0,y:0,revision,action:"undo"},true);
     assert.deepEqual(undone.variationProgress,[]);
     revision=undone.variationRevision;
-    for(const ply of wrong.filter((ply)=>ply.color===puzzle.toPlay)) {
-      const result=await attemptImportedPuzzle(puzzle.id,player,{...ply,revision,action:ply.move==="pass"?"pass":"play"},true);
-      revision=result.variationRevision;
-      assert.equal(result.outcome,ply===wrong[4]?"retry":"continue");
+    const wrongMoves = wrong.filter((ply) => ply.color === puzzle.toPlay);
+    for (const [index, ply] of wrongMoves.entries()) {
+      const result = await attemptImportedPuzzle(puzzle.id, player, { ...ply, revision }, true);
+      revision = result.variationRevision;
+      const beforePass = wrongMoves[index + 1]?.move === "pass";
+      assert.equal(result.outcome, beforePass ? "retry" : "continue");
+      if (beforePass) {
+        assert.deepEqual(result.displayLine, wrong);
+        break;
+      }
     }
     for(const ply of puzzle.paths[0].line.filter((ply)=>ply.color===puzzle.toPlay)) {
       const result=await attemptImportedPuzzle(puzzle.id,player,{...ply,revision,action:ply.move==="pass"?"pass":"play"},true);

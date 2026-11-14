@@ -45,7 +45,7 @@ test("long legal headings and links fit a narrow phone", async ({ page }, info) 
   }
 });
 
-test("all winding learning-path labels stay inside a narrow phone", async ({ page }, info) => {
+test("all learning-path cards stay inside a narrow phone", async ({ page }, info) => {
   await installHarness(page);
   await installLearningFixture(page);
   await page.setViewportSize({ width: 320, height: 740 });

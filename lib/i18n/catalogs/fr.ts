@@ -338,7 +338,7 @@ export const fr = {
     "clock": "Horloge",
     "rules": "Règles",
     "chinese": "Chinois",
-    "lookingForPlayer": "{board} · {time} : Recherche d'un autre joueur…",
+    "lookingForPlayer": "Recherche d'un autre joueur…",
     "cancelSearch": "Annuler la recherche",
     "retrySession": "Réessayer la session du joueur",
     "preparingGuest": "Préparation de l'invité…",

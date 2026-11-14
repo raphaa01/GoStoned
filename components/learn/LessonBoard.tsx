@@ -112,7 +112,7 @@ export function LessonBoard({
                     style={{ left: pointPosition(x), top: pointPosition(y) }}
                     type="button"
                   >
-                    <span aria-hidden="true" className="lesson-board__stone" />
+                    <span aria-hidden="true" className={stone ? `lesson-board__stone stone--${stone}` : "lesson-board__stone"} />
                   </button>
                 );
               })}

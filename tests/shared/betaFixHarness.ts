@@ -51,8 +51,8 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(dialog.getByRole("alert")).toHaveCount(0);
     await assertNoOverflow(page);
     const home = dialog.getByRole("button", { name: "Zur Startseite", exact: true });
-    await expect(home).toHaveClass(/button--secondary/);
-    await expect(home).toHaveCSS("min-height", "46px");
+    await expect(home).toHaveClass(/button--primary/);
+    await expect(home).toHaveCSS("min-height", "50px");
     await home.click();
     await expect(page).toHaveURL(/\/de\/?$/);
     await expect(page.locator(mobile ? ".mobile-home" : ".home-experience")).toBeVisible();

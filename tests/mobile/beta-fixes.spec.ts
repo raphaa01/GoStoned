@@ -27,6 +27,40 @@ test("dark guest surfaces and portrait leaderboard stay inside the viewport", as
   await page.screenshot({ path: `.cache/beta-leaderboard-${info.project.name}.png` });
 });
 
+for (const platform of ["android", "ios"]) {
+  test(`lesson board and Continue fit together on a short ${platform} screen`, async ({ page }, info) => {
+    test.skip(info.project.name !== "mobile-390-touch", "This check uses a short phone layout.");
+    await page.setViewportSize({ width: 320, height: 640 });
+    await installHarness(page);
+    await installLearningFixture(page);
+    await page.addInitScript(() => localStorage.setItem("gostone.mobile.theme.v1", "dark"));
+    await page.goto("/de/learn");
+    await page.locator("html").evaluate((root, platform) => {
+      root.dataset.mobilePlatform = platform;
+      root.dataset.nativeTabBar = String(platform === "ios");
+      root.style.setProperty("--mobile-safe-top", "36px");
+      root.style.setProperty("--mobile-safe-bottom", "22px");
+    }, platform);
+    await page.locator(".learn-next-dock__button").click();
+    const board = page.getByRole("grid");
+    const next = page.getByRole("button", { name: "Weiter", exact: true });
+    await expect(board).toBeInViewport({ ratio: 1 });
+    await expect(next).toBeInViewport({ ratio: 1 });
+    const cutoff = 640 - 22 - (platform === "ios" ? 49 : 64);
+    for (const solved of [false, true]) {
+      if (solved) await board.getByRole("gridcell").first().click();
+      const boardBox = (await board.boundingBox())!;
+      const buttonBox = (await next.boundingBox())!;
+      expect(boardBox.y + boardBox.height).toBeLessThanOrEqual(buttonBox.y);
+      expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(cutoff);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    }
+    await page.screenshot({ path: `.cache/lesson-short-${platform}.png` });
+    await next.click();
+    await expect(page.locator(".learn-player__topbar")).toContainText("2 / 2");
+  });
+}
+
 test("lesson Continue remains visible above tabs without scrolling", async ({ page }, info) => {
   await installHarness(page);
   await installLearningFixture(page);

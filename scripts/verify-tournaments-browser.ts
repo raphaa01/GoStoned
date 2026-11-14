@@ -20,13 +20,17 @@ import {
 import { resignGame } from "../lib/game/gameService";
 import { EXPECTED_PLAYER_HEADER } from "../lib/auth/playerBinding";
 
-function tournamentAction(page: Page, action: "start" | "ready") {
-  return page.waitForResponse((response) => {
-    const request = response.request();
-    return request.method() === "POST" &&
-      new URL(response.url()).pathname === "/api/tournaments" &&
-      request.postDataJSON()?.action === action;
-  });
+async function submitTournamentAction(page: Page, label: string, action: string) {
+  const [response] = await Promise.all([
+    page.waitForResponse((candidate) => {
+      const request = candidate.request();
+      return new URL(candidate.url()).pathname === "/api/tournaments"
+        && request.method() === "POST"
+        && request.postDataJSON()?.action === action;
+    }),
+    page.getByRole("button", { name: label, exact: true }).click(),
+  ]);
+  assert.equal(response.status(), 200, `Tournament action ${action} should succeed`);
 }
 
 async function main() {
@@ -170,22 +174,16 @@ async function main() {
       );
     }
     await host.setViewportSize({ width: 1440, height: 1000 });
-    const [started] = await Promise.all([
-      tournamentAction(host, "start"),
-      host.getByRole("button", { name: "Turnier starten", exact: true }).click(),
-    ]);
-    assert.equal(started.status(), 200);
+    await submitTournamentAction(host, "Turnier starten", "start");
     await expect(
       host.getByText("Jeder gegen jeden", { exact: false }).first(),
     ).toBeVisible();
     const detail = await getTournamentDetail(users[0], id);
     const pairing = detail.matches.find((m) => m.round === 1 && m.whiteId)!;
     assert.ok(pairing);
-    for (const user of [pairing.blackId!, pairing.whiteId!])
-      await pages
-        .get(user)!
-        .getByRole("button", { name: "Bereit", exact: true })
-        .click();
+    for (const user of [pairing.blackId!, pairing.whiteId!]) {
+      await submitTournamentAction(pages.get(user)!, "Bereit", "ready");
+    }
     const black = pages.get(pairing.blackId!)!;
     const white = pages.get(pairing.whiteId!)!;
     await Promise.all([
@@ -301,11 +299,7 @@ async function main() {
     await expect(
       host.getByRole("button", { name: "Bereit", exact: true }),
     ).toBeVisible();
-    const [hostReady] = await Promise.all([
-      tournamentAction(host, "ready"),
-      host.getByRole("button", { name: "Bereit", exact: true }).click(),
-    ]);
-    assert.equal(hostReady.status(), 200);
+    await submitTournamentAction(host, "Bereit", "ready");
     const opponent =
       classicPair.blackId === users[0]
         ? classicPair.whiteId!
