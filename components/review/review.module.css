@@ -326,3 +326,17 @@
 
 .quotaPage { min-height: 0; overflow-y: auto; }
 @media(max-width: 700px) { .quotaPage { grid-template-columns: 1fr; padding: 16px; gap: 18px; } }
+
+:global(.app-shell) .hub { gap: clamp(14px, 3vw, 32px); }
+:global(.app-shell) .hero { padding-top: 0; }
+:global(.app-shell) .sectionHeading,
+:global(.app-shell) .gameList { border: 0; }
+:global(.app-shell) .gameList { gap: 6px; }
+:global(.app-shell) .gameRow {
+  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--web-row-radius);
+  margin: 0;
+  padding: 12px;
+}
+:global(.app-shell) .gameRow:hover { background: var(--color-surface-raised); }
