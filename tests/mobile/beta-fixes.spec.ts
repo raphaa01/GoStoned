@@ -14,9 +14,8 @@ test("dark guest surfaces and portrait leaderboard stay inside the viewport", as
   }) }));
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-mobile-theme", "dark");
-  const stone = await page.locator(".mobile-home-stone span").evaluate((element) => getComputedStyle(element).backgroundImage);
-  expect(stone).toContain("radial-gradient");
-  expect(stone).not.toContain("rgb(255, 255, 255)");
+  await expect(page.locator(".home-tournament canvas")).toBeVisible();
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(48, 46, 39)");
   expect(await page.locator("html").evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe("none");
   await page.goto("/leaderboard");
   await expect(page.locator(".leaderboard-table td:last-child strong")).toBeVisible();

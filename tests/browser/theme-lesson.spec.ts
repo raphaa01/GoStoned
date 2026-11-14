@@ -17,22 +17,14 @@ test("website opens light on a dark device and remembers explicit preferences", 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
-test("dark landing page has a dark water scene and continuous chapter palette", async ({ page }, info) => {
+test("dark home uses the warm palette on the canvas and modules", async ({ page }, info) => {
   await installHarness(page);
   await page.addInitScript(() => localStorage.setItem("gostone.theme.v1", "dark"));
   await page.goto("/de");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  const image = page.locator(".hero-stone-image.stone-artwork--dark");
-  await expect(image).toBeVisible();
-  await expect(page.locator(".hero-stone-image.stone-artwork--light")).toBeHidden();
-  await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-  await expect.poll(() => page.locator(".hero-stone-stage").evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
-  const colors = await page.locator(".home-chapters").evaluate((element) => ({
-    background: getComputedStyle(element).backgroundColor,
-    transition: getComputedStyle(document.querySelector(".home-hero")!, "::after").backgroundImage,
-  }));
-  expect(colors.background).toBe("rgb(17, 19, 16)");
-  expect(colors.transition).not.toContain("238, 233, 223");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(48, 46, 39)");
+  await expect(page.locator(".home-tournament canvas")).toBeVisible();
+  await expect(page.locator(".home-games-empty")).toHaveCSS("background-color", "rgb(70, 67, 61)");
   await assertNoOverflow(page);
   await page.screenshot({ path: `.cache/website-dark-${info.project.name}.png`, animations: "disabled" });
 });

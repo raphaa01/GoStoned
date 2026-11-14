@@ -12,7 +12,7 @@ function NativeThemeChrome() {
       const resolved = resolveTheme(preference, media.matches);
       document.documentElement.style.backgroundColor = resolved === "dark" ? "#111310" : "#f5f2eb";
       updateNativeChrome({ type: "theme", dark: resolved === "dark" });
-      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved === "dark" ? "#111310" : "#f5f2eb");
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved === "dark" ? "#302E27" : "#F5F1E9");
       if (Capacitor.isNativePlatform()) void SystemBars.setStyle({
         style: resolved === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
       }).catch(() => undefined);

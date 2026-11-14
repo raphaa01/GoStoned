@@ -4,7 +4,7 @@ import { scoreChineseAgreement, toggleDeadGroup } from "../../lib/game/scoring";
 import { LOCALES } from "../../lib/i18n/config";
 import { getDictionary } from "../../lib/i18n/dictionary";
 
-const ORIGIN = "http://127.0.0.1:3100";
+const ORIGIN = process.env.GOSTONE_BROWSER_TEST_ORIGIN ?? "http://127.0.0.1:3100";
 const EXPECTED_PLAYER_HEADER = "x-gostone-expected-player";
 const PLAYER_KEY = "guest:11111111-1111-4111-8111-111111111111";
 const OPPONENT_KEY = "guest:22222222-2222-4222-8222-222222222222";
@@ -31,7 +31,6 @@ const copy = {
     mobileNavigation: "Mobile navigation",
     openMenu: "Open menu",
     opponent: "Opponent",
-    opponentTurn: "Opponent's turn",
     pass: "Pass",
     reconnecting: "Reconnecting",
     resign: "Resign",
@@ -49,7 +48,6 @@ const copy = {
     unavailable: "Game unavailable",
     viewBoard: "Review the board",
     waiting: "waiting",
-    yourTurn: "Your turn",
   },
   de: {
     analyze: "Partie analysieren",
@@ -71,7 +69,6 @@ const copy = {
     mobileNavigation: "Mobile Navigation",
     openMenu: "Menü öffnen",
     opponent: "Gegner",
-    opponentTurn: "Der Gegner ist am Zug",
     pass: "Passen",
     reconnecting: "Verbindung wird erneuert",
     resign: "Aufgeben",
@@ -89,7 +86,6 @@ const copy = {
     unavailable: "Partie nicht verfügbar",
     viewBoard: "Brett noch einmal ansehen",
     waiting: "wartet",
-    yourTurn: "Du bist am Zug",
   },
 } as const;
 
@@ -1179,7 +1175,7 @@ for (const locale of ["en", "de"] as const) {
     await pass.click();
     await expect.poll(() => harness.moveBodies.length).toBe(1);
     expect(harness.moveBodies[0]).toEqual({ isPass: true, expectedVersion: 4 });
-    await expect(page.getByText(localeCopy.opponentTurn, { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".game-panel-player.is-to-play")).not.toHaveClass(/is-you/);
 
     harness.opponentPass();
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
@@ -1332,7 +1328,7 @@ for (const locale of ["en", "de"] as const) {
     }]);
     await expect(page.locator(".scoring-controls")).toHaveCount(0);
     await expect(page.getByText(localeCopy.disputeResumed, { exact: true })).toBeVisible();
-    await expect(page.getByText(localeCopy.opponentTurn, { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".game-panel-player.is-to-play")).not.toHaveClass(/is-you/);
     await expect(page.locator('[role="gridcell"][aria-selected="true"]')).toHaveCount(0);
     await expectNoDocumentOverflow(page);
     expectStrictlyMonotonicServerNow(harness);
@@ -1558,7 +1554,7 @@ for (const locale of ["en", "de"] as const) {
     const grid = page.getByRole("grid", { name: /19 × 19/ });
     await expect(grid).toBeVisible();
     await expect(grid.getByRole("gridcell")).toHaveCount(361);
-    await expect(page.getByText(localeCopy.yourTurn, { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".game-panel-player.is-to-play")).toHaveClass(/is-you/);
     await expectNoDocumentOverflow(page);
     expect(harness.gameReadVersions[0]).toBeNull();
     await expect.poll(
@@ -1681,7 +1677,7 @@ for (const locale of ["en", "de"] as const) {
 
     await expect.poll(() => harness.moveBodies.length).toBe(1);
     expect(harness.moveBodies[0]).toEqual({ x: 0, y: 0, expectedVersion: 0 });
-    await expect(page.getByText(localeCopy.opponentTurn, { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".game-panel-player.is-to-play")).not.toHaveClass(/is-you/);
     await expect.poll(
       () => harness.gameReadVersions.filter((version) => version === 1).length,
       { timeout: 4_000 },

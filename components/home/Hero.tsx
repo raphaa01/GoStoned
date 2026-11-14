@@ -1,13 +1,12 @@
 "use client";
 
-import { ArrowRight, BookOpen, Gamepad2, Play, Puzzle, Search, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
-import { GoBoardScene } from "@/components/home/GoBoardScene";
-import { IosAppBanner } from "@/components/home/IosAppBanner";
-import { StoneArtwork } from "@/components/home/StoneArtwork";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { HomeAccountOverview } from "./HomeAccountOverview";
+import { HomeShortcuts } from "./HomeShortcuts";
+import { IosAppBanner } from "./IosAppBanner";
 
 type PublicActivityCount = number | "under_5";
 type PlatformSummary = {
@@ -21,11 +20,8 @@ type SummaryState =
   | { kind: "ready"; summary: PlatformSummary }
   | { kind: "unavailable" };
 
-export function Hero() {
-  const { dictionary, href, locale } = useI18n();
-  const learnHref = useAccountFeatureHref("/learn");
-  const profileHref = useAccountFeatureHref("/profile");
-  const reviewHref = useAccountFeatureHref("/review");
+function PlatformActivity() {
+  const { dictionary, locale } = useI18n();
   const copy = dictionary.home;
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: "loading" });
   const [requestKey, setRequestKey] = useState(0);
@@ -37,7 +33,9 @@ export function Hero() {
     let active = true;
     fetch("/api/games").then(async (response) => {
       if (!response.ok) throw new Error("Game summary unavailable");
-      return (await response.json()) as { summary: PlatformSummary };
+      const result = (await response.json()) as { summary?: PlatformSummary };
+      if (!result.summary) throw new Error("Game summary unavailable");
+      return { summary: result.summary };
     }).then((result) => {
       if (!active) return;
       setSummaryState({ kind: "ready", summary: result.summary });
@@ -78,137 +76,56 @@ export function Hero() {
     setRequestKey((value) => value + 1);
   };
 
+  const counts = [
+    [copy.recentlyWaitingPlayers, summary?.recentlyWaitingPlayers],
+    [copy.unfinishedGames, summary?.unfinishedGames],
+    [copy.gamesStartedLast24Hours, summary?.gamesStartedLast24Hours],
+  ] as const;
   return (
-    <div className="home-experience">
-      <IosAppBanner />
-      <section className="home-hero" aria-labelledby="home-title">
-        <span aria-hidden="true" className="hero-edge hero-edge--left">{copy.edgeLeft}</span>
-        <span aria-hidden="true" className="hero-edge hero-edge--right">{copy.edgeRight}</span>
-
-        <div className="home-hero-copy">
-          <h1 id="home-title"><span lang="ja">{copy.heroJapanese}</span></h1>
-          <p className="hero-worlds-line">{copy.heroWorlds.replace(/[.!?。！？]+$/, "")}</p>
-        </div>
-
-        <div aria-hidden="true" className="hero-stone-stage">
-          <span className="hero-ripple hero-ripple--one" />
-          <span className="hero-ripple hero-ripple--two" />
-          <StoneArtwork
-            className="hero-stone-image"
-            sizes="(max-width: 620px) 94vw, 920px"
-          />
-        </div>
-
-        <div className="hero-actions">
-          <Link className="button button--primary button--lg hero-start" href={href("/play")}>
-            {copy.startPlay} <Play aria-hidden="true" fill="currentColor" size={18} />
-          </Link>
-        </div>
-      </section>
-
-      <div className="home-chapters">
-        <section aria-labelledby="home-play-title" className="home-chapter home-chapter--play" id="home-play">
-          <div className="home-chapter-inner">
-            <Link aria-label={copy.playChapterAction} className="board-feature-link" href={href("/play")}>
-              <GoBoardScene label={copy.playChapterTitle} scene="play" />
-            </Link>
-            <div className="chapter-copy">
-              <p className="chapter-kicker"><Gamepad2 aria-hidden="true" size={21} />{copy.playChapterKicker}</p>
-              <h2 id="home-play-title">{copy.playChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-              <dl className="chapter-facts" aria-label={copy.playChapterTitle}>
-                <div><dt>{dictionary.play.boardSize}</dt><dd>19×19</dd></div>
-                <div><dt>{dictionary.play.timeControl}</dt><dd>{dictionary.timeControls.rapid.name}</dd></div>
-                <div><dt>{dictionary.game.move}</dt><dd>124</dd></div>
-                <div><dt>{dictionary.game.yourTurn}</dt><dd>06:42</dd></div>
-              </dl>
-              <nav aria-label={copy.playChapterAction} className="board-size-choices">
-                {([9, 13, 19] as const).map((size) => (
-                  <Link aria-label={`${copy.playChapterAction}: ${size}×${size}`} href={`${href("/play")}?size=${size}`} key={size}>
-                    <span aria-hidden="true" className="board-size-glyph" />
-                    <strong>{size}×{size}</strong>
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          </div>
-        </section>
-
-        <section aria-label={copy.learnChapterKicker} className="home-feature-list">
-          <Link className="home-feature-link" href={learnHref} id="home-learn">
-            <span aria-hidden="true" className="home-feature-icon"><BookOpen size={20} /></span>
-            <span className="home-feature-copy">
-              <small>{copy.learnChapterKicker}</small>
-              <strong id="home-learn-title">{copy.learnChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-            </span>
-            <ArrowRight aria-hidden="true" size={20} />
-          </Link>
-          <Link className="home-feature-link" href={href("/puzzles")} id="home-puzzles">
-            <span aria-hidden="true" className="home-feature-icon"><Puzzle size={20} /></span>
-            <span className="home-feature-copy">
-              <small>{copy.puzzlesChapterKicker}</small>
-              <strong id="home-puzzles-title">{copy.puzzlesChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-            </span>
-            <ArrowRight aria-hidden="true" size={20} />
-          </Link>
-          <Link className="home-feature-link" href={reviewHref} id="home-review">
-            <span aria-hidden="true" className="home-feature-icon"><Search size={20} /></span>
-            <span className="home-feature-copy">
-              <small>{copy.reviewChapterKicker}</small>
-              <strong id="home-review-title">{copy.reviewChapterTitle.replace(/[.!?。！？]+$/, "")}</strong>
-            </span>
-            <ArrowRight aria-hidden="true" size={20} />
-          </Link>
-        </section>
-
-        <section className="platform-status" id="home-progress" aria-labelledby="home-progress-title">
-          <div className="platform-status-heading">
-            <div>
-              <p className="chapter-kicker"><Trophy aria-hidden="true" size={21} />{copy.progressChapterKicker}</p>
-              <h2 id="home-progress-title">{copy.progressChapterTitle.replace(/[.!?。！？]+$/, "")}</h2>
-            </div>
-            <Link className="chapter-symbol-link" href={profileHref}><Trophy aria-hidden="true" size={19} /><span>{copy.progressChapterAction}</span></Link>
-          </div>
-
-          <div className="platform-metrics">
-            <article><span>{copy.recentlyWaitingPlayers}</span><strong>{displayCount(summary?.recentlyWaitingPlayers)}</strong></article>
-            <article><span>{copy.unfinishedGames}</span><strong>{displayCount(summary?.unfinishedGames)}</strong></article>
-            <article><span>{copy.gamesStartedLast24Hours}</span><strong>{displayCount(summary?.gamesStartedLast24Hours)}</strong></article>
-          </div>
-
-          <div className="progress-preview" aria-hidden="true">
-            <div>
-              <span>{dictionary.profile.globalRating}</span>
-              <strong>1,842</strong>
-              <small>+36</small>
-            </div>
-            <svg viewBox="0 0 720 120" preserveAspectRatio="none">
-              <path className="progress-preview__area" d="M0 102C72 96 114 88 168 91S258 67 314 72 401 51 466 57 555 29 612 38 678 20 720 12V120H0Z" />
-              <path className="progress-preview__line" d="M0 102C72 96 114 88 168 91S258 67 314 72 401 51 466 57 555 29 612 38 678 20 720 12" />
-            </svg>
-            <ol className="progress-preview__form">
-              {["W", "W", "L", "W", "W"].map((result, index) => <li className={result === "W" ? "is-win" : "is-loss"} key={`${result}-${index}`}>{result}</li>)}
-            </ol>
-          </div>
-
-          <div className="platform-activity-status">
-            <p
-              aria-atomic="true"
-              aria-live="polite"
-              className={`platform-activity-note${summary ? "" : " sr-only"}`}
-              ref={statusRef}
-              role="status"
-              tabIndex={-1}
-            >
-              {activityStatus}
-            </p>
-            {summaryState.kind === "unavailable" || retrying ? (
-              <button className="button button--secondary" disabled={retrying} onClick={retryActivity} type="button">
-                {retrying ? copy.retryingActivity : copy.retryActivity}
-              </button>
-            ) : null}
-          </div>
-        </section>
+    <section className="home-section">
+      <dl className="home-stats">
+        {counts.map(([label, count]) => (
+          <div key={label}><dt>{label}</dt><dd>{displayCount(count)}</dd></div>
+        ))}
+      </dl>
+      <div className="home-activity-note">
+        <p
+          aria-atomic="true"
+          aria-live="polite"
+          className={summaryState.kind === "unavailable" ? undefined : "sr-only"}
+          ref={statusRef}
+          role="status"
+          tabIndex={-1}
+        >
+          {activityStatus}
+        </p>
+        {summaryState.kind === "unavailable" || retrying ? (
+          <button className="button button--secondary" disabled={retrying} onClick={retryActivity} type="button">
+            {retrying ? copy.retryingActivity : copy.retryActivity}
+          </button>
+        ) : null}
       </div>
+    </section>
+  );
+}
+
+export function Hero() {
+  const { dictionary, href } = useI18n();
+  const { user } = useAuth();
+
+  return (
+    <div className="web-home">
+      <IosAppBanner />
+      <section className="web-home__main" aria-labelledby="home-title">
+        <h1 className="sr-only" id="home-title">GoStone</h1>
+        <HomeShortcuts />
+        <Link className="button button--primary web-home__play" href={href("/play")}>
+          <span aria-hidden="true" /> {dictionary.home.startPlay}
+        </Link>
+      </section>
+      {user
+        ? <HomeAccountOverview key={user.playerKey} playerKey={user.playerKey} />
+        : <PlatformActivity />}
     </div>
   );
 }

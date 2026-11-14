@@ -1397,17 +1397,8 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
         ) : null}
         <section className="focused-board-panel">
           <div className="focused-board-status" ref={boardStatus} tabIndex={-1}>
-            <strong>
-              {game.status === "active" && !gameInteractionAllowed
-                ? copy.controlsPaused
-                : canMove
-                ? copy.yourTurn
-                : game.status === "finished"
-                  ? `${copy.gameOver} · ${game.result}`
-                  : game.phase === "scoring"
-                    ? copy.confirmFinalPosition
-                    : copy.opponentTurn}
-            </strong>
+            {game.status === "finished" ? <strong>{copy.gameOver} · {game.result}</strong>
+              : game.phase === "scoring" ? <strong>{copy.confirmFinalPosition}</strong> : null}
             <span>
               {game.boardSize}×{game.boardSize} · {copy.move}{" "}
               {game.moveCount + (pendingMovePreview?.applied ? 1 : 0)}

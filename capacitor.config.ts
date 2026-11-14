@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: "app.gostone",
   appName: "GoStone",
   webDir: "mobile-dist",
-  backgroundColor: "#f4f0e7",
+  backgroundColor: "#F5F1E9",
   ios: {
     contentInset: "never",
     preferredContentMode: "mobile",

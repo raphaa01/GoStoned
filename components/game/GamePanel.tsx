@@ -80,8 +80,10 @@ export function GamePanel({
     !interactionDisabled
     && yourColor
     && game.status === "active"
+    && game.phase === "play"
     && game.turn === yourColor,
   );
+  const activePlayer = game.status === "active" && game.phase === "play" ? game.turn : null;
   const scoring = game.phase === "scoring" ? game.scoring : null;
   const activeScoring = game.status === "active" ? scoring : null;
   const proposalPending = Boolean(game.browserBotModelVersion && activeScoring && !activeScoring.browserBotProposalReady);
@@ -110,13 +112,14 @@ export function GamePanel({
           : `${copy.draw} · ${game.result}`
         : interactionDisabled
         ? copy.controlsPaused
-        : yourTurn
-        ? copy.yourTurn
-        : copy.opponentTurn;
+        : null;
 
   return (
     <section className="game-panel game-player-panel">
-      <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
+      <span className="sr-only" role="status">{activePlayer
+        ? `${activePlayer === "white" ? game.whitePlayerName : game.blackPlayerName} · ${activePlayer === yourColor ? copy.yourTurn : copy.opponentTurn}`
+        : ""}</span>
+      <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}${activePlayer === "white" ? " is-to-play" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
           <div className="game-player-heading"><strong>{game.whitePlayerName}</strong>
@@ -132,7 +135,7 @@ export function GamePanel({
           clock={game.clock}
           color="white"
           observedAt={clockObservedAt}
-          running={game.status === "active" && game.turn === "white"}
+          running={activePlayer === "white"}
         />
       </div>
 
@@ -144,7 +147,7 @@ export function GamePanel({
       {game.status === "finished" || interactionDisabled || game.lastResume ? <div className="game-state">
         <span className={`player-stone player-stone--${game.turn ?? yourColor ?? "black"}`} />
         <div>
-          <strong>{resultText}</strong>
+          {resultText ? <strong>{resultText}</strong> : null}
           <span>
             {game.status === "finished"
               ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
@@ -163,7 +166,7 @@ export function GamePanel({
         </div>
       </div> : null}
 
-      <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}`}>
+      <div className={`game-panel-player ${yourColor === "black" ? "is-you" : ""}${activePlayer === "black" ? " is-to-play" : ""}`}>
         <span className="player-stone player-stone--black" />
         <div className="game-player-name">
           <div className="game-player-heading"><strong>{game.blackPlayerName}</strong>
@@ -179,7 +182,7 @@ export function GamePanel({
           clock={game.clock}
           color="black"
           observedAt={clockObservedAt}
-          running={game.status === "active" && game.turn === "black"}
+          running={activePlayer === "black"}
         />
       </div>
 

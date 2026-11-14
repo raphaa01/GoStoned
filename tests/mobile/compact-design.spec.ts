@@ -70,6 +70,7 @@ test("an expired puzzle paints its snapshot while a slow network refresh is pend
   let refreshing = false;
   await page.route("**/api/puzzles?mode=daily", async route => { refreshing = true; await gate; await route.fallback(); });
   await page.clock.fastForward(61_000);
+  await page.clock.runFor(200);
   await expect.poll(() => refreshing).toBe(true);
   await page.locator(".mobile-tab-bar").getByRole("link", { name: "Puzzles", exact: true }).click();
   await expect(page.locator(".go-board")).toBeVisible();
@@ -80,10 +81,8 @@ test("returning to daily puzzle, leaderboard, review and profile reuses reads; m
   const requests = await installCompactFixture(page);
   await page.goto("/");
   await expect(page.getByText("AutumnGoban3", { exact: true })).toBeVisible();
-  const headingSize = await page.locator(".mobile-home-section h2").first().evaluate((heading) => getComputedStyle(heading).fontSize);
-  for (const title of await page.locator(".mobile-home-action strong").all()) {
-    await expect(title).toHaveCSS("font-size", headingSize);
-  }
+  await expect(page.locator(".home-shortcuts .home-shortcut")).toHaveCount(2);
+  await expect(page.locator("main a[href*='/puzzles']")).toHaveCount(0);
   // Both destinations are warm before the first tab click, not just on return.
   await expect.poll(() => requests.puzzles).toBe(1);
   await expect.poll(() => requests.stats).toBe(1);
@@ -229,7 +228,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
         }
         if (route === "/") {
           await expect(page.getByText("Find the strongest move on the board.")).toHaveCount(0);
-          const actions = (await page.locator(".mobile-home-actions").boundingBox())!;
+          const actions = (await page.locator(".home-shortcuts").boundingBox())!;
           expect(actions.height).toBeLessThan(210);
         }
         await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });

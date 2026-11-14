@@ -228,7 +228,6 @@ a {
 
 .app-footer {
   align-items: center;
-  border-top: 1px solid var(--line);
   color: var(--muted-2);
   display: flex;
   font-size: 11px;
@@ -348,7 +347,6 @@ a {
 
 .sidebar-signup {
   background: var(--green);
-  border-bottom: 3px solid var(--green-dark);
   color: #132008;
 }
 
@@ -427,7 +425,6 @@ a {
 
 .button--primary {
   background: var(--green);
-  border-bottom: 3px solid var(--green-dark);
   color: #132008;
 }
 
@@ -437,7 +434,6 @@ a {
 
 .button--secondary {
   background: var(--panel-raised);
-  border-bottom: 3px solid #292725;
   color: #eee;
 }
 
@@ -447,7 +443,6 @@ a {
 
 .button--danger {
   background: #b84f47;
-  border-bottom: 3px solid #7d3530;
   color: #fff;
 }
 
@@ -781,7 +776,6 @@ a {
 
 .hero-board-choice > header {
   align-items: center;
-  border-bottom: 1px solid var(--line);
   display: flex;
   gap: 12px;
   padding-bottom: 18px;
@@ -988,7 +982,6 @@ a {
 }
 
 .service-status {
-  border-top: 1px solid var(--line);
   display: flex;
   gap: 22px;
   margin-top: 18px;
@@ -1680,8 +1673,6 @@ a {
 }
 
 .game-meta-strip {
-  border-bottom: 1px solid var(--line);
-  border-top: 1px solid var(--line);
   color: var(--muted-2);
   display: flex;
   font-size: 9px;
@@ -1727,7 +1718,6 @@ a {
 }
 
 .game-actions {
-  border-top: 1px solid var(--line);
   display: grid;
   gap: 7px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1755,7 +1745,6 @@ a {
 }
 
 .scoring-controls {
-  border-top: 1px solid var(--line);
   margin: 14px -16px -16px;
   padding: 12px 16px 0;
 }
@@ -1804,7 +1793,6 @@ a {
 }
 
 .scoring-breakdown {
-  border-top: 1px solid var(--line);
   color: var(--muted);
   display: grid;
   font-size: 9px;
@@ -1897,7 +1885,6 @@ a {
 
 .chat-panel > header {
   align-items: center;
-  border-bottom: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   font-size: 12px;
@@ -2013,7 +2000,6 @@ a {
 }
 
 .chat-form {
-  border-top: 1px solid var(--line);
   display: grid;
   gap: 7px;
   grid-template-columns: 1fr 44px;
@@ -2054,7 +2040,6 @@ a {
 
 .chat-error {
   background: rgba(211, 107, 98, 0.12);
-  border-top: 1px solid rgba(211, 107, 98, 0.25);
   color: #f0aaa4;
   font-size: 9px;
   line-height: 1.4;
@@ -2172,23 +2157,13 @@ a {
 }
 
 .result-modal {
-  border-top: 4px solid var(--green);
   max-width: 420px;
   overflow: hidden;
-}
-
-.result-modal.is-loss {
-  border-top-color: var(--danger);
-}
-
-.result-modal.is-draw {
-  border-top-color: #aaa6a1;
 }
 
 .result-modal-header {
   align-items: center;
   background: var(--bg-deep);
-  border-bottom: 1px solid var(--line);
   display: grid;
   gap: 13px;
   grid-template-columns: 54px minmax(0, 1fr);
@@ -2250,7 +2225,6 @@ a {
 
 .result-player-list > div {
   align-items: center;
-  border-bottom: 1px solid var(--line);
   display: grid;
   gap: 10px;
   grid-template-columns: 38px 1fr auto;
@@ -3008,7 +2982,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 
 .leaderboard-title {
   align-items: center;
-  border-bottom: 1px solid var(--line);
   display: flex;
   gap: 8px;
   padding: 3px 3px 15px;
@@ -3076,7 +3049,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 
 .leaderboard-table th,
 .leaderboard-table td {
-  border-bottom: 1px solid var(--line);
   padding: 13px 8px;
   text-align: left;
 }
@@ -3465,7 +3437,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 
 .history-game {
   align-items: center;
-  border-top: 1px solid var(--line);
   display: grid;
   gap: 13px;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -3583,7 +3554,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 
   .mobile-menu {
     background: var(--bg-deep);
-    border-top: 1px solid var(--line);
     box-shadow: 0 14px 22px rgba(0, 0, 0, 0.3);
     display: grid;
     left: 0;
@@ -3987,7 +3957,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
   }
 
   .game-connection {
-    border-top: 1px solid var(--line);
     grid-column: 1 / -1;
     grid-row: 2;
     padding-top: 7px;
@@ -4169,5 +4138,5 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
 .friend-safety-actions { display: flex; gap: 12px; }
 .moderation-board { width: min(100%, 900px); margin: 30px auto; padding: 16px; }
 .moderation-board > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.moderation-case { padding: 20px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.moderation-case { padding: 20px 0; overflow-wrap: anywhere; }
 .moderation-case details { max-height: 420px; overflow: auto; }

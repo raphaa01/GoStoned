@@ -326,57 +326,62 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <strong>{copy.toPlay.replace("{color}", colorLabel)}</strong>
                 <span>{puzzle.rankKyu ? copy.approximateRank.replace("{rank}", String(puzzle.rankKyu)) : difficultyLabel}</span>
               </div>
+            </div>
+          </div>
+
+          <div className={styles.puzzleCard}>
+            <div className={styles.puzzleHeading}>
               <div className={styles.prompt}>
-                <span>{progress}</span>
+                <strong>{progress}</strong>
                 {puzzle.goal ? <p>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
               </div>
+              {!puzzle.solved && !branchLine ? (
+                <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
+                  <CircleHelp aria-hidden="true" size={20} />
+                </button>
+              ) : null}
             </div>
-            {!puzzle.solved && !branchLine ? (
-              <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
-                <CircleHelp aria-hidden="true" size={20} />
-              </button>
-            ) : null}
-          </div>
 
-          {!puzzle.solved && (branchLine || branchFeedback) ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
-          <div className={styles.boardColumn}>
-            <GoBoard
-              boardSize={puzzle.boardSize}
-              boardState={displayBoard}
-              disabled={busy || puzzle.solved || branchLine !== null}
-              lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
-              hintMove={hintMove}
-              onIntersectionClick={submitMove}
-              pendingMove={pendingMove}
-              previewColor={puzzle.toPlay}
-              precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
-              viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
-              targetStones={puzzle.targetStones}
-            />
-          </div>
+            {!puzzle.solved && (branchLine || branchFeedback) ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
+            <div className={styles.boardColumn}>
+              <GoBoard
+                boardSize={puzzle.boardSize}
+                boardState={displayBoard}
+                disabled={busy || puzzle.solved || branchLine !== null}
+                lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
+                hintMove={hintMove}
+                onIntersectionClick={submitMove}
+                pendingMove={pendingMove}
+                previewColor={puzzle.toPlay}
+                precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
+                viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
+                targetStones={puzzle.targetStones}
+              />
+            </div>
 
-          <div className={styles.controls}>
-            {puzzle.solved ? (
-              <p className={styles.solution} role="status">
-                <Check aria-hidden="true" size={18} /> {copy.correct}
-              </p>
-            ) : canRetry ? (
-              <div className={styles.feedbackActions}>
-                <button className="button button--secondary" disabled={busy} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
-                  <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+            <div className={styles.controls}>
+              {puzzle.solved ? (
+                <p className={styles.solution} role="status">
+                  <Check aria-hidden="true" size={18} /> {copy.correct}
+                </p>
+              ) : canRetry ? (
+                <div className={styles.feedbackActions}>
+                  <button className="button button--secondary" disabled={busy} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
+                    <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+                  </button>
+                  <button className="button button--secondary" disabled={busy} onClick={undoPuzzleMove} type="button">
+                    <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
+                  </button>
+                </div>
+              ) : null}
+              {showNext ? (
+                <button className="button button--primary" disabled={busy || hintBusy || (mode === "daily" && authLoading)} onClick={mode === "daily" ? () => changeMode("practice") : changeProblem} type="button">
+                  {mode === "daily" ? copy.practice : copy.next} <ArrowRight aria-hidden="true" size={18} />
                 </button>
-                <button className="button button--secondary" disabled={busy} onClick={undoPuzzleMove} type="button">
-                  <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
-                </button>
-              </div>
-            ) : null}
-            {showNext ? (
-              <button className="button button--primary" disabled={busy || hintBusy || (mode === "daily" && authLoading)} onClick={mode === "daily" ? () => changeMode("practice") : changeProblem} type="button">
-                {mode === "daily" ? copy.practice : copy.next} <ArrowRight aria-hidden="true" size={18} />
-              </button>
-            ) : null}
+              ) : null}
+            </div>
+            {error ? <p className={styles.error} role="alert">{error}</p> : null}
           </div>
-          {error ? <p className={styles.error} role="alert">{error}</p> : null}
         </section>
       )}
     </div>

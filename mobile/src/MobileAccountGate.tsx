@@ -22,8 +22,6 @@ export function MobileAccountGate({ children, returnTo, title }: {
       <section className="mobile-account-gate">
         <div aria-hidden="true" className="mobile-account-gate__stone" />
         <h1>{title}</h1>
-        <h2>{copy.accountRequired}</h2>
-        <p>{copy.accountRequiredBody}</p>
         <Link className="button button--primary" href={href(destination)}>{copy.signIn}</Link>
       </section>
     );
