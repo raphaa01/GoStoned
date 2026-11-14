@@ -131,7 +131,7 @@ function TournamentGameLinkForPlayer({
     )
       .then(readApi<{ tournamentId: string; currentRapid?: boolean }>)
       .then((r) => {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted && r.tournamentId)
           setDestination(
             mobile && r.currentRapid
               ? "/tournaments"
