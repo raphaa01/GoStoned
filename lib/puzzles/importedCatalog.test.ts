@@ -19,6 +19,7 @@ test("the supplied export contains 61 unique verified puzzles and records the fo
       assert.equal(final.length, 19);
       assert.deepEqual(matchingPuzzlePaths(puzzle, path.line.slice(0, 2)).includes(path), true);
       for (const ply of path.line) if (ply.move !== "pass") assert.ok(ply.x < puzzle.viewportSize && ply.y < puzzle.viewportSize, `${puzzle.id}: every move stays visible`);
+      if (path.solved) assert.ok(path.line.every((ply) => ply.color !== puzzle.toPlay || ply.move !== "pass"), "puzzles must be solvable by placing stones");
       if (path.solved && puzzle.goalType === "capture") assert.ok(puzzle.target.every(({x,y}) => final[y][x] !== puzzle.targetColor), "a solved capture actually removes its target");
     }
   }

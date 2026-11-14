@@ -171,9 +171,8 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     await expect(page.getByRole("heading", {name:line(lesson.title,"de"),exact:true})).toBeVisible();
     const advance = page.getByRole("button", {name:index === lesson.steps.length - 1 ? "Lektion abschließen" : "Weiter", exact:true});
     const gameStep = step.kind.endsWith("game");
-    const notice = page.locator(".learn-player__step-mode");
-    await expect(notice).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
-    await expect(notice.locator("strong")).toHaveText(step.kind === "info" ? "Erklärung" : gameStep ? "Partie" : "Du bist dran");
+    const player = page.locator(".learn-player");
+    await expect(player).toHaveAttribute("data-mode", step.kind === "info" ? "info" : gameStep ? "game" : "action");
     const instruction = page.locator(".learn-player__heading .learn-teacher__speech");
     await expect(page.locator(".learn-player__heading .learn-teacher__avatar")).toHaveCount(1);
     await expect(instruction).toContainText(line(step.body,"de"));
@@ -238,7 +237,7 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
       if (continuesOwnTurn(step, lesson.steps[index + 1])) {
         await expect(page.locator(".learn-player")).toHaveAttribute("data-step-id", lesson.steps[index + 1].id);
         await expect(page.getByRole("button", { name: /^Nächsten Zug zeigen/ })).toHaveCount(0);
-        await expect(page.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+        await expect(page.locator('.learn-player[data-mode="action"]')).toBeVisible();
         await expect(page.locator('.interactive-learn-board__point[aria-disabled="false"]').first()).toBeVisible();
         continue;
       }
@@ -255,8 +254,8 @@ async function walkLesson(page: Page, lesson: LearnLesson) {
     if (step.kind === "info") {
       await expect(page.locator('.interactive-learn-board__point[aria-disabled="false"]')).toHaveCount(0);
     } else {
-      await expect(notice).toHaveAttribute("data-mode", "solved");
-      await expect(notice.locator("strong")).toHaveText("Erledigt");
+      await expect(player).toHaveAttribute("data-mode", "solved");
+      await expect(instruction.getByRole("status")).toBeVisible();
     }
     await expect(advance).toBeEnabled();
     await advance.click();
@@ -349,7 +348,7 @@ async function run() {
         assert.equal((await readAccountProgress(freshPage)).progress?.completedLessonIds.length,120);
         await freshDevice.close();
       }
-      await page.getByRole("button", {name:"Das Go-Brett 2 Min.", exact:true}).click();
+      await page.getByRole("button", {name:"Das Go-Brett", exact:true}).click();
       await expect(page.getByRole("heading", {name:"Das Go-Brett", exact:true})).toBeVisible();
       await page.getByRole("button", {name:"Lernpfad", exact:true}).click();
       await expect(page.getByText("120 von 120 Lektionen abgeschlossen", {exact:true})).toBeVisible();
@@ -368,21 +367,21 @@ async function run() {
         const box = await page.locator(".learn-next-dock").boundingBox();
         assert.ok(box && box.y+box.height <= 844-(mobile ? width===390 ? 49:64:0), "Lesson button overlaps navigation");
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-${width}-${colorScheme}.png`});
-        await page.getByRole("button",{name:"Schlagen 4 Min.",exact:true}).click();
-        await expect(page.locator('.learn-player__step-mode[data-mode="action"]')).toBeVisible();
+        await page.getByRole("button",{name:"Schlagen",exact:true}).click();
+        await expect(page.locator('.learn-player[data-mode="action"]')).toBeVisible();
         await verifyBoardGeometry(page);
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth), "Lesson or task notice overflows horizontally");
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-capture-${width}-${colorScheme}.png`,fullPage:true});
         await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         if (width === 390) {
-          await page.getByRole("button",{name:"Gruppen 3 Min.",exact:true}).click();
-          await expect(page.locator('.learn-player__step-mode[data-mode="info"]')).toBeVisible();
+          await page.getByRole("button",{name:"Gruppen",exact:true}).click();
+          await expect(page.locator('.learn-player[data-mode="info"]')).toBeVisible();
           await expect(page.getByRole("button",{name:"Weiter",exact:true})).toBeEnabled();
           await verifyBoardGeometry(page);
           await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-explanation-${colorScheme}.png`,fullPage:true});
           await page.getByRole("button",{name:"Lernpfad",exact:true}).click();
         }
-        await page.getByRole("button",{name:"Worum geht es? 3 Min.",exact:true}).click();
+        await page.getByRole("button",{name:"Worum geht es?",exact:true}).click();
         await verifyBoardGeometry(page);
         await page.screenshot({path:`.cache/learn-${mobile ? "mobile" : "web"}-9x9-${width}-${colorScheme}.png`,fullPage:true});
         await page.getByRole("button",{name:"Lernpfad",exact:true}).click();

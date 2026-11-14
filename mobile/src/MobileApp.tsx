@@ -106,7 +106,7 @@ function MobileRoute() {
       content = <MobileHome />;
       showPlayAction = true;
       break;
-    case "/play": content = <PushedScreen><MobileCoachEntry /><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /><LocalPlayEntry /></PushedScreen>; break;
+    case "/play": content = <PushedScreen><PlayWorkspace initialSize={size === 13 || size === 19 ? size : 9} /><LocalPlayEntry /><MobileCoachEntry /></PushedScreen>; break;
     case "/play/coach": content = <PushedScreen><MobileCoachGate /></PushedScreen>; break;
     case "/profile": content = <PushedScreen><MobileAccountGate returnTo="/profile" title={copy.profile}><MobileProfile /></MobileAccountGate></PushedScreen>; break;
     case "/profile/settings": content = <PushedScreen><MobileAccountGate returnTo="/profile/settings" title={getSettingsCopy(locale).title}><MobileSettings /></MobileAccountGate></PushedScreen>; break;

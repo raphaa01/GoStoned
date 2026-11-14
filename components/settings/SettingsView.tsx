@@ -21,8 +21,8 @@ export function SettingsView({ children }: { children?: React.ReactNode }) {
     </header>
     <BoardPlacementSettings key={user?.playerKey} />
     <AppearanceSettings />
-    <AccountDeletionRequest />
-    {user?.moderator ? <Link href={href("/moderation")}>{getCommunityCopy(locale).moderation}</Link> : null}
+    <AccountDeletionRequest compact />
+    {user?.moderator ? <Link className="settings-link" href={href("/moderation")}>{getCommunityCopy(locale).moderation}</Link> : null}
     {children}
   </div>;
 }

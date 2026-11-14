@@ -113,7 +113,7 @@ export function ChatPanel({
   }
 
   return (
-    <section aria-labelledby={titleId} className="chat-panel">
+    <section aria-labelledby={titleId} className="chat-panel" data-unavailable={chatUnavailable}>
       <header>
         <span className="chat-title">
           <MessageCircle aria-hidden="true" size={18} />

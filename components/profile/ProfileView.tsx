@@ -158,7 +158,7 @@ export function ProfileView({ tournamentTrophies = false }: { tournamentTrophies
         </div>
       </div>
       <div className="profile-header__actions">
-        <Link className="button button--secondary profile-settings-link" href={href("/profile/settings")}><Settings aria-hidden="true" size={18} /> {settingsCopy.title}</Link>
+        <Link aria-label={settingsCopy.title} className="button button--secondary profile-settings-link" href={href("/profile/settings")}><Settings aria-hidden="true" size={20} /><span>{settingsCopy.title}</span></Link>
         <Link className="button button--primary" href={href("/play")}><Gamepad2 size={18} /> {copy.play}</Link>
       </div>
     </header>

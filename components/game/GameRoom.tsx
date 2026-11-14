@@ -1321,7 +1321,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
   }
 
   return (
-    <div className="focused-game-shell">
+    <div className="focused-game-shell" data-playing={game.status === "active" && game.phase === "play"}>
       <SkipLink />
       <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
         {gameAnnouncement}
@@ -1359,7 +1359,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
           onClick={leaveGameRoom}
           type="button"
         >
-          <LogOut size={15} />
+          <LogOut aria-hidden="true" size={15} />
           {game.status === "active" && !gameInteractionAllowed
             ? copy.leaveView
             : copy.leaveGame}
@@ -1473,15 +1473,42 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
               ])}
             />}
           </div>
-          {game.status === "active" && game.phase === "play" && game.boardSize > 9 ? (
-            <p className="scoring-board-hint">
-              {copy.boardHint}
-            </p>
-          ) : null}
           {error ? <p className="play-error" role="alert">{error}</p> : null}
         </section>
 
         <aside className="focused-game-side">
+          <GamePanel
+            busy={busy}
+            clockObservedAt={clockObservedAt}
+            game={game}
+            interactionDisabled={!gameInteractionAllowed}
+            onLeave={() => clearFinishedGame("/play")}
+            onPass={() => makeMove({ isPass: true }, game.version)}
+            onConfirmScore={() => scoringAction("confirm", {})}
+            onResolveGroup={(point, dead) => void scoringAction("dead-stones", { ...point, dead })}
+            onSelectDisputeGroup={(representative) => {
+              if (!game.scoring) return;
+              setSelectedDisputeSelection({
+                boardHash: game.scoring.boardHash,
+                stone: representative,
+              });
+            }}
+            onShowScoringHelp={() => setShowScoringHelp(true)}
+            onResign={() => {
+              if (!gameInteractionAllowed) return;
+              setError(null);
+              setConfirmation("resign");
+            }}
+            onResumePlay={(claim, disputedStone) => {
+              void scoringAction("resume", {
+                claim,
+                x: disputedStone.x,
+                y: disputedStone.y,
+              });
+            }}
+            playerKey={playerKey}
+            selectedDisputeStone={selectedDisputeStone}
+          />
           {game.status === "active" && game.phase === "play" ? (
             <section className="game-panel game-tools-panel" aria-label={copy.gameTools}>
               <details className="game-tools-disclosure">
@@ -1528,38 +1555,6 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
               </details>
             </section>
           ) : null}
-          <GamePanel
-            busy={busy}
-            clockObservedAt={clockObservedAt}
-            game={game}
-            interactionDisabled={!gameInteractionAllowed}
-            onLeave={() => clearFinishedGame("/play")}
-            onPass={() => makeMove({ isPass: true }, game.version)}
-            onConfirmScore={() => scoringAction("confirm", {})}
-            onResolveGroup={(point, dead) => void scoringAction("dead-stones", { ...point, dead })}
-            onSelectDisputeGroup={(representative) => {
-              if (!game.scoring) return;
-              setSelectedDisputeSelection({
-                boardHash: game.scoring.boardHash,
-                stone: representative,
-              });
-            }}
-            onShowScoringHelp={() => setShowScoringHelp(true)}
-            onResign={() => {
-              if (!gameInteractionAllowed) return;
-              setError(null);
-              setConfirmation("resign");
-            }}
-            onResumePlay={(claim, disputedStone) => {
-              void scoringAction("resume", {
-                claim,
-                x: disputedStone.x,
-                y: disputedStone.y,
-              });
-            }}
-            playerKey={playerKey}
-            selectedDisputeStone={selectedDisputeStone}
-          />
           <ChatPanel
             gameId={gameId}
             blockActionRef={blockActionRef}

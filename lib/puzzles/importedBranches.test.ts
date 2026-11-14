@@ -5,7 +5,7 @@ import { IMPORTED_PUZZLES } from "./importedCatalog";
 import { attemptImportedPuzzle } from "./importedService";
 import type { PuzzlePly } from "./types";
 
-test("all 183 supplied solution and wrong paths finish correctly, including player passes and late mistakes", async () => {
+test("all 183 supplied solution and wrong paths finish correctly, including refutations with forced passes", async () => {
   let progress: PuzzlePly[] = [];
   let revision = 0;
   let solved = false;
@@ -29,10 +29,16 @@ test("all 183 supplied solution and wrong paths finish correctly, including play
   try {
     for (const puzzle of IMPORTED_PUZZLES) for (const [index, path] of puzzle.paths.slice(0, 3).entries()) {
       progress = []; revision = 0; solved = false; attempts = 0; first = null;
-      for (const ply of path.line.filter((ply) => ply.color === puzzle.toPlay)) {
-        const result = await attemptImportedPuzzle(puzzle.id, "user:branch-check", { ...ply, revision, action: ply.move === "pass" ? "pass" : "play" }, true);
-        const terminal = path.line.at(-1) === ply || path.line.at(-2) === ply;
+      const moves = path.line.filter((ply) => ply.color === puzzle.toPlay);
+      for (const [moveIndex, ply] of moves.entries()) {
+        assert.notEqual(ply.move, "pass", "the player is never prompted to pass");
+        const result = await attemptImportedPuzzle(puzzle.id, "user:branch-check", { ...ply, revision }, true);
+        const terminal = moveIndex === moves.length - 1 || moves[moveIndex + 1].move === "pass";
         assert.equal(result.outcome, terminal ? index === 0 ? "solved" : "retry" : "continue", `${puzzle.id} branch ${index}, ${ply.move}`);
+        if (terminal) {
+          assert.deepEqual(result.displayLine, path.line);
+          break;
+        }
       }
       assert.equal(solved, index === 0);
       assert.equal(first, index === 0);

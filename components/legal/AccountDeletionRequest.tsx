@@ -13,7 +13,7 @@ import { EXPECTED_PLAYER_HEADER } from "@/lib/auth/playerBinding";
 
 type RequestState = { enabled: boolean; hasIdentity: boolean; actor?: string; request: AccountDeletionReceipt | null };
 
-export function AccountDeletionRequest() {
+export function AccountDeletionRequest({ compact = false }: { compact?: boolean }) {
   const { locale, href } = useI18n();
   const { user, loading: authLoading, clearSession } = useAuth();
   const router = useRouter();
@@ -73,8 +73,8 @@ export function AccountDeletionRequest() {
 
   if (state && !state.enabled) return null;
   const request = state?.request;
-  return <section className="settings-section account-deletion-flow" lang={accountDeletionLanguage(locale)} aria-labelledby="deletion-request-title">
-    <h2 id="deletion-request-title">{copy.inAppTitle}</h2>
+  return <section className={compact ? "settings-section account-deletion-flow account-deletion-flow--compact" : "settings-section account-deletion-flow"} lang={accountDeletionLanguage(locale)} aria-labelledby="deletion-request-title">
+    <h2 className={compact ? "sr-only" : undefined} id="deletion-request-title">{copy.inAppTitle}</h2>
     {failed && <div role="alert"><p>{copy.failed}</p><button className="button button--secondary" type="button" onClick={() => setReload((value) => value + 1)}><RefreshCw aria-hidden="true" size={18} />{copy.retry}</button></div>}
     {!state && !failed && <p role="status">{copy.loading}</p>}
     {request?.status === "completed" ? <div role="status">
@@ -82,7 +82,7 @@ export function AccountDeletionRequest() {
       <p>{copy.appleNote}</p>
       <p>{copy.reference}: <span className="deletion-reference">{request.id}</span></p>
     </div> : state?.enabled && <>
-      <p>{copy.inAppIntro}</p>
+      {compact ? null : <p>{copy.inAppIntro}</p>}
       {!state.hasIdentity ? <p>{copy.signIn} <Link className="button button--secondary" href={href("/login?returnTo=%2Fdelete-account")}>{copy.signInAction}</Link></p>
         : !confirming ? <button className="button button--secondary" type="button" onClick={() => setConfirming(true)}><Trash2 aria-hidden="true" size={18} />{copy.action}</button>
         : <form onSubmit={(event) => void submit(event)}>
