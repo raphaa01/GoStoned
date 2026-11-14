@@ -215,8 +215,9 @@ async function runNativeKataGoAnalysisWork(
     const refinedMoves = latestProgress.phase === "quality"
       ? Math.min(input.moves.length, Math.max(0, latestProgress.completedTurns))
       : 0;
-    const previewThreshold = Math.min(10, input.moves.length);
-    if (!force && !revealElapsed && completedMoves < previewThreshold) return;
+    const firstMoveReady = latestProgress.phase === "preview" && latestProgress.completedTurns === 2 && completedMoves === 1;
+    const initialBatchSize = Math.min(10, input.moves.length);
+    if (!force && !revealElapsed && !firstMoveReady && completedMoves < initialBatchSize) return;
     if (!force && completedMoves === lastPublishedMoves && refinedMoves - lastPublishedRefined < 2) return;
     lastPublishedMoves = completedMoves;
     lastPublishedRefined = refinedMoves;
@@ -226,10 +227,11 @@ async function runNativeKataGoAnalysisWork(
       refinedMoves,
       totalMoves: input.moves.length,
     }));
-    const firstPreviewReady = lastPersistedMoves === 0 && completedMoves >= previewThreshold;
+    const firstPreviewReady = lastPersistedMoves === 0;
+    const initialBatchReady = lastPersistedMoves < initialBatchSize && completedMoves >= initialBatchSize;
     const previewChunkReady = completedMoves - lastPersistedMoves >= PREVIEW_PERSIST_INTERVAL;
     const qualityChunkReady = refinedMoves - lastPersistedRefined >= QUALITY_PERSIST_INTERVAL;
-    if (force || firstPreviewReady || previewChunkReady || qualityChunkReady) {
+    if (force || firstPreviewReady || initialBatchReady || previewChunkReady || qualityChunkReady) {
       lastPersistedMoves = completedMoves;
       lastPersistedRefined = refinedMoves;
       queuePersistence(result);

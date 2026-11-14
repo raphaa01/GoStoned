@@ -463,8 +463,13 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             try startQualityPass(job)
             return
         }
-        let size = job.previewChunkIndex == 0 ? initialPreviewPositions : previewChunkPositions
-        let end = min(job.totalTurns, start + size)
+        let limit: Int
+        switch job.previewChunkIndex {
+        case 0: limit = 2
+        case 1: limit = initialPreviewPositions
+        default: limit = start + previewChunkPositions
+        }
+        let end = min(job.totalTurns, limit)
         let turns = Array(start..<end)
         job.phase = "preview"
         job.currentRequestId = "\(job.id):preview:\(job.previewChunkIndex)"
