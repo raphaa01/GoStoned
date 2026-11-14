@@ -492,8 +492,12 @@ a.tournament-row:hover strong {
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.rapid-standings th[scope="row"] {
-  width: 100%;
+.tournament-standings .rapid-standings th:nth-child(2) {
+  width: auto;
+}
+.rapid-standings th[scope="col"]:not(:nth-child(2)) {
+  white-space: nowrap;
+  width: 1%;
 }
 .rapid-standings :is(th, td):not(:nth-child(2)) {
   text-align: end;
