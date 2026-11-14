@@ -743,7 +743,7 @@ body {
 .home-hero {
   background: var(--color-canvas);
   display: block;
-  height: calc(100svh - 82px);
+  height: calc(100svh - 82px - var(--app-banner-height, 0px));
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -2671,7 +2671,7 @@ body {
   }
 
   .home-hero {
-    height: calc(100svh - 60px);
+    height: calc(100svh - 60px - var(--app-banner-height, 0px));
   }
 
   .play-experience {
@@ -2732,7 +2732,7 @@ body {
   }
 
   .home-hero {
-    height: calc(100svh - 60px);
+    height: calc(100svh - 60px - var(--app-banner-height, 0px));
   }
 
   .home-hero-copy {
@@ -2880,7 +2880,7 @@ body {
   }
 
   .home-hero {
-    height: calc(100svh - 60px);
+    height: calc(100svh - 60px - var(--app-banner-height, 0px));
   }
 
   .home-hero h1 {
@@ -9219,7 +9219,7 @@ html:has(.home-chapters) {
 
 .home-hero {
   max-height: 920px;
-  min-height: 620px;
+  min-height: calc(620px - var(--app-banner-height, 0px));
 }
 
 .home-chapters {
@@ -9721,7 +9721,7 @@ html:has(.home-chapters) {
 @media (max-width: 760px) {
   .home-hero {
     max-height: none;
-    min-height: 600px;
+    min-height: calc(600px - var(--app-banner-height, 0px));
   }
 
   .chapter-facts {

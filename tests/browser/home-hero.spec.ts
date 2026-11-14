@@ -46,3 +46,50 @@ test("matches the play and progress heading sizes on the German home page", asyn
   );
   expect(sizes).toHaveLength(3);
 });
+
+test("links from the German home page to GoStone in the App Store on iPhone", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" });
+  });
+  await page.goto("/de");
+
+  const appStoreUrl = "https://apps.apple.com/de/app/gostone-lerne-und-spiele-go/id6819760816";
+  const banner = page.getByRole("link", { name: "In der GoStone-App spielen App Store" });
+  await expect(banner).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("link", { name: "Partie starten" })).toBeInViewport({ ratio: 1 });
+  await page.route(appStoreUrl, (route) => route.fulfill({ body: "GoStone App Store" }));
+  await banner.click();
+  await expect(page).toHaveURL(appStoreUrl);
+});
+
+test("shows the home page banner on an iPad using a desktop user agent", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" });
+    Object.defineProperty(navigator, "maxTouchPoints", { value: 5 });
+  });
+  await page.goto("/");
+  const banner = page.getByRole("link", { name: "Play in the GoStone app App Store" });
+  await expect(banner).toBeVisible();
+
+  await page.goto("/play");
+  await expect(banner).toHaveCount(0);
+});
+
+for (const device of [
+  { name: "Mac", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", maxTouchPoints: 0 },
+  { name: "Android", userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9)", maxTouchPoints: 5 },
+]) {
+  test(`keeps the home page banner hidden on ${device.name}`, async ({ page }) => {
+    await page.addInitScript(({ userAgent, maxTouchPoints }) => {
+      Object.defineProperty(navigator, "userAgent", { value: userAgent });
+      Object.defineProperty(navigator, "maxTouchPoints", { value: maxTouchPoints });
+    }, device);
+    // Hero requests activity after hydration, when the banner can detect the device.
+    await Promise.all([
+      page.waitForRequest((request) => new URL(request.url()).pathname === "/api/games"),
+      page.goto("/"),
+    ]);
+    await expect(page.getByRole("link", { name: "Play in the GoStone app App Store" })).toHaveCount(0);
+  });
+}

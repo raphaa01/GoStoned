@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { GoBoardScene } from "@/components/home/GoBoardScene";
+import { IosAppBanner } from "@/components/home/IosAppBanner";
 import { StoneArtwork } from "@/components/home/StoneArtwork";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
@@ -79,6 +80,7 @@ export function Hero() {
 
   return (
     <div className="home-experience">
+      <IosAppBanner />
       <section className="home-hero" aria-labelledby="home-title">
         <span aria-hidden="true" className="hero-edge hero-edge--left">{copy.edgeLeft}</span>
         <span aria-hidden="true" className="hero-edge hero-edge--right">{copy.edgeRight}</span>

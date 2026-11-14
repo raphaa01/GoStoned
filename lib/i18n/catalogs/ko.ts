@@ -80,6 +80,8 @@ export const ko = {
   "home": {
     "heroJapanese": "一手一世界",
     "heroWorlds": "온라인으로 바둑을 두세요.",
+    "playInApp": "GoStone 앱에서 바둑 두기",
+    "appStore": "App Store",
     "startPlay": "플레이 시작",
     "edgeLeft": "9×9 · 13×13 · 19×19",
     "edgeRight": "BADUK · WEIQI · GO",

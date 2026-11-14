@@ -1,0 +1,42 @@
+.banner,
+.banner + :global(.home-hero) {
+  --app-banner-height: 44px;
+}
+
+.banner {
+  align-items: center;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-ink);
+  display: flex;
+  font-size: var(--home-font-small);
+  font-weight: 650;
+  gap: 12px;
+  justify-content: center;
+  min-height: var(--app-banner-height);
+  padding: 8px 16px;
+}
+
+.banner:hover {
+  background: var(--color-canvas-deep);
+}
+
+.banner:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: -3px;
+}
+
+.store {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+
+@media (max-height: 620px) {
+  .banner + :global(.home-hero) {
+    min-height: 0;
+  }
+}
