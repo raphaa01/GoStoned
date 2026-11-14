@@ -338,7 +338,7 @@ export const ja = {
     "clock": "時計",
     "rules": "ルール",
     "chinese": "中国語",
-    "lookingForPlayer": "{board} · {time}: 他のプレイヤーを探しています…",
+    "lookingForPlayer": "他のプレイヤーを探しています…",
     "cancelSearch": "検索をキャンセル",
     "retrySession": "プレイヤーセッションを再試行",
     "preparingGuest": "ゲストを準備中…",

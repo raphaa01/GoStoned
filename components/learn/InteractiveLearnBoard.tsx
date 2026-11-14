@@ -149,7 +149,7 @@ function InteractiveLearnBoardComponent({
                     tabIndex={focusIndex === index ? 0 : -1}
                     type="button"
                   >
-                    {stone ? <span aria-hidden="true" className={`interactive-learn-board__stone is-${stone}`} /> : null}
+                    {stone ? <span aria-hidden="true" className={`interactive-learn-board__stone stone--${stone}`} /> : null}
                     {lastMove?.x === x && lastMove.y === y ? <span aria-hidden="true" className="interactive-learn-board__last" /> : null}
                   </button>
                 );

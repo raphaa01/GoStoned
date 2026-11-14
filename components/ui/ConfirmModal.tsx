@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
+import { X } from "lucide-react";
 import { type RefObject, useId, useRef } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "./ModalDialog";
@@ -53,9 +53,8 @@ export function ConfirmModal({
           onClick={onCancel}
           type="button"
         >
-          <X size={18} />
+          <X aria-hidden="true" size={18} />
         </button>
-        <span className="confirm-modal-icon"><AlertTriangle size={24} /></span>
         <h2 id={titleId}>{title}</h2>
         <p id={descriptionId}>{description}</p>
         {error ? <p className="confirm-modal-error" role="alert">{error}</p> : null}

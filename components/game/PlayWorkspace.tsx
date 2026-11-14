@@ -510,7 +510,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
   const panelError = error ?? identityError;
 
   return (
-    <div className={`play-experience${activeGame ? " play-experience--active" : ""}`}>
+    <div className={`play-experience${activeGame ? " play-experience--active" : ""}`} data-waiting={queueStatus === "waiting" && !activeGame}>
       {activeGame ? (
         <section className="play-active-card">
           <ActiveGamePanel

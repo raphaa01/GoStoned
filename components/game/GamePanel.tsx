@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleDot, Flag, Play, SkipForward } from "lucide-react";
+import { Check, Flag, Play, SkipForward } from "lucide-react";
 import { useMemo } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { formatBoardLabel, goCoordinate } from "@/lib/game/boardAccessibility";
@@ -115,7 +115,7 @@ export function GamePanel({
         : copy.opponentTurn;
 
   return (
-    <aside className="game-panel">
+    <section className="game-panel game-player-panel">
       <div className={`game-panel-player ${yourColor === "white" ? "is-you" : ""}`}>
         <span className="player-stone player-stone--white" />
         <div className="game-player-name">
@@ -137,17 +137,15 @@ export function GamePanel({
       </div>
 
       <div className="game-meta-strip">
-        <span><CircleDot size={15} /> {game.boardSize}×{game.boardSize}</span>
         <span>{dictionary.timeControls[game.timeControl].name}</span>
         {game.gameType === "friendly" ? <span>{friendsCopy.friendlyGame}</span> : null}
-        <span>{game.phase === "scoring" ? copy.scoring : `${copy.move} ${game.moveCount}`}</span>
       </div>
 
-      {!activeScoring || interactionDisabled ? <div className={`game-state ${yourTurn ? "is-your-turn" : ""}`}>
+      {game.status === "finished" || interactionDisabled || game.lastResume ? <div className="game-state">
         <span className={`player-stone player-stone--${game.turn ?? yourColor ?? "black"}`} />
         <div>
           <strong>{resultText}</strong>
-          <span className={game.status === "active" && !interactionDisabled && !activeScoring && !game.lastResume ? "game-turn-detail" : undefined}>
+          <span>
             {game.status === "finished"
               ? game.rated ? copy.ratedResultSaved : copy.unratedResultSaved
               : interactionDisabled
@@ -156,7 +154,7 @@ export function GamePanel({
                 ? copy.scoringExpired
               : game.lastResume
                 ? copy.disputeResumed
-              : copy.movesVerified}
+              : null}
           </span>
           {game.status === "finished" && game.rated && game.viewerRatingChange !== null
             && game.viewerRatingChange !== undefined
@@ -340,6 +338,6 @@ export function GamePanel({
           </button>
         </>
       )}
-    </aside>
+    </section>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Smartphone, Sun } from "lucide-react";
+import { Check, Moon, Smartphone, Sun } from "lucide-react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { getSettingsCopy } from "@/lib/i18n/settings";
 import { useTheme } from "./ThemeProvider";
@@ -17,13 +17,14 @@ export function AppearanceSettings() {
 
   return <section aria-labelledby="appearance-title" className="settings-section">
     <header><h2 id="appearance-title">{copy.appearance}</h2></header>
-    <div aria-labelledby="appearance-title" className="settings-theme-picker" role="group">
+    <div aria-labelledby="appearance-title" className="settings-options settings-theme-picker" role="group">
       {choices.map(({ value, label, icon: Icon }) => <button
         aria-pressed={preference === value}
+        className="settings-option"
         key={value}
         onClick={() => setPreference(value)}
         type="button"
-      ><Icon aria-hidden="true" size={19} />{label}</button>)}
+      ><Icon aria-hidden="true" size={18} /><span>{label}</span>{preference === value ? <Check aria-hidden="true" size={17} /> : null}</button>)}
     </div>
   </section>;
 }

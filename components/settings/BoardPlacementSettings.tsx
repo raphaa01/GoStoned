@@ -73,18 +73,17 @@ export function BoardPlacementSettings() {
   </section>;
 
   return (
-      <section aria-labelledby="board-placement-title" className="profile-board-placement">
+      <section aria-labelledby="board-placement-title" className="settings-section profile-board-placement">
         <header>
           <h2 id="board-placement-title">{placementCopy.settingsTitle}</h2>
-          <p>{placementCopy.settingsBody}</p>
         </header>
-        <fieldset disabled={placementSaving}>
+        <fieldset className="settings-options" disabled={placementSaving}>
           <legend className="sr-only">{placementCopy.settingsTitle}</legend>
-          <label>
+          <label className="settings-option">
             <input checked={selectedBoardPlacement === "zoom"} name="board-placement" onChange={() => { setSelectedBoardPlacement("zoom"); setPlacementStatus(null); }} type="radio" value="zoom" />
             <span><strong>{placementCopy.zoom}</strong><small>{placementCopy.zoomBody}</small></span>
           </label>
-          <label>
+          <label className="settings-option">
             <input checked={selectedBoardPlacement === "direct"} name="board-placement" onChange={() => { setSelectedBoardPlacement("direct"); setPlacementStatus(null); }} type="radio" value="direct" />
             <span><strong>{placementCopy.direct}</strong><small>{placementCopy.directBody}</small></span>
           </label>

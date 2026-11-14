@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BookOpen, Check, Lightbulb, MousePointer2, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Lightbulb, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { boardHash } from "@/lib/game/goEngine";
 import type { Board, Position } from "@/lib/game/types";
@@ -216,7 +216,6 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
   };
 
   const canAdvance = step.kind === "info" || solved;
-  const stepProgress = ((stepIndex + Number(solved || step.kind === "info")) / lesson.steps.length) * 100;
   const presentation = lessonBoardPresentation(step, {
     solved, wrong, hint, failedAttempts, lastMove: position?.moves.at(-1)?.position ?? null,
   });
@@ -226,35 +225,26 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
     : step.kind === "guided-game" ? "guided"
       : step.kind === "beginner-game" ? "beginner" : null;
   const stepMode = waitingForReply ? "reply" : solved ? "solved" : continuation || step.kind === "info" ? "info" : gameMode ? "game" : "action";
-  const modeLabel = waitingForReply ? copy.opponentReply : solved ? copy.taskSolved : continuation || step.kind === "info" ? copy.explanation : gameMode ? copy.practiceGame : copy.taskTurn;
-  const modeHelp = waitingForReply ? copy.replyPause : continuation ? copy.watchContinuation : solved ? copy.readyToContinue : step.kind === "info" ? copy.explanationHelp
-    : gameMode ? copy.practiceGameHelp : step.kind === "pass" ? copy.passTaskHelp
-      : step.kind === "play" || step.kind === "illegal" ? step.toPlay === "white" ? copy.yourWhiteTurn : copy.yourBlackTurn : copy.boardTaskHelp;
+  const task = step.task ? line(step.task, locale) : null;
+  const turn = step.kind === "play" || step.kind === "illegal"
+    ? step.toPlay === "white" ? copy.yourWhiteTurn : copy.yourBlackTurn
+    : gameMode ? copy.practiceGameHelp : null;
 
   return (
-    <article className="learn-player" data-step-id={step.id} data-player-color={step.toPlay ?? "black"}>
+    <article className="learn-player" data-board-step={Boolean(board && !gameMode)} data-mode={stepMode} data-step-id={step.id} data-player-color={step.toPlay ?? "black"}>
       <header className="learn-player__topbar">
         <button className="learn-text-button" onClick={() => { cancelReply(); onBack(); }} type="button"><ArrowLeft aria-hidden="true" size={17} /> {copy.learningPath}</button>
         <span>{stepIndex + 1} / {lesson.steps.length}</span>
       </header>
 
-      <div aria-hidden="true" className="learn-player__progress"><span style={{ width: `${stepProgress}%` }} /></div>
-
       <div className="learn-player__heading">
-        <small>{formatLearn(copy.stage, { stage: lesson.stage })}</small>
         <h1>{line(lesson.title, locale)}</h1>
-        <div className="learn-player__step-mode" data-mode={stepMode}>
-          <span>
-            {solved ? <Check aria-hidden="true" size={15} /> : step.kind === "info" ? <BookOpen aria-hidden="true" size={15} /> : <MousePointer2 aria-hidden="true" size={15} />}
-            <strong>{modeLabel}</strong>
-          </span>
-          <span>{modeHelp}</span>
-        </div>
         <LearnTeacher tone={wrong ? "correction" : solved ? "success" : "neutral"}>
           {!solved && !continuation ? <>
             <p>{line(step.body, locale)}</p>
-            {step.task ? <strong className="learn-teacher__task">{line(step.task, locale)}</strong> : null}
+            {!waitingForReply && (task || turn) ? <strong className="learn-teacher__task">{task ?? turn}</strong> : null}
           </> : null}
+          {waitingForReply ? <p className="learn-teacher__task" role="status">{copy.opponentReply}</p> : null}
           {feedback ? (
             <div aria-live="polite" className={`learn-player__feedback${wrong ? " is-wrong" : solved ? " is-success" : ""}`} role="status">
               {solved ? <Check aria-hidden="true" size={17} /> : null}<p>{feedback}</p>
@@ -280,20 +270,22 @@ export function LessonPlayer({ lesson, locale, initialStep, onBack, onStep, onCo
             }}
           />
         ) : board ? (
-          <InteractiveLearnBoard
-            board={board}
-            disabled={!interactive || solved || waitingForReply || Boolean(continuation)}
-            emphasis={presentation.emphasis}
-            group={presentation.group}
-            interaction={boardInteraction}
-            lastMove={presentation.lastMove}
-            liberties={step.kind === "select" && solved ? targets : []}
-            locale={locale}
-            onPoint={handlePoint}
-            previewColor={step.toPlay ?? "black"}
-            selected={selected}
-            territory={presentation.territory}
-          />
+          <div className="learn-player__board-area">
+            <InteractiveLearnBoard
+              board={board}
+              disabled={!interactive || solved || waitingForReply || Boolean(continuation)}
+              emphasis={presentation.emphasis}
+              group={presentation.group}
+              interaction={boardInteraction}
+              lastMove={presentation.lastMove}
+              liberties={step.kind === "select" && solved ? targets : []}
+              locale={locale}
+              onPoint={handlePoint}
+              previewColor={step.toPlay ?? "black"}
+              selected={selected}
+              territory={presentation.territory}
+            />
+          </div>
         ) : null}
 
         <div className="learn-player__controls">

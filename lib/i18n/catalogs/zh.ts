@@ -338,7 +338,7 @@ export const zh = {
     "clock": "时钟",
     "rules": "规则",
     "chinese": "中文",
-    "lookingForPlayer": "{board} · {time}：正在寻找其他玩家…",
+    "lookingForPlayer": "正在寻找其他玩家…",
     "cancelSearch": "取消搜索",
     "retrySession": "重试玩家会话",
     "preparingGuest": "正在准备访客…",
