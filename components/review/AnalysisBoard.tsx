@@ -44,9 +44,12 @@ export function AnalysisBoard({ board, size, playedMove, bestMove, label, bestMo
         <circle className={stone === "black" ? styles.blackStone : styles.whiteStone} cx={position(x)} cy={position(y)} data-review-stone={`${x}:${y}`} key={`${x}:${y}`} r={stoneRadius} />
       ) : null))}
       {best && (best.x !== played?.x || best.y !== played?.y) ? (
-        <circle className={styles.bestMarker} cx={position(best.x)} cy={position(best.y)} data-review-marker="recommendation" r={stoneRadius + 1}>
-          <title>{bestMoveLabel}: {bestMove}</title>
-        </circle>
+        <>
+          <circle aria-hidden="true" className={styles.recommendationHalo} cx={position(best.x)} cy={position(best.y)} r={stoneRadius + .65} />
+          <circle className={styles.bestMarker} cx={position(best.x)} cy={position(best.y)} data-review-marker="recommendation" r={stoneRadius + .65}>
+            <title>{bestMoveLabel}: {bestMove}</title>
+          </circle>
+        </>
       ) : null}
       {played ? <circle className={styles.playedMarker} cx={position(played.x)} cy={position(played.y)} r={1.25} /> : null}
     </svg>

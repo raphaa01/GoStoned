@@ -6209,7 +6209,6 @@ body {
 .rating-label--hero small { line-height: 1.3; }
 
 @media (max-width: 620px) {
-  .result-analysis-action { margin-inline: 20px; width: calc(100% - 40px); }
   .scoring-confirmation-status { grid-template-columns: 1fr; }
 }
 
@@ -10505,28 +10504,46 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .confirm-modal-actions .button { white-space: normal; }
 
 .result-modal {
+  --result-padding-inline: clamp(12px, 4vw, 24px);
   border: 1px solid var(--color-line);
   max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow: auto;
 }
-.result-modal-header { display: block; background: transparent; }
+.result-modal-header { display: block; background: transparent; padding: 16px var(--result-padding-inline) 10px; }
 .result-modal-header h2 { font-size: 1.75rem; }
+.result-modal .result-player-list { padding-inline: var(--result-padding-inline); }
+.result-modal :is(.result-rating-change, .result-score-summary) { margin-inline: var(--result-padding-inline); }
+.result-modal .result-player-list > div > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
 .result-modal .result-home-action {
   font-size: 1rem;
   justify-content: center;
-  margin: 8px 16px 0;
+  margin: 8px var(--result-padding-inline) 0;
   min-height: 50px;
-  width: calc(100% - 32px);
+  width: calc(100% - var(--result-padding-inline) * 2);
 }
-.result-modal .result-secondary-actions {
+.result-modal :is(.result-secondary-actions, .result-details-actions) {
   display: grid;
+  align-items: stretch;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 8px 16px 0;
+  padding: 8px var(--result-padding-inline) 0;
 }
-.result-secondary-actions .button { justify-content: center; min-height: 44px; text-align: center; white-space: normal; }
-.result-details-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 3px 16px 10px; }
-.result-modal .finished-game-share--compact { margin: 0; min-width: 0; }
+.result-modal .result-details-actions { padding-bottom: 12px; }
+.result-modal .finished-game-share--compact { display: contents; }
+.result-details-actions :is(.finished-game-link, [role="alert"]) { grid-column: 1 / -1; }
+.result-modal :is(.result-secondary-actions .button, .result-view-board, .result-share-action) {
+  justify-content: center;
+  margin: 0;
+  min-height: 50px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 6px clamp(4px, 2vw, 12px);
+  text-align: center;
+  white-space: normal;
+  width: 100%;
+}
+.result-modal :is(.result-secondary-actions, .result-details-actions) svg { flex: none; }
+.result-modal :is(button, a):focus-visible { outline: 2px solid var(--color-ink); outline-offset: -3px; }
 
 .game-player-panel .game-state { background: transparent; border: 0; border-radius: 0; }
 .game-player-panel .game-panel-player.is-you .game-player-heading strong { color: var(--color-ink); }

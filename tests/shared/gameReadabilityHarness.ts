@@ -4,6 +4,10 @@ import { gameFor, GAME_ID, installHarness, USER } from "./boardDesignHarness";
 export async function contrast(locator: Locator, background: Locator = locator) {
   const foreground = await locator.evaluate((element) => getComputedStyle(element).color);
   const surface = await background.evaluate((element) => getComputedStyle(element).backgroundColor);
+  return colorContrast(foreground, surface);
+}
+
+export function colorContrast(foreground: string, surface: string) {
   const luminance = (value: string) => {
     const channels = value.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((channel) => {
       const normalized = channel / 255;

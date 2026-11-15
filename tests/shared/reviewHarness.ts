@@ -4,6 +4,7 @@ import { GAME_ID, USER, gameFor, installHarness } from "./boardDesignHarness";
 import { replayMoves } from "../../lib/game/goEngine";
 import { captureIncidentMoves } from "../../lib/game/fixtures/captureIncident9x9";
 import { toGtpCoordinate } from "../../lib/analysis/coordinates";
+import { colorContrast } from "./gameReadabilityHarness";
 
 async function reviewHarness(page: Page, options: { missing?: boolean; quota?: boolean; failRead?: boolean } = {}) {
   const state = await installHarness(page);
@@ -130,6 +131,13 @@ export function registerReviewTests(authenticatedServer = false) {
     const recommendation = player.locator('[data-review-marker="recommendation"]');
     await expect(recommendation.locator("title")).toHaveText("Bester Zug: D9");
     expect(await recommendation.evaluate(element => getComputedStyle(element).fill)).toBe("none");
+    const strokes = await recommendation.evaluate(element => {
+      const outline = element.previousElementSibling!;
+      const board = element.closest("svg")!.querySelector("rect")!;
+      return [getComputedStyle(element).stroke, getComputedStyle(outline).stroke, getComputedStyle(board).fill];
+    });
+    for (const surface of [strokes[2], "rgb(57, 59, 63)", "rgb(248, 245, 240)"])
+      expect(Math.max(colorContrast(strokes[0], surface), colorContrast(strokes[1], surface))).toBeGreaterThanOrEqual(3);
     await timeline.nth(39).click();
     await expect(player.locator('[data-review-stone="3:0"]')).toHaveCount(1);
     await timeline.nth(47).click();

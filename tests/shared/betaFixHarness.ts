@@ -58,6 +58,53 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(page.locator(mobile ? ".mobile-home" : ".web-home")).toBeVisible();
   });
 
+  for (const theme of ["light", "dark"]) {
+    test(`result actions align and stay tappable on compact screens (${theme})`, async ({ page }, info) => {
+      test.skip(!info.project.name.includes("390"));
+      const state = await installHarness(page);
+      await page.addInitScript(theme => {
+        localStorage.setItem("gostone.mobile.theme.v1", theme);
+        localStorage.setItem("gostone.theme.v1", theme);
+      }, theme);
+      for (const won of [true, false]) {
+        const game = gameFor(9, "friendly");
+        state.game = { ...game, status: "finished", winnerKey: won ? game.blackPlayerKey : game.whitePlayerKey,
+          result: won ? "B+R" : "W+R", finishReason: "resignation", finishedAt: new Date().toISOString(), turn: null };
+        await page.goto(`/game/${GAME_ID}`);
+        if (mobile) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByRole("heading", { name: won ? "Victory" : "Defeat", exact: true })).toBeVisible();
+        const home = dialog.locator(".result-home-action");
+        const pairs = [
+          [dialog.locator(".result-play-action"), dialog.locator(".result-analysis-action")],
+          [dialog.locator(".result-view-board"), dialog.locator(".result-share-action")],
+        ];
+        for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+          await page.setViewportSize(viewport);
+          await assertNoOverflow(page);
+          const homeBounds = (await home.boundingBox())!;
+          for (const [left, right] of pairs) {
+            const a = (await left.boundingBox())!;
+            const b = (await right.boundingBox())!;
+            expect(a.x).toBeCloseTo(homeBounds.x, 0);
+            expect(b.x + b.width).toBeCloseTo(homeBounds.x + homeBounds.width, 0);
+            expect(a.width).toBeCloseTo(b.width, 0);
+            expect(a.height).toBeCloseTo(b.height, 0);
+            expect(a.height).toBeGreaterThanOrEqual(50);
+            expect(b.x - a.x - a.width).toBeGreaterThanOrEqual(7.5);
+            for (const button of [left, right]) {
+              await button.scrollIntoViewIfNeeded();
+              expect(await button.evaluate(element => {
+                const { x, y, width, height } = element.getBoundingClientRect();
+                return element.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+              })).toBe(true);
+            }
+          }
+        }
+      }
+    });
+  }
+
   test("puzzle undo removes the failed branch and continues at the last correct decision", async ({ page }) => {
     await installHarness(page);
     const progress: PuzzlePly[] = [
