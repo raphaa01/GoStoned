@@ -14,7 +14,7 @@ number. The release script builds the pinned KataGo XCFramework before
 Capacitor sync. It verifies the archived core and plugin registration,
 the KataGo model/config, and the bundled Coach model and WASM files.
 
-The repository prepares iOS 1.0 build 4. Confirm that build number is unused
+The repository prepares iOS 1.0.1 build 4. Confirm that build number is unused
 in App Store Connect before exporting the signed archive. GitHub CI also
 installs the simulator build, runs a review through WKWebView and the real
 KataGo plugin, and reopens it from the local cache. It supplies a fixture for
