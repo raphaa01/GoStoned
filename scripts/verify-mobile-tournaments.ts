@@ -209,7 +209,7 @@ async function run() {
     await expect(phone.getByText("0 / 10 Partien")).toBeVisible();
     await expect(phone.locator(".tournament-activity")).toBeVisible();
     await expect(phone.locator(".tournament-countdown")).toHaveCount(0);
-    const groupTable = phone.locator(".tournament-live .rapid-standings tbody");
+    const groupTable = phone.locator(".tournament-live .rapid-standings tbody").first();
     await expect(groupTable.locator("tr")).not.toHaveCount(10);
     await phone.getByRole("button", { name: "Ganze Gruppe anzeigen" }).click();
     await expect(groupTable.locator("tr")).toHaveCount(10);
@@ -250,9 +250,7 @@ async function run() {
     await expect(phone.getByText("1 / 10 Partien")).toBeVisible();
     const won = scored.winnerKey === `user:${alice.id}`;
     await expect(
-      phone
-        .locator(".tournament-live .rapid-standings tr[data-self=true] td")
-        .nth(2),
+      groupTable.locator("tr[data-self=true] td").nth(2),
     ).toHaveText(
       new Intl.NumberFormat("de", { signDisplay: "exceptZero" }).format(
         won ? 6.5 : -6.5,
@@ -267,6 +265,16 @@ async function run() {
     await expect(liveWorldwide.getByRole("row", { name: new RegExp(winner) }).getByRole("cell").last()).toHaveText("1");
     await noOverflow(phone);
     await phone.screenshot({ path: `${audit}/iphone-rapid-live.png`, fullPage: true });
+    const phoneSize = phone.viewportSize()!;
+    await phone.setViewportSize({ width: 320, height: 568 });
+    const expandGroup = phone.getByRole("button", { name: "Ganze Gruppe anzeigen", exact: true });
+    await expandGroup.click();
+    await expect(expandGroup).toHaveCount(0);
+    await expect(groupTable.getByRole("row")).toHaveCount(10);
+    await noOverflow(phone);
+    await phone.getByRole("button", { name: "Weniger Spieler anzeigen", exact: true }).click();
+    await expect(expandGroup).toBeVisible();
+    await phone.setViewportSize(phoneSize);
 
     await query(
       "UPDATE tournaments SET starts_at=LEAST(starts_at,statement_timestamp()-interval '1 hour'),ends_at=statement_timestamp() WHERE month=$1 AND kind='monthly' AND monthly_mode='rapid'",

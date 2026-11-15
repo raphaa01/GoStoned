@@ -267,6 +267,15 @@ a.tournament-row:hover strong {
 .tournament-standings {
   margin: 16px 0;
 }
+.tournament-standings > h2 { margin: 0 0 6px; }
+.tournament-standings > .tournament-text-button {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  margin-block-start: 4px;
+  min-height: 44px;
+  padding: 6px 12px;
+  text-decoration: none;
+}
 .tournament-table-scroll {
   overflow-x: auto;
 }
@@ -282,7 +291,6 @@ a.tournament-row:hover strong {
 .tournament-standings th {
   border: 0;
   padding: 15px 12px;
-  border-bottom: 1px solid var(--line);
   font-weight: 400;
 }
 .tournament-standings thead th {
@@ -300,7 +308,7 @@ a.tournament-row:hover strong {
   font-size: 11px;
 }
 .tournament-standings tr[data-self="true"] {
-  color: var(--green);
+  color: var(--color-ink);
   background: var(--color-moss-soft);
 }
 .tournament-qualification {
