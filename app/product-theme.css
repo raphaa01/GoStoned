@@ -386,7 +386,7 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
 }
 .home-learning__stones i:nth-child(3) {
   right: var(--home-board-inset);
-  top: calc(var(--home-board-first-row) + var(--home-board-cell) * 3);
+  top: calc(var(--home-board-first-row) + var(--home-board-cell) * 4);
 }
 .home-learning__progress { display: grid; gap: 3px; }
 .home-learning__progress progress {
