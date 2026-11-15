@@ -13,9 +13,13 @@ import { MobileApp } from "./MobileApp";
 import { installNativeChromeBridge } from "./nativeChrome";
 import { installMobileFetchBridge } from "./runtime";
 import { handleNativeOAuthUrl } from "./nativeOAuth";
+import { restoreMobileLocale } from "./localePreference";
 
 installMobileFetchBridge();
 installNativeChromeBridge();
+restoreMobileLocale();
+window.addEventListener("popstate", restoreMobileLocale);
+window.addEventListener("gostone:navigation", restoreMobileLocale);
 const mobilePlatform = Capacitor.getPlatform();
 document.documentElement.dataset.mobilePlatform = mobilePlatform;
 document.documentElement.dataset.mobileApp = "true";

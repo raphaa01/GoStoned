@@ -1,5 +1,6 @@
 "use client";
 
+import { requestTimeout } from "@/lib/client/requestTimeout";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
@@ -204,7 +205,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
       let requestError: unknown = null;
       let shouldContinue = false;
       const guardSignal = guard.start();
-      const signal = AbortSignal.any([guardSignal, AbortSignal.timeout(10_000)]);
+      const signal = requestTimeout(10_000, guardSignal);
       try {
         const response = await fetch("/api/matchmaking", {
           cache: "no-store",
@@ -291,7 +292,7 @@ export function PlayWorkspace({ initialSize = 9 }: { initialSize?: BoardSize }) 
     return {
       controller,
       requestIdentity,
-      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+      signal: requestTimeout(10_000, controller.signal),
     };
   }
 

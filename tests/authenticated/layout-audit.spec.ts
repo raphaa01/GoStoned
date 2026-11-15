@@ -10,7 +10,7 @@ for (const theme of ["light", "dark"]) test(`authenticated website layout audit 
   test.setTimeout(90000);
   const identity = crypto.randomUUID().replaceAll("-", "");
   const registered = await context.request.post("/api/auth/register", { headers: { "x-gostone-community-rules": "2026-10-30" }, data: {
-    username: `audit_${identity.slice(0, 12)}`, email: `${identity}@example.test`, password: crypto.randomUUID(),
+    username: `audit_${identity.slice(0, 10)}`, email: `${identity}@example.test`, password: crypto.randomUUID(),
     startingStrength: "unspecified", knownRank: null, boardPlacement: "direct",
   } });
   expect(registered.status()).toBe(201);

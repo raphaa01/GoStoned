@@ -69,6 +69,7 @@ private final class EngineSession {
     var engine: OpaquePointer?
     var stopping = false
     var cancellationWaiters: [CAPPluginCall] = []
+    var statusWaiters: [CAPPluginCall] = []
 
     init(owner: GoStoneKataGoPlugin) {
         self.owner = owner
@@ -130,17 +131,11 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 reason: "KataGo Metal inference requires a physical iOS device."
             ))
             #else
-            do {
-                let runtime = try self.ensureRuntime()
-                let nativeVersion = String(cString: gostone_katago_version())
-                guard nativeVersion == engineVersion else {
-                    throw NativeError.message("The linked KataGo core has an unexpected version.")
-                }
-                _ = try self.ensureWarmEngine(runtime)
-                call.resolve(self.status(available: true))
-            } catch {
-                call.resolve(self.status(available: false, reason: self.safeMessage(error)))
+            if let session = self.warmEngine, session.stopping {
+                session.statusWaiters.append(call)
+                return
             }
+            self.resolveStatus(call)
             #endif
             #else
             call.resolve(self.status(
@@ -293,6 +288,21 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     #if canImport(GoStoneKataGoCore)
+    private func resolveStatus(_ call: CAPPluginCall) {
+        do {
+            guard String(cString: gostone_katago_version()) == engineVersion else {
+                throw NativeError.message("The linked KataGo core has an unexpected version.")
+            }
+            let runtime = try ensureRuntime()
+            if !isThermallyConstrained {
+                _ = try ensureWarmEngine(runtime)
+            }
+            call.resolve(status(available: true))
+        } catch {
+            call.resolve(status(available: false, reason: safeMessage(error)))
+        }
+    }
+
     private func ensureRuntime() throws -> RuntimeFiles {
         if let verifiedRuntime { return verifiedRuntime }
         guard let model = Bundle.main.url(
@@ -453,8 +463,13 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             try startQualityPass(job)
             return
         }
-        let size = job.previewChunkIndex == 0 ? initialPreviewPositions : previewChunkPositions
-        let end = min(job.totalTurns, start + size)
+        let limit: Int
+        switch job.previewChunkIndex {
+        case 0: limit = 2
+        case 1: limit = initialPreviewPositions
+        default: limit = start + previewChunkPositions
+        }
+        let end = min(job.totalTurns, limit)
         let turns = Array(start..<end)
         job.phase = "preview"
         job.currentRequestId = "\(job.id):preview:\(job.previewChunkIndex)"
@@ -503,7 +518,11 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 self.fail(job, message: "KataGo rejected the analysis: \(error)")
                 return
             }
-            if response["isDuringSearch"] as? Bool == true || response["noResults"] as? Bool == true { return }
+            if response["isDuringSearch"] as? Bool == true { return }
+            if response["noResults"] as? Bool == true {
+                self.fail(job, message: "KataGo stopped before returning a result.")
+                return
+            }
             guard let turnNumber = (response["turnNumber"] as? NSNumber)?.intValue,
                   turnNumber >= 0,
                   let root = response["rootInfo"] as? JSObject,
@@ -600,6 +619,8 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             // A replacement request can now acquire the native engine safely.
             session.cancellationWaiters.forEach { $0.resolve() }
             session.cancellationWaiters.removeAll()
+            session.statusWaiters.forEach { self.resolveStatus($0) }
+            session.statusWaiters.removeAll()
         }
     }
 

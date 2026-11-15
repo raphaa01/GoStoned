@@ -85,10 +85,3 @@ export function validatePasswordIssue(
 export function validatePassword(value: unknown): string | null {
   return validatePasswordIssue(value)?.message ?? null;
 }
-
-export function normalizeUsername(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const username = value.trim();
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return null;
-  return username;
-}

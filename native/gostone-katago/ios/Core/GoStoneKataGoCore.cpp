@@ -16,14 +16,16 @@ namespace {
 
 class InputBuffer final : public std::streambuf {
  public:
-  void send(const std::string& line) {
+  bool send(const std::string& line) {
     {
       std::lock_guard<std::mutex> lock(mutex);
+      if(closed) return false;
       for(const char value : line)
         pending.push_back(value);
       pending.push_back('\n');
     }
     condition.notify_one();
+    return true;
   }
 
   void close() {
@@ -194,8 +196,7 @@ extern "C" GoStoneKataGoEngine* gostone_katago_start(
 extern "C" int gostone_katago_send(GoStoneKataGoEngine* engine, const char* jsonLine) {
   if(engine == nullptr || jsonLine == nullptr)
     return 0;
-  engine->input.send(jsonLine);
-  return 1;
+  return engine->input.send(jsonLine) ? 1 : 0;
 }
 
 extern "C" void gostone_katago_stop(GoStoneKataGoEngine* engine) {

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields, type AuthField } from "@/lib/auth/errorFields";
+import { NEW_USERNAME_MAX_LENGTH } from "@/lib/auth/username";
 import type { OAuthProvider } from "@/lib/auth/oauthAccountService";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import { useAuth } from "./AuthProvider";
@@ -211,7 +212,7 @@ export function AuthForm({
               autoComplete="username"
               autoCapitalize="none"
               autoFocus
-              maxLength={registering ? 20 : 254}
+              maxLength={registering ? NEW_USERNAME_MAX_LENGTH : 254}
               minLength={3}
               name="username"
               onChange={() => {

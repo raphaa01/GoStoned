@@ -25,9 +25,10 @@ int main() {
     assert(received[i] == "{\"turnNumber\":" + std::to_string(i) + "}");
   InputBuffer input;
   std::istream reader(&input);
-  input.send("first");
-  input.send("second");
+  assert(input.send("first"));
+  assert(input.send("second"));
   input.close();
+  assert(!input.send("late"));
   std::string line;
   assert(std::getline(reader, line) && line == "first");
   assert(std::getline(reader, line) && line == "second");

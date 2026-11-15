@@ -1,6 +1,7 @@
 import type { Locale } from "./config";
 
 const english = {
+  activeGame: "Finish the game before opening its analysis.",
   noMoves: "This game has no moves to analyse.",
   preview: "Quick review",
   quality: "Improving details",
@@ -16,6 +17,7 @@ const english = {
 const copies: Record<Locale, typeof english> = {
   en: english,
   de: {
+    activeGame: "Schließe zuerst die Partie ab, um sie zu analysieren.",
     noMoves: "Diese Partie enthält keine Züge für die Analyse.",
     preview: "Schnellauswertung",
     quality: "Details werden verbessert",

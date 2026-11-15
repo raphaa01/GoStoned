@@ -236,12 +236,12 @@ test("username completion upgrades an existing generated OAuth account in place"
   const database = oauthPool({ intentUserId: "88888888-8888-4888-8888-888888888888" });
   const result = await withPool(database.pool, () => completeOAuthRegistration(
     "c".repeat(43),
-    "Actually_Personal",
+    "Actual_Personal",
     { estimate: "unspecified", knownRank: null },
   ));
 
   assert.equal(result.user.id, database.userId);
-  assert.equal(result.user.username, "Actually_Personal");
+  assert.equal(result.user.username, "Actual_Personal");
   assert.equal(
     database.statements.some(({ sql }) => sql.startsWith("UPDATE users")),
     true,
@@ -286,7 +286,7 @@ test("social registration reports an outdated rating-policy constraint precisely
   await assert.rejects(
     withPool(database.pool, () => completeOAuthRegistration(
       "d".repeat(43),
-      "new_social_player",
+      "social_player",
       { estimate: "unspecified", knownRank: null },
     )),
     (error: unknown) => {

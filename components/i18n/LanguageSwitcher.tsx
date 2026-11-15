@@ -15,13 +15,17 @@ import { useI18n } from "./I18nProvider";
 
 export function useLocaleSwitch() {
   const pathname = usePathname();
-  const { dictionary } = useI18n();
+  const { changeLocale, dictionary } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const switchLocale = useCallback(async (locale: Locale) => {
-    setBusy(true);
     setError(null);
+    if (changeLocale) {
+      changeLocale(locale);
+      return;
+    }
+    setBusy(true);
     const destination = buildLocaleSwitchHref(
       pathname,
       window.location.search,
@@ -40,7 +44,7 @@ export function useLocaleSwitch() {
       setBusy(false);
       setError(dictionary.language.switchFailed);
     }
-  }, [dictionary.language.switchFailed, pathname]);
+  }, [changeLocale, dictionary.language.switchFailed, pathname]);
 
   return { busy, error, switchLocale };
 }
@@ -126,6 +130,8 @@ export function LanguageSwitcher() {
                     triggerRef.current?.focus();
                     return;
                   }
+                  setOpen(false);
+                  triggerRef.current?.focus();
                   void switchLocale(option.code);
                 }}
                 onKeyDown={(event) => {

@@ -9,14 +9,23 @@ export function MobileAccountGate({ children, returnTo, title }: {
   returnTo: string;
   title: string;
 }) {
-  const { loading, user } = useAuth();
-  const { href, locale } = useI18n();
+  const { error, loading, refresh, user } = useAuth();
+  const { dictionary, href, locale } = useI18n();
   const copy = getMobileCopy(locale);
 
   if (loading) {
     return <div aria-label={copy.loading} className="mobile-screen-loading" role="status"><i /></div>;
   }
   if (!user) {
+    if (error) return (
+      <section className="mobile-account-gate">
+        <h1>{title}</h1>
+        <p role="alert">{error}</p>
+        <button className="button button--primary" type="button" onClick={() => void refresh().catch(() => undefined)}>
+          {dictionary.analysisReview.retry}
+        </button>
+      </section>
+    );
     const destination = `/login?returnTo=${encodeURIComponent(returnTo)}`;
     return (
       <section className="mobile-account-gate">
