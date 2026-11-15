@@ -45,26 +45,23 @@ npm run mobile:katago:ios
 npm run mobile:sync
 ```
 
-The first command checks out the exact pinned KataGo commit, applies the
-reviewable iOS patch, builds Metal/MPSGraph arm64 slices for iPhone and the
+The first command checks out the pinned KataGo and Eigen commits, applies the
+iOS patch, builds Eigen CPU arm64 slices for iPhone and the
 Apple-silicon Simulator, and creates
 `native/gostone-katago/ios/Frameworks/GoStoneKataGoCore.xcframework`. The generated framework is
 ignored. Swift Package Manager links it only when it exists; otherwise the
 plugin remains explicitly fail-closed, so normal web and source-only builds do
 not claim that local inference is available.
 
-The iOS plugin runs the analysis protocol in process, verifies the model hash,
-retains a warm engine between reviews, and uses the same first-move preview,
+The iOS plugin runs the analysis protocol in process, verifies and reads the
+model directly from the app bundle, and keeps a warm engine sized to the board.
+It uses the same first-move preview,
 16-position preview chunks and selective quality pass as Android. It permits
 one job, streams preview and quality replacements, preserves partial results at
 the 90-second limit, and stops on cancellation, backgrounding, or serious
-thermal pressure. It requires iOS 16 because KataGo's current MPSGraph
-implementation uses APIs introduced there.
-
-The Simulator slice is a compile/link contract only. Xcode 26.6's simulator
-Metal driver aborts inside `MPSGraphDevice` when this graph executes, so the
-plugin reports the runtime unavailable there instead of risking an application
-crash. Inference is enabled only on a physical device.
+thermal pressure. CI runs the Apple-silicon Simulator slice with the model from
+the built iPhone app and checks review, Coach ownership and engine restart
+across all three board sizes.
 
 Before release, compare fixed-fixture output against the server worker and run
 sustained 9×9, 13×13 and 19×19 analysis on an older and current real iPhone.

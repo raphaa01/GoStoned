@@ -14,7 +14,7 @@ Vercel API and the only process with PostgreSQL access.
 | Android shell | `android/` | Gradle application, Android resources and device tests |
 | Android KataGo | `native/gostone-katago/android/` | Local CPU engine bridge and lifecycle/thermal controls |
 | iOS shell | `ios/` | Xcode/SPM application project |
-| iOS KataGo | `native/gostone-katago/ios/` | Separate Swift bridge and future XCFramework boundary |
+| iOS KataGo | `native/gostone-katago/ios/` | In-process Swift bridge and XCFramework |
 
 The website is not replaced or packaged as a remote WebView. Shared game UI and
 rules are reused, while platform-native code stays in the Android and iOS
@@ -130,17 +130,16 @@ KataGo v1.18.2 and `b10c384h6nbttflrs` are the pinned mobile identities.
   with a generic failure. It stops at severe thermal pressure and never calls
   the server analysis route. The device test verifies actual multi-position
   model inference on Android API 36.
-- **iOS:** the in-process bridge, model verification and Metal/MPSGraph build
-  recipe are ready for iOS 16 and newer. `npm run mobile:katago:ios` builds the
+- **iOS:** the in-process bridge uses the Eigen CPU backend for iOS 16 and newer.
+  `npm run mobile:katago:ios` builds the
   pinned upstream commit as arm64 device and Apple-silicon Simulator slices,
   packages them as a local XCFramework, and makes the Swift plugin available.
   Without that generated framework the same package deliberately stays
   fail-closed. Its engine follows the same warm-session, preview-chunk,
   incremental-persistence and selective-quality contract as Android. The
-  simulator slice verifies compile/link integration but runtime
-  inference stays disabled because Xcode 26.6's simulator MPSGraph driver aborts
-  during execution. Real-iPhone performance, battery and thermal validation
-  remains untested on physical devices.
+  simulator runs real KataGo review and Coach queries on 9×9, 13×13 and 19×19
+  boards in CI. Real-iPhone performance, battery and thermal behavior require
+  a physical-device run.
 - **Website:** continues to use the existing server worker. Mobile native paths
   never silently fall back to Modal or the KataGo server.
 

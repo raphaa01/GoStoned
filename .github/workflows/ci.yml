@@ -149,6 +149,47 @@ jobs:
             cmp "$app/public/$asset" "mobile-dist/$asset"
           done
 
+      - name: Run packaged KataGo inference on the iOS simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator=$(xcrun simctl list devices available --json | jq -er \
+            '[.devices | to_entries[] | select(.key | contains("SimRuntime.iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          xcrun simctl boot "$simulator"
+          xcrun simctl bootstatus "$simulator" -b
+          core=native/gostone-katago/ios/Core/include
+          source=.mobile-cache/KataGo-1.18.2-ios-eigen/cpp
+          library=.mobile-cache/katago-ios-eigen/simulator/libGoStoneKataGoCore.a
+          smoke="$RUNNER_TEMP/gostone-katago-smoke"
+          sdk=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          xcrun --sdk iphonesimulator clang++ -arch arm64 -isysroot "$sdk" -mios-simulator-version-min=16.0 \
+            -std=c++17 -I "$core" -I "$source" tests/native/katago-inference.test.cpp "$library" -lz -o "$smoke"
+          codesign --force --sign - "$smoke"
+          app="$RUNNER_TEMP/gostone-ios/Build/Products/Release-iphoneos/App.app"
+          xcrun simctl spawn "$simulator" "$smoke" \
+            "$app/public/katago/b10c384h6nbttflrs.katago" "$app/public/katago/analysis-mobile.cfg"
+
+      - name: Open and reopen a review in the installed iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/gostone-ios" \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
+          app="$RUNNER_TEMP/gostone-ios/Build/Products/Release-iphonesimulator/App.app"
+          npx tsx tests/native/prepare-ios-review-smoke.ts "$app"
+          codesign --force --sign - "$app"
+          xcrun simctl install booted "$app"
+          log="$RUNNER_TEMP/gostone-ios-review.log"
+          xcrun simctl launch --console-pty booted app.gostone >"$log" 2>&1 &
+          trap 'xcrun simctl terminate booted app.gostone || true; cat "$log"' EXIT
+          for _ in {1..120}; do
+            if grep -Fq 'GOSTONE_IOS_REVIEW_FAILED' "$log"; then exit 1; fi
+            if grep -Fq 'GOSTONE_IOS_REVIEW_PASSED' "$log"; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
   postgres-integration:
     name: PostgreSQL integration
     runs-on: ubuntu-24.04

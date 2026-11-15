@@ -66,13 +66,15 @@ private final class ActiveAnalysis {
 
 private final class EngineSession {
     weak var owner: GoStoneKataGoPlugin?
+    let boardSize: Int
     var engine: OpaquePointer?
     var stopping = false
     var cancellationWaiters: [CAPPluginCall] = []
     var statusWaiters: [CAPPluginCall] = []
 
-    init(owner: GoStoneKataGoPlugin) {
+    init(owner: GoStoneKataGoPlugin, boardSize: Int) {
         self.owner = owner
+        self.boardSize = boardSize
     }
 }
 
@@ -102,18 +104,43 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var warmEngine: EngineSession?
     private var verifiedRuntime: RuntimeFiles?
     private var lifecycleObservers: [NSObjectProtocol] = []
+    private var backgrounded = false
 
     @objc override public func load() {
         lifecycleObservers.append(NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in self?.cancelForLifecycle("Local analysis was cancelled in the background.") })
+        ) { [weak self] _ in
+            self?.enterBackground("Local analysis was cancelled in the background.")
+        })
+        lifecycleObservers.append(NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.stateQueue.async { self.backgrounded = false }
+        })
         lifecycleObservers.append(NotificationCenter.default.addObserver(
             forName: UIApplication.willTerminateNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in self?.cancelForLifecycle("Local analysis was cancelled because the app is closing.") })
+        ) { [weak self] _ in self?.enterBackground("Local analysis was cancelled because the app is closing.") })
+        lifecycleObservers.append(NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.stateQueue.async {
+                if let job = self.activeAnalysis {
+                    self.fail(job, message: "Local analysis stopped because the device is low on memory.")
+                } else {
+                    self.stopWarmEngine()
+                }
+            }
+        })
     }
 
     deinit {
@@ -125,22 +152,15 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc public func getStatus(_ call: CAPPluginCall) {
         stateQueue.async {
             #if canImport(GoStoneKataGoCore)
-            #if targetEnvironment(simulator)
-            call.resolve(self.status(
-                available: false,
-                reason: "KataGo Metal inference requires a physical iOS device."
-            ))
-            #else
             if let session = self.warmEngine, session.stopping {
                 session.statusWaiters.append(call)
                 return
             }
             self.resolveStatus(call)
-            #endif
             #else
             call.resolve(self.status(
                 available: false,
-                reason: "The KataGo Metal core has not been linked into this build."
+                reason: "The KataGo core has not been linked into this build."
             ))
             #endif
         }
@@ -148,9 +168,6 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc public func analyze(_ call: CAPPluginCall) {
         #if canImport(GoStoneKataGoCore)
-        #if targetEnvironment(simulator)
-        call.reject("KataGo Metal inference requires a physical iOS device.", "native_runtime_unavailable")
-        #else
         guard let analysisId = call.getString("analysisId"), !analysisId.isEmpty,
               let input = call.getObject("input") else {
             call.reject("A valid analysisId and input are required.", "invalid_analysis_request")
@@ -163,10 +180,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             do {
-                guard !self.isThermallyConstrained else {
-                    throw NativeError.message("The device is too warm to start local analysis.")
-                }
+                try self.requireActiveDevice()
                 let runtime = try self.ensureRuntime()
+                let boardSize = try self.requireBoardSize(input)
                 let moveCount = (input["moves"] as? [Any])?.count ?? 0
                 let job = ActiveAnalysis(
                     owner: self,
@@ -177,7 +193,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                     totalTurns: moveCount + 1
                 )
                 self.activeAnalysis = job
-                _ = try self.ensureWarmEngine(runtime)
+                try self.ensureWarmEngine(runtime, boardSize: boardSize)
                 try self.sendNextPreviewChunk(job)
                 let timeout = DispatchWorkItem { [weak self, weak job] in
                     guard let self, let job, self.activeAnalysis === job, !job.resolved else { return }
@@ -194,14 +210,13 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(self.safeMessage(error), "native_analysis_failed")
             }
         }
-        #endif
         #else
-        call.reject("The KataGo Metal core is unavailable.", "native_runtime_unavailable")
+        call.reject("The KataGo core is unavailable.", "native_runtime_unavailable")
         #endif
     }
 
     @objc public func analyzePosition(_ call: CAPPluginCall) {
-        #if canImport(GoStoneKataGoCore) && !targetEnvironment(simulator)
+        #if canImport(GoStoneKataGoCore)
         guard let analysisId = call.getString("analysisId"), !analysisId.isEmpty,
               let input = call.getObject("input") else {
             call.reject("A valid analysisId and input are required.", "invalid_analysis_request")
@@ -215,9 +230,8 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             do {
-                guard !self.isThermallyConstrained else {
-                    throw NativeError.message("The device is too warm to start local analysis.")
-                }
+                try self.requireActiveDevice()
+                let boardSize = try self.requireBoardSize(input)
                 let moveCount = (input["moves"] as? [Any])?.count ?? 0
                 let job = ActiveAnalysis(owner: self, id: analysisId, call: call, input: input, requestedVisits: visits, totalTurns: moveCount + 1)
                 job.positionOnly = true
@@ -226,7 +240,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
                 job.expectedPhaseTurns = 1
                 job.qualityVisits = visits
                 self.activeAnalysis = job
-                _ = try self.ensureWarmEngine(self.ensureRuntime())
+                try self.ensureWarmEngine(self.ensureRuntime(), boardSize: boardSize)
                 var value = try self.request(id: analysisId, input: input, visits: visits, pvLength: qualityPVLength, analyzeTurns: [moveCount])
                 value["includeOwnership"] = ownership
                 let requestedTime = call.getDouble("maxTime") ?? 5.0
@@ -247,7 +261,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
         #else
-        call.reject("Local KataGo training requires a linked core and physical iOS device.", "native_runtime_unavailable")
+        call.reject("Local KataGo training requires a linked core.", "native_runtime_unavailable")
         #endif
     }
 
@@ -271,8 +285,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func cancelForLifecycle(_ message: String) {
+    private func enterBackground(_ message: String) {
         stateQueue.async {
+            self.backgrounded = true
             guard let job = self.activeAnalysis else {
                 self.stopWarmEngine()
                 return
@@ -287,16 +302,22 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    private func requireActiveDevice() throws {
+        if backgrounded {
+            throw NativeError.message("Open GoStone to run local analysis.")
+        }
+        if isThermallyConstrained {
+            throw NativeError.message("The device is too warm to start local analysis.")
+        }
+    }
+
     #if canImport(GoStoneKataGoCore)
     private func resolveStatus(_ call: CAPPluginCall) {
         do {
             guard String(cString: gostone_katago_version()) == engineVersion else {
                 throw NativeError.message("The linked KataGo core has an unexpected version.")
             }
-            let runtime = try ensureRuntime()
-            if !isThermallyConstrained {
-                _ = try ensureWarmEngine(runtime)
-            }
+            _ = try ensureRuntime()
             call.resolve(status(available: true))
         } catch {
             call.resolve(status(available: false, reason: safeMessage(error)))
@@ -324,42 +345,35 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         guard digest == modelSha256 else {
             throw NativeError.message("The bundled KataGo model failed verification.")
         }
-        let runtimeDirectory = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        )[0].appendingPathComponent("katago/\(engineVersion)", isDirectory: true)
-        try FileManager.default.createDirectory(at: runtimeDirectory, withIntermediateDirectories: true)
-        let runtimeModel = runtimeDirectory.appendingPathComponent("b10c384h6nbttflrs.bin.gz")
-        let existingData = try? Data(contentsOf: runtimeModel, options: [.mappedIfSafe])
-        let existingDigest = existingData.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
-        if existingDigest != modelSha256 {
-            let temporaryModel = runtimeDirectory.appendingPathComponent("b10c384h6nbttflrs.bin.gz.tmp")
-            try? FileManager.default.removeItem(at: temporaryModel)
-            try data.write(to: temporaryModel, options: [.atomic])
-            try? FileManager.default.removeItem(at: runtimeModel)
-            try FileManager.default.moveItem(at: temporaryModel, to: runtimeModel)
-        }
-        let runtime = RuntimeFiles(model: runtimeModel, config: config)
+        let runtime = RuntimeFiles(model: model, config: config)
         verifiedRuntime = runtime
         return runtime
     }
 
-    private func ensureWarmEngine(_ runtime: RuntimeFiles) throws -> EngineSession {
-        if let warmEngine, warmEngine.engine != nil, !warmEngine.stopping { return warmEngine }
-        if warmEngine != nil {
-            throw NativeError.message("The previous KataGo session is still closing.")
+    private func ensureWarmEngine(_ runtime: RuntimeFiles, boardSize: Int) throws {
+        if let session = warmEngine, let engine = session.engine {
+            guard !session.stopping else {
+                throw NativeError.message("The previous KataGo session is still closing.")
+            }
+            if session.boardSize == boardSize { return }
+            // The previous job has finished. Its exit callback only queues work
+            // on stateQueue, so joining here cannot deadlock the engine thread.
+            session.engine = nil
+            warmEngine = nil
+            gostone_katago_destroy(engine)
         }
-        let session = EngineSession(owner: self)
+        let session = EngineSession(owner: self, boardSize: boardSize)
         let retainedContext = Unmanaged.passRetained(session).toOpaque()
         let engine = runtime.model.path.withCString { modelPath in
             runtime.config.path.withCString { configPath in
                 gostone_katago_start(
                     modelPath,
                     configPath,
+                    Int32(boardSize),
                     { line, context in
                         guard let line, let context else { return }
                         let session = Unmanaged<EngineSession>.fromOpaque(context).takeUnretainedValue()
-                        session.owner?.receive(line: String(cString: line))
+                        session.owner?.receive(line: String(cString: line), from: session)
                     },
                     { exitCode, error, context in
                         guard let context else { return }
@@ -377,11 +391,17 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         guard let engine else {
             Unmanaged<EngineSession>.fromOpaque(retainedContext).release()
-            throw NativeError.message("The KataGo Metal core could not be started.")
+            throw NativeError.message("The KataGo core could not be started.")
         }
         session.engine = engine
         warmEngine = session
-        return session
+    }
+
+    private func requireBoardSize(_ input: JSObject) throws -> Int {
+        guard let size = (input["boardSize"] as? NSNumber)?.intValue, [9, 13, 19].contains(size) else {
+            throw NativeError.message("The analysis board size is invalid.")
+        }
+        return size
     }
 
     private func request(
@@ -394,9 +414,8 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         guard let sourceMoves = input["moves"] as? [JSObject], sourceMoves.count <= 1_000 else {
             throw NativeError.message("The game move list is invalid or too large.")
         }
-        let boardSize = (input["boardSize"] as? NSNumber)?.intValue ?? input["boardSize"] as? Int ?? 0
-        guard [9, 13, 19].contains(boardSize),
-              let rules = input["rules"] as? String,
+        let boardSize = try requireBoardSize(input)
+        guard let rules = input["rules"] as? String,
               let komi = input["komi"] as? NSNumber else {
             throw NativeError.message("The analysis position is invalid.")
         }
@@ -448,7 +467,7 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func send(_ value: JSObject, to job: ActiveAnalysis) throws {
         guard let engine = warmEngine?.engine, warmEngine?.stopping == false else {
-            throw NativeError.message("The KataGo Metal core stopped.")
+            throw NativeError.message("The KataGo core stopped.")
         }
         let data = try JSONSerialization.data(withJSONObject: value)
         guard let line = String(data: data, encoding: .utf8),
@@ -507,18 +526,19 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         ), to: job)
     }
 
-    private func receive(line: String) {
+    private func receive(line: String, from session: EngineSession) {
         stateQueue.async {
-            guard let job = self.activeAnalysis else { return }
-            guard self.activeAnalysis === job, !job.resolved,
+            guard self.warmEngine === session, let job = self.activeAnalysis, !job.resolved,
                   let data = line.data(using: .utf8),
                   let response = try? JSONSerialization.jsonObject(with: data) as? JSObject else { return }
-            guard response["id"] as? String == job.currentRequestId else { return }
-            if let error = response["error"] as? String {
+            let responseId = response["id"] as? String
+            if let error = response["error"] as? String, responseId == nil || responseId == job.currentRequestId {
                 self.fail(job, message: "KataGo rejected the analysis: \(error)")
                 return
             }
-            if response["isDuringSearch"] as? Bool == true { return }
+            guard responseId == job.currentRequestId,
+                  response["warning"] == nil,
+                  response["isDuringSearch"] as? Bool != true else { return }
             if response["noResults"] as? Bool == true {
                 self.fail(job, message: "KataGo stopped before returning a result.")
                 return

@@ -27,6 +27,7 @@ import {
 import { replayMoves } from "@/lib/game/goEngine";
 import type { GameState } from "@/lib/game/types";
 import {
+  preferNativeReviewResult,
   readNativeKataGoAnalysis,
   runNativeKataGoAnalysis,
   usesNativeKataGoAnalysis,
@@ -175,24 +176,27 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
           starting = true;
           setRequesting(true);
           const pendingAt = new Date().toISOString();
-          setAnalysis({
+          setAnalysis(previous => ({
             id: `local:pending:${body.game.id}:${body.game.version}`,
             gameId: body.game.id,
             gameVersion: body.game.version,
             status: "running",
             attempts: 1,
-            result: null,
+            result: previous?.gameVersion === body.game.version ? previous.result : null,
             errorCode: null,
             createdAt: pendingAt,
             startedAt: pendingAt,
             completedAt: null,
-          });
+          }));
           const next = await runNativeKataGoAnalysis(body.game, value => {
-            if (isCurrent()) setAnalysis(value);
+            if (isCurrent()) setAnalysis(previous => ({ ...value,
+              result: preferNativeReviewResult(previous?.result ?? null, value.result),
+            }));
           }, controller.signal);
           if (!isCurrent()) return;
-          setSelectedMove(move => Math.min(move, next.result?.moves.length ?? 0));
-          setAnalysis(next);
+          setAnalysis(previous => ({ ...next,
+            result: preferNativeReviewResult(previous?.result ?? null, next.result),
+          }));
         } else {
           setAnalysis(saved);
         }
@@ -230,6 +234,11 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         setError(null);
         setReauthenticate(true);
       } else {
+        if (nativeAnalysis) {
+          setAnalysis(previous => previous?.result && previous.status === "running"
+            ? { ...previous, status: "completed", progress: undefined }
+            : previous);
+        }
         setError(requestError instanceof ApiRequestError && requestError.code === "analysis_game_active"
           ? progressiveCopy.activeGame
           : localizedApiError(dictionary, requestError, copy.failed));
@@ -330,7 +339,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load("OPEN")} type="button">{copy.retry}</button></div>
       ) : !game || !board ? (
         <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
-      ) : error ? (
+      ) : error && (!nativeAnalysis || !result) ? (
         <section className={styles.reviewStatus}>
           <p role="alert">{error}</p>
           <button
@@ -387,6 +396,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
       ) : result && boardBefore && winrates && scoreLead ? (
         showSummary && summaries ? (
           <main className={styles.summaryPage} data-review-summary>
+            {error ? <p role="alert">{error}</p> : null}
             <div className={styles.summaryPlayers}>
               {(["black", "white"] as const).map((color) => (
                 <article key={color}>
@@ -413,7 +423,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
               .replace("{done}", String(result.moves.length)).replace("{total}", String(game.moveCount))}` : ""}</p>
             <div className={styles.summaryActions}>
               <button onClick={() => setShowSummary(false)} type="button">{experienceCopy.returnToAnalysis}</button>
-              {nativeAnalysis && analysis.status === "completed" && result.moves.length < game.moveCount ? (
+              {nativeAnalysis && analysis.status === "completed" && (error || result.moves.length < game.moveCount) ? (
                 <button onClick={() => {
                   setShowSummary(false);
                   setSelectedMove(1);
@@ -425,6 +435,10 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
           </main>
         ) : (
           <main className={styles.reviewMain} data-review-player>
+            {error ? <div className={styles.reviewStatus}>
+              <p role="alert">{error}</p>
+              <button className="button button--secondary" onClick={() => void load("POST")} type="button">{copy.retry}</button>
+            </div> : null}
             <section className={styles.evaluation} aria-label={copy.winChance}>
               <div className={styles.evaluationLabels}>
                 <span><i aria-hidden="true" className={`${styles.metricStone} ${styles.blackMetricStone}`} />{dictionary.game.black} <strong>{formatWinrate(winrates.black)}</strong></span>

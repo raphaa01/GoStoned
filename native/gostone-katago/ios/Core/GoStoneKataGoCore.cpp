@@ -32,6 +32,7 @@ class InputBuffer final : public std::streambuf {
     {
       std::lock_guard<std::mutex> lock(mutex);
       closed = true;
+      pending.clear();
     }
     condition.notify_all();
   }
@@ -118,16 +119,18 @@ struct GoStoneKataGoEngine {
   void* context;
   std::string modelPath;
   std::string configPath;
+  int boardSize;
   std::thread worker;
 
   GoStoneKataGoEngine(
     const char* model,
     const char* config,
+    int boardSize,
     GoStoneKataGoLineCallback lineCallback,
     GoStoneKataGoExitCallback exitCallback,
     void* context
   ) : output(lineCallback, context), exitCallback(exitCallback), context(context),
-      modelPath(model), configPath(config) {}
+      modelPath(model), configPath(config), boardSize(boardSize) {}
 };
 
 extern "C" const char* gostone_katago_version(void) {
@@ -138,11 +141,14 @@ extern "C" const char* gostone_katago_version(void) {
 extern "C" GoStoneKataGoEngine* gostone_katago_start(
   const char* modelPath,
   const char* configPath,
+  int boardSize,
   GoStoneKataGoLineCallback lineCallback,
   GoStoneKataGoExitCallback exitCallback,
   void* context
 ) {
   if(modelPath == nullptr || configPath == nullptr || lineCallback == nullptr || exitCallback == nullptr)
+    return nullptr;
+  if(boardSize != 9 && boardSize != 13 && boardSize != 19)
     return nullptr;
   {
     std::lock_guard<std::mutex> lock(globalEngineMutex);
@@ -151,10 +157,10 @@ extern "C" GoStoneKataGoEngine* gostone_katago_start(
     globalEngineActive = true;
   }
 
-  auto engine = std::make_unique<GoStoneKataGoEngine>(
-    modelPath, configPath, lineCallback, exitCallback, context);
-  GoStoneKataGoEngine* rawEngine = engine.get();
   try {
+    auto engine = std::make_unique<GoStoneKataGoEngine>(
+      modelPath, configPath, boardSize, lineCallback, exitCallback, context);
+    GoStoneKataGoEngine* rawEngine = engine.get();
     rawEngine->worker = std::thread([rawEngine] {
       int exitCode = 1;
       std::string error;
@@ -165,6 +171,7 @@ extern "C" GoStoneKataGoEngine* gostone_katago_start(
       try {
         const std::vector<std::string> arguments = {
           "analysis", "-model", rawEngine->modelPath, "-config", rawEngine->configPath,
+          "-override-config", "maxBoardSizeForNNBuffer=" + std::to_string(rawEngine->boardSize),
           "-quit-without-waiting"
         };
         exitCode = MainCmds::analysis(arguments);
@@ -184,13 +191,13 @@ extern "C" GoStoneKataGoEngine* gostone_katago_start(
       }
       rawEngine->exitCallback(exitCode, error.empty() ? nullptr : error.c_str(), rawEngine->context);
     });
+    return engine.release();
   }
   catch(...) {
     std::lock_guard<std::mutex> lock(globalEngineMutex);
     globalEngineActive = false;
     return nullptr;
   }
-  return engine.release();
 }
 
 extern "C" int gostone_katago_send(GoStoneKataGoEngine* engine, const char* jsonLine) {

@@ -526,10 +526,6 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
             && [401, 403, 404].includes(caughtError.status)
           ) {
             chatTerminal.current = true;
-            applyConnectionFailure(
-              caughtError,
-              nextChatPollDelay(gameStatus.current, caughtError, document.hidden),
-            );
           }
         }
       } finally {
@@ -583,10 +579,13 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
     };
     immediateGameSync.current = requestImmediateSync;
 
-    const handleVisibilityChange = () => {
-      if (!document.hidden) requestImmediateSync(true);
+    const reconnect = () => {
+      requestImmediateSync(true);
+      if (chatTerminal.current) requestImmediateChatSync();
     };
-    const handleOnline = () => requestImmediateSync(true);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) reconnect();
+    };
     const handleOffline = () => {
       if (
         !identityAuthority.current.isCurrent(requestIdentity)
@@ -605,7 +604,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
     gameTimer = window.setTimeout(pollGame, 0);
     chatTimer = window.setTimeout(pollChat, 0);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("online", handleOnline);
+    window.addEventListener("online", reconnect);
     window.addEventListener("offline", handleOffline);
     return () => {
       cancelled = true;
@@ -620,7 +619,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
       if (gameTimer !== undefined) window.clearTimeout(gameTimer);
       if (chatTimer !== undefined) window.clearTimeout(chatTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("online", reconnect);
       window.removeEventListener("offline", handleOffline);
     };
   }, [

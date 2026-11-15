@@ -3,6 +3,7 @@ import { GOSTONE_BOT_MODEL } from "@/lib/bot/modelV1";
 import type { CoachEvidence } from "@/lib/learn/coachEvidence";
 import { COACH_MODEL, type CoachReason } from "@/lib/learn/coachModel";
 import type { CoachRuntimeAssets } from "../../workers/browser/coach.worker";
+import { withDeadline } from "./withDeadline";
 
 export type CoachText = { text: string; reason: CoachReason };
 
@@ -65,13 +66,13 @@ export function createCoachClient() {
     signal.addEventListener("abort", dispose, { once: true });
     startup = (async () => {
       try {
-        const [model, vocabulary, schema, manifest, wasm] = await Promise.all([
+        const [model, vocabulary, schema, manifest, wasm] = await withDeadline(Promise.all([
           bundledAsset(`${COACH_MODEL.baseUrl}coach.onnx`, controller.signal, COACH_MODEL.files["coach.onnx"]),
           bundledAsset(`${COACH_MODEL.baseUrl}tokenizer.json`, controller.signal, COACH_MODEL.files["tokenizer.json"]),
           bundledAsset(`${COACH_MODEL.baseUrl}schema.json`, controller.signal, COACH_MODEL.files["schema.json"]),
           bundledAsset(`${COACH_MODEL.baseUrl}manifest.json`, controller.signal, COACH_MODEL.files["manifest.json"]),
           bundledAsset(`${GOSTONE_BOT_MODEL.runtimeBaseUrl}ort-wasm-simd-threaded.wasm`, controller.signal),
-        ]);
+        ]), 25_000, "Coach asset loading timed out.", controller.signal);
         controller.signal.throwIfAborted();
         // WKWebView serves the app from capacitor://. The document loads the
         // assets and a self-contained blob worker receives their bytes.

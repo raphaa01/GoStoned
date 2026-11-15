@@ -143,6 +143,15 @@ export function MobileCoach() {
     } catch { fail(controller, revision, () => void reply(snapshot, controller, revision)); }
   }
 
+  async function commentOn(evidence: CoachEvidence, signal: AbortSignal) {
+    try {
+      return await decoder.current?.comment(evidence, signal) ?? null;
+    } catch (cause) {
+      if (!signal.aborted) console.warn("[GoStone Coach] Comment failed", cause);
+      return null;
+    }
+  }
+
   async function explain(before: TrainingPosition, after: TrainingPosition, cached: Baseline | null, controller: AbortController, revision: number) {
     try {
       const previous = cached?.position === before ? await cached.promise.catch(() => scan(before, controller)) : await scan(before, controller);
@@ -152,7 +161,7 @@ export function MobileCoach() {
       let evidence = buildCoachEvidence(before, after, previous, current);
       setEstimate({ position: after, result: current });
       // Surface the quick, grounded comment before the opponent's longer search.
-      const text = await decoder.current!.comment(evidence, controller.signal);
+      const text = await commentOn(evidence, controller.signal);
       if (!active(controller, revision)) return;
       setComment({ text, evidence });
       const ranked = [...previous.moveInfos].sort((a, b) => a.order - b.order);
@@ -165,7 +174,7 @@ export function MobileCoach() {
         const agrees = evidence.stable && evidence.judgement !== "uncertain"
           && Math.abs(refined.loss - evidence.loss) <= Math.max(2, evidence.loss * .3);
         evidence = refined;
-        const refinedText = await decoder.current!.comment(evidence, controller.signal);
+        const refinedText = await commentOn(evidence, controller.signal);
         if (!active(controller, revision)) return;
         setComment({ text: refinedText, evidence }); setEstimate({ position: after, result: refinedAfter });
         if (agrees && evidence.stable && evidence.judgement === "blunder") {

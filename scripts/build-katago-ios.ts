@@ -5,10 +5,13 @@ import { basename, join } from "node:path";
 
 const KATAGO_VERSION = "v1.18.2";
 const KATAGO_COMMIT = "fd0723fdbc0e9d82cf269c9630af8c27c57c07c4";
+const EIGEN_VERSION = "3.4.0";
+const EIGEN_COMMIT = "3147391d946bb4b6c68edd901f2add6ac1f31f8c";
 const IOS_DEPLOYMENT_TARGET = "16.0";
 const repository = process.cwd();
 const cache = join(repository, ".mobile-cache");
-const source = join(cache, `KataGo-${KATAGO_VERSION.slice(1)}-ios`);
+const source = join(cache, `KataGo-${KATAGO_VERSION.slice(1)}-ios-eigen`);
+const eigen = join(cache, `eigen-${EIGEN_VERSION}`);
 const patch = join(repository, "native", "gostone-katago", "ios", "katago-ios.patch");
 const bridge = join(repository, "native", "gostone-katago", "ios", "Core", "GoStoneKataGoCore.cpp");
 const headers = join(repository, "native", "gostone-katago", "ios", "Core", "include");
@@ -56,7 +59,6 @@ function patchSource(): void {
 type Slice = Readonly<{
   name: "device" | "simulator";
   sdk: "iphoneos" | "iphonesimulator";
-  swiftTarget: string;
   minimumFlag: string;
 }>;
 
@@ -75,26 +77,29 @@ const actualCommit = output("git", ["rev-parse", "HEAD"], source);
 if (actualCommit !== KATAGO_COMMIT) {
   throw new Error(`Pinned KataGo source mismatch: expected ${KATAGO_COMMIT}, found ${actualCommit}.`);
 }
+if (!existsSync(join(eigen, ".git"))) {
+  run("git", ["clone", "--depth", "1", "--branch", EIGEN_VERSION, "https://gitlab.com/libeigen/eigen.git", eigen]);
+}
+const eigenCommit = output("git", ["rev-parse", "HEAD"], eigen);
+if (eigenCommit !== EIGEN_COMMIT) throw new Error(`Pinned Eigen source mismatch: ${eigenCommit}.`);
 patchSource();
 
 const slices: Slice[] = [
   {
     name: "device",
     sdk: "iphoneos",
-    swiftTarget: `arm64-apple-ios${IOS_DEPLOYMENT_TARGET}`,
     minimumFlag: `-miphoneos-version-min=${IOS_DEPLOYMENT_TARGET}`,
   },
   {
     name: "simulator",
     sdk: "iphonesimulator",
-    swiftTarget: `arm64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator`,
     minimumFlag: `-mios-simulator-version-min=${IOS_DEPLOYMENT_TARGET}`,
   },
 ];
 
 const libraries: string[] = [];
 for (const slice of slices) {
-  const build = join(cache, "katago-ios", slice.name);
+  const build = join(cache, "katago-ios-eigen", slice.name);
   const sdkPath = output("xcrun", ["--sdk", slice.sdk, "--show-sdk-path"]);
   mkdirSync(build, { recursive: true });
   run(cmake, [
@@ -102,14 +107,14 @@ for (const slice of slices) {
     "-B", build,
     "-G", "Ninja",
     `-DCMAKE_MAKE_PROGRAM=${ninja}`,
-    "-DUSE_BACKEND=METAL",
+    "-DUSE_BACKEND=EIGEN",
+    `-DEIGEN3_INCLUDE_DIRS=${eigen}`,
     "-DBUILD_DISTRIBUTED=0",
     "-DNO_GIT_REVISION=1",
     "-DCMAKE_SYSTEM_NAME=iOS",
     `-DCMAKE_OSX_SYSROOT=${slice.sdk}`,
     "-DCMAKE_OSX_ARCHITECTURES=arm64",
     `-DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}`,
-    `-DCMAKE_Swift_FLAGS=-target ${slice.swiftTarget}`,
     "-DCMAKE_BUILD_TYPE=Release",
   ]);
   run(cmake, [
@@ -138,7 +143,6 @@ for (const slice of slices) {
   run("xcrun", [
     "libtool", "-static", "-o", combined,
     join(build, "libkatago.a"),
-    join(build, "libKataGoSwift.a"),
     bridgeObject,
   ]);
   libraries.push(combined);
@@ -152,4 +156,4 @@ run("xcodebuild", [
   "-library", libraries[1], "-headers", headers,
   "-output", framework,
 ]);
-console.log(`Built KataGo ${KATAGO_VERSION} Metal core: ${framework}`);
+console.log(`Built KataGo ${KATAGO_VERSION} Eigen CPU core: ${framework}`);

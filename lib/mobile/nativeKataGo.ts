@@ -71,6 +71,18 @@ function analysisKey(game: GameState) {
   return `${game.id}:${game.version}:${MOBILE_KATAGO.engineVersion}:${MOBILE_KATAGO.modelSha256}:preview-${MOBILE_KATAGO.previewVisits}`;
 }
 
+export function preferNativeReviewResult(
+  previous: GameAnalysisResult | null,
+  incoming: GameAnalysisResult | null,
+): GameAnalysisResult | null {
+  if (!incoming) return previous;
+  if (!previous || incoming.gameVersion !== previous.gameVersion) return incoming;
+  const coverage = incoming.moves.length - previous.moves.length;
+  if (coverage !== 0) return coverage > 0 ? incoming : previous;
+  const verifiedMoves = (result: GameAnalysisResult) => result.moves.filter(move => move.classification && !move.provisional).length;
+  return verifiedMoves(incoming) >= verifiedMoves(previous) ? incoming : previous;
+}
+
 async function storedResult(game: GameState): Promise<GameAnalysisResult | null> {
   const database = await openDatabase();
   try {
@@ -94,7 +106,13 @@ async function storeResult(game: GameState, result: GameAnalysisResult): Promise
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error("Local analysis storage failed."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Local analysis storage was interrupted."));
-      transaction.objectStore(STORE_NAME).put({ key: analysisKey(game), result });
+      const store = transaction.objectStore(STORE_NAME);
+      const key = analysisKey(game);
+      const request = store.get(key);
+      request.onsuccess = () => {
+        const saved = (request.result as { result?: GameAnalysisResult } | undefined)?.result ?? null;
+        if (preferNativeReviewResult(saved, result) === result) store.put({ key, result });
+      };
     });
   } finally {
     database.close();

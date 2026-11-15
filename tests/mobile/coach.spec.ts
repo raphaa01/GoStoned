@@ -161,7 +161,7 @@ test("an unanswered rating request and root-only warmup do not prevent a local C
   await expect(page.locator('.go-board [role="gridcell"]')).toHaveCount(81);
 });
 
-test("a worker inference error restarts the model on retry", async ({ page }) => {
+test("a worker inference error leaves play available and the next turn restarts the model", async ({ page }) => {
   await harness(page, true, true, false, "ios");
   await page.addInitScript(() => {
     let failNextComment = true;
@@ -185,9 +185,10 @@ test("a worker inference error restarts the model on retry", async ({ page }) =>
   await page.goto("/de/play/coach");
   await page.getByRole("button", { name: "Spiel starten" }).click({ timeout: 20_000 });
   await place(page, 2, 6);
-  await page.getByRole("button", { name: "Erneut berechnen" }).click();
   await expect(page.getByRole("gridcell", { name: /Schwarzer Stein bei C3/ })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: /Weißer Stein bei G7/ })).toBeVisible();
+  await place(page, 3, 6);
+  await expect(page.locator(".go-board .stone")).toHaveCount(4);
   expect(workerUrls).toHaveLength(2);
 });
 
