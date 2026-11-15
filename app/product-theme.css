@@ -347,10 +347,17 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
 
 .home-learning {
   --home-board-cell: clamp(17px, 6.1vw, 28px);
+  --home-board-inset: calc(var(--home-board-cell) * .72);
+  --home-board-first-row: 5.5px;
+  --home-board-grid: rgb(41 24 12 / .30);
   background:
     linear-gradient(0deg, rgb(29 17 9 / .58), transparent 90%),
-    linear-gradient(rgb(41 24 12 / .30) 1px, transparent 1px) 50% 5px / var(--home-board-cell) var(--home-board-cell),
-    linear-gradient(90deg, rgb(41 24 12 / .30) 1px, transparent 1px) 50% 5px / var(--home-board-cell) var(--home-board-cell),
+    repeating-linear-gradient(180deg,
+      var(--home-board-grid) calc(var(--home-board-first-row) - .5px) calc(var(--home-board-first-row) + .5px),
+      transparent calc(var(--home-board-first-row) + .5px) calc(var(--home-board-first-row) + var(--home-board-cell) - .5px)),
+    repeating-linear-gradient(270deg,
+      var(--home-board-grid) calc(var(--home-board-inset) - .5px) calc(var(--home-board-inset) + .5px),
+      transparent calc(var(--home-board-inset) + .5px) calc(var(--home-board-inset) + var(--home-board-cell) - .5px)),
     var(--color-board);
   color: var(--color-stone-white);
   gap: 9px;
@@ -366,20 +373,20 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
   border-radius: 50%;
   box-shadow: 0 2px 4px rgb(0 0 0 / .28);
   height: calc(var(--home-board-cell) * .78);
-  left: calc(50% + var(--home-board-cell));
   position: absolute;
-  top: calc(5px + var(--home-board-cell));
-  transform: translate(-50%, -50%);
+  right: calc(var(--home-board-inset) + var(--home-board-cell) * 2);
+  top: calc(var(--home-board-first-row) + var(--home-board-cell));
+  transform: translate(50%, -50%);
   width: calc(var(--home-board-cell) * .78);
 }
 .home-learning__stones i:nth-child(2) {
   background: radial-gradient(circle at 32% 27%, #FFF, #E6E0D7 68%, #BCB3A6);
-  left: calc(50% + var(--home-board-cell) * 2);
-  top: calc(5px + var(--home-board-cell) * 2);
+  right: calc(var(--home-board-inset) + var(--home-board-cell));
+  top: calc(var(--home-board-first-row) + var(--home-board-cell) * 2);
 }
 .home-learning__stones i:nth-child(3) {
-  left: min(calc(50% + var(--home-board-cell) * 3), calc(100% - var(--home-board-cell) * .55));
-  top: calc(5px + var(--home-board-cell) * 3);
+  right: var(--home-board-inset);
+  top: calc(var(--home-board-first-row) + var(--home-board-cell) * 3);
 }
 .home-learning__progress { display: grid; gap: 3px; }
 .home-learning__progress progress {

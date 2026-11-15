@@ -370,9 +370,11 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
               </p>
             ) : null}
             <div className={styles.controls}>
-              <button className="button button--secondary" disabled={busy || hintBusy || !canRetry} onClick={restartPuzzle} type="button">
-                <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
-              </button>
+              {canRetry ? (
+                <button className="button button--secondary" disabled={busy || hintBusy} onClick={restartPuzzle} type="button">
+                  <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+                </button>
+              ) : null}
               {canUndo ? (
                 <button className="button button--secondary" disabled={busy || hintBusy} onClick={undoPuzzleMove} type="button">
                   <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}

@@ -166,8 +166,7 @@ test("daily puzzle mistakes show compact retry and undo controls below the board
 
   await undo.click();
   await expect(feedback).toHaveCount(0);
-  await expect(retry).toBeVisible();
-  await expect(retry).toBeDisabled();
+  await expect(retry).toHaveCount(0);
   await expect(undo).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Passen", exact: true })).toHaveCount(0);
   await expect(board.getByRole("gridcell").first()).toBeEnabled();

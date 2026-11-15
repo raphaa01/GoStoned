@@ -59,7 +59,7 @@ test("Home prefetch and an immediate puzzle tab click share the same slow reques
   expect(requests.puzzles).toBe(1);
 });
 
-test("fresh puzzles show retry and can advance without solving first", async ({ page }) => {
+test("fresh puzzles can advance and only offer retry after a move", async ({ page }) => {
   const requests = await installCompactFixture(page);
   let restarted = false;
   await page.route(`**/api/puzzles/${GAME_ID}/attempt`, async (route) => {
@@ -74,13 +74,12 @@ test("fresh puzzles show retry and can advance without solving first", async ({ 
   await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
   const retry = page.getByRole("button", { name: "Try again", exact: true });
   const next = page.getByRole("button", { name: "Next problem", exact: true });
-  await expect(retry).toBeVisible();
-  await expect(retry).toBeDisabled();
+  await expect(retry).toHaveCount(0);
   await page.locator(".intersection").nth(20).click();
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect.poll(() => restarted).toBe(true);
-  await expect(retry).toBeDisabled();
+  await expect(retry).toHaveCount(0);
   await expect(next).toBeInViewport({ ratio: 1 });
   await next.click();
   await expect(page.getByRole("tab", { name: "More problems" })).toHaveAttribute("aria-selected", "true");
