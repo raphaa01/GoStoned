@@ -691,6 +691,14 @@ export const zh = {
     "action": "返回 GoStone"
   },
   "puzzles": {
+    "checkingMove": "正在验证落子…",
+    "replayTitle": "复盘失误",
+    "replayPrevious": "上一步",
+    "replayNext": "下一步",
+    "replayStart": "失误前的局面",
+    "replayPass": "停一手",
+    "replayProgress": "{current}/{total} · {move}",
+    "replayMove": "{color} · {move}",
     "kicker": "围棋训练",
     "title": "找出最强走法。",
     "description": "解决今日局面，然后继续更多引擎生成的围棋题。",

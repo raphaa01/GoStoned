@@ -691,6 +691,14 @@ export const es = {
     "action": "Volver a GoStone"
   },
   "puzzles": {
+    "checkingMove": "Comprobando la jugada…",
+    "replayTitle": "Revisar el error",
+    "replayPrevious": "Jugada anterior",
+    "replayNext": "Jugada siguiente",
+    "replayStart": "Posición antes del error",
+    "replayPass": "Pasa",
+    "replayProgress": "{current}/{total} · {move}",
+    "replayMove": "{color} · {move}",
     "kicker": "Entrenamiento de Go",
     "title": "Encuentra el movimiento más fuerte.",
     "description": "Resuelve la posición de hoy y luego continúa con más problemas de Go generados por el motor.",

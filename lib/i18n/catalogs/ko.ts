@@ -691,6 +691,14 @@ export const ko = {
     "action": "GoStone으로 돌아가기"
   },
   "puzzles": {
+    "checkingMove": "착수 확인 중…",
+    "replayTitle": "실수 복기",
+    "replayPrevious": "이전 수",
+    "replayNext": "다음 수",
+    "replayStart": "실수 전의 국면",
+    "replayPass": "패스",
+    "replayProgress": "{current}/{total} · {move}",
+    "replayMove": "{color} · {move}",
     "kicker": "바둑 훈련",
     "title": "가장 강한 수를 찾으세요.",
     "description": "오늘의 상황을 풀고, 이어서 더 많은 엔진 생성 바둑 문제를 진행하세요.",

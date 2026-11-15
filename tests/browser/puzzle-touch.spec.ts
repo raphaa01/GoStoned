@@ -240,9 +240,11 @@ test("daily 13x13 puzzles cancel outside drags and place only valid releases", a
   await touchSession.detach();
 
   await expect(firstIntersection.locator(".stone--black")).toHaveCount(1);
-  await expect(firstIntersection).toHaveClass(/is-pending-move/);
+  const checking = page.getByText("Zug wird geprüft …", { exact: true });
+  await expect(checking).toBeVisible();
   await expect.poll(() => harness.attempts.length).toBe(1);
   expect(harness.attempts[0]).toEqual({ x: 0, y: 0, revision: 0 });
   harness.releaseAttemptResponse();
-  await expect(firstIntersection).not.toHaveClass(/is-pending-move/);
+  await expect(checking).toHaveCount(0);
+  await expect(firstIntersection.locator(".stone--black")).toHaveCount(1);
 });

@@ -80,6 +80,7 @@
   display: flex;
   gap: 6px;
   justify-content: space-between;
+  min-height: 44px;
   padding-inline: 3px;
 }
 .prompt { display: grid; font-size: .875rem; gap: 3px; }
@@ -112,7 +113,56 @@
 
 .hintButton:disabled { opacity: .5; }
 
-.boardColumn { min-width: 0; }
+.boardColumn {
+  min-width: 0;
+  padding-block-start: 22px;
+  padding-inline-start: 23px;
+}
+
+.boardColumn :global(.go-board) { overflow: visible; }
+.boardColumn :global(.go-board[data-board-design] .board-coordinate-labels .board-coordinate) {
+  color: var(--color-ink-soft);
+  font-size: clamp(9px, 2.4cqw, 12px);
+  pointer-events: none;
+}
+.boardColumn :global(.go-board .board-coordinate--column) { top: -19px; }
+.boardColumn :global(.go-board .board-coordinate--row) {
+  left: -23px;
+  text-align: center;
+  width: 17px;
+}
+
+.replay {
+  align-items: center;
+  background: var(--color-canvas);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  padding: 3px;
+}
+
+.replayButton {
+  align-items: center;
+  background: var(--color-moss-soft);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.replayButton:disabled {
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: .6;
+}
+
+.replayStatus { display: grid; gap: 2px; font-size: .8125rem; line-height: 1.25; text-align: center; }
+.replayStatus span { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 
 .controls {
   display: grid;

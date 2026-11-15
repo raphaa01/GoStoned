@@ -44,22 +44,25 @@ export async function readImportedPuzzleHub(playerKey: string, mode: PuzzleKind)
   const puzzles = entries.map(({ puzzle, id }) => puzzleView(puzzle, result.rows.find((row) => row.id === id), mode, date));
   return { status: "ready", mode, puzzles: orderPuzzleQueue(puzzles, rank.kind === "kyu" ? rank.value : 1), expectedPerCategory: 0, categoryCounts: Object.fromEntries(PUZZLE_CATEGORIES.map((category) => [category, 0])) as PuzzleHub["categoryCounts"], dailyCycleLength: IMPORTED_PUZZLES.length };
 }
-async function findPuzzle(id: string): Promise<CatalogEntry> {
+async function findAccessiblePuzzle(id: string, accountAccess: boolean): Promise<ImportedPuzzle> {
   const puzzle = IMPORTED_PUZZLES.find((candidate) => candidate.id === id);
-  if (puzzle) return { puzzle, id, dailyDate: null };
-  const result = await query<{ model_name: string }>("SELECT model_name FROM puzzles WHERE id = $1 AND engine_version = $2", [id, IMPORTED_CATALOG_VERSION]);
-  const dailyDate = result.rows[0]?.model_name.match(/^gostone-import-0\.1:daily:(\d{4}-\d{2}-\d{2})$/)?.[1];
+  if (puzzle && accountAccess) return puzzle;
+
+  const accountRequired = () => new GameServiceError("Please log in first.", 401, "authentication_required");
+  if (puzzle) throw accountRequired();
+
+  const result = await query<{ model_name: string; today: string }>(`SELECT model_name,
+    (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS today
+    FROM puzzles WHERE id = $1 AND engine_version = $2`, [id, IMPORTED_CATALOG_VERSION]);
+  const row = result.rows[0];
+  const dailyDate = row?.model_name.match(/^gostone-import-0\.1:daily:(\d{4}-\d{2}-\d{2})$/)?.[1];
   if (!dailyDate || dailyImportedPuzzleId(dailyDate) !== id) throw new GameServiceError("Puzzle not found.", 404, "puzzle_not_found");
-  return { puzzle: dailyImportedPuzzle(dailyDate), id, dailyDate };
+  if (!accountAccess && dailyDate !== row.today) throw accountRequired();
+  return dailyImportedPuzzle(dailyDate);
 }
-async function assertAccess(entry: CatalogEntry, accountAccess: boolean) {
-  if (accountAccess) return;
-  if (entry.dailyDate !== await puzzleDate()) throw new GameServiceError("Please log in first.", 401, "authentication_required");
-}
+
 export async function attemptImportedPuzzle(id: string, playerKey: string, selected: PuzzleAttemptInput, accountAccess: boolean): Promise<PuzzleAttemptResult> {
-  const entry = await findPuzzle(id);
-  const { puzzle } = entry;
-  await assertAccess(entry, accountAccess);
+  const puzzle = await findAccessiblePuzzle(id, accountAccess);
   return withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`puzzle:${id}:${playerKey}`]);
     const stored = await client.query<AttemptRow>("SELECT puzzle_id AS id, attempt_count, solved, first_attempt_correct, variation_progress, variation_revision FROM puzzle_attempts WHERE puzzle_id = $1 AND player_key = $2 FOR UPDATE", [id, playerKey]);
@@ -123,9 +126,7 @@ export async function attemptImportedPuzzle(id: string, playerKey: string, selec
   });
 }
 export async function readImportedPuzzleHint(id: string, playerKey: string, accountAccess: boolean): Promise<PuzzleHint> {
-  const entry = await findPuzzle(id);
-  const { puzzle } = entry;
-  await assertAccess(entry, accountAccess);
+  const puzzle = await findAccessiblePuzzle(id, accountAccess);
   const stored = await query<AttemptRow>("SELECT variation_progress FROM puzzle_attempts WHERE puzzle_id = $1 AND player_key = $2", [id, playerKey]);
   const progress = stored.rows[0]?.variation_progress ?? [];
   const hint = matchingPuzzlePaths(puzzle, progress).find((path) => path.solved)?.line[progress.length];
