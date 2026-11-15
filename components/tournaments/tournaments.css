@@ -265,7 +265,7 @@ a.tournament-row:hover strong {
   font-size: 14px;
 }
 .tournament-standings {
-  margin: 36px 0;
+  margin: 16px 0;
 }
 .tournament-table-scroll {
   overflow-x: auto;
@@ -280,6 +280,7 @@ a.tournament-row:hover strong {
 }
 .tournament-standings td,
 .tournament-standings th {
+  border: 0;
   padding: 15px 12px;
   border-bottom: 1px solid var(--line);
   font-weight: 400;

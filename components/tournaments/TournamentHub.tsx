@@ -545,7 +545,8 @@ function TournamentHubBody({
             {live && joinedMonthly ? (
               <TournamentHub id={joinedMonthly.id} mobile={mobile} embedded />
             ) : null}
-            {live ? <RapidLeaderboards /> : <RapidCountdown startsAt={startsAt} now={now} />}
+            {live && !joinedMonthly ? <RapidLeaderboards /> : null}
+            {!live ? <RapidCountdown startsAt={startsAt} now={now} /> : null}
             <TournamentHistory mobile={mobile} />
             {!mobile ? (
               <section className="tournament-monthly">
@@ -983,6 +984,7 @@ function TournamentHubBody({
       {rapid && gameLimit === RAPID_GAMES ? (
         <>
           <RapidStandings rows={detail.standings} userId={detail.userId} />
+          {t.status === "running" && t.month === monthlyWindow(new Date(now)).month ? <RapidLeaderboards /> : null}
           {t.status === "finished" && t.month ? <RapidLeaderboards month={t.month} /> : null}
         </>
       ) : (
