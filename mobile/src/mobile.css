@@ -407,9 +407,9 @@ html[data-mobile-platform="ios"] .mobile-play-dock {
 
 .mobile-app-content .size-selector { padding: 3px; }
 .mobile-app-content .size-selector button { min-height: 40px; }
-.mobile-app-content .play-pace-column { max-width: none; padding: 0 !important; width: 100%; }
+.mobile-app-content .play-pace-column { max-width: none; padding: 12px; width: 100%; }
 .mobile-app-content .play-pace-heading { border-bottom: 0; padding: 0; }
-.mobile-app-content .play-pace-heading h1 { font-size: 18px !important; margin: 0 0 var(--space-2) !important; }
+.mobile-app-content .play-pace-heading h1 { font-size: 18px !important; margin: 0 !important; overflow-wrap: anywhere; }
 .mobile-app-content .time-selector { gap: var(--space-1) !important; }
 .mobile-app-content .time-selector button {
   border-radius: 8px !important;
@@ -576,7 +576,6 @@ html[data-mobile-app="true"] :where(.modal-card, .confirm-modal, .friends-modal)
 @media (min-width: 760px) {
   .mobile-app-content .play-board-preview,
   .mobile-app-content .play-board-column .size-selector { width: min(40vw, 42dvh, 390px) !important; }
-  .mobile-app-content .play-pace-column { padding-top: var(--space-3) !important; }
 }
 
 /* Sections use spacing and one divider instead of nested card frames. */
@@ -731,7 +730,7 @@ html[data-mobile-app="true"] .game-toolbar-menu { background: var(--mobile-surfa
   .mobile-app-content .play-board-column { position: static; }
   .mobile-app-content .play-board-preview,
   .mobile-app-content .play-board-column .size-selector { width: min(100%, 54dvh, 500px) !important; }
-  .mobile-app-content .play-pace-column { border: 0; margin: 0; padding: 0 !important; }
+  .mobile-app-content .play-pace-column { margin: 0; }
   .mobile-app-content .time-selector button { min-height: 62px; }
   .mobile-app-content .time-selector strong { font-size: 17px !important; }
   .mobile-app-content .time-selector-copy span { font-size: 12px; }

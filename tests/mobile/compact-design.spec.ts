@@ -248,6 +248,16 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
         }).map((element) => element.className));
         expect(outside, route).toEqual([]);
         if (route === "/play") {
+          const pace = page.locator(".play-pace-column");
+          const clearance = await pace.evaluate((card) => {
+            const title = card.querySelector("h1")!;
+            const text = document.createRange();
+            text.selectNodeContents(title);
+            const frame = card.getBoundingClientRect();
+            const heading = text.getBoundingClientRect();
+            return Math.min(heading.left - frame.left, frame.right - heading.right, heading.top - frame.top);
+          });
+          expect(clearance).toBeGreaterThanOrEqual(8);
           const board = (await page.locator(".play-board-preview").boundingBox())!;
           const time = (await page.locator(".time-selector").boundingBox())!;
           expect(board.x + board.width <= time.x || board.y + board.height <= time.y, "board and time selector must not overlap").toBe(true);

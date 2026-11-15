@@ -34,6 +34,12 @@ export function registerGameReadabilityTests() {
       await expect(page.locator(".game-panel-player.is-to-play")).toHaveCount(1);
       await expect(page.locator(".game-panel-player.is-to-play .player-clock")).toHaveClass(/is-running/);
       await expect(page.locator(".focused-board-status strong")).toHaveCount(0);
+      const clockClearance = await running.evaluate(clock => {
+        const row = clock.closest(".game-panel-player")!.getBoundingClientRect();
+        const bounds = clock.getBoundingClientRect();
+        return Math.min(bounds.top - row.top, row.bottom - bounds.bottom, row.right - bounds.right);
+      });
+      expect(clockClearance).toBeGreaterThanOrEqual(8);
       expect(await contrast(running.locator("strong"), running)).toBeGreaterThanOrEqual(4.5);
       expect(await contrast(running.locator("span"), running)).toBeGreaterThanOrEqual(4.5);
       const idle = page.locator(".player-clock:not(.is-running)");

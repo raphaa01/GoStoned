@@ -259,7 +259,7 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
   border: 0;
   border-radius: var(--radius-sm);
   margin-block: 4px;
-  padding-inline: 8px;
+  padding: 8px 12px;
 }
 .game-player-panel .game-panel-player.is-to-play {
   box-shadow: inset 0 0 0 2px var(--color-moss-strong);
@@ -449,6 +449,5 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
 
 @media (max-width: 620px) {
   .modal-backdrop:not(.modal-backdrop--onboarding, .modal-backdrop--scoring-help) { align-items: center; }
-  .game-player-panel .game-panel-player { padding-inline: 6px; }
   .web-home { gap: 10px; }
 }
