@@ -4,6 +4,10 @@ import { gameFor, GAME_ID, installHarness, USER } from "./boardDesignHarness";
 export async function contrast(locator: Locator, background: Locator = locator) {
   const foreground = await locator.evaluate((element) => getComputedStyle(element).color);
   const surface = await background.evaluate((element) => getComputedStyle(element).backgroundColor);
+  return colorContrast(foreground, surface);
+}
+
+export function colorContrast(foreground: string, surface: string) {
   const luminance = (value: string) => {
     const channels = value.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((channel) => {
       const normalized = channel / 255;
@@ -31,6 +35,15 @@ export function registerGameReadabilityTests() {
       await page.goto(`/de/game/${GAME_ID}`);
       const running = page.locator(".player-clock.is-running");
       await expect(running).toBeVisible();
+      await expect(page.locator(".game-panel-player.is-to-play")).toHaveCount(1);
+      await expect(page.locator(".game-panel-player.is-to-play .player-clock")).toHaveClass(/is-running/);
+      await expect(page.locator(".focused-board-status strong")).toHaveCount(0);
+      const clockClearance = await running.evaluate(clock => {
+        const row = clock.closest(".game-panel-player")!.getBoundingClientRect();
+        const bounds = clock.getBoundingClientRect();
+        return Math.min(bounds.top - row.top, row.bottom - bounds.bottom, row.right - bounds.right);
+      });
+      expect(clockClearance).toBeGreaterThanOrEqual(8);
       expect(await contrast(running.locator("strong"), running)).toBeGreaterThanOrEqual(4.5);
       expect(await contrast(running.locator("span"), running)).toBeGreaterThanOrEqual(4.5);
       const idle = page.locator(".player-clock:not(.is-running)");

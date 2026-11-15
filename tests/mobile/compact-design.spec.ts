@@ -59,6 +59,32 @@ test("Home prefetch and an immediate puzzle tab click share the same slow reques
   expect(requests.puzzles).toBe(1);
 });
 
+test("fresh puzzles can advance and only offer retry after a move", async ({ page }) => {
+  const requests = await installCompactFixture(page);
+  let restarted = false;
+  await page.route(`**/api/puzzles/${GAME_ID}/attempt`, async (route) => {
+    if (route.request().postDataJSON().action !== "restart") return route.fallback();
+    restarted = true;
+    await route.fulfill({ json: { ok: true, actor: USER.playerKey, attempt: {
+      puzzleId: GAME_ID, outcome: "continue", solved: false, attemptCount: requests.attempts + 1,
+      firstAttemptCorrect: true, variationProgress: [], variationRevision: 2, solution: null, displayLine: [],
+    } } });
+  });
+  await page.goto("/puzzles");
+  await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  const next = page.getByRole("button", { name: "Next problem", exact: true });
+  await expect(retry).toHaveCount(0);
+  await page.locator(".intersection").nth(20).click();
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(() => restarted).toBe(true);
+  await expect(retry).toHaveCount(0);
+  await expect(next).toBeInViewport({ ratio: 1 });
+  await next.click();
+  await expect(page.getByRole("tab", { name: "More problems" })).toHaveAttribute("aria-selected", "true");
+});
+
 test("an expired puzzle paints its snapshot while a slow network refresh is pending", async ({ page }) => {
   await page.clock.install();
   await installCompactFixture(page);
@@ -70,6 +96,7 @@ test("an expired puzzle paints its snapshot while a slow network refresh is pend
   let refreshing = false;
   await page.route("**/api/puzzles?mode=daily", async route => { refreshing = true; await gate; await route.fallback(); });
   await page.clock.fastForward(61_000);
+  await page.clock.runFor(200);
   await expect.poll(() => refreshing).toBe(true);
   await page.locator(".mobile-tab-bar").getByRole("link", { name: "Puzzles", exact: true }).click();
   await expect(page.locator(".go-board")).toBeVisible();
@@ -80,10 +107,8 @@ test("returning to daily puzzle, leaderboard, review and profile reuses reads; m
   const requests = await installCompactFixture(page);
   await page.goto("/");
   await expect(page.getByText("AutumnGoban3", { exact: true })).toBeVisible();
-  const headingSize = await page.locator(".mobile-home-section h2").first().evaluate((heading) => getComputedStyle(heading).fontSize);
-  for (const title of await page.locator(".mobile-home-action strong").all()) {
-    await expect(title).toHaveCSS("font-size", headingSize);
-  }
+  await expect(page.locator(".home-shortcuts .home-shortcut")).toHaveCount(2);
+  await expect(page.locator("main a[href*='/puzzles']")).toHaveCount(0);
   // Both destinations are warm before the first tab click, not just on return.
   await expect.poll(() => requests.puzzles).toBe(1);
   await expect.poll(() => requests.stats).toBe(1);
@@ -141,7 +166,7 @@ test("solved daily puzzle leads straight to practice within the phone viewport",
   await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
   await expect(page.getByText("Solved on the first try", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Goal reached.", { exact: true })).toHaveCount(0);
-  const next = page.getByRole("button", { name: "More problems" });
+  const next = page.getByRole("button", { name: "Next problem" });
   const nextBox = (await next.boundingBox())!;
   const tabsBox = (await page.locator(".mobile-tab-bar").boundingBox())!;
   expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(tabsBox.y);
@@ -222,6 +247,16 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
         }).map((element) => element.className));
         expect(outside, route).toEqual([]);
         if (route === "/play") {
+          const pace = page.locator(".play-pace-column");
+          const clearance = await pace.evaluate((card) => {
+            const title = card.querySelector("h1")!;
+            const text = document.createRange();
+            text.selectNodeContents(title);
+            const frame = card.getBoundingClientRect();
+            const heading = text.getBoundingClientRect();
+            return Math.min(heading.left - frame.left, frame.right - heading.right, heading.top - frame.top);
+          });
+          expect(clearance).toBeGreaterThanOrEqual(8);
           const board = (await page.locator(".play-board-preview").boundingBox())!;
           const time = (await page.locator(".time-selector").boundingBox())!;
           expect(board.x + board.width <= time.x || board.y + board.height <= time.y, "board and time selector must not overlap").toBe(true);
@@ -229,7 +264,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
         }
         if (route === "/") {
           await expect(page.getByText("Find the strongest move on the board.")).toHaveCount(0);
-          const actions = (await page.locator(".mobile-home-actions").boundingBox())!;
+          const actions = (await page.locator(".home-shortcuts").boundingBox())!;
           expect(actions.height).toBeLessThan(210);
         }
         await page.screenshot({ path: `.cache/compact-${route.replaceAll("/", "") || "home"}-${theme}-${viewport.width}.png` });

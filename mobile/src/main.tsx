@@ -9,6 +9,8 @@ import "./mobile.css";
 import "./tournaments.css";
 import "./local-play.css";
 import "@/app/board-designs.css";
+import "@/app/product-theme.css";
+import "./product-mobile.css";
 import { MobileApp } from "./MobileApp";
 import { installNativeChromeBridge } from "./nativeChrome";
 import { installMobileFetchBridge } from "./runtime";

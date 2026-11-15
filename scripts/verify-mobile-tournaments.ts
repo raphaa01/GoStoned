@@ -172,8 +172,8 @@ async function run() {
       await joinTournament(entrant.id, { id: rapid.id });
     }
     await phone.goto(`${app}/de`);
-    const homeLink = phone.locator(".mobile-home-tournament-link");
-    await expect(homeLink).toContainText("Nicht angemeldet");
+    const homeLink = phone.locator(".home-tournament");
+    await expect(homeLink).toHaveAttribute("href", "/de/tournaments");
     await homeLink.click();
     await expect(
       phone.getByRole("heading", { name: "Monthly Rapid", exact: true }),
@@ -193,7 +193,9 @@ async function run() {
       fullPage: true,
     });
     await phone.locator('.mobile-tab-bar a[href="/de"]').click();
-    await expect(homeLink.getByText("Angemeldet", { exact: true })).toBeVisible();
+    await homeLink.click();
+    await expect(phone.getByText(/^Angemeldet ·/)).toBeVisible();
+    await phone.locator('.mobile-tab-bar a[href="/de"]').click();
 
     await web.goto(`${api}/de/tournaments/${rapid.id}`);
     await web.getByRole("button", { name: "Beitreten", exact: true }).click();

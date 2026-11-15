@@ -69,6 +69,7 @@ export function FriendsHub({ tournamentTrophies = false }: { tournamentTrophies?
   const chatTitleId = useId();
   const profileTitleId = useId();
   const inviteTitleId = useId();
+  const inviteDescriptionId = useId();
   const chatInput = useRef<HTMLInputElement>(null);
   const requestGeneration = useRef(0);
   const actorHeader = useMemo<Record<string, string>>(
@@ -375,8 +376,39 @@ export function FriendsHub({ tournamentTrophies = false }: { tournamentTrophies?
         {profile ? <><header><span className="section-kicker">{copy.profileTitle}</span><button aria-label={copy.close} onClick={() => setProfile(null)} type="button"><X /></button></header><div className="profile-preview__identity"><ProfileAvatar size="lg" style={profile.avatarStyle} /><div><h2 id={profileTitleId}>{profile.displayName}</h2><p>@{profile.username} · {copy[profile.presence]}</p></div></div><dl className="profile-preview__stats"><div><dt>{copy.rating}</dt><dd>{profile.rating === null ? copy.provisional : Math.round(profile.rating)}</dd></div><div><dt>{copy.ratedGames}</dt><dd>{profile.ratedGames}</dd></div><div><dt>{copy.friendlyGames}</dt><dd>{profile.friendlyGames}</dd></div><div><dt>{copy.sharedGames}</dt><dd>{profile.sharedFriendlyGames}</dd></div>{profile.tournamentWins !== undefined ? <div><dt>{getTournamentsCopy(locale).tournamentWins}</dt><dd>{profile.tournamentWins}</dd></div> : null}</dl>{tournamentTrophies ? <TrophyCase userId={profile.userId} mobile={tournamentTrophies === "mobile"} /> : null}<p>{copy.joined}: {displayDate(profile.joinedAt, locale)}</p><footer>{profile.friendshipStatus === "friends" && profile.friendshipId ? <><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setSelectedFriend(friend); setProfile(null); }} variant="secondary"><MessageCircle size={17} /> {copy.message}</Button><Button onClick={() => { const friend = dashboard.friends.find(({ friendshipId }) => friendshipId === profile.friendshipId); if (friend) setInviteFriend(friend); setProfile(null); }}><Gamepad2 size={17} /> {copy.invite}</Button><Button onClick={() => void remove(profile.friendshipId!)} variant="ghost"><UserMinus size={17} /> {copy.removeFriend}</Button></> : profile.friendshipStatus === "none" ? <Button onClick={() => void addFriend({ ...profile, friendshipId: null, friendshipStatus: "none" })}><UserPlus size={17} /> {copy.addFriend}</Button> : null}</footer></> : null}
       </ModalDialog>
 
-      <ModalDialog className="friends-modal invite-modal" onDismiss={() => setInviteFriend(null)} open={Boolean(inviteFriend)} titleId={inviteTitleId}>
-        {inviteFriend ? <form onSubmit={sendInvite}><header><div><span className="section-kicker">{copy.unratedNotice}</span><h2 id={inviteTitleId}>{formatFriendsText(copy.inviteTitle, { name: inviteFriend.displayName })}</h2></div><button aria-label={copy.close} onClick={() => setInviteFriend(null)} type="button"><X /></button></header><fieldset><legend>{copy.boardSize}</legend><div className="invite-choice-grid">{([9, 13, 19] as const).map((size) => <label className={boardSize === size ? "is-selected" : ""} key={size}><input checked={boardSize === size} name="board-size" onChange={() => setBoardSize(size)} type="radio" />{copy[`board${size}`]}</label>)}</div></fieldset><label className="invite-time"><span>{copy.timeControl}</span><select onChange={(event) => setTimeControl(event.target.value as TimeControlId)} value={timeControl}>{(["blitz", "rapid", "classic"] as const).map((control) => <option key={control} value={control}>{dictionary.timeControls[control].name} · {dictionary.timeControls[control].shortLabel}</option>)}</select></label><p className="unrated-callout"><Gamepad2 size={18} /> {copy.unratedNotice}</p><footer><Button onClick={() => setInviteFriend(null)} type="button" variant="ghost">{copy.close}</Button><Button disabled={busy === `invite-${inviteFriend.friendshipId}`} type="submit">{copy.sendInvite}</Button></footer></form> : null}
+      <ModalDialog className="friends-modal invite-modal" descriptionId={inviteDescriptionId} onDismiss={() => setInviteFriend(null)} open={Boolean(inviteFriend)} titleId={inviteTitleId}>
+        {inviteFriend ? (
+          <form onSubmit={sendInvite}>
+            <header>
+              <h2 id={inviteTitleId}>{formatFriendsText(copy.inviteTitle, { name: inviteFriend.displayName })}</h2>
+              <button aria-label={copy.close} onClick={() => setInviteFriend(null)} type="button"><X aria-hidden="true" /></button>
+            </header>
+            <fieldset>
+              <legend>{copy.boardSize}</legend>
+              <div className="invite-choice-grid">
+                {([9, 13, 19] as const).map((size) => (
+                  <label className={boardSize === size ? "is-selected" : ""} key={size}>
+                    <input checked={boardSize === size} name="board-size" onChange={() => setBoardSize(size)} type="radio" />
+                    {size}×{size}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="invite-time">
+              <span>{copy.timeControl}</span>
+              <select onChange={(event) => setTimeControl(event.target.value as TimeControlId)} value={timeControl}>
+                {(["blitz", "rapid", "classic"] as const).map((control) => (
+                  <option key={control} value={control}>{dictionary.timeControls[control].name} · {dictionary.timeControls[control].shortLabel}</option>
+                ))}
+              </select>
+            </label>
+            <p className="unrated-callout" id={inviteDescriptionId}>{copy.friendlyGame}</p>
+            <footer>
+              <Button onClick={() => setInviteFriend(null)} type="button" variant="ghost">{dictionary.common.cancel}</Button>
+              <Button disabled={busy === `invite-${inviteFriend.friendshipId}`} type="submit">{copy.sendInvite}</Button>
+            </footer>
+          </form>
+        ) : null}
       </ModalDialog>
     </div>
   );

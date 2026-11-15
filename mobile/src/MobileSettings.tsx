@@ -1,7 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { getMobileCopy } from "@/lib/i18n/mobile";
 import { getPrivacyCopy } from "@/lib/i18n/privacy";
@@ -37,7 +36,6 @@ export function MobileSettings() {
   return (
     <SettingsView>
       <section className="mobile-settings" aria-label={copy.settings}>
-        <LanguageSwitcher />
         <nav aria-label={copy.legal} className="mobile-legal-links">
           <MobileLegalLink pathname="/privacy">{privacy.navLabel}</MobileLegalLink>
           <MobileLegalLink pathname="/impressum">{dictionary.nav.legal}</MobileLegalLink>

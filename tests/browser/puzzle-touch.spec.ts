@@ -150,6 +150,7 @@ test("daily puzzle mistakes show compact retry and undo controls below the board
   const retry = page.getByRole("button", { name: "Erneut versuchen" });
   const undo = page.getByRole("button", { name: "Zug zurück" });
   await expect(retry).toBeVisible();
+  await expect(retry).toBeEnabled();
   await expect(undo).toBeVisible();
   const boardBounds = await board.boundingBox();
   const feedbackBounds = await feedback.boundingBox();

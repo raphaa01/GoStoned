@@ -14,7 +14,7 @@
   margin: 0 0 16px;
 }
 .tournaments section + section {
-  margin-top: 36px;
+  margin-top: 12px;
 }
 .tournament-heading {
   display: flex;
@@ -33,15 +33,15 @@
   margin: 0;
 }
 .tournament-monthly {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding: 28px 0;
-  margin: 32px 0 40px;
+  padding: clamp(12px, 3vw, 24px);
+  margin: 16px 0 20px;
 }
 .tournament-monthly h2 {
   margin: 8px 0 12px;
@@ -64,7 +64,7 @@
 .tournament-code {
   display: flex;
   gap: 12px;
-  margin: 24px 0;
+  margin: 12px 0;
 }
 .tournament-code input {
   width: 230px;
@@ -95,11 +95,12 @@
   outline-offset: 3px;
 }
 .tournament-settings {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  padding: 24px 0;
-  border-top: 1px solid var(--line);
+  padding: 12px;
 }
 .tournament-settings label {
   display: grid;
@@ -121,12 +122,14 @@
   align-self: end;
 }
 .tournament-row {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--line);
+  margin-block: 5px;
+  padding: 12px;
   color: var(--text);
   text-decoration: none;
 }
@@ -155,7 +158,7 @@ a.tournament-row:hover strong {
 .tournament-empty {
   color: var(--muted);
   font-size: 14px;
-  padding: 18px 0;
+  margin: 12px 0 0;
 }
 .tournament-back {
   display: inline-flex;
@@ -168,9 +171,9 @@ a.tournament-row:hover strong {
 }
 .tournament-lobby,
 .tournament-meta {
-  padding: 24px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 12px;
 }
 .tournament-invite-code {
   display: flex;
@@ -258,7 +261,6 @@ a.tournament-row:hover strong {
   align-items: center;
   gap: 16px;
   padding: 24px 0;
-  border-bottom: 1px solid var(--line);
 }
 .tournament-result span {
   color: var(--muted);
@@ -271,7 +273,8 @@ a.tournament-row:hover strong {
   overflow-x: auto;
 }
 .tournament-standings table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 4px;
   width: 100%;
   font-size: 14px;
   text-align: right;
@@ -281,9 +284,12 @@ a.tournament-row:hover strong {
 .tournament-standings td,
 .tournament-standings th {
   padding: 15px 12px;
-  border-bottom: 1px solid var(--line);
   font-weight: 400;
 }
+.tournament-standings tbody :is(th, td) { background: var(--color-surface); }
+.tournament-standings tbody tr[data-self="true"] :is(th, td) { background: var(--color-moss-soft); }
+.tournament-standings tbody tr > :first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.tournament-standings tbody tr > :last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .tournament-standings thead th {
   color: var(--muted);
   font-size: 12px;
@@ -302,8 +308,18 @@ a.tournament-row:hover strong {
   color: var(--green);
   background: var(--color-moss-soft);
 }
-.tournament-qualification {
-  padding: 36px 0;
+.tournament-qualification,
+.tournament-rapid-heading,
+.tournament-history,
+.tournament-private,
+.tournament-countdown {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: clamp(12px, 3vw, 20px);
+}
+.tournament-private .tournament-heading {
+  gap: 8px;
+  margin: 0;
 }
 .tournament-qualification p {
   color: var(--muted);
@@ -331,7 +347,6 @@ a.tournament-row:hover strong {
   padding: 14px 20px;
   color: var(--text);
   background: var(--color-moss-soft);
-  border-bottom: 1px solid var(--line);
   font-size: 13px;
 }
 .tournament-notice a {
@@ -462,7 +477,7 @@ a.tournament-row:hover strong {
 .tournament-rapid-heading {
   display: grid;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 .tournament-rapid-heading :is(h1, p) {
   margin: 0;
@@ -471,13 +486,9 @@ a.tournament-row:hover strong {
 .tournament-activity {
   color: var(--muted);
 }
-.tournament-countdown {
-  margin-block: 24px;
-}
+.tournament-countdown,
 .tournament-history {
-  border-block: 1px solid var(--line);
-  margin-block: 24px;
-  padding-block: 16px;
+  margin-block: 12px;
 }
 .tournament-history summary {
   cursor: pointer;

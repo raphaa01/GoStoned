@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
-import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { SkipLink } from "@/components/layout/SkipLink";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -1347,9 +1346,8 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
             className={connectionState.kind === "reconnecting" ? "spin" : undefined}
             size={15}
           />
-          {connectionLabel}
+          <span className="game-connection-label">{connectionLabel}</span>
         </span>
-        <LanguageSwitcher />
         {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink key={game.id} gameId={game.id} finished={game.status === "finished"} mobile={tournamentNavigation === "mobile"} /> : null}
         <button
           className="game-exit"
@@ -1395,17 +1393,8 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
         ) : null}
         <section className="focused-board-panel">
           <div className="focused-board-status" ref={boardStatus} tabIndex={-1}>
-            <strong>
-              {game.status === "active" && !gameInteractionAllowed
-                ? copy.controlsPaused
-                : canMove
-                ? copy.yourTurn
-                : game.status === "finished"
-                  ? `${copy.gameOver} · ${game.result}`
-                  : game.phase === "scoring"
-                    ? copy.confirmFinalPosition
-                    : copy.opponentTurn}
-            </strong>
+            {game.status === "finished" ? <strong>{copy.gameOver} · {game.result}</strong>
+              : game.phase === "scoring" ? <strong>{copy.confirmFinalPosition}</strong> : null}
             <span>
               {game.boardSize}×{game.boardSize} · {copy.move}{" "}
               {game.moveCount + (pendingMovePreview?.applied ? 1 : 0)}

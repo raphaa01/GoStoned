@@ -14,6 +14,7 @@ export function registerBetaGameTests(mobile: boolean) {
     state.game.board[0][1] = null;
     await page.goto(`/de/game/${GAME_ID}`);
     await expect(page.locator(".game-pass-notice")).toContainText("Friend");
+    await expect(page.locator(".game-topbar .language-menu-trigger")).toHaveCount(0);
     await expect(page.locator(".game-pass-notice")).toContainText("Weiß passte.");
     if (mobile) {
       await expect(page.locator(".game-player-rank")).toHaveCount(2);
@@ -55,8 +56,71 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(home).toHaveCSS("min-height", "50px");
     await home.click();
     await expect(page).toHaveURL(/\/de\/?$/);
-    await expect(page.locator(mobile ? ".mobile-home" : ".home-experience")).toBeVisible();
+    await expect(page.locator(mobile ? ".mobile-home" : ".web-home")).toBeVisible();
   });
+
+  for (const theme of ["light", "dark"]) {
+    test(`result actions align and stay tappable on compact screens (${theme})`, async ({ page }, info) => {
+      test.skip(!info.project.name.includes("390"));
+      const state = await installHarness(page);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript(theme => {
+        localStorage.setItem("gostone.mobile.theme.v1", theme);
+        localStorage.setItem("gostone.theme.v1", theme);
+      }, theme);
+      for (const won of [true, false]) {
+        const game = gameFor(9, "friendly");
+        state.game = { ...game, status: "finished", winnerKey: won ? game.blackPlayerKey : game.whitePlayerKey,
+          result: won ? "B+R" : "W+R", finishReason: "resignation", finishedAt: new Date().toISOString(), turn: null };
+        await page.goto(`/game/${GAME_ID}`);
+        if (mobile) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByRole("heading", { name: won ? "Victory" : "Defeat", exact: true })).toBeVisible();
+        const focusedButton = dialog.locator(".result-play-action");
+        await expect(focusedButton).toBeFocused();
+        await expect(focusedButton).toHaveCSS("outline-offset", "-3px");
+        await expect(focusedButton).toHaveCSS("box-shadow", "none");
+        const pairs = [
+          [dialog.locator(".result-play-action"), dialog.locator(".result-analysis-action")],
+          [dialog.locator(".result-view-board"), dialog.locator(".result-share-action")],
+        ];
+        for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+          await page.setViewportSize(viewport);
+          await assertNoOverflow(page);
+          if (viewport.width === 320) {
+            const aligned = await page.locator(".game-topbar").evaluate(element => {
+              const y = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
+              const brand = y(".game-brand");
+              const exit = y(".game-exit");
+              return brand.top + brand.height / 2 > exit.top && brand.top + brand.height / 2 < exit.bottom;
+            });
+            expect(aligned).toBe(true);
+          }
+          const [homeBounds, ...rows] = await dialog.evaluate(element => {
+            const bounds = (selector: string) => element.querySelector(selector)!.getBoundingClientRect().toJSON();
+            return [bounds(".result-home-action"), [bounds(".result-play-action"), bounds(".result-analysis-action")],
+              [bounds(".result-view-board"), bounds(".result-share-action")]];
+          });
+          for (const [index, [left, right]] of pairs.entries()) {
+            const [a, b] = rows[index];
+            expect(a.x).toBeCloseTo(homeBounds.x, 0);
+            expect(b.x + b.width).toBeCloseTo(homeBounds.x + homeBounds.width, 0);
+            expect(a.width).toBeCloseTo(b.width, 0);
+            expect(a.height).toBeCloseTo(b.height, 0);
+            expect(a.height).toBeGreaterThanOrEqual(50);
+            expect(b.x - a.x - a.width).toBeGreaterThanOrEqual(7.5);
+            for (const button of [left, right]) {
+              await button.scrollIntoViewIfNeeded();
+              expect(await button.evaluate(element => {
+                const { x, y, width, height } = element.getBoundingClientRect();
+                return element.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+              })).toBe(true);
+            }
+          }
+        }
+      }
+    });
+  }
 
   test("puzzle undo removes the failed branch and continues at the last correct decision", async ({ page }) => {
     await installHarness(page);

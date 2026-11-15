@@ -44,6 +44,7 @@ function registerModal(backdrop: HTMLElement) {
   if (modalStack.length === 0) {
     originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.dataset.modalOpen = "";
   }
   modalStack.push(backdrop);
 }
@@ -59,6 +60,7 @@ function unregisterModal(backdrop: HTMLElement) {
   backgroundStates.clear();
   document.body.style.overflow = originalBodyOverflow ?? "";
   originalBodyOverflow = null;
+  delete document.documentElement.dataset.modalOpen;
 }
 
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
@@ -66,7 +68,8 @@ function focusableElements(dialog: HTMLElement): HTMLElement[] {
     dialog.querySelectorAll<HTMLElement>(
       "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
     ),
-  ).filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+  ).filter((element) => element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true"
+    && (!(element instanceof HTMLInputElement) || element.type !== "radio" || element.checked));
 }
 
 type ModalDialogProps = {
@@ -115,6 +118,15 @@ export function ModalDialog({
       ? activeElement
       : null;
     registerModal(currentBackdrop);
+    const viewport = window.visualViewport;
+    function fitViewport() {
+      if (!viewport || viewport.scale !== 1) return;
+      currentBackdrop.style.setProperty("--dialog-viewport-height", `${viewport.height}px`);
+      currentBackdrop.style.setProperty("--dialog-viewport-top", `${viewport.offsetTop}px`);
+    }
+    fitViewport();
+    viewport?.addEventListener("resize", fitViewport);
+    viewport?.addEventListener("scroll", fitViewport);
 
     const focusInside = (fromEnd = false) => {
       const focusable = focusableElements(currentDialog);
@@ -165,6 +177,8 @@ export function ModalDialog({
     document.addEventListener("focusin", containFocus);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      viewport?.removeEventListener("resize", fitViewport);
+      viewport?.removeEventListener("scroll", fitViewport);
       document.removeEventListener("focusin", containFocus);
       window.removeEventListener("keydown", handleKeyDown);
       unregisterModal(currentBackdrop);

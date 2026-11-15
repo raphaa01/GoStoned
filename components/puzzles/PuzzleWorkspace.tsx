@@ -293,8 +293,13 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const progress = copy.problemProgress
     .replace("{current}", String(mode === "daily" ? puzzle?.collectionOrder ?? 1 : selectedProblemIndex + 1))
     .replace("{total}", String(mode === "daily" ? currentHub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH : puzzles.length));
-  const showNext = mode === "daily" ? puzzle?.solved : puzzles.length > 1;
-  const canRetry = Boolean(branchLine || puzzle?.variationProgress.length);
+  const canUndo = !puzzle?.solved && Boolean(branchLine?.length || puzzle?.variationProgress.length);
+  const canRetry = !puzzle?.solved && Boolean(canUndo || hintMove || branchFeedback);
+
+  function restartPuzzle() {
+    if (puzzle?.variationProgress.length) void submitMove(0, 0, "restart");
+    else clearTransientState();
+  }
 
   return (
     <div className={styles.page}>
@@ -326,57 +331,66 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <strong>{copy.toPlay.replace("{color}", colorLabel)}</strong>
                 <span>{puzzle.rankKyu ? copy.approximateRank.replace("{rank}", String(puzzle.rankKyu)) : difficultyLabel}</span>
               </div>
+            </div>
+          </div>
+
+          <div className={styles.puzzleCard}>
+            <div className={styles.puzzleHeading}>
               <div className={styles.prompt}>
-                <span>{progress}</span>
+                <strong>{progress}</strong>
                 {puzzle.goal ? <p>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
               </div>
+              {!puzzle.solved && !branchLine ? (
+                <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
+                  <CircleHelp aria-hidden="true" size={20} />
+                </button>
+              ) : null}
             </div>
-            {!puzzle.solved && !branchLine ? (
-              <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
-                <CircleHelp aria-hidden="true" size={20} />
-              </button>
-            ) : null}
-          </div>
 
-          {!puzzle.solved && (branchLine || branchFeedback) ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
-          <div className={styles.boardColumn}>
-            <GoBoard
-              boardSize={puzzle.boardSize}
-              boardState={displayBoard}
-              disabled={busy || puzzle.solved || branchLine !== null}
-              lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
-              hintMove={hintMove}
-              onIntersectionClick={submitMove}
-              pendingMove={pendingMove}
-              previewColor={puzzle.toPlay}
-              precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
-              viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
-              targetStones={puzzle.targetStones}
-            />
-          </div>
+            {!puzzle.solved && (branchLine || branchFeedback) ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
+            <div className={styles.boardColumn}>
+              <GoBoard
+                boardSize={puzzle.boardSize}
+                boardState={displayBoard}
+                disabled={busy || puzzle.solved || branchLine !== null}
+                lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
+                hintMove={hintMove}
+                onIntersectionClick={submitMove}
+                pendingMove={pendingMove}
+                previewColor={puzzle.toPlay}
+                precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
+                viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
+                targetStones={puzzle.targetStones}
+              />
+            </div>
 
-          <div className={styles.controls}>
             {puzzle.solved ? (
               <p className={styles.solution} role="status">
                 <Check aria-hidden="true" size={18} /> {copy.correct}
               </p>
-            ) : canRetry ? (
-              <div className={styles.feedbackActions}>
-                <button className="button button--secondary" disabled={busy} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
+            ) : null}
+            <div className={styles.controls}>
+              {canRetry ? (
+                <button className="button button--secondary" disabled={busy || hintBusy} onClick={restartPuzzle} type="button">
                   <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
                 </button>
-                <button className="button button--secondary" disabled={busy} onClick={undoPuzzleMove} type="button">
+              ) : null}
+              {canUndo ? (
+                <button className="button button--secondary" disabled={busy || hintBusy} onClick={undoPuzzleMove} type="button">
                   <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
                 </button>
-              </div>
-            ) : null}
-            {showNext ? (
-              <button className="button button--primary" disabled={busy || hintBusy || (mode === "daily" && authLoading)} onClick={mode === "daily" ? () => changeMode("practice") : changeProblem} type="button">
-                {mode === "daily" ? copy.practice : copy.next} <ArrowRight aria-hidden="true" size={18} />
+              ) : null}
+              <button
+                className="button button--primary"
+                disabled={busy || hintBusy || (mode === "daily" ? authLoading : puzzles.length < 2)}
+                onClick={mode === "daily" ? () => changeMode("practice") : changeProblem}
+                type="button"
+              >
+                {copy.next} <ArrowRight aria-hidden="true" size={16} />
               </button>
-            ) : null}
+            </div>
+            {error ? <p className={styles.error} role="alert">{error}</p> : null}
           </div>
-          {error ? <p className={styles.error} role="alert">{error}</p> : null}
         </section>
       )}
     </div>

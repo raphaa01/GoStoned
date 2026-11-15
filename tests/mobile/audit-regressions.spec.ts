@@ -38,8 +38,13 @@ test("app language changes work offline and survive back navigation and a cold e
   await page.goto("/");
   await expect(page).toHaveURL(/\/de$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await page.goto(`/game/${GAME_ID}`);
+  await expect(page).toHaveURL(new RegExp(`/de/game/${GAME_ID}$`));
+  await expect(page.locator(".game-topbar")).toBeVisible();
+  await expect(page.locator(".game-topbar .language-menu-trigger")).toHaveCount(0);
   await page.goto("/profile/settings");
   await page.locator(".language-menu-trigger").click();
+  await expect(page.getByRole("menuitemradio", { name: "Deutsch" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("menuitemradio", { name: "English" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.reload();

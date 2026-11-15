@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Search } from "lucide-react";
+import { Home } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -114,43 +114,44 @@ export function GameResultModal({
           </section>
         ) : null}
 
-        <button
-          className="button button--primary result-primary result-home-action"
-          disabled={exiting}
-          onClick={() => void exitResult(onHome)}
-          type="button"
-        >
-          <Home aria-hidden="true" size={18} />
-          {copy.home}
-        </button>
-        <div className="result-secondary-actions">
+        <div className="result-actions">
           <button
-            className="button button--secondary result-play-action"
+            className="button button--primary result-primary result-home-action"
             disabled={exiting}
-            onClick={() => void exitResult(onPlayAgain)}
-            ref={playAgainButton}
+            onClick={() => void exitResult(onHome)}
             type="button"
           >
-            {copy.findAnother}
+            <Home aria-hidden="true" size={18} />
+            {copy.home}
           </button>
-          <button
-            className="button button--secondary result-analysis-action"
-            disabled={exiting}
-            onClick={() => void exitResult(onAnalyze)}
-            type="button"
-          >
-            <Search aria-hidden="true" size={18} />
-            {dictionary.analysisReview.analyze}
-          </button>
+          <div className="result-secondary-actions">
+            <button
+              className="button button--secondary result-play-action"
+              disabled={exiting}
+              onClick={() => void exitResult(onPlayAgain)}
+              ref={playAgainButton}
+              type="button"
+            >
+              {copy.findAnother}
+            </button>
+            <button
+              className="button button--secondary result-analysis-action"
+              disabled={exiting}
+              onClick={() => void exitResult(onAnalyze)}
+              type="button"
+            >
+              {dictionary.analysisReview.analyze}
+            </button>
+          </div>
+          <div className="result-details-actions">
+            <button className="result-view-board" disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">
+              {copy.viewBoard}
+            </button>
+            <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
+          </div>
           <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
             {exiting ? dictionary.common.pleaseWait : ""}
           </span>
-        </div>
-        <div className="result-details-actions">
-          <button className="result-view-board" disabled={exiting} onClick={() => void exitResult(onViewBoard)} type="button">
-            {copy.viewBoard}
-          </button>
-          <FinishedGameShareButton compact gameId={game.id} playerKey={playerKey} />
         </div>
     </ModalDialog>
   );
