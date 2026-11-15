@@ -59,6 +59,33 @@ test("Home prefetch and an immediate puzzle tab click share the same slow reques
   expect(requests.puzzles).toBe(1);
 });
 
+test("fresh puzzles show retry and can advance without solving first", async ({ page }) => {
+  const requests = await installCompactFixture(page);
+  let restarted = false;
+  await page.route(`**/api/puzzles/${GAME_ID}/attempt`, async (route) => {
+    if (route.request().postDataJSON().action !== "restart") return route.fallback();
+    restarted = true;
+    await route.fulfill({ json: { ok: true, actor: USER.playerKey, attempt: {
+      puzzleId: GAME_ID, outcome: "continue", solved: false, attemptCount: requests.attempts + 1,
+      firstAttemptCorrect: true, variationProgress: [], variationRevision: 2, solution: null, displayLine: [],
+    } } });
+  });
+  await page.goto("/puzzles");
+  await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  const next = page.getByRole("button", { name: "Next problem", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(retry).toBeDisabled();
+  await page.locator(".intersection").nth(20).click();
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(() => restarted).toBe(true);
+  await expect(retry).toBeDisabled();
+  await expect(next).toBeInViewport({ ratio: 1 });
+  await next.click();
+  await expect(page.getByRole("tab", { name: "More problems" })).toHaveAttribute("aria-selected", "true");
+});
+
 test("an expired puzzle paints its snapshot while a slow network refresh is pending", async ({ page }) => {
   await page.clock.install();
   await installCompactFixture(page);
@@ -140,7 +167,7 @@ test("solved daily puzzle leads straight to practice within the phone viewport",
   await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
   await expect(page.getByText("Solved on the first try", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Goal reached.", { exact: true })).toHaveCount(0);
-  const next = page.getByRole("button", { name: "More problems" });
+  const next = page.getByRole("button", { name: "Next problem" });
   const nextBox = (await next.boundingBox())!;
   const tabsBox = (await page.locator(".mobile-tab-bar").boundingBox())!;
   expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(tabsBox.y);

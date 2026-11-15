@@ -22,12 +22,21 @@ for (const theme of ["light", "dark"]) {
     const readStone = () => canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
     const original = await readStone();
     const rect = (await canvas.boundingBox())!;
-    await page.mouse.move(rect.x + rect.width * .28, rect.y + rect.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(rect.x + rect.width * .85, rect.y + rect.height / 2, { steps: 14 });
-    await page.mouse.up();
+    const cdp = await page.context().newCDPSession(page);
+    const swipe = async (start: number, end: number) => {
+      const touch = (fraction: number) => [{ x: Math.round(rect.x + rect.width * fraction), y: Math.round(rect.y + rect.height / 2) }];
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: touch(start) });
+      for (let step = 1; step <= 10; step++) {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: touch(start + (end - start) * step / 10) });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await expect(page).toHaveURL("/");
+    };
+    await swipe(.22, .85);
     await expect.poll(readStone).not.toBe(original);
-    await expect(page).toHaveURL("/");
+    const afterRightSwipe = await readStone();
+    await swipe(.85, .25);
+    await expect.poll(readStone).not.toBe(afterRightSwipe);
     await link.tap();
     await expect(page).toHaveURL("/tournaments");
   });

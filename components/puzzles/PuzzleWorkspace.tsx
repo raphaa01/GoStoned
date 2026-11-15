@@ -293,8 +293,13 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const progress = copy.problemProgress
     .replace("{current}", String(mode === "daily" ? puzzle?.collectionOrder ?? 1 : selectedProblemIndex + 1))
     .replace("{total}", String(mode === "daily" ? currentHub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH : puzzles.length));
-  const showNext = mode === "daily" ? puzzle?.solved : puzzles.length > 1;
-  const canRetry = Boolean(branchLine || puzzle?.variationProgress.length);
+  const canUndo = !puzzle?.solved && Boolean(branchLine?.length || puzzle?.variationProgress.length);
+  const canRetry = !puzzle?.solved && Boolean(canUndo || hintMove || branchFeedback);
+
+  function restartPuzzle() {
+    if (puzzle?.variationProgress.length) void submitMove(0, 0, "restart");
+    else clearTransientState();
+  }
 
   return (
     <div className={styles.page}>
@@ -359,26 +364,28 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
               />
             </div>
 
+            {puzzle.solved ? (
+              <p className={styles.solution} role="status">
+                <Check aria-hidden="true" size={18} /> {copy.correct}
+              </p>
+            ) : null}
             <div className={styles.controls}>
-              {puzzle.solved ? (
-                <p className={styles.solution} role="status">
-                  <Check aria-hidden="true" size={18} /> {copy.correct}
-                </p>
-              ) : canRetry ? (
-                <div className={styles.feedbackActions}>
-                  <button className="button button--secondary" disabled={busy} onClick={() => { if (branchLine) clearTransientState(); else void submitMove(0, 0, "restart"); }} type="button">
-                    <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
-                  </button>
-                  <button className="button button--secondary" disabled={busy} onClick={undoPuzzleMove} type="button">
-                    <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
-                  </button>
-                </div>
-              ) : null}
-              {showNext ? (
-                <button className="button button--primary" disabled={busy || hintBusy || (mode === "daily" && authLoading)} onClick={mode === "daily" ? () => changeMode("practice") : changeProblem} type="button">
-                  {mode === "daily" ? copy.practice : copy.next} <ArrowRight aria-hidden="true" size={18} />
+              <button className="button button--secondary" disabled={busy || hintBusy || !canRetry} onClick={restartPuzzle} type="button">
+                <RotateCcw aria-hidden="true" size={16} /> {copy.retry}
+              </button>
+              {canUndo ? (
+                <button className="button button--secondary" disabled={busy || hintBusy} onClick={undoPuzzleMove} type="button">
+                  <Undo2 aria-hidden="true" size={16} /> {copy.undoMove}
                 </button>
               ) : null}
+              <button
+                className="button button--primary"
+                disabled={busy || hintBusy || (mode === "daily" ? authLoading : puzzles.length < 2)}
+                onClick={mode === "daily" ? () => changeMode("practice") : changeProblem}
+                type="button"
+              >
+                {copy.next} <ArrowRight aria-hidden="true" size={16} />
+              </button>
             </div>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
           </div>

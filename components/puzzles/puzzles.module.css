@@ -114,28 +114,29 @@
 
 .boardColumn { min-width: 0; }
 
-.controls,
-.feedbackActions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.controls {
+  display: grid;
+  gap: 5px;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
 }
-
-.controls { justify-content: space-between; }
-.controls:empty { display: none; }
-.controls > button { flex: 1 1 auto; }
-.feedbackActions { flex: 1 1 auto; }
 
 .controls button {
-  font-size: .875rem;
-  gap: 6px;
+  font-size: clamp(.75rem, 3.3vw, .875rem);
+  gap: 5px;
   justify-content: center;
+  line-height: 1.15;
   min-height: 44px;
-  padding-inline: 10px;
+  padding-inline: 5px;
+  white-space: normal;
 }
 
-.feedbackActions button { flex: 1 1 auto; }
+.controls button svg { flex-shrink: 0; }
+
+@media (max-width: 375px) {
+  .controls button svg { display: none; }
+}
+
 .solution { align-items: center; display: flex; font-size: .875rem; font-weight: 650; gap: 6px; margin: 0; }
 .solution svg { color: var(--color-moss-strong); flex-shrink: 0; }
 .message, .error, .loading, .state { color: var(--color-text-muted); font-size: .875rem; line-height: 1.45; margin: 0; }
