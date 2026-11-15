@@ -530,7 +530,9 @@ public class GoStoneKataGoPlugin: CAPPlugin, CAPBridgedPlugin {
         stateQueue.async {
             guard self.warmEngine === session, let job = self.activeAnalysis, !job.resolved,
                   let data = line.data(using: .utf8),
-                  let response = try? JSONSerialization.jsonObject(with: data) as? JSObject else { return }
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  // Foundation does not cast nested JSON objects to Capacitor's JSValue protocol.
+                  let response = JSTypes.coerceDictionaryToJSObject(json) else { return }
             let responseId = response["id"] as? String
             if let error = response["error"] as? String, responseId == nil || responseId == job.currentRequestId {
                 self.fail(job, message: "KataGo rejected the analysis: \(error)")

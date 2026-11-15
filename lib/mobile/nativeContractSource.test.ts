@@ -75,6 +75,7 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(ios, /maximumRuntimeSeconds = 90/);
   assert.match(ios, /totalVisitBudget = 900/);
   assert.match(ios, /didEnterBackgroundNotification/);
+  assert.match(ios, /JSTypes\.coerceDictionaryToJSObject\(json\)/);
   assert.match(client, /revealElapsed = true;\s+publish\(true\);\s+}, 10_000\)/);
   assert.match(client, /PREVIEW_PERSIST_INTERVAL = 16/);
   assert.match(client, /QUALITY_PERSIST_INTERVAL = 4/);
