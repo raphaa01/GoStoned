@@ -62,6 +62,7 @@ export function registerBetaGameTests(mobile: boolean) {
     test(`result actions align and stay tappable on compact screens (${theme})`, async ({ page }, info) => {
       test.skip(!info.project.name.includes("390"));
       const state = await installHarness(page);
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await page.addInitScript(theme => {
         localStorage.setItem("gostone.mobile.theme.v1", theme);
         localStorage.setItem("gostone.theme.v1", theme);
@@ -74,7 +75,9 @@ export function registerBetaGameTests(mobile: boolean) {
         if (mobile) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
         const dialog = page.getByRole("dialog");
         await expect(dialog.getByRole("heading", { name: won ? "Victory" : "Defeat", exact: true })).toBeVisible();
-        const home = dialog.locator(".result-home-action");
+        const focusedButton = dialog.locator(".result-play-action");
+        await expect(focusedButton).toBeFocused();
+        await expect(focusedButton).toHaveCSS("outline-offset", "-3px");
         const pairs = [
           [dialog.locator(".result-play-action"), dialog.locator(".result-analysis-action")],
           [dialog.locator(".result-view-board"), dialog.locator(".result-share-action")],
@@ -82,10 +85,13 @@ export function registerBetaGameTests(mobile: boolean) {
         for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
           await page.setViewportSize(viewport);
           await assertNoOverflow(page);
-          const homeBounds = (await home.boundingBox())!;
-          for (const [left, right] of pairs) {
-            const a = (await left.boundingBox())!;
-            const b = (await right.boundingBox())!;
+          const [homeBounds, ...rows] = await dialog.evaluate(element => {
+            const bounds = (selector: string) => element.querySelector(selector)!.getBoundingClientRect().toJSON();
+            return [bounds(".result-home-action"), [bounds(".result-play-action"), bounds(".result-analysis-action")],
+              [bounds(".result-view-board"), bounds(".result-share-action")]];
+          });
+          for (const [index, [left, right]] of pairs.entries()) {
+            const [a, b] = rows[index];
             expect(a.x).toBeCloseTo(homeBounds.x, 0);
             expect(b.x + b.width).toBeCloseTo(homeBounds.x + homeBounds.width, 0);
             expect(a.width).toBeCloseTo(b.width, 0);

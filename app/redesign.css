@@ -10514,21 +10514,25 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .result-modal .result-player-list { padding-inline: var(--result-padding-inline); }
 .result-modal :is(.result-rating-change, .result-score-summary) { margin-inline: var(--result-padding-inline); }
 .result-modal .result-player-list > div > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.result-modal .result-actions {
+  display: grid;
+  gap: 8px;
+  padding: 8px var(--result-padding-inline) 12px;
+}
 .result-modal .result-home-action {
   font-size: 1rem;
   justify-content: center;
-  margin: 8px var(--result-padding-inline) 0;
+  margin: 0;
   min-height: 50px;
-  width: calc(100% - var(--result-padding-inline) * 2);
+  width: 100%;
 }
 .result-modal :is(.result-secondary-actions, .result-details-actions) {
   display: grid;
   align-items: stretch;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 8px var(--result-padding-inline) 0;
+  padding: 0;
 }
-.result-modal .result-details-actions { padding-bottom: 12px; }
 .result-modal .finished-game-share--compact { display: contents; }
 .result-details-actions :is(.finished-game-link, [role="alert"]) { grid-column: 1 / -1; }
 .result-modal :is(.result-secondary-actions .button, .result-view-board, .result-share-action) {
@@ -10543,7 +10547,10 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
   width: 100%;
 }
 .result-modal :is(.result-secondary-actions, .result-details-actions) svg { flex: none; }
-.result-modal :is(button, a):focus-visible { outline: 2px solid var(--color-ink); outline-offset: -3px; }
+.result-modal .result-actions :is(button, a):not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: -3px;
+}
 
 .game-player-panel .game-state { background: transparent; border: 0; border-radius: 0; }
 .game-player-panel .game-panel-player.is-you .game-player-heading strong { color: var(--color-ink); }
