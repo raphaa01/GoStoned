@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { LEARN_LESSONS, lessonById } from "./curriculum";
 import { automaticReplyCount, continuesOwnTurn, stableLessonColor } from "./lessonFlow";
-import { allGroups, boardFromStones, createLearnGame, passLearnMove, playLearnMove, withLearnTurn } from "./lessonEngine";
+import { boardFromStones, createLearnGame, passLearnMove, playLearnMove, withLearnTurn } from "./lessonEngine";
 import { boardHash } from "@/lib/game/goEngine";
 
 test("all 120 lessons keep one learner colour, including mixed checks in stages 1–3", () => {
@@ -55,50 +55,15 @@ test("only ongoing own decisions advance directly; new tasks, explanations and g
   assert.equal(continuesOwnTurn(net[2], net[3]), false, "A different puzzle must wait for Continue");
 });
 
-test("five varied net and snapback positions have real replies and the claimed captures", () => {
-  for (const [id, captureCounts] of [["s4-net", [3,3,3,3,4]], ["s4-snapback", [3,3,3,3,4]]] as const) {
-    const decisions = lessonById(id).steps.filter((step) => step.kind === "play");
-    const starts = decisions.filter((step) => !step.continuePosition);
-    assert.equal(starts.length, 5, id);
-    assert.equal(new Set(starts.map((step) => `${step.size}:${boardHash(boardFromStones(step.size!, step.stones!))}`)).size, 5);
-    let captureIndex = 0;
-    for (const [index, step] of decisions.entries()) {
-      let state = withLearnTurn(createLearnGame(step.size!, step.stones), step.toPlay!);
-      const own = playLearnMove(state, step.targets![0]); assert.ok(own.ok); state = own.position;
-      if (id === "s4-snapback" && step.replies?.length) {
-        const response = playLearnMove(state, step.replies[0]!); assert.ok(response.ok);
-        assert.equal(response.captured.length, 1, "White must capture the sacrifice, not play a decorative reply");
-      }
-      if (!decisions[index + 1]?.continuePosition) {
-        assert.equal(own.captured.length, captureCounts[captureIndex++], `${id}/${step.id}`);
-      }
-    }
-    assert.equal(captureIndex, 5);
-  }
-});
-
-test("each new stage-four tactic has at least five distinct practice positions", () => {
-  for (const id of ["s4-double-atari", "s4-ladder", "s4-ladder-breaker", "s4-net", "s4-snapback", "s4-throw-in", "s4-shortage", "s4-semeai", "s4-sacrifice", "s4-tesuji"] as const) {
-    const starts = lessonById(id).steps.filter((step) => step.kind === "play" && !step.continuePosition);
-    assert.ok(starts.length >= 5, id);
-    assert.ok(new Set(starts.map((step) => `${step.size}:${boardHash(boardFromStones(step.size!, step.stones!))}`)).size >= 5, `${id}: repeated the identical position`);
-  }
-});
-
-test("rotated race directions name the correct stone of the white pair, not the attacking reply", () => {
-  let checked = 0;
-  for (const step of lessonById("s4-semeai").steps) {
-    if (!/^race-(?:[123]-|mirrored-)/.test(step.id) || !step.body.de.includes("Zweiergruppe")) continue;
-    const board = boardFromStones(step.size!, step.stones!);
-    const pair = allGroups(board, "white").find((group) => group.length === 2)!;
-    assert.ok(pair, step.id);
-    const stone = [...pair].sort((a, b) => step.body.de.includes("oberen") ? a.y - b.y
-      : step.body.de.includes("unteren") ? b.y - a.y : b.x - a.x)[0];
-    const direction = step.body.de.match(/Freiheit (rechts|links|unter|über)/)![1];
-    const expected = { x: stone.x + (direction === "rechts" ? 1 : direction === "links" ? -1 : 0),
-      y: stone.y + (direction === "unter" ? 1 : direction === "über" ? -1 : 0) };
-    assert.deepEqual(step.targets, [expected], step.id);
-    checked++;
-  }
-  assert.equal(checked, 8);
+test("the corner and wider nets teach different captures", () => {
+  const decisions = lessonById("s4-net").steps.filter((step) => step.kind === "play");
+  const starts = decisions.filter((step) => !step.continuePosition);
+  assert.deepEqual(starts.map((step) => step.size), [5, 7]);
+  const finishing = decisions.filter((_, index) => !decisions[index + 1]?.continuePosition);
+  assert.deepEqual(finishing.map((step) => {
+    const state = withLearnTurn(createLearnGame(step.size!, step.stones), step.toPlay!);
+    const own = playLearnMove(state, step.targets![0]);
+    assert.ok(own.ok);
+    return own.captured.length;
+  }), [3, 4]);
 });

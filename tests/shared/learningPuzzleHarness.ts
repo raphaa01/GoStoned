@@ -8,7 +8,7 @@ import { LEARN_LESSONS } from "../../lib/learn/curriculum";
 export function registerLearningPuzzleTests(mobile: boolean) {
   // The website's server-side account gate is exercised by verify-learn-browser
   // with a real PostgreSQL session; a client API mock cannot authorize it.
-  if (mobile) test("learning opens at current progress and exposes every locked stage above it", async ({page}) => {
+  if (mobile) test("learning opens at current progress and exposes every later locked stage", async ({page}) => {
     await installHarness(page);
     const completed=LEARN_LESSONS.slice(0,13).map((lesson)=>lesson.id);
     const current=LEARN_LESSONS[13];
@@ -23,7 +23,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     await expect(locked.locator(".learn-route-node").first()).toBeDisabled();
     await locked.scrollIntoViewIfNeeded();
     await expect(locked.getByRole("heading")).toBeVisible();
-    await expect.poll(async()=>{const currentBox=await node.boundingBox();const futureBox=await locked.boundingBox();return futureBox!.y<currentBox!.y;}).toBe(true);
+    await expect.poll(async()=>{const currentBox=await node.boundingBox();const futureBox=await locked.boundingBox();return futureBox!.y>currentBox!.y;}).toBe(true);
     await assertNoOverflow(page);
     await page.locator(".learn-next-dock__button").click();
     await expect(page.getByRole("heading",{name:current.title.de,exact:true})).toBeVisible();
@@ -32,7 +32,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     await expect.poll(async()=>{const box=await node.boundingBox();return !!box&&box.y>0&&box.y<page.viewportSize()!.height-100;}).toBe(true);
   });
 
-  test("practice opens directly, plays the whole wrong branch, undoes it, and advances to an unsolved puzzle", async({page})=>{
+  test("practice places immediately, replays a wrong branch, and advances after solving", async({page})=>{
     await installHarness(page);
     const source=IMPORTED_PUZZLES.find((puzzle)=>puzzle.paths[1].line.length===6 && puzzle.paths[1].line.every((ply)=>ply.move!=="pass"))!;
     const wrong=source.paths[1].line;
@@ -41,6 +41,8 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     let solved=false;
     let activeWrong=false;
     let attempts=0;
+    let releaseAttempt: (() => void) | undefined;
+    const delayedReply = new Promise<void>((resolve) => { releaseAttempt = resolve; });
     const view=():PuzzleView=>({id:source.id,kind:"practice",category:null,rankKyu:source.rankKyu,collectionOrder:1,dailyDate:null,boardSize:19,toPlay:source.toPlay,board:source.board,difficulty:"beginner",publishedAt:"2026-10-07T00:00:00Z",attemptCount:attempts,solved,firstAttemptCorrect:false,variationProgress:progress,variationRevision:revision,solution:solved?{...source.paths[0].line[0],line:source.paths[0].line,explanation:source.paths[0].explanation}:null,viewportSize:source.viewportSize,targetStones:source.target,goal:source.goal});
     await page.route("**/api/puzzles**",async(route)=>{
       const request=route.request();
@@ -58,6 +60,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
           progress=line.slice(0,progress.length+2);displayLine=progress;
           if(progress.length===line.length) {outcome=activeWrong?"retry":"solved";solved=!activeWrong;if(activeWrong)progress=[];}
         }
+        if (attempts === 1) await delayedReply;
         await route.fulfill({json:{ok:true,actor:USER.playerKey,attempt:{puzzleId:source.id,correct:outcome!=="retry",outcome,solved,attemptCount:attempts,firstAttemptCorrect:false,variationProgress:progress,variationRevision:revision,displayLine,displayLineIsComplete:true,feedback:null,solution:view().solution}}});
       } else {
         const current=view();
@@ -67,18 +70,41 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     await page.goto("/puzzles?mode=practice");
     const board=page.locator(".go-board");
     await expect(board).toBeVisible();
+    const boardBox = (await board.boundingBox())!;
+    const columns = await board.locator(".board-coordinate--column").first().boundingBox();
+    const rows = await board.locator(".board-coordinate--row").first().boundingBox();
+    expect(columns!.y + columns!.height).toBeLessThanOrEqual(boardBox.y);
+    expect(rows!.x + rows!.width).toBeLessThanOrEqual(boardBox.x);
     await expect(page.getByText("Choose a category",{exact:true})).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Pass", exact: true })).toHaveCount(0);
+    const point=(ply:PuzzlePly)=>board.getByRole("row").nth(ply.y).getByRole("gridcell").nth(ply.x);
     const play=async(ply:PuzzlePly)=>{
-      await Promise.all([page.waitForResponse((response)=>response.url().endsWith("/attempt")),board.getByRole("gridcell").nth(ply.y*source.viewportSize+ply.x).click()]);
+      await Promise.all([page.waitForResponse((response)=>response.url().endsWith("/attempt")),point(ply).click()]);
       await expect(page.getByRole("region",{name:"Find the strongest move.",exact:true})).toHaveAttribute("aria-busy","false");
     };
-    await play(wrong[0]);
+    const firstAttempt = page.waitForResponse((response)=>response.url().endsWith("/attempt"));
+    try {
+      await point(wrong[0]).click();
+      await expect(point(wrong[0])).toHaveAccessibleName(/stone.*last move/i);
+      await expect(page.getByText("Checking move…",{exact:true})).toBeVisible();
+    } finally {
+      releaseAttempt?.();
+    }
+    await firstAttempt;
     await expect(page.getByText("Not quite.",{exact:true})).toHaveCount(0);
     await page.getByRole("button",{name:"Undo move",exact:true}).click();
     await expect.poll(()=>progress.length).toBe(0);
     for(const ply of wrong.filter((ply)=>ply.color===source.toPlay))await play(ply);
     await expect(page.getByText("Not quite.",{exact:true})).toBeVisible();
+    const replay = page.getByRole("group",{name:"Review the mistake"});
+    await expect(replay).toContainText("5/6");
+    await expect(point(wrong[4])).toHaveAccessibleName(/stone.*last move/i);
+    await replay.getByRole("button",{name:"Next move"}).click();
+    await expect(replay).toContainText("6/6");
+    await expect(point(wrong[5])).toHaveAccessibleName(/stone.*last move/i);
+    await expect(replay.getByRole("button",{name:"Next move"})).toBeDisabled();
+    await replay.getByRole("button",{name:"Previous move"}).click();
+    await expect(replay).toContainText("5/6");
     await page.getByRole("button",{name:"Undo move",exact:true}).click();
     await expect(page.getByText("Not quite.",{exact:true})).toHaveCount(0);
     for(const ply of source.paths[0].line.filter((ply)=>ply.color===source.toPlay))await play(ply);

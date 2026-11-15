@@ -130,18 +130,13 @@ hr { border: 0; margin-block: 1rem; }
 .matchmaking-summary { gap: 6px; padding: 8px 12px; }
 .matchmaking-summary > div + div { border: 0; }
 :is(.profile-history .history-game, .friends-page .friend-row, .game-invite, .player-result,
-    .learn-stage-entry, .learn-route-node, .scoring-help-steps li) {
+    .learn-stage-entry, .scoring-help-steps li) {
   background: var(--color-surface);
   border: 0;
   border-radius: var(--radius-sm);
   margin-block-end: 5px;
   padding-inline: 10px;
 }
-.learn-route-node[aria-current="step"] { background: var(--color-moss-soft); }
-.learn-overview__header { padding: 12px; }
-.learn-path-stage { margin-block: 8px; }
-.learn-stage__nodes { gap: 4px; }
-.learn-route-node > :last-child { min-width: 0; }
 .learn-teacher__speech,
 .learn-teacher__speech::before { background: var(--color-surface); border: 0; }
 .learn-teacher__speech :is(.learn-player__feedback, .learn-player__hint):not(:first-child) { border: 0; }
