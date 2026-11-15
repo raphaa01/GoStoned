@@ -88,12 +88,14 @@ export type TournamentTrophy = {
   place: number;
   displayed: boolean;
   monthlyMode?: Tournament["monthlyMode"];
+  scope?: "group" | "worldwide";
 };
 
 export type TournamentLeaderboardEntry = {
   userId: string;
   name: string;
   points: number;
+  wins: number;
   place: number;
 };
 

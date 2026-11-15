@@ -271,6 +271,10 @@ async function main() {
       }
     league = await tournaments.getTournamentDetail(host, monthly.id);
     assert(league.standings.every((r) => r.played === 10));
+    assert(league.standings.every((r) => r.points === 3 * r.wins + r.draws));
+    const beforeDeadline = await tournaments.getRapidLeaderboards(host);
+    assert(beforeDeadline.worldwide.some((row) => row.userId === host && row.wins > 0));
+    assert(beforeDeadline.friends.some((row) => row.userId === host));
     await assert.rejects(tournaments.queueMonthly(host, monthly.id, true), {
       code: "tournament_game_limit",
     });
@@ -289,8 +293,8 @@ async function main() {
       latePairing.whiteId!,
     );
     await query(
-      "UPDATE tournaments SET ends_at=statement_timestamp() WHERE id=$1",
-      [monthly.id],
+      "UPDATE tournaments SET starts_at=LEAST(starts_at,statement_timestamp()-interval '1 hour'),ends_at=statement_timestamp() WHERE month=$1 AND kind='monthly' AND monthly_mode='rapid'",
+      [monthly.month],
     );
     await Promise.all([
       tournaments.getTournamentDetail(host, monthly.id),
@@ -331,12 +335,14 @@ async function main() {
     );
     const winner = awards.rows[0].user_id;
     await tournaments.displayTrophy(winner, monthly.id, false);
-    assert.equal((await tournaments.getTrophies(winner, false)).length, 0);
-    assert.equal((await tournaments.getTrophies(winner, true)).length, 1);
-    const leaderboards = await tournaments.getRapidLeaderboards(winner);
+    assert(!(await tournaments.getTrophies(winner, false)).some(t => t.scope === "group"));
+    assert((await tournaments.getTrophies(winner, true)).some(t => t.scope === "group"));
+    assert((await tournaments.getTrophies(winner, false)).some(t => t.scope === "worldwide" && t.place <= 50));
+    assert.deepEqual(await tournaments.getRapidLeaderboards(winner), { worldwide: [], friends: [] });
+    const leaderboards = await tournaments.getRapidLeaderboards(winner, monthly.month!);
     assert.equal(
       leaderboards.worldwide.find((row) => row.userId === winner)?.points,
-      (4 - awards.rows[0].place) * 2,
+      beforeDeadline.worldwide.find((row) => row.userId === winner)?.points,
     );
     assert(leaderboards.friends.some((row) => row.userId === winner));
     assert(

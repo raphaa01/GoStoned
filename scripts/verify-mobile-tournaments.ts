@@ -180,6 +180,7 @@ async function run() {
     ).toBeVisible();
     await expect(phone.locator(".tournament-countdown")).toBeVisible();
     await expect(phone.locator(".tournament-activity")).toHaveCount(0);
+    await expect(phone.getByRole("heading", { name: "Weltweit", exact: true })).toHaveCount(0);
     await expect(
       phone.getByRole("heading", { name: "Monthly Classic", exact: true }),
     ).toHaveCount(0);
@@ -251,26 +252,36 @@ async function run() {
     await expect(
       phone
         .locator(".tournament-live .rapid-standings tr[data-self=true] td")
-        .last(),
+        .nth(2),
     ).toHaveText(
       new Intl.NumberFormat("de", { signDisplay: "exceptZero" }).format(
         won ? 6.5 : -6.5,
       ),
     );
+    const winner = won ? "App Player" : "Web Player";
+    const standingsSections = phone.locator(".tournament-standings > h2");
+    await expect(standingsSections).toHaveText([/Gruppe/, "Weltweit", "Freunde"]);
+    const liveWorldwide = phone.locator(".tournament-standings").filter({
+      has: phone.getByRole("heading", { name: "Weltweit", exact: true }),
+    });
+    await expect(liveWorldwide.getByRole("row", { name: new RegExp(winner) }).getByRole("cell").last()).toHaveText("1");
+    await noOverflow(phone);
+    await phone.screenshot({ path: `${audit}/iphone-rapid-live.png`, fullPage: true });
 
     await query(
-      "UPDATE tournaments SET ends_at=statement_timestamp() WHERE id=$1",
-      [rapid.id],
+      "UPDATE tournaments SET starts_at=LEAST(starts_at,statement_timestamp()-interval '1 hour'),ends_at=statement_timestamp() WHERE month=$1 AND kind='monthly' AND monthly_mode='rapid'",
+      [rapid.month],
     );
     await getTournamentDetail(alice.id, rapid.id);
     await tablet.goto(`${app}/de/tournaments`);
+    await expect(tablet.getByRole("heading", { name: "Weltweit", exact: true })).toHaveCount(0);
+    await tablet.getByText("Turnierhistorie", { exact: true }).click();
+    await tablet.locator(".tournament-history").getByRole("link", { name: /Monthly Rapid/ }).click();
     await expect(
       tablet.getByRole("heading", { name: "Weltweit", exact: true }),
     ).toBeVisible();
-    const winner =
-      scored.winnerKey === `user:${alice.id}` ? "App Player" : "Web Player";
     await expect(
-      tablet.getByRole("row", { name: new RegExp(`${winner}.*9`) }).first(),
+      tablet.getByRole("row", { name: new RegExp(`${winner}.*91[67]`) }).first(),
     ).toBeVisible();
     const friends = tablet
       .locator(".tournament-standings")
@@ -278,12 +289,8 @@ async function run() {
         has: tablet.getByRole("heading", { name: "Freunde", exact: true }),
       });
     await expect(
-      friends.getByRole("row", { name: new RegExp(`${winner}.*9`) }),
+      friends.getByRole("row", { name: new RegExp(`${winner}.*91[67]`) }),
     ).toBeVisible();
-    await tablet.getByText("Turnierhistorie", { exact: true }).click();
-    await expect(tablet.locator(".tournament-history")).toContainText(
-      winner === "App Player" ? "#1" : "#2",
-    );
     await noOverflow(tablet);
     await tablet.screenshot({
       path: `${audit}/ipad-rapid.png`,

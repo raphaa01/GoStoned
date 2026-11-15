@@ -78,15 +78,15 @@ export async function GET(request: NextRequest) {
     const expected =
       view === "trophies"
         ? ["view", ...(params.has("userId") ? ["userId"] : [])]
-        : view === "game" || view === "watch"
-          ? ["view", "gameId"]
-          : ["notice", "home", "leaderboards", "activity", "history"].includes(
-                view ?? "",
-              )
-            ? ["view"]
-            : params.has("id")
-              ? ["id"]
-              : [];
+        : view === "leaderboards"
+          ? ["view", ...(params.has("month") ? ["month"] : [])]
+          : view === "game" || view === "watch"
+            ? ["view", "gameId"]
+            : ["notice", "home", "activity", "history"].includes(view ?? "")
+              ? ["view"]
+              : params.has("id")
+                ? ["id"]
+                : [];
     if (mobile) expected.push("client");
     if (
       [...params.keys()].length !== expected.length ||
@@ -103,10 +103,13 @@ export async function GET(request: NextRequest) {
       return noStoreJson({
         activePlayers: await tournaments.getRapidActivity(),
       });
-    if (view === "leaderboards")
+    if (view === "leaderboards") {
+      const month = params.get("month");
+      if (month !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) invalidTournament();
       return noStoreJson({
-        leaderboards: await tournaments.getRapidLeaderboards(user.id),
+        leaderboards: await tournaments.getRapidLeaderboards(user.id, month ?? undefined),
       });
+    }
     if (view === "history")
       return noStoreJson({
         history: await tournaments.getTournamentHistory(user.id, mobile),
@@ -115,10 +118,11 @@ export async function GET(request: NextRequest) {
       const target = params.has("userId")
         ? uuid(params.get("userId"))
         : user.id;
+      const own = target === user.id;
+      const trophies = await tournaments.getTrophies(target, own);
       return noStoreJson({
-        trophies: (
-          await tournaments.getTrophies(target, target === user.id)
-        ).filter((t) => !mobile || t.monthlyMode === "rapid"),
+        trophies: trophies.filter((t) => !mobile || t.monthlyMode === "rapid"),
+        podium: await tournaments.podiumCounts(target, own, mobile),
       });
     }
     if (view === "game" || view === "watch")
@@ -266,9 +270,10 @@ export async function POST(request: NextRequest) {
         );
         break;
       case "trophy":
-        fields(body, ["action", "id", "displayed"]);
+        fields(body, ["action", "id", "displayed", ...(body.scope === undefined ? [] : ["scope"])]);
         if (typeof body.displayed !== "boolean") invalidTournament();
-        await tournaments.displayTrophy(user.id, id, body.displayed);
+        if (body.scope !== undefined && body.scope !== "group" && body.scope !== "worldwide") invalidTournament();
+        await tournaments.displayTrophy(user.id, id, body.displayed, body.scope);
         break;
       default:
         invalidTournament();

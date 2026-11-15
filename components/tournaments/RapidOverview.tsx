@@ -136,18 +136,20 @@ export function RapidStandings({
         <thead>
           <tr>
             <th scope="col">#</th>
-            <th scope="col">{copy.player}</th>
+            <th scope="col">{copy.points}</th>
+            <th scope="col" data-player-heading>{copy.player}</th>
+            <th scope="col" aria-label={copy.scoreDifference}>{copy.differenceShort}</th>
             <th scope="col">{copy.wins}</th>
-            <th scope="col">{copy.scoreDifference}</th>
           </tr>
         </thead>
         <tbody>
           {visible.map((row) => (
             <tr key={row.userId} data-self={row.userId === userId}>
               <td>{row.place}</td>
+              <td>{row.points}</td>
               <th scope="row">{row.name}</th>
-              <td>{row.wins}</td>
               <td>{number.format(row.margin ?? 0)}</td>
+              <td>{row.wins}</td>
             </tr>
           ))}
         </tbody>
@@ -167,21 +169,22 @@ export function RapidStandings({
 }
 
 export function RapidLeaderboards({
-  countdown,
+  month,
 }: {
-  countdown?: React.ReactNode;
+  month?: string;
 }) {
   const { user } = useAuth();
   const { locale } = useI18n();
   const copy = getTournamentsCopy(locale);
-  const [boards, setBoards] = useState<TournamentLeaderboards>();
+  const [snapshot, setSnapshot] = useState<{ identity: string; month?: string; boards: TournamentLeaderboards }>();
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   const identity = user?.playerKey;
+  const boards = snapshot && snapshot.identity === identity && snapshot.month === month ? snapshot.boards : undefined;
   useEffect(() => {
     if (!identity) return;
     const controller = new AbortController();
-    void fetch("/api/tournaments?view=leaderboards", {
+    const load = () => fetch(`/api/tournaments?view=leaderboards${month ? `&month=${encodeURIComponent(month)}` : ""}`, {
       cache: "no-store",
       headers: { [EXPECTED_PLAYER_HEADER]: identity },
       signal: controller.signal,
@@ -189,15 +192,20 @@ export function RapidLeaderboards({
       .then(readApi<{ leaderboards: TournamentLeaderboards }>)
       .then((result) => {
         if (!controller.signal.aborted) {
-          setBoards(result.leaderboards);
+          setSnapshot({ identity, month, boards: result.leaderboards });
           setError(false);
         }
       })
       .catch(() => {
         if (!controller.signal.aborted) setError(true);
       });
-    return () => controller.abort();
-  }, [identity, retry]);
+    void load();
+    const timer = month ? undefined : window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [identity, month, retry]);
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
   function ranking(title: string, rows: TournamentLeaderboardEntry[]) {
     return (
       <section className="tournament-standings">
@@ -207,8 +215,9 @@ export function RapidLeaderboards({
             <thead>
               <tr>
                 <th scope="col">#</th>
-                <th scope="col">{copy.player}</th>
+                <th scope="col" data-player-heading>{copy.player}</th>
                 <th scope="col">{copy.tournamentPoints}</th>
+                <th scope="col">{copy.wins}</th>
               </tr>
             </thead>
             <tbody>
@@ -216,14 +225,15 @@ export function RapidLeaderboards({
                 <tr key={row.userId} data-self={row.userId === user?.id}>
                   <td>{row.place}</td>
                   <th scope="row">{row.name}</th>
-                  <td>{row.points}</td>
+                  <td>{number.format(row.points)}</td>
+                  <td>{row.wins}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : (
+        ) : boards ? (
           <p className="tournament-empty">{copy.noPlayers}</p>
-        )}
+        ) : null}
       </section>
     );
   }
@@ -237,9 +247,9 @@ export function RapidLeaderboards({
           </button>
         </p>
       ) : null}
-      {boards ? ranking(copy.worldwide, boards.worldwide) : null}
-      {countdown}
-      {boards ? ranking(copy.friendRanking, boards.friends) : null}
+      {!boards && !error ? <p role="status">{copy.loading}</p> : null}
+      {ranking(copy.worldwide, boards?.worldwide ?? [])}
+      {ranking(copy.friendRanking, boards?.friends ?? [])}
     </>
   );
 }
