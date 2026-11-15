@@ -383,7 +383,8 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
   overflow: hidden;
   position: relative;
 }
-.home-learning > strong { font-size: clamp(1rem, 4.6vw, 1.3rem); max-width: 9ch; text-shadow: 0 1px 4px rgb(25 16 9 / .9); }
+.home-learning > strong { font-size: clamp(1rem, 4.6vw, 1.3rem); max-width: 100%; text-shadow: 0 1px 4px rgb(25 16 9 / .9); }
+.home-learning:lang(en) > strong { max-width: 9ch; }
 .home-learning__stones { inset: 0; pointer-events: none; position: absolute; z-index: -1; }
 .home-learning__stones i {
   background: radial-gradient(circle at 35% 28%, #535149, #22211F 67%, #141310);

@@ -33,6 +33,12 @@ test("puts tournaments and learning next to each other on the German home page",
   const learning = page.locator(".home-learning");
   await expect(tournaments).toHaveAttribute("href", "/de/tournaments");
   await expect(learning.locator("progress")).toHaveAttribute("max", /\d+/);
+  const labelLines = await learning.locator("strong").evaluate(element => {
+    const text = document.createRange();
+    text.selectNodeContents(element);
+    return text.getClientRects().length;
+  });
+  expect(labelLines).toBe(1);
   const left = (await tournaments.boundingBox())!;
   const right = (await learning.boundingBox())!;
   expect(left.y).toBe(right.y);

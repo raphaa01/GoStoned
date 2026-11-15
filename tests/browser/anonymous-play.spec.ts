@@ -1536,6 +1536,14 @@ for (const locale of ["en", "de"] as const) {
     await expect(previewGrid.locator(".play-board-center-stone")).toHaveAttribute("cy", "50");
     const findOpponent = page.getByRole("button", { name: localeCopy.findOpponent });
     await expect(findOpponent).toBeEnabled();
+    const timeHeadingClearance = await page.locator(".play-pace-column").evaluate(card => {
+      const text = document.createRange();
+      text.selectNodeContents(card.querySelector("h1")!);
+      const heading = text.getBoundingClientRect();
+      const frame = card.getBoundingClientRect();
+      return Math.min(heading.left - frame.left, frame.right - heading.right, heading.top - frame.top);
+    });
+    expect(timeHeadingClearance).toBeGreaterThanOrEqual(5);
     const size13 = page.getByRole("button", { name: /13×13/ });
     await size13.click();
     await expect(boardPreview.locator('svg[data-board-size="13"]')).toBeVisible();
