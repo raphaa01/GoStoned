@@ -17,12 +17,14 @@ recipe instead of opaque binaries.
 The Java plugin verifies the 38 MB model, warms one engine session and keeps it
 alive between reviews, permits one job at a time, caps each selected position
 at 80 visits, streams the actual turn result, supports cancellation, and stops
-at Android's severe thermal state. It first requests positions 0–10 with two
-visits, a three-move PV and no policy payload, then continues the preview in
+at Android's severe thermal state. The CPU engine sizes its inference buffers
+to the board and reuses the session for reviews of that size. It requests
+the initial position and first move, then positions 2–10 with two visits,
+a three-move PV and no policy payload. It continues the preview in
 16-position blocks. Every usable block is persisted by the mobile client. Only
 the largest fixed-player win-rate or score swings receive the adaptive
-900-visit quality budget. The review can therefore open after ten contiguous
-moves (or after 10 seconds), with a searched candidate and explicitly
+900-visit quality budget. The review can open after the first analyzable
+move, with a searched candidate and explicitly
 provisional classification. One visit only evaluates the root and cannot
 produce a searched recommendation. Root-only output remains a valid quick
 position estimate even when `moveInfos` is empty. The shared client preserves
@@ -52,7 +54,7 @@ plugin remains explicitly fail-closed, so normal web and source-only builds do
 not claim that local inference is available.
 
 The iOS plugin runs the analysis protocol in process, verifies the model hash,
-retains a warm engine between reviews, and uses the same 0–10-first,
+retains a warm engine between reviews, and uses the same first-move preview,
 16-position preview chunks and selective quality pass as Android. It permits
 one job, streams preview and quality replacements, preserves partial results at
 the 90-second limit, and stops on cancellation, backgrounding, or serious

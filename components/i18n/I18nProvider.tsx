@@ -9,6 +9,7 @@ type I18nContextValue = {
   locale: Locale;
   dictionary: Dictionary;
   href: (path: string) => string;
+  changeLocale?: (locale: Locale) => void;
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -17,14 +18,16 @@ export function I18nProvider({
   children,
   dictionary,
   locale,
+  changeLocale,
 }: {
   children: React.ReactNode;
   dictionary: Dictionary;
   locale: Locale;
+  changeLocale?: (locale: Locale) => void;
 }) {
   const value = useMemo<I18nContextValue>(
-    () => ({ locale, dictionary, href: (path) => localizeHref(path, locale) }),
-    [dictionary, locale],
+    () => ({ locale, dictionary, changeLocale, href: (path) => localizeHref(path, locale) }),
+    [changeLocale, dictionary, locale],
   );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

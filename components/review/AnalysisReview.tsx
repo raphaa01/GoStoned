@@ -39,16 +39,19 @@ import styles from "./review.module.css";
 type ResponseBody = { actor: string; game: GameState; analysis: AnalysisJobView | null };
 type PriceVoteResponse = { actor: string; monthlyPriceEur: AnalysisPriceOption | null };
 
+function reviewSessionRejected(error: unknown): boolean {
+  return error instanceof ApiRequestError && (error.status === 401 || error.code === "identity_changed");
+}
+
 export function AnalysisReview({ gameId }: { gameId: string }) {
   const { user } = useAuth();
   return <PlayerAnalysisReview gameId={gameId} key={`${gameId}:${user?.playerKey ?? ""}`} />;
 }
 
 function PlayerAnalysisReview({ gameId }: { gameId: string }) {
-  const { user, loading, refresh } = useAuth();
+  const { user, loading, error: sessionError, refresh } = useAuth();
   const playerKey = user?.playerKey;
   const requestController = useRef<AbortController | null>(null);
-  const mounted = useRef(false);
   const { dictionary, href, locale } = useI18n();
   const copy = dictionary.analysisReview;
   const progressiveCopy = getMobileAnalysisCopy(locale);
@@ -131,6 +134,17 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
     const controller = new AbortController();
     requestController.current = controller;
     const isCurrent = () => !controller.signal.aborted && requestController.current === controller;
+    const readGame = async <T extends { actor: string }>(path: string, requestMethod: "GET" | "POST") => {
+      const request = fetch(path, {
+        method: requestMethod,
+        cache: "no-store",
+        headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
+        signal: controller.signal,
+      }).then(readApi<T>);
+      const body = await withDeadline(request, 15_000, "Could not load the review in time.", controller.signal);
+      assertResponseActor(body.actor, playerKey);
+      return body;
+    };
     let starting = method === "POST";
     if (method === "POST") {
       setRequesting(true);
@@ -139,14 +153,17 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
     setReauthenticate(false);
     try {
       if (nativeAnalysis) {
-        const loadGame = fetch(`/api/games/${gameId}`, {
-          cache: "no-store",
-          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-          signal: controller.signal,
-        }).then(readApi<{ actor: string; game: GameState }>);
-        const body = await withDeadline(loadGame, 15_000, "Could not load the game in time.", controller.signal);
-        assertResponseActor(body.actor, playerKey);
+        const fetchGame = () => readGame<{ actor: string; game: GameState }>(`/api/games/${gameId}`, "GET");
+        const body = await fetchGame().catch(async (failure: unknown) => {
+          if (!reviewSessionRejected(failure) || !isCurrent()) throw failure;
+          const currentUser = await refresh({ silent: true }).catch(() => undefined);
+          if (!isCurrent() || currentUser?.playerKey !== playerKey) throw failure;
+          return fetchGame();
+        });
         if (!isCurrent()) return;
+        if (body.game.status !== "finished") {
+          throw new ApiRequestError(progressiveCopy.activeGame, { status: 409, code: "analysis_game_active" });
+        }
         setGame(body.game);
         if (body.game.moves.length === 0) {
           setError(null);
@@ -174,6 +191,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
             if (isCurrent()) setAnalysis(value);
           }, controller.signal);
           if (!isCurrent()) return;
+          setSelectedMove(move => Math.min(move, next.result?.moves.length ?? 0));
           setAnalysis(next);
         } else {
           setAnalysis(saved);
@@ -181,17 +199,8 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         setError(null);
         return;
       }
-      const requestAnalysis = async (requestMethod: "GET" | "POST") => {
-        const response = await fetch(`/api/games/${gameId}/analysis`, {
-          method: requestMethod,
-          cache: "no-store",
-          headers: { [EXPECTED_PLAYER_HEADER]: playerKey },
-          signal: controller.signal,
-        });
-        const body = await readApi<ResponseBody>(response);
-        assertResponseActor(body.actor, playerKey);
-        return body;
-      };
+      const requestAnalysis = (requestMethod: "GET" | "POST") =>
+        readGame<ResponseBody>(`/api/games/${gameId}/analysis`, requestMethod);
       let body = await requestAnalysis(method === "POST" ? "POST" : "GET");
       if (!isCurrent()) return;
       setGame(body.game);
@@ -217,35 +226,35 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         void loadSupportPrice();
         return;
       }
-      if (requestError instanceof ApiRequestError && (
-        requestError.status === 401 || requestError.code === "identity_changed"
-      )) {
+      if (reviewSessionRejected(requestError)) {
         setError(null);
         setReauthenticate(true);
       } else {
-        setError(localizedApiError(dictionary, requestError, copy.failed));
+        setError(requestError instanceof ApiRequestError && requestError.code === "analysis_game_active"
+          ? progressiveCopy.activeGame
+          : localizedApiError(dictionary, requestError, copy.failed));
       }
     } finally {
       if (isCurrent()) setRequesting(false);
       controller.abort();
     }
-  }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, playerKey]);
+  }, [copy.failed, dictionary, gameId, loadSupportPrice, nativeAnalysis, playerKey, progressiveCopy.activeGame, refresh]);
 
   useEffect(() => {
-    mounted.current = true;
     const timer = window.setTimeout(() => void load("OPEN"), 0);
     return () => {
-      mounted.current = false;
       window.clearTimeout(timer);
       requestController.current?.abort();
     };
   }, [load]);
   useEffect(() => {
-    if (nativeAnalysis || reauthenticate) return;
+    if (nativeAnalysis || reauthenticate || error) return;
     if (analysis?.status !== "queued" && analysis?.status !== "running") return;
-    const timer = window.setInterval(() => void load(), 2_500);
+    const timer = window.setInterval(() => {
+      if (!requestController.current || requestController.current.signal.aborted) void load();
+    }, 2_500);
     return () => window.clearInterval(timer);
-  }, [analysis?.status, load, nativeAnalysis, reauthenticate]);
+  }, [analysis?.status, error, load, nativeAnalysis, reauthenticate]);
 
   const result = analysis?.result ?? null;
   const availableMoves = result?.moves.length ?? 0;
@@ -305,16 +314,17 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
 
       {loading ? (
         <div className={styles.reviewStatus}><LoaderCircle className={styles.spin} />…</div>
+      ) : !user && sessionError ? (
+        <div className={styles.reviewStatus}>
+          <p role="alert">{sessionError}</p>
+          <button className="button button--primary" onClick={() => void refresh().catch(() => undefined)} type="button">{copy.retry}</button>
+        </div>
       ) : !user || reauthenticate ? (
         <div className={styles.reviewStatus}>
           <p role="status">{copy.signIn}</p>
           <Link className="button button--primary" href={loginPath}>{dictionary.auth.login}</Link>
-          {reauthenticate && user ? <button className="button button--secondary" disabled={requesting} onClick={() => {
-            setRequesting(true);
-            void withDeadline(refresh({ silent: true }), 15_000, "Session check timed out.")
-              .then(() => { if (mounted.current) return load("OPEN"); })
-              .catch(() => { if (mounted.current) setRequesting(false); });
-          }} type="button">{copy.retry}</button> : null}
+          {reauthenticate && user ? <button className="button button--secondary" disabled={requesting}
+            onClick={() => void load("OPEN")} type="button">{copy.retry}</button> : null}
         </div>
       ) : error && !game ? (
         <div className={styles.reviewStatus}><p role="alert">{error}</p><button className="button button--primary" onClick={() => void load("OPEN")} type="button">{copy.retry}</button></div>
@@ -326,7 +336,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
           <button
             className="button button--primary"
             disabled={requesting}
-            onClick={() => void load(nativeAnalysis ? "POST" : analysis ? "GET" : "POST")}
+            onClick={() => void load(nativeAnalysis || analysis?.status === "failed" ? "POST" : "OPEN")}
             type="button"
           >
             {requesting ? <LoaderCircle className={styles.spin} size={17} /> : <RotateCcw size={17} />}
@@ -367,8 +377,8 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         <section className={styles.reviewStatus}><p>{progressiveCopy.noMoves}</p></section>
       ) : !analysis ? (
         <section className={styles.reviewStatus}>
-          <LoaderCircle className={styles.spin} size={38} />
-          <h1>{copy.running}</h1>
+          {requesting ? <><LoaderCircle className={styles.spin} size={38} /><h1>{copy.running}</h1></> :
+            <button className="button button--primary" onClick={() => void load("POST")} type="button">{copy.analyze}</button>}
         </section>
       ) : (analysis.status === "queued" || analysis.status === "running") && !result ? (
         <section className={styles.reviewStatus}><LoaderCircle className={styles.spin} size={38} /><h1>{analysis.status === "queued" ? copy.queued : copy.running}</h1><p className={styles.analysisNote}>{copy.runningNote}</p></section>

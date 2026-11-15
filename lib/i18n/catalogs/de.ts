@@ -126,7 +126,7 @@ export const de = {
     loginDescription: "Mach mit deinem gespeicherten Profil und deinen Wertungen weiter.",
     username: "Benutzername",
     usernamePlaceholder: "Dein Benutzername",
-    usernameHint: "3–20 Buchstaben, Zahlen oder Unterstriche. Dieser Benutzername ist für andere Spieler und in Ranglisten sichtbar.",
+    usernameHint: "3–16 Buchstaben, Zahlen oder Unterstriche. Dieser Benutzername ist für andere Spieler und in Ranglisten sichtbar.",
     password: "Passwort",
     passwordPlaceholder: "Mindestens 8 Zeichen",
     startingStrength: "Optionale Spielstärke",
@@ -158,7 +158,7 @@ export const de = {
     errors: {
       invalid_request: "Die Anfrage konnte nicht gelesen werden. Bitte versuche es erneut.",
       request_rejected: "Diese Authentifizierungsanfrage wurde blockiert. Bitte versuche es erneut.",
-      invalid_username: "Der Benutzername muss 3–20 Buchstaben, Zahlen oder Unterstriche enthalten.",
+      invalid_username: "Der Benutzername muss 3–16 Buchstaben, Zahlen oder Unterstriche enthalten.",
       password_required: "Das Passwort ist erforderlich.",
       password_too_short: "Das Passwort muss mindestens 8 Zeichen enthalten.",
       password_too_long: "Das Passwort darf höchstens 128 Zeichen enthalten.",

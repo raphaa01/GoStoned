@@ -1,5 +1,6 @@
 import { query, withTransaction } from "@/lib/db";
-import { hashPassword, normalizeUsername, validatePasswordIssue, verifyPassword } from "./password";
+import { hashPassword, validatePasswordIssue, verifyPassword } from "./password";
+import { NEW_USERNAME_MAX_LENGTH, normalizeUsername } from "./username";
 import { createSessionInTransaction } from "./session";
 import type { AuthUser, AuthUserRow } from "./types";
 import { serializeAuthUser } from "./types";
@@ -64,11 +65,11 @@ export function registrationDatabaseError(error: unknown): AuthError | null {
   return null;
 }
 
-export function validateCredentials(usernameValue: unknown, passwordValue: unknown) {
-  const username = normalizeUsername(usernameValue);
+export function validateCredentials(usernameValue: unknown, passwordValue: unknown, options?: { existing?: boolean }) {
+  const username = normalizeUsername(usernameValue, options);
   if (!username) {
     throw new AuthError(
-      "Username must contain 3–20 letters, numbers, or underscores.",
+      options?.existing ? "Invalid username." : `Username must contain 3–${NEW_USERNAME_MAX_LENGTH} letters, numbers, or underscores.`,
       400,
       "invalid_username",
     );

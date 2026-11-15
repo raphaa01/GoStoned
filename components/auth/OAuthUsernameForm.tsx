@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { affectedAuthFields } from "@/lib/auth/errorFields";
+import { NEW_USERNAME_MAX_LENGTH } from "@/lib/auth/username";
 import { localizedAuthError } from "@/lib/i18n/dictionary";
 import type { StartingStrength } from "@/lib/rating/preferences";
 import type { BoardPlacementPreference } from "@/lib/boardPlacement";
@@ -120,7 +121,7 @@ export function OAuthUsernameForm({ returnTo = null }: { returnTo?: string | nul
               autoComplete="username"
               autoCapitalize="none"
               autoFocus
-              maxLength={20}
+              maxLength={NEW_USERNAME_MAX_LENGTH}
               minLength={3}
               name="username"
               onChange={() => {

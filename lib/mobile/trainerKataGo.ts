@@ -43,7 +43,7 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
         const status = await readKataGoStatus(() => plugin.getStatus(), signal);
         if (status.available) assertNativeKataGoStatus(status);
         return status;
-      });
+      }, signal);
     },
     analyze(input: AnalysisInput, options: { visits: number; ownership?: boolean; maxTime?: number; signal: AbortSignal }): Promise<TrainerPositionAnalysis> {
       const execute = async () => {
@@ -59,7 +59,7 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
             visits: Math.max(2, Math.min(MOBILE_KATAGO.maximumVisitsPerTurn, Math.round(options.visits))),
             includeOwnership: options.ownership ?? false,
             maxTime: Number.isFinite(options.maxTime) ? Math.max(.1, Math.min(8, options.maxTime!)) : 5,
-          }), TRAINER_TIMEOUT_MS, "KataGo did not finish the training position in time.");
+          }), TRAINER_TIMEOUT_MS, "KataGo did not finish the training position in time.", options.signal);
           if (options.signal.aborted) throw aborted();
           validateTrainerAnalysis(response.turn, input);
           return response.turn;
@@ -71,7 +71,7 @@ export function createTrainerKataGoClient(plugin: TrainerKataGoPlugin, nativeAva
           await cancellation;
         }
       };
-      return enqueue(execute);
+      return enqueue(execute, options.signal);
     },
   };
 }

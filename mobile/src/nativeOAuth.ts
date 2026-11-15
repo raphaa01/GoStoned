@@ -29,7 +29,7 @@ function navigate(href: string): void {
 
 function readPending(): PendingOAuth | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<PendingOAuth>;
     if (typeof value.verifier !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value.verifier)
@@ -78,19 +78,19 @@ export async function startNativeOAuth(href: string): Promise<void> {
     expiresAt: Date.now() + 10 * 60_000,
   };
   handledCallbackUrl = null;
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(pending));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(pending));
   try {
     await Browser.open({ url: requested.href });
   } catch {
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     authError(pending);
   }
 }
 
 async function finishNativeOAuth(url: URL): Promise<void> {
   const pending = readPending();
-  sessionStorage.removeItem(STORAGE_KEY);
-  try { await Browser.close(); } catch { /* Android closes its Custom Tab on return. */ }
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* The server still consumes the code only once. */ }
+  void Browser.close().catch(() => undefined);
   if (!pending) {
     authError(null);
     return;

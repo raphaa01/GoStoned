@@ -124,7 +124,7 @@ export const en = {
     loginDescription: "Continue with your saved profile and ratings.",
     username: "Username",
     usernamePlaceholder: "Your username",
-    usernameHint: "3–20 letters, numbers, or underscores. This username is visible to other players and on leaderboards.",
+    usernameHint: "3–16 letters, numbers, or underscores. This username is visible to other players and on leaderboards.",
     password: "Password",
     passwordPlaceholder: "At least 8 characters",
     startingStrength: "Optional starting strength",
@@ -156,7 +156,7 @@ export const en = {
     errors: {
       invalid_request: "The request could not be read. Please try again.",
       request_rejected: "This authentication request was blocked. Please try again.",
-      invalid_username: "Username must contain 3–20 letters, numbers, or underscores.",
+      invalid_username: "Username must contain 3–16 letters, numbers, or underscores.",
       password_required: "Password is required.",
       password_too_short: "Password must contain at least 8 characters.",
       password_too_long: "Password must contain at most 128 characters.",
