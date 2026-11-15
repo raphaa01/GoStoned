@@ -10548,6 +10548,7 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 }
 .result-modal :is(.result-secondary-actions, .result-details-actions) svg { flex: none; }
 .result-modal .result-actions :is(button, a):not([tabindex="-1"]):focus-visible {
+  box-shadow: none;
   outline: 2px solid var(--color-ink);
   outline-offset: -3px;
 }
@@ -10560,6 +10561,17 @@ html:not([data-mobile-app="true"]) .go-board[data-preview-color="white"] .inters
 .chat-panel[data-unavailable="true"] .chat-form { display: none; }
 
 .learn-player__tools:empty { display: none; }
+
+@media (max-width: 360px) {
+  .game-topbar .game-connection[data-state="final"] > .game-connection-label {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+}
 
 @media (max-width: 760px) {
   .profile-header .profile-settings-link {

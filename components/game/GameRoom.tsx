@@ -1349,7 +1349,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
             className={connectionState.kind === "reconnecting" ? "spin" : undefined}
             size={15}
           />
-          {connectionLabel}
+          <span className="game-connection-label">{connectionLabel}</span>
         </span>
         <LanguageSwitcher />
         {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink key={game.id} gameId={game.id} finished={game.status === "finished"} mobile={tournamentNavigation === "mobile"} /> : null}

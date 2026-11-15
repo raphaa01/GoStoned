@@ -78,6 +78,7 @@ export function registerBetaGameTests(mobile: boolean) {
         const focusedButton = dialog.locator(".result-play-action");
         await expect(focusedButton).toBeFocused();
         await expect(focusedButton).toHaveCSS("outline-offset", "-3px");
+        await expect(focusedButton).toHaveCSS("box-shadow", "none");
         const pairs = [
           [dialog.locator(".result-play-action"), dialog.locator(".result-analysis-action")],
           [dialog.locator(".result-view-board"), dialog.locator(".result-share-action")],
@@ -85,6 +86,15 @@ export function registerBetaGameTests(mobile: boolean) {
         for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
           await page.setViewportSize(viewport);
           await assertNoOverflow(page);
+          if (viewport.width === 320) {
+            const aligned = await page.locator(".game-topbar").evaluate(element => {
+              const y = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
+              const brand = y(".game-brand");
+              const exit = y(".game-exit");
+              return brand.top + brand.height / 2 > exit.top && brand.top + brand.height / 2 < exit.bottom;
+            });
+            expect(aligned).toBe(true);
+          }
           const [homeBounds, ...rows] = await dialog.evaluate(element => {
             const bounds = (selector: string) => element.querySelector(selector)!.getBoundingClientRect().toJSON();
             return [bounds(".result-home-action"), [bounds(".result-play-action"), bounds(".result-analysis-action")],

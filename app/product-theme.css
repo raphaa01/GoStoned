@@ -272,6 +272,7 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
 .game-player-panel .player-clock.is-running :is(strong, span) { color: var(--color-on-action); }
 .game-player-panel .game-actions { border: 0; }
 .game-topbar { background: var(--color-canvas); border: 0; }
+.game-topbar .game-connection[data-state="final"] { color: var(--color-text-muted); }
 .focused-board-status { justify-content: flex-end; }
 .focused-board-status > strong { margin-inline-end: auto; }
 .result-score-summary,
