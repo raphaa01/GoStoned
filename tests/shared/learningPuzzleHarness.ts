@@ -83,7 +83,7 @@ export function registerLearningPuzzleTests(mobile: boolean) {
     await expect(page.getByText("Not quite.",{exact:true})).toHaveCount(0);
     for(const ply of source.paths[0].line.filter((ply)=>ply.color===source.toPlay))await play(ply);
     await expect.poll(()=>solved).toBe(true);
-    await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Try again", exact: true })).toHaveCount(0);
     await expect(page.getByText("Correct.", { exact: true })).toBeVisible();
     await page.getByRole("button",{name:"Next problem",exact:true}).click();
     await expect(page.getByText("about 5 kyu",{exact:true}).first()).toBeVisible();
