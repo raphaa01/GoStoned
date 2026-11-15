@@ -52,7 +52,7 @@ static void checkBoard(const char* model, const char* config, int size) {
     json request = {
       {"id", id}, {"rules", "japanese"}, {"komi", 6.5}, {"maxVisits", 4},
       {"boardXSize", size}, {"boardYSize", size}, {"analyzeTurns", turns},
-      {"moves", {{"B", "D4"}}}, {"includeOwnership", ownership},
+      {"moves", json::array({json::array({"B", "D4"})})}, {"includeOwnership", ownership},
     };
     if (!gostone_katago_send(engine.get(), request.dump().c_str())) {
       throw std::runtime_error("Could not send KataGo query");
