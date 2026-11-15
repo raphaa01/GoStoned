@@ -75,6 +75,22 @@ hr { border: 0; margin-block: 1rem; }
 
 /* Radius and spacing separate content groups throughout the product. */
 .settings-section .settings-options { gap: 6px; }
+.settings-language .language-menu-trigger {
+  background: var(--color-canvas-deep);
+  border-radius: var(--radius-sm);
+  justify-content: space-between;
+  min-height: 44px;
+  width: 100%;
+}
+.settings-language .language-menu-trigger > span { flex: 1; text-align: start; }
+.settings-language .language-menu-popover {
+  box-shadow: none;
+  margin-block-start: 6px;
+  min-width: 0;
+  position: static;
+}
+.settings-language .language-menu-heading { display: none; }
+.settings-language .language-menu-option { min-height: 44px; }
 .settings-section .settings-options .settings-option,
 .settings-page .account-deletion-flow--compact {
   background: var(--color-surface);

@@ -3962,11 +3962,6 @@ html:not([data-mobile-app="true"]) .intersection[aria-disabled="false"]:hover::b
     padding-top: 7px;
   }
 
-  .game-topbar .language-menu {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
   .game-exit {
     grid-column: 3;
     grid-row: 1;

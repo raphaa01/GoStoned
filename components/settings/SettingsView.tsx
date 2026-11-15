@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { getSettingsCopy } from "@/lib/i18n/settings";
 import { AccountDeletionRequest } from "@/components/legal/AccountDeletionRequest";
 import { AppearanceSettings } from "./AppearanceSettings";
@@ -12,13 +13,17 @@ import { BoardPlacementSettings } from "./BoardPlacementSettings";
 
 export function SettingsView({ children }: { children?: React.ReactNode }) {
   const { user } = useAuth();
-  const { href, locale } = useI18n();
+  const { dictionary, href, locale } = useI18n();
   const copy = getSettingsCopy(locale);
   return <div className="settings-page">
     <header className="settings-page__header">
       <Link className="settings-back" href={href("/profile")}><ArrowLeft aria-hidden="true" size={18} />{copy.back}</Link>
       <h1>{copy.title}</h1>
     </header>
+    <section className="settings-section settings-language">
+      <h2>{dictionary.language.switcherLabel}</h2>
+      <LanguageSwitcher />
+    </section>
     <BoardPlacementSettings key={user?.playerKey} />
     <AppearanceSettings />
     <AccountDeletionRequest compact />

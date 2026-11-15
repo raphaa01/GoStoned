@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePlayerIdentity } from "@/components/auth/PlayerIdentityProvider";
-import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { SkipLink } from "@/components/layout/SkipLink";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -1349,7 +1348,6 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
           />
           <span className="game-connection-label">{connectionLabel}</span>
         </span>
-        <LanguageSwitcher />
         {tournamentNavigation && !game.blackPlayerIsBot && !game.whitePlayerIsBot ? <TournamentGameLink key={game.id} gameId={game.id} finished={game.status === "finished"} mobile={tournamentNavigation === "mobile"} /> : null}
         <button
           className="game-exit"

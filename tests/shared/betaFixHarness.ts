@@ -14,6 +14,7 @@ export function registerBetaGameTests(mobile: boolean) {
     state.game.board[0][1] = null;
     await page.goto(`/de/game/${GAME_ID}`);
     await expect(page.locator(".game-pass-notice")).toContainText("Friend");
+    await expect(page.locator(".game-topbar .language-menu-trigger")).toHaveCount(0);
     await expect(page.locator(".game-pass-notice")).toContainText("Weiß passte.");
     if (mobile) {
       await expect(page.locator(".game-player-rank")).toHaveCount(2);
