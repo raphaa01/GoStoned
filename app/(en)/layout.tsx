@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { BoardDesignProvider } from "@/components/game/BoardDesignProvider";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
+import { WebsiteLayout } from "@/components/layout/WebsiteLayout";
 import { getDictionary } from "@/lib/i18n/dictionary";
 import { rootMetadata } from "@/lib/i18n/metadata";
 import "../globals.css";
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head><script id="gostone-theme">{THEME_BOOTSTRAP}</script></head>
       <body>
         <I18nProvider dictionary={getDictionary("en")} locale="en">
-          <ThemeProvider><AuthProvider><BoardDesignProvider><BoardPlacementProvider>{children}</BoardPlacementProvider></BoardDesignProvider></AuthProvider></ThemeProvider>
+          <ThemeProvider><AuthProvider><BoardDesignProvider><BoardPlacementProvider>
+            <WebsiteLayout>{children}</WebsiteLayout>
+          </BoardPlacementProvider></BoardDesignProvider></AuthProvider></ThemeProvider>
         </I18nProvider>
         {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>

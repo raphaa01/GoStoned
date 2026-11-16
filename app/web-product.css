@@ -1,14 +1,95 @@
 /* Rounded product surfaces for the website. The native bundle has its own shell. */
-.app-shell {
+.web-site {
   --web-header-height: 82px;
   --web-card-radius: 14px;
   --web-row-radius: 9px;
+  min-height: 100dvh;
 }
 
-.app-main { padding-top: var(--web-header-height); }
+.web-navigation {
+  --web-nav-inset: clamp(16px, 3.6vw, 64px);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+}
 
-@media (max-width: 1366px) {
-  .app-shell { --web-header-height: 60px; }
+.web-navigation > .sidebar {
+  inset: 0 0 auto;
+  overflow: var(--web-inline-overflow, visible);
+  padding-inline: var(--web-nav-inset);
+  position: var(--web-inline-position, relative);
+  visibility: var(--web-inline-visibility, visible);
+  z-index: 0;
+}
+
+.web-navigation > .mobile-nav { display: var(--web-menu-display, none); }
+
+.web-navigation .sidebar-nav {
+  justify-self: center;
+  white-space: nowrap;
+  width: max-content;
+}
+.web-navigation .sidebar-bottom { width: max-content; }
+.web-navigation .nav-link { width: max-content; }
+
+.web-site:has(> .web-navigation[data-layout="compact"]) {
+  --web-header-height: 60px;
+  --web-inline-overflow: clip;
+  --web-inline-position: absolute;
+  --web-inline-visibility: hidden;
+  --web-menu-display: flex;
+}
+
+/* Keep the phone header stable before hydration. */
+@media (max-width: 640px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .web-site:has(> .web-navigation:not([data-layout])) {
+    --web-header-height: 60px;
+    --web-inline-overflow: clip;
+    --web-inline-position: absolute;
+    --web-inline-visibility: hidden;
+    --web-menu-display: flex;
+  }
+}
+
+.web-navigation[data-layout="overflow"] > .sidebar {
+  grid-template-columns: max-content minmax(0, 1fr);
+  padding-inline-end: calc(var(--web-nav-inset) + 44px + 16px);
+}
+.web-navigation[data-layout="overflow"] :is(.sidebar-bottom, [data-overflow-tab]) {
+  inset-inline-start: 0;
+  position: absolute;
+  visibility: hidden;
+}
+.web-site .web-navigation[data-layout="overflow"] > .mobile-nav {
+  background: transparent;
+  backdrop-filter: none;
+  display: flex;
+  height: var(--web-header-height);
+  inset: 0 var(--web-nav-inset) auto auto;
+  padding: 0;
+  position: absolute;
+  z-index: 1;
+}
+.web-navigation[data-layout="overflow"] > .mobile-nav > .brand { display: none; }
+.web-navigation[data-layout="overflow"] .mobile-menu {
+  max-height: calc(100dvh - var(--web-header-height) - 16px);
+  right: 0;
+}
+
+.web-site .app-shell,
+.web-site .app-main,
+.web-site :is(.focused-game-shell, .game-loading) {
+  min-height: calc(100dvh - var(--web-header-height));
+}
+.web-site .app-main { padding-top: 0; }
+.web-site .focused-game-layout { min-height: calc(100dvh - var(--web-header-height) - 68px); }
+.web-site .review-workspace {
+  height: calc(100dvh - var(--web-header-height));
+  inset-block-start: var(--web-header-height);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-navigation .nav-link::after { transition: none; }
 }
 
 .home-feature-list {

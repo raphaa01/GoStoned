@@ -1698,7 +1698,7 @@ for (const locale of ["en", "de"] as const) {
 for (const locale of ["en", "de"] as const) {
   test(`${locale.toUpperCase()} mobile disclosure follows real keyboard focus`, async ({ page }) => {
     const width = page.viewportSize()?.width ?? Number.POSITIVE_INFINITY;
-    test.skip(width > 1366, "The desktop project uses the inline navigation.");
+    test.skip(width > 390, "The phone projects exercise the compact navigation.");
     await page.setViewportSize({ width, height: 360 });
     const harness = await installApiHarness(page);
     const localeCopy = copy[locale];
@@ -1833,31 +1833,32 @@ test("language switch preserves the play route, query, and fragment", async ({ p
   await expectCleanHarness(harness);
 });
 
-test("tablet navigation keeps Friends, Tournaments, and languages in a compact panel", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "chromium-1024", "One project covers the tablet sizes.");
+test("moves only Friends and Leaderboard into the overflow menu on tablets", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "One project exercises the layout across widths.");
   const harness = await installApiHarness(page);
   await page.goto("/de/play");
 
   const toggle = page.locator(".mobile-nav > .icon-button");
   const navigation = page.getByRole("navigation", { name: copy.de.mobileNavigation });
   const language = navigation.getByRole("button", { name: /Deutsch/ });
-  for (const width of [1024, 1280, 1366]) {
-    await page.setViewportSize({ width, height: 768 });
-    await expect(page.locator(".sidebar")).toBeHidden();
-    await expect(navigation).toBeHidden();
-    await toggle.click();
+  const header = page.locator(".web-navigation");
+  const tabs = header.locator(".sidebar-nav").getByRole("link");
+  await page.setViewportSize({ width: 1280, height: 768 });
+  await expect(header).toHaveAttribute("data-layout", "wide");
+  await expect(toggle).toBeHidden();
+  await expect(tabs).toHaveCount(7);
 
-    await expect(navigation.getByRole("link", { name: "Freunde", exact: true })).toHaveAttribute("href", "/de/friends");
-    await expect(navigation.getByRole("link", { name: "Turniere", exact: true })).toHaveAttribute("href", "/de/tournaments");
-    await expectControlInsideViewport(page, navigation, false);
-    const [panel, button] = await Promise.all([navigation.boundingBox(), toggle.boundingBox()]);
-    expect(panel!.width).toBeLessThanOrEqual(320);
-    expect(panel!.y).toBeGreaterThanOrEqual(button!.y + button!.height);
-    expect(panel!.x + panel!.width).toBeCloseTo(button!.x + button!.width, 0);
-    await toggle.click();
-  }
-
+  await page.setViewportSize({ width: 768, height: 768 });
+  await expect(header).toHaveAttribute("data-layout", "overflow");
+  await expect(tabs).toHaveCount(5);
+  for (const tab of await tabs.all()) await expect(tab).toBeInViewport({ ratio: 1 });
+  await expect(tabs.getByText(/Freunde|Rangliste/)).toHaveCount(0);
+  await expect(navigation).toBeHidden();
   await toggle.click();
+  await expect(navigation.getByRole("link", { name: "Freunde", exact: true })).toHaveAttribute("href", "/de/friends");
+  await expect(navigation.getByRole("link", { name: "Rangliste", exact: true })).toHaveAttribute("href", "/de/leaderboard");
+  await expect(navigation.getByRole("link", { name: "Turniere", exact: true })).toHaveCount(0);
+  await expectControlInsideViewport(page, navigation, false);
   await language.click();
   await expect(navigation.getByRole("menuitemradio", { name: "Deutsch" })).toBeFocused();
   await page.keyboard.press("Escape");
@@ -1868,10 +1869,60 @@ test("tablet navigation keeps Friends, Tournaments, and languages in a compact p
   await expect(navigation).toBeHidden();
 
   await toggle.click();
-  await navigation.getByRole("link", { name: "Turniere", exact: true }).click();
-  await expect(page).toHaveURL(`${ORIGIN}/de/register?returnTo=%2Ftournaments`);
+  await navigation.getByRole("link", { name: "Freunde", exact: true }).click();
+  await expect(page).toHaveURL(`${ORIGIN}/de/register?returnTo=%2Ffriends`);
   await expect(navigation).toBeHidden();
+
+  await page.setViewportSize({ width: 1280, height: 768 });
+  await expect(header).toHaveAttribute("data-layout", "wide");
+  await expect(tabs).toHaveCount(7);
   await expectCleanHarness(harness);
+});
+
+test("puts all seven tabs in the phone menu in portrait and landscape", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-390-touch", "One touch project covers both orientations.");
+  await installApiHarness(page);
+  await page.goto("/de/play");
+  const header = page.locator(".web-navigation");
+  const toggle = header.locator(".mobile-nav > .icon-button");
+  const menu = header.getByRole("navigation", { name: copy.de.mobileNavigation });
+  const { nav } = getDictionary("de");
+  const labels = [nav.play, nav.learn, nav.review, nav.puzzles, nav.leaderboard, "Freunde", "Turniere"];
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await expect(header).toHaveAttribute("data-layout", "compact");
+    await expect(header.locator(".sidebar")).toBeHidden();
+    await toggle.click();
+    for (const label of labels) await expect(menu.getByRole("link", { name: label, exact: true })).toBeVisible();
+    await toggle.click();
+    await expect(menu).toBeHidden();
+  }
+});
+
+test("keeps the header and its underlines across website pages", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium-1024", "One desktop project covers mouse and keyboard navigation.");
+  await installApiHarness(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/de");
+  const header = page.locator(".web-navigation");
+  const tabs = header.locator(".nav-link");
+  const play = tabs.filter({ hasText: /^Spielen$/ });
+  const underline = () => play.evaluate(link => getComputedStyle(link, "::after").opacity);
+  await expect(play).toBeVisible();
+  await expect.poll(underline).toBe("0");
+  await play.hover();
+  await expect.poll(underline).toBe("1");
+  await play.click();
+  await expect(page).toHaveURL(`${ORIGIN}/de/play`);
+  await expect(play).toHaveAttribute("aria-current", "page");
+
+  await page.goto(`/de/game/${GAME_ID}`);
+  await expect(page.locator("main#main-content")).toBeVisible();
+  await expect(play).toBeVisible();
+  await page.goto("/shared-game/unavailable");
+  await expect(page.locator("main#main-content")).toBeVisible();
+  await expect(tabs).toHaveCount(7);
 });
 
 for (const { code, nativeName } of LOCALES) {

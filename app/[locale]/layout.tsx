@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import { BoardPlacementProvider } from "@/components/game/BoardPlacementProvider";
 import { BoardDesignProvider } from "@/components/game/BoardDesignProvider";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
+import { WebsiteLayout } from "@/components/layout/WebsiteLayout";
 import { LOCALES } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionary";
 import { rootMetadata } from "@/lib/i18n/metadata";
@@ -44,7 +45,9 @@ export default async function LocalizedRootLayout({
       <head><script id="gostone-theme">{THEME_BOOTSTRAP}</script></head>
       <body>
         <I18nProvider dictionary={getDictionary(locale)} locale={locale}>
-          <ThemeProvider><AuthProvider><BoardDesignProvider><BoardPlacementProvider>{children}</BoardPlacementProvider></BoardDesignProvider></AuthProvider></ThemeProvider>
+          <ThemeProvider><AuthProvider><BoardDesignProvider><BoardPlacementProvider>
+            <WebsiteLayout>{children}</WebsiteLayout>
+          </BoardPlacementProvider></BoardDesignProvider></AuthProvider></ThemeProvider>
         </I18nProvider>
         {process.env.VERCEL === "1" ? <WebAnalytics /> : null}
       </body>

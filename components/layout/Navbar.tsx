@@ -16,7 +16,7 @@ import { getFriendsCopy } from "@/lib/i18n/friends";
 import { isRouteActive } from "@/lib/i18n/routing";
 import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 
-export function Navbar() {
+export function Navbar({ overflow = false }: { overflow?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, rating } = useAuth();
@@ -33,11 +33,12 @@ export function Navbar() {
     { destination: learnHref, path: "/learn", label: dictionary.nav.learn, icon: BookOpen },
     { destination: reviewHref, path: "/review", label: dictionary.nav.review, icon: Search },
     { destination: href("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles, icon: Puzzle },
-    { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown },
-    { destination: href("/friends"), path: "/friends", label: friendsCopy.nav, icon: Users },
+    { destination: href("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, icon: Crown, overflowMenu: true },
+    { destination: href("/friends"), path: "/friends", label: friendsCopy.nav, icon: Users, overflowMenu: true },
     { destination: href("/tournaments"), path: "/tournaments", label: getTournamentsCopy(locale).title, icon: Trophy },
-    { destination: href(user ? "/profile" : "/login"), path: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn },
+    { destination: href(user ? "/profile" : "/login"), path: user ? "/profile" : "/login", label: user ? user.displayName : dictionary.nav.login, icon: LogIn, overflowMenu: true },
   ];
+  const menuLinks = overflow ? links.filter((link) => link.overflowMenu) : links;
 
   useEffect(() => {
     if (!open) return;
@@ -110,7 +111,7 @@ export function Navbar() {
         hidden={!open}
         id={menuId}
       >
-          {links.map(({ destination, path, label, icon: Icon }) => (
+          {menuLinks.map(({ destination, path, label, icon: Icon }) => (
             <Link
               className={isRouteActive(pathname, path) ? "is-active" : ""}
               href={destination}
