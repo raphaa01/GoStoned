@@ -15,7 +15,8 @@ const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
 function onStoneSurface([x, y, z]: Point): Point {
   const radius = Math.hypot(x, y, z);
-  return [x / radius, .985 * y / radius, .92 * z / radius];
+  // Keep the face round and compress its depth to form a biconvex Go stone.
+  return [x / radius, .985 * y / radius, .42 * z / radius];
 }
 
 function buildMesh() {
@@ -189,7 +190,7 @@ export function TournamentStone({ href, label }: { href: string; label: string }
     gesture.speed = delta / Math.max(8, event.timeStamp - gesture.lastAt);
     gesture.lastX = event.clientX;
     gesture.lastAt = event.timeStamp;
-    rotation.current.target += delta * .0105;
+    rotation.current.target -= delta * .0105;
     requestDraw.current();
   }
 
@@ -210,7 +211,7 @@ export function TournamentStone({ href, label }: { href: string; label: string }
     }
     if (gesture.moved && event.timeStamp - gesture.lastAt < 85
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      rotation.current.target += Math.max(-.38, Math.min(.38, gesture.speed * .24));
+      rotation.current.target -= Math.max(-.38, Math.min(.38, gesture.speed * .24));
       requestDraw.current();
     }
   }

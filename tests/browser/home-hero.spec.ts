@@ -1,13 +1,19 @@
 import { expect, test } from "@playwright/test";
+import { installHarness } from "../shared/boardDesignHarness";
 
 test("keeps the primary homepage action visible and proportionally anchored", async ({ page }) => {
   await page.goto("/");
 
-  const hero = page.locator(".web-home__main");
+  const hero = page.locator(".home-hero");
   const startPlay = page.getByRole("link", { name: "Start a game" });
 
   await expect(hero).toBeVisible();
+  const artwork = hero.locator(".hero-stone-image.stone-artwork--light");
+  await expect(artwork).toBeVisible();
+  await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(startPlay).toBeVisible();
+  await expect(startPlay).toHaveCSS("background-color", "rgb(175, 134, 85)");
+  await expect(page.locator("main canvas")).toHaveCount(0);
 
   const heroBox = await hero.boundingBox();
   const buttonBox = await startPlay.boundingBox();
@@ -23,27 +29,19 @@ test("keeps the primary homepage action visible and proportionally anchored", as
   expect(buttonBox.y).toBeGreaterThanOrEqual(heroBox.y);
   expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(viewport.height);
 
-  const shortcuts = (await page.locator('.home-shortcuts').boundingBox())!;
-  expect(buttonBox.y).toBeGreaterThanOrEqual(shortcuts.y + shortcuts.height);
+  const relativeButtonTop = (buttonBox.y - heroBox.y) / heroBox.height;
+  expect(relativeButtonTop).toBeGreaterThan(0.6);
+  expect(relativeButtonTop).toBeLessThan(0.9);
 });
 
-test("puts tournaments and learning next to each other on the German home page", async ({ page }) => {
+test("shows the website sections and localized links on the German home page", async ({ page }) => {
+  await installHarness(page);
   await page.goto("/de");
-  const tournaments = page.locator(".home-tournament");
-  const learning = page.locator(".home-learning");
-  await expect(tournaments).toHaveAttribute("href", "/de/tournaments");
-  await expect(learning.locator("progress")).toHaveAttribute("max", /\d+/);
-  const labelLines = await learning.locator("strong").evaluate(element => {
-    const text = document.createRange();
-    text.selectNodeContents(element);
-    return text.getClientRects().length;
-  });
-  expect(labelLines).toBe(1);
-  const left = (await tournaments.boundingBox())!;
-  const right = (await learning.boundingBox())!;
-  expect(left.y).toBe(right.y);
-  expect(left.x + left.width).toBeLessThan(right.x);
-  await expect(page.locator("main a[href*='/puzzles']")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Online Go spielen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Partien und Wertung im Blick", exact: true })).toBeVisible();
+  await expect(page.locator("#home-learn")).toHaveAttribute("href", "/de/learn");
+  await expect(page.locator("#home-puzzles")).toHaveAttribute("href", "/de/puzzles");
+  await expect(page.locator("#home-review")).toHaveAttribute("href", "/de/review");
 });
 
 test("links from the German home page to GoStone in the App Store on iPhone", async ({ page }) => {

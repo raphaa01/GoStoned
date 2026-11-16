@@ -313,20 +313,24 @@ html[data-mobile-app="true"] .mobile-auth-screen .auth-card .input-wrap {
 .go-board[data-board-design]:not([data-board-design="default"]) .intersection.is-star::before { background: var(--skin-grid); }
 .go-board[data-board-design]:not([data-board-design="default"]) .board-coordinate { color: var(--skin-grid); }
 
-/* Dashboard modules shared by the web landing page and installed apps. */
-.web-home {
+/* The water artwork blends into the website home palette. */
+.home-experience {
+  --color-canvas: #f5f2eb;
+  --color-canvas-deep: #eee9df;
+}
+html[data-theme="dark"] .home-experience {
+  --color-canvas: #111310;
+  --color-canvas-deep: #20231f;
+}
+
+.platform-account {
   display: grid;
   gap: 16px;
-  margin: 0 auto;
-  max-width: 720px;
-  padding: clamp(10px, 3vw, 28px) 0;
+  margin: clamp(24px, 4vw, 48px) auto 0;
+  max-width: 1180px;
 }
-.web-home__main { display: grid; gap: 10px; }
-.web-home__play { border-radius: var(--radius-md); justify-content: center; min-height: 48px; }
-.web-home__play > span { background: var(--color-stone-black); border-radius: 50%; height: 12px; width: 12px; }
-.home-activity-note:has(p:not(.sr-only)) { color: var(--color-text-muted); font-size: .875rem; }
-.home-activity-note p { margin: 0 0 6px; }
 
+/* Dashboard modules shared by iOS and Android. */
 .home-shortcuts {
   display: grid;
   gap: clamp(8px, 3vw, 16px);
