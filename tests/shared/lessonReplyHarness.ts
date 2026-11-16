@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { installHarness } from "./boardDesignHarness";
-import { emptyLearnProgress, LEARN_LESSON_IDS, type LearnLessonId } from "../../lib/learn/progress";
+import { lessonById } from "../../lib/learn/curriculum";
+import { emptyLearnProgress, learnStepBookmark, LEARN_LESSON_IDS, type LearnLessonId } from "../../lib/learn/progress";
 
 export function registerLessonReplyTests(mobile: boolean) {
   async function openLesson(page: Page, id: LearnLessonId, initialStep = 1) {
@@ -15,25 +16,28 @@ export function registerLessonReplyTests(mobile: boolean) {
       expect(registered.status()).toBe(201);
     }
     await installHarness(page);
+    const bookmark = learnStepBookmark(id, initialStep, lessonById(id).steps[initialStep].id);
     const progress = { ...emptyLearnProgress(), completedLessonIds: LEARN_LESSON_IDS.slice(0, LEARN_LESSON_IDS.indexOf(id)),
-      currentLessonId: id, lastStepByLesson: { [id]: initialStep }, updatedAt: new Date().toISOString() };
+      currentLessonId: id, lastStepByLesson: { [id]: bookmark }, updatedAt: new Date().toISOString() };
     await page.route("**/api/learn/progress", route => route.fulfill({ json: { ok: true, progress } }));
     await page.clock.install({ time: new Date("2026-10-25T12:00:00Z") });
     await page.goto("/de/learn");
     if (mobile) await expect(page.locator(".mobile-splash")).toHaveAttribute("aria-hidden", "true");
+    await expect(page.locator('.learn-route-node[aria-current="step"]')).toContainText(lessonById(id).title.de);
     await page.locator(".learn-next-dock__button").click();
+    await expect(page.locator(".learn-player")).toHaveAttribute("data-step-id", lessonById(id).steps[initialStep].id);
     await expect(page.locator(".interactive-learn-board")).toBeVisible();
     await page.clock.pauseAt(new Date("2026-10-25T12:01:00Z"));
   }
 
-  test("throw-in stays visible for two seconds before capture and the recapture stays immediate", async ({ page }, info) => {
-    await openLesson(page, "s4-throw-in");
+  test("the sacrificed stone stays visible for two seconds and the snapback stays immediate", async ({ page }, info) => {
+    await openLesson(page, "s4-snapback");
     const player = page.locator(".learn-player");
     const stone = page.getByRole("gridcell").nth(1);
     const reply = page.getByRole("gridcell").nth(0);
     await stone.click();
     await expect(stone).toHaveClass(/has-stone is-black/);
-    await expect(player).toHaveAttribute("data-step-id", "throw-0");
+    await expect(player).toHaveAttribute("data-step-id", "snap-practice-0");
     await expect(player).toHaveAttribute("data-mode", "reply");
     await expect(player.locator(".learn-player__next")).toBeDisabled();
     await expect(player.locator('[role="gridcell"][aria-disabled="false"]')).toHaveCount(0);
@@ -49,7 +53,7 @@ export function registerLessonReplyTests(mobile: boolean) {
     await page.clock.runFor(1);
     await expect(stone).not.toHaveClass(/has-stone/);
     await expect(reply).toHaveClass(/has-stone is-white/);
-    await expect(player).toHaveAttribute("data-step-id", "throw-1");
+    await expect(player).toHaveAttribute("data-step-id", "snap-practice-1");
     await expect(player).toHaveAttribute("data-mode", "action");
     await page.screenshot({ path: `${artifact}-after.png`, fullPage: true, animations: "disabled" });
     // This decision has no authored reply, so no additional delay is introduced.
@@ -60,7 +64,7 @@ export function registerLessonReplyTests(mobile: boolean) {
   });
 
   test("restart and leaving the lesson cancel the delayed reply", async ({ page }) => {
-    await openLesson(page, "s4-throw-in");
+    await openLesson(page, "s4-snapback");
     const player = page.locator(".learn-player");
     const stone = page.getByRole("gridcell").nth(1);
     const restart = page.getByRole("button", { name: "Neu starten", exact: true });
@@ -77,11 +81,11 @@ export function registerLessonReplyTests(mobile: boolean) {
     await page.locator(".learn-next-dock__button").click();
     await page.clock.runFor(3_000);
     await expect(stone).not.toHaveClass(/has-stone/);
-    await expect(player).toHaveAttribute("data-step-id", "throw-0");
+    await expect(player).toHaveAttribute("data-step-id", "snap-practice-0");
     await expect(player).toHaveAttribute("data-mode", "action");
     await stone.click();
     await page.clock.runFor(2_000);
-    await expect(player).toHaveAttribute("data-step-id", "throw-1");
+    await expect(player).toHaveAttribute("data-step-id", "snap-practice-1");
   });
 
   test("the first trainer reply is delayed while later demonstration moves remain manual", async ({ page }) => {
