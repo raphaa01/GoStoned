@@ -29,11 +29,11 @@ function SharedGameLoader({ token }: { token: string }) {
   }, [token]);
 
   if (!game) {
-    return <main className={styles.page}><div className={styles.status}>{failed ? copy.unavailable : copy.loading}</div></main>;
+    return <main className={styles.page} id="main-content" tabIndex={-1}><div className={styles.status}>{failed ? copy.unavailable : copy.loading}</div></main>;
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} id="main-content" tabIndex={-1}>
       <article className={styles.shell}>
         <header className={styles.header}>
           <span className={styles.eyebrow}>{copy.brand} · {copy.eyebrow}</span>

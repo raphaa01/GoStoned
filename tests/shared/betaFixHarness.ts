@@ -56,7 +56,11 @@ export function registerBetaGameTests(mobile: boolean) {
     await expect(home).toHaveCSS("min-height", "50px");
     await home.click();
     await expect(page).toHaveURL(/\/de\/?$/);
-    await expect(page.locator(mobile ? ".mobile-home" : ".web-home")).toBeVisible();
+    if (mobile) {
+      await expect(page.locator(".mobile-home")).toBeVisible();
+    } else {
+      await expect(page.getByRole("link", { name: "Partie starten", exact: true })).toBeVisible();
+    }
   });
 
   for (const theme of ["light", "dark"]) {

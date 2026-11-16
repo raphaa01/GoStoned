@@ -5,6 +5,7 @@ import { BrandMark } from "./BrandMark";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { Ref } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useAccountFeatureHref } from "@/components/auth/useAccountFeatureHref";
 import { useI18n } from "@/components/i18n/I18nProvider";
@@ -14,7 +15,7 @@ import { getFriendsCopy } from "@/lib/i18n/friends";
 import { isRouteActive } from "@/lib/i18n/routing";
 import { getTournamentsCopy } from "@/lib/i18n/tournaments";
 
-export function DesktopHeader() {
+export function DesktopHeader({ headerRef }: { headerRef: Ref<HTMLElement> }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
@@ -27,8 +28,8 @@ export function DesktopHeader() {
     { destination: learnHref, path: "/learn", label: dictionary.nav.learn },
     { destination: reviewHref, path: "/review", label: dictionary.nav.review },
     { destination: localizedHref("/puzzles"), path: "/puzzles", label: dictionary.nav.puzzles },
-    { destination: localizedHref("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard },
-    { destination: localizedHref("/friends"), path: "/friends", label: friendsCopy.nav },
+    { destination: localizedHref("/leaderboard"), path: "/leaderboard", label: dictionary.nav.leaderboard, overflow: true },
+    { destination: localizedHref("/friends"), path: "/friends", label: friendsCopy.nav, overflow: true },
     { destination: localizedHref("/tournaments"), path: "/tournaments", label: getTournamentsCopy(locale).title },
   ];
 
@@ -43,7 +44,7 @@ export function DesktopHeader() {
   }
 
   return (
-    <header className="sidebar">
+    <header className="sidebar" ref={headerRef}>
       <Link className="brand" href={localizedHref("/")} aria-label={dictionary.nav.homeLabel}>
         <BrandMark />
         <span>GoStone</span>
@@ -51,9 +52,10 @@ export function DesktopHeader() {
 
       <nav className="sidebar-nav" aria-label={dictionary.nav.mainLabel}>
         <div className="nav-group">
-          {items.map(({ destination, path, label }) => (
+          {items.map(({ destination, path, label, overflow }) => (
             <Link
               className={`nav-link ${isRouteActive(pathname, path) ? "is-active" : ""}`}
+              data-overflow-tab={overflow || undefined}
               href={destination}
               key={path}
               aria-current={isRouteActive(pathname, path) ? "page" : undefined}

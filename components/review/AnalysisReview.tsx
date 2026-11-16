@@ -297,7 +297,8 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
   useEffect(() => {
     if (!availableMoves || showSummary) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable]")) return;
+      if (event.defaultPrevented || (event.target instanceof HTMLElement
+        && event.target.closest("input, textarea, select, [contenteditable], .web-navigation"))) return;
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       setSelectedMove((move) => event.key === "Home" ? 0 : event.key === "End" ? availableMoves
@@ -311,7 +312,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
     : null;
   const loginPath = href(`/login?returnTo=${encodeURIComponent(safeAccountReturnPath(`/review/${gameId}`) ?? "/review")}`);
   return (
-    <div className={`${styles.reviewWorkspace} review-workspace`}>
+    <main className={`${styles.reviewWorkspace} review-workspace`} id="main-content" tabIndex={-1}>
       <header className={styles.reviewHeader}>
         <button aria-label={experienceCopy.back} onClick={exitReview} type="button"><ArrowLeft size={22} /></button>
         <h1>{showSummary ? experienceCopy.summary : experienceCopy.title}</h1>
@@ -395,7 +396,7 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
         <section className={styles.reviewStatus}><h1>{copy.failed}</h1><p>{analysis.errorCode}</p><button className="button button--primary" onClick={() => void load("POST")} type="button"><RotateCcw size={17} /> {copy.retry}</button></section>
       ) : result && boardBefore && winrates && scoreLead ? (
         showSummary && summaries ? (
-          <main className={styles.summaryPage} data-review-summary>
+          <div className={styles.summaryPage} data-review-summary>
             {error ? <p role="alert">{error}</p> : null}
             <div className={styles.summaryPlayers}>
               {(["black", "white"] as const).map((color) => (
@@ -432,9 +433,9 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
               ) : null}
               <button className={styles.nextMove} onClick={exitReview} type="button">{experienceCopy.done}</button>
             </div>
-          </main>
+          </div>
         ) : (
-          <main className={styles.reviewMain} data-review-player>
+          <div className={styles.reviewMain} data-review-player>
             {error ? <div className={styles.reviewStatus}>
               <p role="alert">{error}</p>
               <button className="button button--secondary" onClick={() => void load("POST")} type="button">{copy.retry}</button>
@@ -476,9 +477,9 @@ function PlayerAnalysisReview({ gameId }: { gameId: string }) {
               </button>
               <button aria-label={experienceCopy.last} className={styles.jumpMove} disabled={selectedMove >= result.moves.length} onClick={() => setSelectedMove(result.moves.length)} type="button"><ChevronsRight size={19} /></button>
             </div>
-          </main>
+          </div>
         )
       ) : null}
-    </div>
+    </main>
   );
 }

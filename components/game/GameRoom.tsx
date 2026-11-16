@@ -84,7 +84,11 @@ function rememberScoringHelpHidden(playerKey: string) {
   }
 }
 
-export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: string; tournamentNavigation?: boolean | "mobile" }) {
+export function GameRoom({ gameId, showSkipLink = true, tournamentNavigation = false }: {
+  gameId: string;
+  showSkipLink?: boolean;
+  tournamentNavigation?: boolean | "mobile";
+}) {
   const router = useRouter();
   const { refreshRating } = useAuth();
   const { dictionary, href } = useI18n();
@@ -1266,7 +1270,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
   ) {
     return (
       <>
-        <SkipLink />
+        {showSkipLink ? <SkipLink /> : null}
         <main aria-busy="true" className="game-loading" id="main-content" tabIndex={-1}>
           <span className="spin-ring" />
           <p aria-atomic="true" aria-live="polite" role="status">
@@ -1282,7 +1286,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
     const sessionExpired = connectionState.kind === "session_expired";
     return (
       <>
-        <SkipLink />
+        {showSkipLink ? <SkipLink /> : null}
         <main className="game-loading" id="main-content" tabIndex={-1}>
           <h1>{sessionExpired ? copy.sessionExpired : copy.unavailable}</h1>
           <p role="alert">
@@ -1318,7 +1322,7 @@ export function GameRoom({ gameId, tournamentNavigation = false }: { gameId: str
 
   return (
     <div className="focused-game-shell" data-playing={game.status === "active" && game.phase === "play"}>
-      <SkipLink />
+      {showSkipLink ? <SkipLink /> : null}
       <p aria-atomic="true" aria-live="polite" className="sr-only" role="status">
         {gameAnnouncement}
       </p>

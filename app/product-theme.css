@@ -66,7 +66,7 @@ html[data-mobile-theme="dark"] {
 :is(html[data-theme="dark"], html[data-mobile-theme="dark"]) .button--danger { color: var(--color-on-action); }
 :is(.sidebar, .mobile-nav, .mobile-menu) { background: var(--color-navigation); }
 html[data-theme="dark"] :is(.sidebar, .mobile-nav, .mobile-menu) { background: var(--color-navigation); }
-:is(.nav-link, .mobile-menu a).is-active {
+.mobile-menu a.is-active {
   background: var(--color-moss-soft);
   border-radius: 9px;
   box-shadow: none;
