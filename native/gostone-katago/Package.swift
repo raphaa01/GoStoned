@@ -22,9 +22,6 @@ packageTargets.append(.target(
     dependencies: pluginDependencies,
     path: "ios/Sources/GoStoneKataGoPlugin",
     linkerSettings: hasNativeCore ? [
-        .linkedFramework("CoreML"),
-        .linkedFramework("MetalPerformanceShaders"),
-        .linkedFramework("MetalPerformanceShadersGraph"),
         .linkedLibrary("c++"),
         .linkedLibrary("z")
     ] : []

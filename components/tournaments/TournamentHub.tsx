@@ -211,6 +211,7 @@ function TournamentHubBody({
   const [watchGame, setWatchGame] = useState<GameState | null>(null);
   const [now, setNow] = useState(Date.now);
   const mutation = useRef(false);
+  const queueRenewal = useRef<Promise<unknown> | null>(null);
   const loadVersion = useRef(0);
   const identity = user?.playerKey;
   const identityRef = useRef(identity);
@@ -280,22 +281,27 @@ function TournamentHubBody({
   }, []);
   useEffect(() => {
     if (!waiting || !id) return;
-    let pending = false;
     const controller = new AbortController();
+    let retryAt = 0;
     const renew = async () => {
-      if (controller.signal.aborted || pending || document.hidden || mutation.current) return;
-      pending = true;
+      if (controller.signal.aborted || queueRenewal.current || document.hidden || mutation.current || Date.now() < retryAt) return;
+      const request = post({ action: "queue", id, waiting: true });
+      queueRenewal.current = request;
       try {
-        await post({ action: "queue", id, waiting: true });
-        if (controller.signal.aborted) return;
-        await load();
+        await request;
       } catch (e) {
-        if (!controller.signal.aborted) {
-          setWaiting(false);
-          setError(e);
+        if (controller.signal.aborted || mutation.current) return;
+        if (e instanceof ApiRequestError) {
+          retryAt = Date.now() + (e.retryAfterSeconds ?? 0) * 1000;
+          if ([400, 401, 403, 404, 409].includes(e.status)) setWaiting(false);
         }
+        setError(e);
+        return;
       } finally {
-        pending = false;
+        queueRenewal.current = null;
+      }
+      if (!controller.signal.aborted && !mutation.current) {
+        await load().catch(e => { if (!controller.signal.aborted && !mutation.current) setError(e); });
       }
     };
     const timer = setInterval(() => void renew(), 10000);
@@ -369,6 +375,10 @@ function TournamentHubBody({
     setBusy(true);
     setError(null);
     try {
+      if (body.action === "queue" && body.waiting === false) {
+        // A late heartbeat must not rejoin the queue after a successful Stop.
+        await queueRenewal.current?.catch(() => undefined);
+      }
       const result = await post(body);
       if (identityRef.current !== identity) return;
       if (body.action === "join" && identity)

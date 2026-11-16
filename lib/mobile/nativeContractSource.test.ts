@@ -75,6 +75,7 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(ios, /maximumRuntimeSeconds = 90/);
   assert.match(ios, /totalVisitBudget = 900/);
   assert.match(ios, /didEnterBackgroundNotification/);
+  assert.match(ios, /JSTypes\.coerceDictionaryToJSObject\(json\)/);
   assert.match(client, /revealElapsed = true;\s+publish\(true\);\s+}, 10_000\)/);
   assert.match(client, /PREVIEW_PERSIST_INTERVAL = 16/);
   assert.match(client, /QUALITY_PERSIST_INTERVAL = 4/);
@@ -83,12 +84,12 @@ test("Android and iOS keep the pinned local engine limits and platform backends"
   assert.match(build, /arm64-v8a/);
   assert.match(build, /x86_64/);
   assert.match(build, /fd0723fdbc0e9d82cf269c9630af8c27c57c07c4/);
-  assert.match(iosBuild, /USE_BACKEND=METAL/);
+  assert.match(iosBuild, /USE_BACKEND=EIGEN/);
   assert.match(iosBuild, /iphoneos/);
   assert.match(iosBuild, /iphonesimulator/);
   assert.match(iosBuild, /fd0723fdbc0e9d82cf269c9630af8c27c57c07c4/);
   assert.match(ios, /canImport\(GoStoneKataGoCore\)/);
-  assert.match(ios, /targetEnvironment\(simulator\)/);
+  assert.doesNotMatch(ios, /targetEnvironment\(simulator\)/);
   assert.match(ios, /available: true/);
-  assert.match(ios, /KataGo Metal core has not been linked/);
+  assert.match(ios, /KataGo core has not been linked/);
 });

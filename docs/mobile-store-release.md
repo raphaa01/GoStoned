@@ -14,6 +14,12 @@ number. The release script builds the pinned KataGo XCFramework before
 Capacitor sync. It verifies the archived core and plugin registration,
 the KataGo model/config, and the bundled Coach model and WASM files.
 
+The repository prepares iOS 1.0.1 build 4. Confirm that build number is unused
+in App Store Connect before exporting the signed archive. GitHub CI also
+installs the simulator build, runs a review through WKWebView and the real
+KataGo plugin, and reopens it from the local cache. It supplies a fixture for
+the authenticated game response.
+
 Use a physical iPhone to test the exact signed update via TestFlight. With
 a production account, finish a game and open its review from the result and
 again from history. Check that the move-by-move analysis opens, advances and
@@ -117,10 +123,9 @@ npm run mobile:android:build
 
 The iOS script finds CMake and Ninja through `CMAKE` and `NINJA` environment
 variables, the ignored `.mobile-cache/ios-build-tools/bin/`, or standard
-Homebrew paths. It builds arm64 iPhone and Apple-silicon Simulator slices and
-generates the ignored `GoStoneKataGoCore.xcframework`. Simulator inference is
-deliberately unavailable because the Xcode 26.6 MPSGraph simulator driver can
-abort during graph execution; device inference stays linked in Release.
+Homebrew paths. It builds arm64 Eigen CPU slices for iPhone and Apple-silicon
+Simulator and generates the ignored `GoStoneKataGoCore.xcframework`. CI links
+the device build and runs the simulator core against the packaged model.
 
 ## App icon artwork
 

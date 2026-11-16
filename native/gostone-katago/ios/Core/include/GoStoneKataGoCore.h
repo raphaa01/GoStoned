@@ -13,6 +13,7 @@ const char *gostone_katago_version(void);
 GoStoneKataGoEngine *gostone_katago_start(
     const char *model_path,
     const char *config_path,
+    int board_size,
     GoStoneKataGoLineCallback line_callback,
     GoStoneKataGoExitCallback exit_callback,
     void *context

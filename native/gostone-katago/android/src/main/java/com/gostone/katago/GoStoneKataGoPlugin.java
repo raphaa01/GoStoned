@@ -382,11 +382,11 @@ public class GoStoneKataGoPlugin extends Plugin {
             } catch (Exception ignored) {
                 continue;
             }
-            if (!requestId.equals(response.optString("id"))) continue;
-            if (response.has("error")) {
+            String responseId = response.optString("id");
+            if (response.has("error") && (responseId.isEmpty() || requestId.equals(responseId))) {
                 throw new IllegalStateException("KataGo rejected the analysis: " + response.optString("error"));
             }
-            if (response.optBoolean("isDuringSearch", false)) continue;
+            if (!requestId.equals(responseId) || response.has("warning") || response.optBoolean("isDuringSearch", false)) continue;
             if (response.optBoolean("noResults", false)) {
                 throw new IllegalStateException("KataGo stopped before returning a result.");
             }

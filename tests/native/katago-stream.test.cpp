@@ -27,11 +27,10 @@ int main() {
   std::istream reader(&input);
   assert(input.send("first"));
   assert(input.send("second"));
-  input.close();
-  assert(!input.send("late"));
   std::string line;
   assert(std::getline(reader, line) && line == "first");
-  assert(std::getline(reader, line) && line == "second");
+  input.close();
+  assert(!input.send("late"));
   assert(!std::getline(reader, line));
   return 0;
 }

@@ -118,7 +118,8 @@ async function finishNativeOAuth(url: URL): Promise<void> {
       const parameters = new URLSearchParams();
       if (pending.returnTo) parameters.set("returnTo", pending.returnTo);
       const base = localizeHref("/register/username", pending.locale);
-      navigate(parameters.size ? `${base}?${parameters}` : base);
+      const query = parameters.toString();
+      navigate(query ? `${base}?${query}` : base);
       return;
     }
     if (body.kind !== "authenticated") throw new Error("Invalid OAuth result.");

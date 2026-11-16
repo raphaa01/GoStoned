@@ -1,11 +1,58 @@
 import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
-import { installHarness, GAME_ID } from "../shared/boardDesignHarness";
+import { installHarness, GAME_ID, USER } from "../shared/boardDesignHarness";
 import { getDictionary } from "../../lib/i18n/dictionary";
+import { getTournamentsCopy } from "../../lib/i18n/tournaments";
+import type { TournamentDetail } from "../../lib/tournaments/types";
 import { installLearningFixture } from "../shared/betaFixHarness";
 import { contrast } from "../shared/gameReadabilityHarness";
 
 test.beforeEach(async () => { await mkdir(".cache/visual-audit", { recursive: true }); });
+
+test("Rapid keeps searching after a temporary failure and stops after an in-flight renewal", async ({ page }) => {
+  await installHarness(page);
+  const detail: TournamentDetail = {
+    group: 1, schedule: [], noShows: 0, withdrawn: false, standings: [], matches: [],
+    joined: true, queueUntil: null, userId: USER.id,
+    tournament: {
+      id: GAME_ID, kind: "monthly", hostId: null, name: "Rapid Test", code: null,
+      month: "2026-11", category: 0, monthlyMode: "rapid", scheduleHour: 0, format: "league",
+      boardSize: 9, timeControl: "rapid", maxPlayers: 20, status: "running", round: 1,
+      startsAt: "2026-11-01T00:00:00Z", endsAt: "2026-12-01T00:00:00Z", memberCount: 2,
+    },
+  };
+  let renew = false;
+  let finishRenewal!: () => void;
+  const renewal = new Promise<void>(resolve => { finishRenewal = resolve; });
+  const writes: boolean[] = [];
+  await page.route("**/api/tournaments**", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { ok: true, detail } });
+    const { waiting } = route.request().postDataJSON() as { waiting: boolean };
+    writes.push(waiting);
+    if (writes.length === 2) return route.fulfill({ status: 503, json: { ok: false } });
+    if (writes.length === 3) {
+      renew = true;
+      await renewal;
+    }
+    return route.fulfill({ json: { ok: true } });
+  });
+  const copy = getTournamentsCopy("de");
+  await page.goto(`/de/tournaments/${GAME_ID}`);
+  await page.getByRole("button", { name: copy.findGame }).click();
+  const stop = page.getByRole("button", { name: copy.stop });
+  await expect(stop).toBeEnabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(stop).toBeEnabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => renew).toBe(true);
+  await stop.click();
+  await expect(stop).toBeDisabled();
+  expect(writes).toEqual([true, true, true]);
+  finishRenewal();
+  await expect(page.getByRole("button", { name: copy.findGame })).toBeEnabled();
+  expect(writes).toEqual([true, true, true, false]);
+});
 
 test("unknown app destinations offer a localized route home", async ({ page }) => {
   await installHarness(page);
