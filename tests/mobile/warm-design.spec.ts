@@ -10,8 +10,9 @@ const friend: FriendSummary = {
 };
 
 for (const theme of ["light", "dark"]) {
-  test(`the tournament stone rotates before a tap opens tournaments (${theme})`, async ({ page }, info) => {
+  test(`swiping turns the tournament stone from its face to its edge (${theme})`, async ({ page }, info) => {
     test.skip(info.project.name !== "mobile-390-touch");
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await installHarness(page);
     await page.addInitScript((theme) => localStorage.setItem("gostone.mobile.theme.v1", theme), theme);
     await page.goto("/");
@@ -19,8 +20,12 @@ for (const theme of ["light", "dark"]) {
     await expect(page.locator("main a[href*='/puzzles']")).toHaveCount(0);
     const link = page.getByRole("link", { name: "Tournaments", exact: true });
     const canvas = link.locator("canvas");
-    const readStone = () => canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
-    const original = await readStone();
+    const stoneWidth = () => canvas.evaluate((node: HTMLCanvasElement) => {
+      const { data } = node.getContext("2d")!.getImageData(0, Math.floor(node.height / 2), node.width, 1);
+      return data.filter((alpha, index) => index % 4 === 3 && alpha > 240).length;
+    });
+    await expect.poll(stoneWidth).toBeGreaterThan(100);
+    const initialWidth = await stoneWidth();
     const rect = (await canvas.boundingBox())!;
     const cdp = await page.context().newCDPSession(page);
     const swipe = async (start: number, end: number) => {
@@ -32,11 +37,11 @@ for (const theme of ["light", "dark"]) {
       await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
       await expect(page).toHaveURL("/");
     };
-    await swipe(.22, .85);
-    await expect.poll(readStone).not.toBe(original);
-    const afterRightSwipe = await readStone();
-    await swipe(.85, .25);
-    await expect.poll(readStone).not.toBe(afterRightSwipe);
+    await swipe(.22, .64);
+    await expect.poll(stoneWidth).toBeGreaterThan(initialWidth + 20);
+    const faceWidth = await stoneWidth();
+    await swipe(.85, .15);
+    await expect.poll(stoneWidth).toBeLessThan(faceWidth * .68);
     await link.tap();
     await expect(page).toHaveURL("/tournaments");
   });
