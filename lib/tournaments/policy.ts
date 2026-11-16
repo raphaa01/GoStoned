@@ -221,8 +221,7 @@ export function rankStandings(rows: Omit<Standing, "place">[]): Standing[] {
 export function rankRapidStandings(rows: Standing[]): Standing[] {
   const sorted = [...rows].sort(
     (a, b) =>
-      Number(b.played > 0) - Number(a.played > 0) ||
-      b.wins - a.wins ||
+      b.points - a.points ||
       (b.margin ?? 0) - (a.margin ?? 0) ||
       a.userId.localeCompare(b.userId),
   );
@@ -231,8 +230,7 @@ export function rankRapidStandings(rows: Standing[]): Standing[] {
     const previous = sorted[index - 1];
     if (
       previous &&
-      (previous.played > 0 !== row.played > 0 ||
-        previous.wins !== row.wins ||
+      (previous.points !== row.points ||
         (previous.margin ?? 0) !== (row.margin ?? 0))
     )
       place = index + 1;

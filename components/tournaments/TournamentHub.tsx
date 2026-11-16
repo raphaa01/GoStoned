@@ -491,13 +491,16 @@ function TournamentHubBody({
           </header>
         ) : null}
         {!dashboard.eligible ? (
-          <div className="tournament-qualification">
-            <h2>{copy.requirement}</h2>
-            <p>
-              {dashboard.ratedGames} / 10 {copy.progress}
-            </p>
-            <progress max={10} value={dashboard.ratedGames} />
-          </div>
+          <>
+            <div className="tournament-qualification">
+              <h2>{copy.requirement}</h2>
+              <p>
+                {dashboard.ratedGames} / 10 {copy.progress}
+              </p>
+              <progress max={10} value={dashboard.ratedGames} />
+            </div>
+            {live ? <RapidLeaderboards /> : null}
+          </>
         ) : (
           <>
             {!mobile ? (
@@ -549,12 +552,11 @@ function TournamentHubBody({
                 </details>
               </section>
             ) : null}
-            {mobile && live && joinedMonthly ? (
-              <TournamentHub id={joinedMonthly.id} mobile embedded />
+            {live && joinedMonthly ? (
+              <TournamentHub id={joinedMonthly.id} mobile={mobile} embedded />
             ) : null}
-            <RapidLeaderboards
-              countdown={<RapidCountdown startsAt={startsAt} now={now} />}
-            />
+            {live && !joinedMonthly ? <RapidLeaderboards /> : null}
+            {!live ? <RapidCountdown startsAt={startsAt} now={now} /> : null}
             <TournamentHistory mobile={mobile} />
             {!mobile ? (
               <section className="tournament-monthly">
@@ -990,7 +992,11 @@ function TournamentHubBody({
         </div>
       ) : null}
       {rapid && gameLimit === RAPID_GAMES ? (
-        <RapidStandings rows={detail.standings} userId={detail.userId} />
+        <>
+          <RapidStandings rows={detail.standings} userId={detail.userId} />
+          {t.status === "running" && t.month === monthlyWindow(new Date(now)).month ? <RapidLeaderboards /> : null}
+          {t.status === "finished" && t.month ? <RapidLeaderboards month={t.month} /> : null}
+        </>
       ) : (
         <section className="tournament-standings">
           <h2>{copy.standings}</h2>

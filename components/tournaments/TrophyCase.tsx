@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Trophy } from "lucide-react";
+import { Medal, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useI18n } from "@/components/i18n/I18nProvider";
@@ -22,6 +22,7 @@ export function TrophyCase({
   const { locale, href } = useI18n();
   const copy = getTournamentsCopy(locale);
   const [trophies, setTrophies] = useState<TournamentTrophy[]>([]);
+  const [podium, setPodium] = useState<number[]>([]);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const own = !userId || userId === user?.id;
@@ -36,9 +37,10 @@ export function TrophyCase({
           headers: { [EXPECTED_PLAYER_HEADER]: identity },
           signal,
         },
-      ).then(readApi<{ trophies?: TournamentTrophy[] }>);
+      ).then(readApi<{ trophies?: TournamentTrophy[]; podium?: number[] }>);
       if (!signal?.aborted) {
         setTrophies(Array.isArray(result.trophies) ? result.trophies : []);
+        setPodium(result.podium ?? []);
         setError(false);
       }
     },
@@ -66,7 +68,7 @@ export function TrophyCase({
         </button>
       </p>
     );
-  if (!trophies.length) return null;
+  if (!trophies.length && !podium.some(Boolean)) return null;
   async function toggle(t: TournamentTrophy) {
     if (!identity || busy) return;
     setBusy(true);
@@ -81,6 +83,7 @@ export function TrophyCase({
           action: "trophy",
           id: t.tournamentId,
           displayed: !t.displayed,
+          ...(t.scope === "worldwide" ? { scope: t.scope } : {}),
         }),
       }).then(readApi);
       await load();
@@ -93,14 +96,24 @@ export function TrophyCase({
   return (
     <section className="tournament-trophies">
       <h2>{copy.trophies}</h2>
+      {podium.some(Boolean) ? (
+        <dl className="tournament-podium" aria-label={copy.podium}>
+          {podium.map((count, index) => (
+            <div key={index}>
+              <dt>{copy.podiumPlace.replace("{place}", String(index + 1))}</dt>
+              <dd>{count}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       <div className="tournament-trophies__items">
         {trophies.map((t) => (
-          <div className="tournament-trophy" key={t.tournamentId}>
-            <Trophy aria-hidden="true" size={26} />
+          <div className="tournament-trophy" data-world-podium={t.scope === "worldwide" && t.place <= 3} key={`${t.tournamentId}-${t.scope ?? "group"}`}>
+            {t.scope === "worldwide" && t.place > 3 ? <Medal aria-hidden="true" size={26} /> : <Trophy aria-hidden="true" size={26} />}
             <div>
               <Link href={href(`/tournaments/${t.tournamentId}`)}>
                 <strong>
-                  #{t.place} · {t.name}
+                  #{t.place} · {t.scope === "worldwide" ? `${copy.worldwide} · ` : ""}{t.name}
                 </strong>
               </Link>
               <small>

@@ -267,7 +267,16 @@ a.tournament-row:hover strong {
   font-size: 14px;
 }
 .tournament-standings {
-  margin: 36px 0;
+  margin: 16px 0;
+}
+.tournament-standings > h2 { margin: 0 0 6px; }
+.tournament-standings > .tournament-text-button {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  margin-block-start: 4px;
+  min-height: 44px;
+  padding: 6px 12px;
+  text-decoration: none;
 }
 .tournament-table-scroll {
   overflow-x: auto;
@@ -283,6 +292,7 @@ a.tournament-row:hover strong {
 }
 .tournament-standings td,
 .tournament-standings th {
+  border: 0;
   padding: 15px 12px;
   font-weight: 400;
 }
@@ -305,7 +315,7 @@ a.tournament-row:hover strong {
   font-size: 11px;
 }
 .tournament-standings tr[data-self="true"] {
-  color: var(--green);
+  color: var(--color-ink);
   background: var(--color-moss-soft);
 }
 .tournament-qualification,
@@ -381,6 +391,23 @@ a.tournament-row:hover strong {
 .tournament-trophy svg {
   color: var(--color-warning);
 }
+.tournament-trophy[data-world-podium="true"] {
+  background: var(--color-moss-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.tournament-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tournament-podium > div {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+.tournament-podium dt { color: var(--muted); font-size: .75rem; }
+.tournament-podium dd { font-weight: 650; margin: 4px 0 0; }
 .tournament-trophy strong {
   display: block;
   font-weight: 500;
@@ -503,15 +530,21 @@ a.tournament-row:hover strong {
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.tournament-standings .rapid-standings th:nth-child(2) {
+.tournament-standings .rapid-standings th {
   width: auto;
 }
-.rapid-standings th[scope="col"]:not(:nth-child(2)) {
-  white-space: nowrap;
-  width: 1%;
-}
-.rapid-standings :is(th, td):not(:nth-child(2)) {
+.tournament-standings .rapid-standings :is(th, td) {
+  overflow-wrap: normal;
   text-align: end;
+}
+.tournament-standings .rapid-standings :is([scope="row"], [data-player-heading]) {
+  overflow-wrap: anywhere;
+  text-align: start;
+  width: 100%;
+}
+.rapid-standings th[scope="col"]:not([data-player-heading]) {
+  white-space: normal;
+  width: 1%;
 }
 .rapid-standings td {
   font-variant-numeric: tabular-nums;

@@ -46,6 +46,8 @@ import type {
   TournamentHistoryEntry,
 } from "./types";
 
+import { readRapidRankings, saveFinishedRapidRankings } from "./rapidRankings";
+
 type TournamentRow = {
   id: string;
   kind: Tournament["kind"];
@@ -186,6 +188,8 @@ async function standings(
   client: PoolClient,
   t: TournamentRow,
 ): Promise<Standing[]> {
+  const rapid = t.kind === "monthly" && t.monthly_mode === "rapid";
+  const rapidLeague = rapid && t.rapid_game_limit === RAPID_GAMES;
   const result = await client.query<{
     user_id: string;
     name: string;
@@ -228,7 +232,7 @@ async function standings(
     WHERE p.tournament_id=$1`,
     [
       t.id,
-      t.kind === "monthly" && t.monthly_mode === "rapid" ? t.ends_at : null,
+      rapid ? t.ends_at : null,
       t.monthly_mode === "classic",
     ],
   );
@@ -237,7 +241,7 @@ async function standings(
       userId: r.user_id,
       name: r.name,
       rating: Number(r.rating),
-      points: Number(r.points),
+      points: rapidLeague ? 3 * Number(r.wins) + Number(r.draws) : Number(r.points),
       wins: Number(r.wins),
       losses: Number(r.losses),
       draws: Number(r.draws),
@@ -274,14 +278,14 @@ async function standings(
       );
       const active = members.filter((r) => !groups.get(r.userId)?.withdrawn);
       const ranked =
-        t.monthly_mode === "rapid" && t.rapid_game_limit === RAPID_GAMES
+        rapidLeague
           ? rankRapidStandings(active)
           : t.status === "finished"
             ? finalMonthlyStandings(active)
             : rankStandings(active);
       output.push(
         ...ranked,
-        ...rankStandings(
+        ...(rapidLeague ? rankRapidStandings : rankStandings)(
           members.filter((r) => groups.get(r.userId)?.withdrawn),
         ).map((r) => ({ ...r, place: r.place + ranked.length })),
       );
@@ -684,10 +688,7 @@ async function reconcileMonthly(userId: string, expiredOnly = false) {
   }
 }
 
-export async function getRapidLeaderboards(
-  userId: string,
-): Promise<TournamentLeaderboards> {
-  // Close expired Rapid pools even when a podium player has not returned yet.
+async function finalizeExpiredRapidTournaments() {
   const expired = await query<{ id: string }>(
     `SELECT id FROM tournaments WHERE kind='monthly' AND monthly_mode='rapid'
      AND status IN ('lobby','running') AND ends_at<=statement_timestamp() ORDER BY ends_at LIMIT 16`,
@@ -697,47 +698,15 @@ export async function getRapidLeaderboards(
       advance(client, await lockTournament(client, id)),
     );
   }
-  const rows = await query<{
-    scope: "worldwide" | "friends";
-    user_id: string;
-    name: string;
-    points: string;
-    place: string;
-  }>(
-    `WITH scores AS (
-      SELECT a.user_id, COALESCE(NULLIF(u.display_name,''),u.username) AS name,
-        SUM((4-a.place)*(t.category+1)) AS points
-      FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
-      JOIN users u ON u.id=a.user_id
-      WHERE t.kind='monthly' AND t.monthly_mode='rapid'
-      GROUP BY a.user_id,u.id
-    ), friends AS (
-      SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS user_id
-      FROM friendships WHERE status='accepted' AND $1 IN (requester_id,addressee_id)
-      AND NOT EXISTS (SELECT 1 FROM player_blocks b WHERE
-        (b.blocker_key='user:'||requester_id::text AND b.blocked_key='user:'||addressee_id::text)
-        OR (b.blocker_key='user:'||addressee_id::text AND b.blocked_key='user:'||requester_id::text))
-      UNION SELECT $1::uuid
-    ), ranked AS (
-      SELECT 'worldwide' AS scope, *, rank() OVER (ORDER BY points DESC) AS place FROM scores
-      UNION ALL
-      SELECT 'friends', u.id, COALESCE(NULLIF(u.display_name,''),u.username), COALESCE(s.points,0),
-        rank() OVER (ORDER BY COALESCE(s.points,0) DESC)
-      FROM friends f JOIN users u ON u.id=f.user_id LEFT JOIN scores s ON s.user_id=f.user_id
-    ), numbered AS (
-      SELECT *,row_number() OVER (PARTITION BY scope ORDER BY place,user_id) AS row_number FROM ranked
-    ) SELECT * FROM numbered WHERE row_number<=20 OR user_id=$1 ORDER BY scope,place,user_id`,
-    [userId],
-  );
-  const result: TournamentLeaderboards = { worldwide: [], friends: [] };
-  for (const r of rows.rows)
-    result[r.scope].push({
-      userId: r.user_id,
-      name: r.name,
-      points: Number(r.points),
-      place: Number(r.place),
-    });
-  return result;
+  await saveFinishedRapidRankings();
+}
+
+export async function getRapidLeaderboards(
+  userId: string,
+  historicalMonth?: string,
+): Promise<TournamentLeaderboards> {
+  if (historicalMonth) await finalizeExpiredRapidTournaments();
+  return readRapidRankings(userId, historicalMonth ?? monthlyWindow().month, Boolean(historicalMonth));
 }
 
 export async function getRapidActivity(): Promise<number | null> {
@@ -764,6 +733,7 @@ export async function getTournamentHistory(
   mobile: boolean,
 ): Promise<TournamentHistoryEntry[]> {
   await reconcileMonthly(userId);
+  await finalizeExpiredRapidTournaments();
   return withTransaction(async (client) => {
     const events = await client.query<
       TournamentRow & {
@@ -1554,6 +1524,7 @@ export async function getTrophies(
   own: boolean,
 ): Promise<TournamentTrophy[]> {
   await reconcileMonthly(userId);
+  await finalizeExpiredRapidTournaments();
   const result = await query<{
     tournament_id: string;
     name: string;
@@ -1562,10 +1533,17 @@ export async function getTrophies(
     place: number;
     displayed: boolean;
     monthly_mode: Tournament["monthlyMode"];
+    scope: "group" | "worldwide";
   }>(
-    `SELECT
-    a.tournament_id,t.name || CASE WHEN t.kind='monthly' THEN ' · #'||a.group_no::text ELSE '' END AS name,t.month,t.category,a.place,a.displayed,t.monthly_mode FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
-    WHERE a.user_id=$1 AND ($2 OR a.displayed) ORDER BY a.awarded_at DESC LIMIT 50`,
+    `SELECT * FROM (
+      SELECT a.tournament_id,t.name || CASE WHEN t.kind='monthly' THEN ' · #'||a.group_no::text ELSE '' END AS name,
+        t.month,t.category,a.place,a.displayed,t.monthly_mode,'group' AS scope,a.awarded_at
+      FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id WHERE a.user_id=$1 AND ($2 OR a.displayed)
+      UNION ALL
+      SELECT r.tournament_id,t.name,t.month,t.category,r.place,r.displayed,t.monthly_mode,'worldwide',t.ends_at
+      FROM tournament_rapid_rankings r JOIN tournaments t ON t.id=r.tournament_id
+      WHERE r.user_id=$1 AND r.place<=50 AND ($2 OR r.displayed)
+    ) trophies ORDER BY awarded_at DESC,scope DESC,place LIMIT 50`,
     [userId, own],
   );
   return result.rows.map((r) => ({
@@ -1576,15 +1554,32 @@ export async function getTrophies(
     place: r.place,
     displayed: r.displayed,
     monthlyMode: r.monthly_mode,
+    scope: r.scope,
   }));
 }
+
+export async function podiumCounts(userId: string, own: boolean, mobile: boolean) {
+  const result = await query<{ place: number; count: number }>(
+    `SELECT place,COUNT(*)::int AS count FROM (
+      SELECT a.place FROM tournament_trophies a JOIN tournaments t ON t.id=a.tournament_id
+      WHERE a.user_id=$1 AND ($2 OR a.displayed) AND (NOT $3 OR t.monthly_mode='rapid')
+      UNION ALL
+      SELECT place FROM tournament_rapid_rankings WHERE user_id=$1 AND place<=3 AND ($2 OR displayed)
+    ) podium GROUP BY place`, [userId, own, mobile],
+  );
+  return [1, 2, 3].map(place => result.rows.find(row => row.place === place)?.count ?? 0);
+}
+
 export async function displayTrophy(
   userId: string,
   id: string,
   displayed: boolean,
+  scope: "group" | "worldwide" = "group",
 ) {
   const result = await query(
-    "UPDATE tournament_trophies SET displayed=$3 WHERE user_id=$1 AND tournament_id=$2",
+    scope === "worldwide"
+      ? "UPDATE tournament_rapid_rankings SET displayed=$3 WHERE user_id=$1 AND tournament_id=$2 AND place<=50"
+      : "UPDATE tournament_trophies SET displayed=$3 WHERE user_id=$1 AND tournament_id=$2",
     [userId, id, displayed],
   );
   if (!result.rowCount) fail("tournament_trophy_not_found", 404);

@@ -32,7 +32,7 @@ test("monthly window includes exactly the last seven calendar days, including le
   }
 });
 
-test("Rapid ranks played entries by wins and then net score margin", () => {
+test("Rapid ranks by league points and net score margin and shares exact ties", () => {
   const player = {
     name: "Player",
     rating: 1200,
@@ -44,16 +44,17 @@ test("Rapid ranks played entries by wins and then net score margin", () => {
     place: 1,
   };
   const results = rankRapidStandings([
-    { ...player, userId: "best-margin", wins: 3, margin: 14 - 5 },
-    { ...player, userId: "most-wins", wins: 4, margin: -2 },
-    { ...player, userId: "lower-margin", wins: 3, margin: 5 },
-    { ...player, userId: "inactive", wins: 0, margin: 0, played: 0 },
-    { ...player, userId: "played", wins: 0, margin: -6.5 },
+    { ...player, userId: "best-margin", points: 12, wins: 3, draws: 3, played: 6, margin: 9 },
+    { ...player, userId: "most-wins", points: 15, wins: 5, margin: -2 },
+    { ...player, userId: "lower-margin", points: 12, wins: 4, margin: 5 },
+    { ...player, userId: "shared-place", points: 12, wins: 3, draws: 3, played: 6, margin: 5 },
+    { ...player, userId: "one-draw", points: 1, wins: 0, draws: 1, margin: -6.5 },
   ]);
   assert.deepEqual(
     results.map((row) => row.userId),
-    ["most-wins", "best-margin", "lower-margin", "played", "inactive"],
+    ["most-wins", "best-margin", "lower-margin", "shared-place", "one-draw"],
   );
+  assert.deepEqual(results.map((row) => row.place), [1, 2, 3, 3, 5]);
 });
 
 test("Classic uses the displayed 10 kyu boundary and five fixed daily slots", () => {
