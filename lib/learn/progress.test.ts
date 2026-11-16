@@ -4,6 +4,7 @@ import {
   completeLearnLesson,
   emptyLearnProgress,
   LEARN_LESSON_IDS,
+  learnStepBookmark,
   mergeLearnProgress,
   parseLearnProgress,
 } from "./progress";
@@ -53,4 +54,20 @@ test("synchronization does not invent timestamps that overwrite a newer learning
   assert.equal(mergeLearnProgress(saved, after).updatedAt, after.updatedAt);
   assert.equal(mergeLearnProgress(emptyLearnProgress(), after).lastStepByLesson["s1-liberties"], 2);
   assert.equal(mergeLearnProgress(emptyLearnProgress(), after).updatedAt, after.updatedAt);
+});
+
+test("rewritten lessons restart legacy bookmarks and preserve completions", () => {
+  const original = parseLearnProgress({
+    ...emptyLearnProgress(),
+    completedLessonIds: ["s4-snapback"],
+    lastStepByLesson: { "s4-throw-in": 8, "s5-commented-game": 2 },
+  });
+  assert.deepEqual(original.completedLessonIds, ["s4-snapback"]);
+  assert.deepEqual(original.lastStepByLesson, { "s5-commented-game": 2 });
+
+  const bookmark = learnStepBookmark("s4-throw-in", 2, "throw-in-1");
+  const active = parseLearnProgress({ ...original, lastStepByLesson: { "s4-throw-in": bookmark } });
+  assert.equal(mergeLearnProgress(original, active).lastStepByLesson["s4-throw-in"], "throw-in-1");
+  const done = completeLearnLesson(active, "s4-throw-in", 4);
+  assert.equal(mergeLearnProgress(active, done).lastStepByLesson["s4-throw-in"], "start");
 });

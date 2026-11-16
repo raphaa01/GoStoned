@@ -40,15 +40,6 @@ export function sequence(id: string, size: number, stones: readonly LearnStone[]
   });
 }
 
-export function mirror(step: LessonStep, id: string): LessonStep {
-  const point = (point: Position) => p(step.size! - 1 - point.x, point.y);
-  return { ...step, id, stones: step.stones?.map((stone) => ({ ...point(stone), color: stone.color })),
-    targets: step.targets?.map(point), emphasis: undefined, group: undefined, territory: undefined,
-    replies: step.replies?.map((move) => move === null ? null : point(move)),
-    hintArea: step.hintArea?.map(point),
-    continuePosition: false };
-}
-
 /** A connected black wall surrounded by White, with only the specified eye space left. */
 export function eyePosition(inner: readonly Position[]): LearnStone[] {
   const left = Math.min(...inner.map((point) => point.x)) - 1, right = Math.max(...inner.map((point) => point.x)) + 1;

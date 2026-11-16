@@ -1,5 +1,6 @@
 import type { BoardSize, Position, Stone } from "@/lib/game/types";
 import { LATER_STAGES } from "./laterCurriculum";
+import { eyePosition } from "./laterLessonTools";
 import { stableLessonColor } from "./lessonFlow";
 import type { LearnLessonId } from "./progress";
 import type { LearnStone } from "./lessonEngine";
@@ -138,10 +139,10 @@ const STAGE_ONE: readonly LearnLesson[] = [
   },
   {
     id: "s1-review", stage: 1, minutes: 3, title: t("Gemischter Check", "Mixed check"), steps: [
-      { id: "liberties", kind: "select", size: 5, stones: [b(0, 0)], targets: [p(1, 0), p(0, 1)], selectFrom: "empty", body: t("Ein Eckstein hat weniger Nachbarn.", "A corner stone has fewer neighbors."), task: t("Markiere seine Freiheiten.", "Mark its liberties."), success: t("Zwei Freiheiten.", "Two liberties."), wrong: t("Nur direkte Nachbarn zählen.", "Only direct neighbors count.") },
-      { id: "atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2)], toPlay: "white", targets: [p(3, 2), p(2, 3)], body: t("Schwarz hat zwei Freiheiten.", "Black has two liberties."), task: t("Setze Schwarz ins Atari.", "Put Black in atari."), success: t("Nur eine Freiheit bleibt.", "Only one liberty remains."), wrong: t("Besetze eine der zwei Freiheiten neben Schwarz.", "Take either of Black's two liberties.") },
+      { id: "liberties", kind: "select", size: 5, stones: [b(0, 2), w(0, 1)], targets: [p(1, 2), p(0, 3)], selectFrom: "empty", body: t("Ein Randstein hat drei Nachbarn. Einer ist schon besetzt.", "An edge stone has three neighbors. One is already occupied."), task: t("Markiere seine Freiheiten.", "Mark its liberties."), success: t("Zwei Freiheiten.", "Two liberties."), wrong: t("Nur direkte Nachbarn zählen.", "Only direct neighbors count.") },
+      { id: "atari", kind: "play", size: 5, stones: [b(1, 0), b(2, 0), w(1, 1), w(2, 1)], toPlay: "white", targets: [p(0, 0), p(3, 0)], body: t("Das schwarze Paar hat zwei Freiheiten entlang des Randes.", "The black pair has two liberties along the edge."), task: t("Setze Schwarz ins Atari.", "Put Black in atari."), success: t("Nur eine Freiheit bleibt.", "Only one liberty remains."), wrong: t("Besetze eine der zwei Freiheiten neben Schwarz.", "Take either of Black's two liberties.") },
       { id: "capture", kind: "play", size: 5, stones: [w(0, 2), b(0, 1), b(1, 2)], toPlay: "black", targets: [p(0, 3)], body: t("Weiß hat eine Freiheit.", "White has one liberty."), task: t("Schlage Weiß.", "Capture White."), success: t("Der Randstein wird entfernt.", "The edge stone is removed."), wrong: t("Fülle die letzte Freiheit.", "Fill the last liberty.") },
-      { id: "group", kind: "select", size: 5, stones: [b(1, 2), b(2, 2), b(3, 3)], targets: [p(1, 2), p(2, 2)], selectFrom: "stone", body: t("Diagonal verbindet nicht.", "Diagonals do not connect."), task: t("Markiere die verbundene Gruppe.", "Mark the connected group."), success: t("Diese zwei Steine teilen ihre Freiheiten; der dritte ist eine eigene Gruppe.", "These two stones share their liberties; the third is a separate group."), wrong: t("Wähle nur Steine, die sich direkt berühren.", "Choose only stones that touch directly.") },
+      { id: "group", kind: "select", size: 5, stones: [b(1, 1), b(2, 1), b(2, 2), b(3, 3)], targets: [p(1, 1), p(2, 1), p(2, 2)], selectFrom: "stone", body: t("Diagonal verbindet nicht.", "Diagonals do not connect."), task: t("Markiere die verbundene Gruppe.", "Mark the connected group."), success: t("Die drei Steine um die Ecke teilen ihre Freiheiten. Der diagonale Stein bildet eine eigene Gruppe.", "The three stones around the bend share liberties. The diagonal stone forms a separate group."), wrong: t("Wähle nur Steine, die sich direkt berühren.", "Choose only stones that touch directly.") },
     ],
   },
   {
@@ -211,7 +212,7 @@ const STAGE_TWO: readonly LearnLesson[] = [
   },
   {
     id: "s2-first-game", stage: 2, minutes: 8, challenge: true, title: t("Deine erste 9×9-Partie", "Your first 9×9 game"), steps: [
-      { id: "review-atari", kind: "play", size: 5, stones: [b(2, 2), w(2, 1), w(1, 2), w(3, 2)], toPlay: "black", targets: [p(2, 3)], body: t("Vor der Partie: Dieser schwarze Stein hat nur eine Freiheit.", "Before the game: this black stone has only one liberty."), task: t("Entkomme aus Atari.", "Escape atari."), success: t("Die Zweiergruppe hat jetzt drei Freiheiten.", "The two-stone group now has three liberties."), wrong: t("Verbinde einen neuen Stein auf der letzten Freiheit.", "Connect a new stone on the last liberty.") },
+      { id: "review-atari", kind: "play", size: 7, stones: [b(1, 3), b(2, 3), w(0, 3), w(1, 2), w(2, 2), w(3, 3), w(1, 4)], toPlay: "black", targets: [p(2, 4)], body: t("Vor der Partie: Das schwarze Paar hat nur eine gemeinsame Freiheit.", "Before the game: the black pair has only one liberty between them."), task: t("Entkomme aus Atari.", "Escape atari."), success: t("Die verbundene Dreiergruppe hat jetzt zwei Freiheiten.", "The connected group of three now has two liberties."), wrong: t("Verbinde einen neuen Stein auf der letzten Freiheit.", "Connect a new stone on the last liberty.") },
       { id: "review-ko", kind: "illegal", size: 5, stones: [b(2, 3), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], koPreviousBoard: [w(2, 2), w(1, 3), w(3, 3), w(2, 4), b(2, 1), b(1, 2), b(3, 2)], toPlay: "white", targets: [p(2, 2)], expectedError: "ko", body: t("Schwarz hat gerade den weißen Stein geschlagen.", "Black has just captured the white stone."), task: t("Versuche den sofortigen Rückschlag.", "Try recapturing immediately."), success: t("Ko: Weiß muss erst woanders spielen. Diese Regel gilt auch in deiner Partie.", "Ko: White must play elsewhere first. This rule also applies in your game.") },
       { id: "game", kind: "guided-game", body: t("Du spielst Schwarz. Die App weist nur auf Atari und zu frühes Passen hin.", "You are Black. The app only points out atari and passing too early."), task: t("Spiele bis zu zwei Pässen, markiere tote Gruppen und zähle.", "Play until two passes, mark dead groups, and count." ) },
     ],
@@ -278,12 +279,12 @@ const STAGE_THREE: readonly LearnLesson[] = [
   },
   {
     id: "s3-challenge", stage: 3, minutes: 6, challenge: true, title: t("Life-&-Death-Challenge", "Life-and-death challenge"), steps: [
-      { id: "live", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "black", targets: [p(3, 3)], body: t("Bringe Schwarz zum Leben.", "Make Black live."), task: t("Finde den Zug für zwei Augen.", "Find the move for two eyes."), success: t("Zwei Augen.", "Two eyes."), wrong: t("Teile den Innenraum in der Mitte.", "Split the inner space in the middle.") },
+      { id: "live", kind: "play", size: 7, stones: eyePosition([p(2, 2), p(3, 2), p(2, 3)]), toPlay: "black", targets: [p(2, 2)], body: t("Bringe Schwarz zum Leben.", "Make Black live."), task: t("Finde den Zug für zwei Augen.", "Find the move for two eyes."), success: t("Zwei Augen.", "Two eyes."), wrong: t("Besetze den Punkt, der beide Arme des L berührt.", "Occupy the point touching both arms of the L.") },
       { id: "kill", kind: "play", size: 7, stones: THREE_POINT_EYE, toPlay: "white", targets: [p(3, 3)], body: t("Töte die schwarze Form.", "Kill the black shape."), task: t("Besetze den vitalen Punkt.", "Take the vital point."), success: t("Schwarz kann keine zwei Augen mehr bilden.", "Black can no longer make two eyes."), wrong: t("Der vitale Punkt liegt in der Mitte.", "The vital point is in the middle.") },
       { id: "false-eye", kind: "play", size: 5, stones: [b(2, 1), b(1, 2), b(3, 2), b(2, 3), w(2, 0), w(1, 1), w(3, 1)], toPlay: "white", targets: [p(2, 2)], body: t("Zerstöre das falsche Auge.", "Destroy the false eye."), task: t("Spiele Weiß.", "Play White."), success: t("Der diagonale Defekt lässt Weiß schlagen.", "The diagonal defect lets White capture."), wrong: t("Spiele auf den scheinbaren Augenpunkt.", "Play on the apparent eye point.") },
       { id: "connect", kind: "play", size: 5, stones: [b(1, 2), b(3, 2)], toPlay: "black", targets: [p(2, 2)], body: t("Verbinde die schwarzen Gruppen.", "Connect the black groups."), task: t("Spiele den Verbindungszug.", "Play the connecting move."), success: t("Eine Gruppe teilt alle Freiheiten.", "One group shares all liberties."), wrong: t("Spiele zwischen beide Steine.", "Play between the two stones.") },
       { id: "cut", kind: "play", size: 5, stones: [w(1, 2), w(3, 2)], toPlay: "black", targets: [p(2, 2)], body: t("Halte Weiß getrennt.", "Keep White separated."), task: t("Finde den Schnitt.", "Find the cut."), success: t("Weiß bleibt zwei Gruppen.", "White remains two groups."), wrong: t("Besetze die Lücke.", "Occupy the gap.") },
-      { id: "weak", kind: "select", size: 7, stones: [b(0, 1), b(1, 1), b(0, 2), b(1, 2), b(5, 5), w(4, 5), w(5, 4), w(6, 5)], targets: [p(5, 5)], selectFrom: "stone", body: t("Welche schwarze Gruppe ist schwach?", "Which black group is weak?"), task: t("Tippe sie an.", "Tap it."), success: t("Wenig Freiheiten, kein Augenraum: diese Gruppe braucht Hilfe.", "Few liberties and no eye space: this group needs help."), wrong: t("Vergleiche den sicheren Block links mit dem Einzelstein rechts.", "Compare the safe block on the left with the lone stone on the right.") },
+      { id: "weak", kind: "select", size: 7, stones: [b(1, 1), b(1, 2), b(4, 5), b(5, 5), b(5, 6), w(3, 5), w(4, 4), w(5, 4), w(6, 5), w(6, 6)], targets: [p(4, 5), p(5, 5), p(5, 6)], selectionCount: 1, selectFrom: "stone", body: t("Welche schwarze Gruppe ist schwach?", "Which black group is weak?"), task: t("Tippe sie an.", "Tap it."), success: t("Wenig Freiheiten, kein Augenraum: diese Gruppe braucht Hilfe.", "Few liberties and no eye space: this group needs help."), wrong: t("Zähle die Freiheiten beider Gruppen. Auch die größere Gruppe kann schwächer sein.", "Count both groups’ liberties. The larger group can be weaker.") },
     ],
   },
   {
@@ -339,6 +340,10 @@ const LEARN_UI_COPY = {
     taskTurn: "Du bist dran",
     boardTaskHelp: "Antworte auf dem Brett.",
     passTaskHelp: "Tippe unten auf „Passen“.",
+    stageNavigation: "Stufen des Lernpfads",
+    stageLink: "Stufe {stage}: {title}",
+    upNext: "Als Nächstes",
+    showCurrentLesson: "Aktuelle Lektion auf dem Pfad zeigen",
     practiceGame: "Partie",
     practiceGameHelp: "Du spielst Schwarz.",
     taskSolved: "Erledigt",
@@ -430,6 +435,10 @@ const LEARN_UI_COPY = {
     taskTurn: "Your task",
     boardTaskHelp: "Answer on the board.",
     passTaskHelp: "Tap ‘Pass’ below.",
+    stageNavigation: "Learning path stages",
+    stageLink: "Stage {stage}: {title}",
+    upNext: "Up next",
+    showCurrentLesson: "Show current lesson on the path",
     practiceGame: "Game",
     practiceGameHelp: "You play Black.",
     taskSolved: "Done",

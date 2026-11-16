@@ -691,6 +691,14 @@ export const ja = {
     "action": "GoStoneに戻る"
   },
   "puzzles": {
+    "checkingMove": "着手を確認中…",
+    "replayTitle": "失敗した手を振り返る",
+    "replayPrevious": "前の手",
+    "replayNext": "次の手",
+    "replayStart": "失敗した手の前の局面",
+    "replayPass": "パス",
+    "replayProgress": "{current}/{total} · {move}",
+    "replayMove": "{color} · {move}",
     "kicker": "囲碁トレーニング",
     "title": "最強の手を見つける。",
     "description": "今日の局面を解き、その後さらにエンジン生成の囲碁問題を続ける。",

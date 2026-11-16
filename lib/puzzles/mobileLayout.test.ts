@@ -28,9 +28,10 @@ test("mobile puzzles put the problem label and hint directly before a viewport-b
   assert.match(workspace, /CircleHelp/);
   assert.match(workspace, /\/api\/puzzles\/\$\{puzzle\.id\}\/hint/);
   assert.match(workspace, /hintMove=\{hintMove\}/);
-  assert.match(workspace, /pendingMove=\{pendingMove\}/);
+  assert.match(workspace, /applyMove\(settledBoard, pendingMove\.color, pendingMove\.x, pendingMove\.y\)/);
   assert.doesNotMatch(workspace, /copy\.choose(?:Variation)?Move/);
-  assert.match(workspace, /<GoBoard[\s\S]*?viewportSize=\{puzzle\.viewportSize \?\? /);
+  assert.match(workspace, /const baseSize = puzzle\.viewportSize \?\?/);
+  assert.match(workspace, /<GoBoard[\s\S]*?viewportSize=\{viewportSize\}/);
 });
 
 test("practice opens the next unsolved puzzle without a category chooser", () => {

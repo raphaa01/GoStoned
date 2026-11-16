@@ -16,7 +16,10 @@ test("daily loads, persists independently of practice, and is playable again aft
         for (const row of JSON.parse(values[0] as string)) if (!catalog.has(row.id)) catalog.set(row.id, row);
       }
       if (sql.includes("FROM puzzles puzzle LEFT JOIN")) return {rows: (values[1] as string[]).map((id) => ({id, rating: 500, ...attempts.get(id)}))};
-      if (sql.startsWith("SELECT model_name")) return {rows: catalog.has(values[0] as string) ? [catalog.get(values[0] as string)] : []};
+      if (sql.startsWith("SELECT model_name")) {
+        const row = catalog.get(values[0] as string);
+        return { rows: row ? [{ ...row, today }] : [] };
+      }
       if (sql.startsWith("SELECT puzzle_id") || sql.startsWith("SELECT variation_progress")) return {rows: attempts.has(values[0] as string) ? [attempts.get(values[0] as string)] : []};
       if (sql.startsWith("INSERT INTO puzzle_attempts")) {
         const id = values[0] as string;

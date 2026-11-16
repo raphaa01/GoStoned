@@ -49,6 +49,25 @@ export const LEARN_LESSON_IDS = [
 ] as const;
 
 export type LearnLessonId = (typeof LEARN_LESSON_IDS)[number];
+export type LearnStepBookmark = number | string;
+
+// These lessons changed step order or exercise content. Old numeric bookmarks
+// start them at the beginning; new bookmarks identify the authored step.
+const REVISED_LESSONS = new Set<LearnLessonId>([
+  "s4-double-atari", "s4-ladder-breaker", "s4-net", "s4-snapback", "s4-throw-in",
+  "s4-shortage", "s4-semeai", "s4-sacrifice", "s4-tesuji", "s4-mix", "s4-challenge",
+  "s5-territory-influence", "s5-attack", "s5-defend", "s5-urgent", "s5-tenuki", "s5-shape", "s5-endgame",
+  "s6-approach", "s6-extension", "s6-moyo", "s6-reduction", "s6-invasion-reduction", "s6-whole-board",
+  "s7-fuseki", "s7-corners", "s7-star-point", "s7-komoku", "s7-san-san", "s7-approach", "s7-extension",
+  "s7-joseki", "s7-direction", "s7-weak-groups", "s7-profit", "s7-moyo", "s7-reduction", "s7-tenuki", "s7-middle-game",
+  "s8-life-death", "s8-eye-shapes", "s8-semeai", "s8-ko-strategy", "s8-fighting-shape", "s8-haengma",
+  "s8-cutting-points", "s8-forcing", "s8-sabaki", "s8-attack-defense", "s8-thickness", "s8-overconcentration",
+  "s8-endgame-values", "s8-sente-endgame", "s8-reading", "s8-candidates", "s8-review", "s8-ai-analysis", "s8-final",
+]);
+
+export function learnStepBookmark(lessonId: LearnLessonId, step: number, stepId: string): LearnStepBookmark {
+  return REVISED_LESSONS.has(lessonId) ? stepId : step;
+}
 
 export type LearnChallengeResult = Readonly<{
   attempts: number;
@@ -61,7 +80,7 @@ export type LearnProgress = Readonly<{
   completedLessonIds: readonly LearnLessonId[];
   currentLessonId: LearnLessonId;
   completedStages: readonly number[];
-  lastStepByLesson: Readonly<Partial<Record<LearnLessonId, number>>>;
+  lastStepByLesson: Readonly<Partial<Record<LearnLessonId, LearnStepBookmark>>>;
   challengeResults: Readonly<Partial<Record<LearnLessonId, LearnChallengeResult>>>;
   updatedAt: string;
 }>;
@@ -101,11 +120,14 @@ export function parseLearnProgress(value: unknown): LearnProgress {
     ? value.currentLessonId
     : LEARN_LESSON_IDS.find((id) => !completedLessonIds.includes(id)) ?? LEARN_LESSON_IDS.at(-1)!;
   const completedStages = [1, 2, 3, 4, 5, 6, 7, 8].filter((stage) => LEARN_LESSON_IDS.filter((id) => id.startsWith(`s${stage}-`)).every((id) => completedLessonIds.includes(id)));
-  const lastStepByLesson: Partial<Record<LearnLessonId, number>> = {};
+  const lastStepByLesson: Partial<Record<LearnLessonId, LearnStepBookmark>> = {};
   if (isRecord(value.lastStepByLesson)) {
     for (const [id, step] of Object.entries(value.lastStepByLesson)) {
-      if (isLearnLessonId(id) && Number.isInteger(step) && (step as number) >= 0 && (step as number) <= 200) {
-        lastStepByLesson[id] = step as number;
+      if (!isLearnLessonId(id)) continue;
+      if (typeof step === "string" && REVISED_LESSONS.has(id) && /^[a-z0-9-]{1,80}$/.test(step)) {
+        lastStepByLesson[id] = step;
+      } else if (typeof step === "number" && !REVISED_LESSONS.has(id) && Number.isInteger(step) && step >= 0 && step <= 200) {
+        lastStepByLesson[id] = step;
       }
     }
   }
@@ -178,7 +200,8 @@ export function completeLearnLesson(
     completedLessonIds,
     completedStages,
     currentLessonId: nextLesson,
-    lastStepByLesson: { ...progress.lastStepByLesson, [lessonId]: 0 },
+    // Retain a reset marker when merging with a device that has an earlier bookmark.
+    lastStepByLesson: { ...progress.lastStepByLesson, [lessonId]: REVISED_LESSONS.has(lessonId) ? "start" : 0 },
     challengeResults: challengeOutcome ? {
       ...progress.challengeResults,
       [lessonId]: {

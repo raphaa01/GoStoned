@@ -691,6 +691,14 @@ export const fr = {
     "action": "Retour à GoStone"
   },
   "puzzles": {
+    "checkingMove": "Vérification du coup…",
+    "replayTitle": "Revoir l’erreur",
+    "replayPrevious": "Coup précédent",
+    "replayNext": "Coup suivant",
+    "replayStart": "Position avant l’erreur",
+    "replayPass": "Passe",
+    "replayProgress": "{current}/{total} · {move}",
+    "replayMove": "{color} · {move}",
     "kicker": "Entraînement de Go",
     "title": "Trouvez le coup le plus fort.",
     "description": "Résolvez la position d'aujourd'hui, puis continuez avec plus de problèmes de Go générés par l'ordinateur.",

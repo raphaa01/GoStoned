@@ -2,6 +2,8 @@
 
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Check,
   CircleHelp,
   RotateCcw,
@@ -18,6 +20,7 @@ import { accountRegistrationPath } from "@/lib/auth/returnPath";
 import { routeSnapshot, invalidateRouteData, readRouteData, puzzleRouteKey } from "@/lib/client/routeCache";
 import { ApiRequestError, readApi } from "@/lib/client/api";
 import { assertResponseActor } from "@/lib/client/identityAuthority";
+import { goCoordinate } from "@/lib/game/boardAccessibility";
 import { applyMove } from "@/lib/game/goEngine";
 import type { Position, Stone } from "@/lib/game/types";
 import { localizedApiError } from "@/lib/i18n/dictionary";
@@ -35,6 +38,16 @@ import { nextUnsolvedPuzzle } from "@/lib/puzzles/queue";
 import styles from "./puzzles.module.css";
 
 type PuzzleApiResponse = PuzzleHub & { actor: string };
+
+type Refutation = {
+  playerKey: string;
+  puzzleId: string;
+  mode: PuzzleKind;
+  line: PuzzlePly[];
+  start: number;
+  shown: number;
+  feedback: string | null;
+};
 
 function lineBoard(base: PuzzleHub["puzzles"][number]["board"], line: readonly PuzzlePly[]) {
   let board = base;
@@ -63,7 +76,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   const [selectedPuzzleOwner, setSelectedPuzzleOwner] = useState(playerKey);
   const [branchFeedback, setBranchFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [branchLine, setBranchLine] = useState<PuzzlePly[] | null>(null);
+  const [refutation, setRefutation] = useState<Refutation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hintMove, setHintMove] = useState<PuzzleHint | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
@@ -153,15 +166,31 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
     : puzzles.find((entry) => selectedPuzzleOwner === playerKey && entry.id === selectedPuzzleId) ?? nextUnsolvedPuzzle(puzzles);
   const selectedProblemIndex = puzzle ? puzzles.findIndex((entry) => entry.id === puzzle.id) : 0;
 
+  const replay = refutation && refutation.playerKey === playerKey && refutation.puzzleId === puzzle?.id && refutation.mode === mode
+    ? refutation
+    : null;
   const visibleLine = useMemo(() => {
     if (!puzzle) return [];
-    if (branchLine) return branchLine;
+    if (replay) return replay.line.slice(0, replay.shown);
     if (puzzle.solved && puzzle.solution) return puzzle.solution.line;
     return puzzle.variationProgress;
-  }, [branchLine, puzzle]);
-  const displayBoard = useMemo(() => (
+  }, [puzzle, replay]);
+  const settledBoard = useMemo(() => (
     puzzle ? lineBoard(puzzle.board, visibleLine) : null
   ), [puzzle, visibleLine]);
+  const displayBoard = useMemo(() => {
+    if (!settledBoard || !pendingMove) return settledBoard;
+    const result = applyMove(settledBoard, pendingMove.color, pendingMove.x, pendingMove.y);
+    return result.ok ? result.board : settledBoard;
+  }, [pendingMove, settledBoard]);
+
+  const viewportSize = useMemo(() => {
+    if (!puzzle) return undefined;
+    const baseSize = puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(puzzle.board) : undefined);
+    if (!baseSize) return undefined;
+    const line = replay?.line ?? visibleLine;
+    return line.reduce((size, ply) => Math.max(size, ply.x + 1, ply.y + 1), baseSize);
+  }, [puzzle, replay, visibleLine]);
 
   const updatePuzzle = useCallback((attempt: PuzzleAttemptResult) => {
     if (playerKey) {
@@ -183,11 +212,12 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }, [playerKey]);
 
   async function submitMove(x: number, y: number, action: Exclude<PuzzleAttemptAction, "pass"> = "play") {
-    if (!puzzle || !playerKey || busy || puzzle.solved || (branchLine && action === "play")) return;
+    if (!puzzle || !playerKey || busy || puzzle.solved || (replay && action === "play")) return;
     setSelectedPuzzleId(puzzle.id);
     setSelectedPuzzleOwner(playerKey);
     if (action === "play") setPendingMove({ x, y, color: puzzle.toPlay });
     setBusy(true);
+    setBranchFeedback(null);
     setHintMove(null);
     setError(null);
     try {
@@ -203,12 +233,18 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
       assertResponseActor(data.actor, playerKey);
       const priorProgress = puzzle.variationProgress;
       updatePuzzle(data.attempt);
+      const feedback = data.attempt.feedback?.[locale] ?? data.attempt.feedback?.en ?? null;
       if (data.attempt.outcome === "retry") {
-        setBranchLine(data.attempt.displayLineIsComplete ? data.attempt.displayLine : [...priorProgress, ...data.attempt.displayLine]);
-      } else if (data.attempt.outcome !== "unknown") {
-        setBranchLine(null);
+        const line = data.attempt.displayLineIsComplete
+          ? data.attempt.displayLine
+          : [...priorProgress, ...data.attempt.displayLine];
+        const start = Math.min(data.attempt.variationProgress.length, line.length);
+        const shown = Math.min(priorProgress.length + 1, line.length);
+        setRefutation({ playerKey, puzzleId: puzzle.id, mode, line, start, shown, feedback });
+      } else {
+        setRefutation(null);
+        setBranchFeedback(feedback);
       }
-      setBranchFeedback(data.attempt.feedback?.[locale] ?? data.attempt.feedback?.en ?? null);
     } catch (attemptError) {
       if (redirectAccountFailure(attemptError)) return;
       if (attemptError instanceof ApiRequestError && attemptError.code === "puzzle_revision_conflict") {
@@ -223,7 +259,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   async function showHint() {
-    if (!puzzle || !playerKey || hintBusy || puzzle.solved || branchLine) return;
+    if (!puzzle || !playerKey || hintBusy || puzzle.solved || replay) return;
     setHintBusy(true);
     setError(null);
     try {
@@ -243,7 +279,7 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   function clearTransientState() {
-    setBranchLine(null);
+    setRefutation(null);
     setError(null);
     setHintMove(null);
     setPendingMove(null);
@@ -251,14 +287,14 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
   }
 
   function undoPuzzleMove() {
-    if (!branchLine?.length) {
+    if (!replay) {
       void submitMove(0, 0, "undo");
       return;
     }
 
     // The server retains the last correct decision. Remove the failed move
     // together with its refutation so the next move can use that revision.
-    setBranchLine(null);
+    setRefutation(null);
     setBranchFeedback(null);
     setError(null);
     setHintMove(null);
@@ -289,11 +325,29 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
 
   const difficultyLabel = puzzle ? copy[puzzle.difficulty] : null;
   const colorLabel = puzzle?.toPlay === "black" ? copy.black : copy.white;
-  const lastPly = visibleLine[visibleLine.length - 1] ?? null;
+  const lastPly = visibleLine.at(-1);
+  const replayLength = replay ? replay.line.length - replay.start : 0;
+  const replayEnded = !replay || replay.shown === replay.line.length;
+  const replayPly = replay && replay.shown > replay.start ? lastPly : undefined;
+  const replayMove = replayPly && puzzle
+    ? copy.replayMove
+      .replace("{color}", replayPly.color === "black" ? copy.black : copy.white)
+      .replace("{move}", replayPly.move === "pass" ? copy.replayPass : goCoordinate(puzzle.boardSize, replayPly.x, replayPly.y))
+    : copy.replayStart;
+  const replayStatus = replay ? copy.replayProgress
+    .replace("{current}", String(replay.shown - replay.start))
+    .replace("{total}", String(replayLength))
+    .replace("{move}", replayMove) : "";
+
+  function stepRefutation(delta: number) {
+    setRefutation((current) => current
+      ? { ...current, shown: Math.max(current.start, Math.min(current.line.length, current.shown + delta)) }
+      : current);
+  }
   const progress = copy.problemProgress
     .replace("{current}", String(mode === "daily" ? puzzle?.collectionOrder ?? 1 : selectedProblemIndex + 1))
     .replace("{total}", String(mode === "daily" ? currentHub?.dailyCycleLength ?? DAILY_PUZZLE_CYCLE_LENGTH : puzzles.length));
-  const canUndo = !puzzle?.solved && Boolean(branchLine?.length || puzzle?.variationProgress.length);
+  const canUndo = !puzzle?.solved && Boolean(replay || puzzle?.variationProgress.length);
   const canRetry = !puzzle?.solved && Boolean(canUndo || hintMove || branchFeedback);
 
   function restartPuzzle() {
@@ -340,30 +394,49 @@ export function PuzzleWorkspace({ initialMode = "daily" }: { initialMode?: Puzzl
                 <strong>{progress}</strong>
                 {puzzle.goal ? <p>{puzzle.goal[locale] ?? puzzle.goal.en}</p> : null}
               </div>
-              {!puzzle.solved && !branchLine ? (
+              {!puzzle.solved && !replay ? (
                 <button aria-label={copy.hint} className={styles.hintButton} disabled={hintBusy || busy} onClick={() => void showHint()} title={copy.hint} type="button">
                   <CircleHelp aria-hidden="true" size={20} />
                 </button>
               ) : null}
             </div>
 
-            {!puzzle.solved && (branchLine || branchFeedback) ? <p className={styles.message} role="status">{branchFeedback ?? copy.incorrect}</p> : null}
+            {!puzzle.solved && replayLength <= 1 && (replay || branchFeedback) ? (
+              <p className={styles.message} role="status">{replay?.feedback ?? branchFeedback ?? copy.incorrect}</p>
+            ) : null}
             <div className={styles.boardColumn}>
               <GoBoard
                 boardSize={puzzle.boardSize}
                 boardState={displayBoard}
-                disabled={busy || puzzle.solved || branchLine !== null}
-                lastMove={lastPly ? { x: lastPly.x, y: lastPly.y } : null}
+                disabled={busy || puzzle.solved || replay !== null}
+                lastMove={pendingMove ?? (lastPly && lastPly.move !== "pass" ? { x: lastPly.x, y: lastPly.y } : null)}
                 hintMove={hintMove}
                 onIntersectionClick={submitMove}
-                pendingMove={pendingMove}
                 previewColor={puzzle.toPlay}
-                precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${branchLine !== null}`}
-                viewportSize={puzzle.viewportSize ?? (puzzle.category?.startsWith("gokyo_") ? localPuzzleViewportSize(displayBoard) : undefined)}
+                precisionRevision={`puzzle:${puzzle.id}:${puzzle.variationRevision}:${visibleLine.length}:${replay !== null}`}
+                viewportSize={viewportSize}
                 targetStones={puzzle.targetStones}
               />
             </div>
 
+            {pendingMove ? <p className={styles.message}>{copy.checkingMove}</p> : null}
+            {!puzzle.solved && replayLength > 1 && replay ? (
+              <div aria-label={copy.replayTitle} className={styles.replay} role="group">
+                <button aria-label={copy.replayPrevious} className={styles.replayButton} disabled={busy || replay.shown === replay.start} onClick={() => stepRefutation(-1)} type="button">
+                  <ChevronLeft aria-hidden="true" size={20} />
+                </button>
+                <div className={styles.replayStatus}>
+                  <strong>{copy.replayTitle}</strong>
+                  <span aria-live="polite" aria-atomic="true">{replayStatus}</span>
+                </div>
+                <button aria-label={copy.replayNext} className={styles.replayButton} disabled={busy || replayEnded} onClick={() => stepRefutation(1)} type="button">
+                  <ChevronRight aria-hidden="true" size={20} />
+                </button>
+              </div>
+            ) : null}
+            {!puzzle.solved && replayLength > 1 ? (
+              <p className={styles.message} role="status">{(replayEnded && replay?.feedback) || copy.incorrect}</p>
+            ) : null}
             {puzzle.solved ? (
               <p className={styles.solution} role="status">
                 <Check aria-hidden="true" size={18} /> {copy.correct}

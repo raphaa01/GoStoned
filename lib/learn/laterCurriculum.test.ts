@@ -18,11 +18,11 @@ const move = (board: Board, color: "black" | "white", point: Position) => {
   return result;
 };
 
-test("stages one to three retain their authored content with the requested same-colour turns and Ko demonstration", () => {
+test("stages one to three retain the authored progression, same-colour turns, and Ko demonstration", () => {
   // This anchored source comparison also protects feedback, positions and step order.
   const current = readFileSync("lib/learn/curriculum.ts","utf8");
   const section = (source: string) => source.slice(source.indexOf("const STAGE_ONE"),source.indexOf("export const LEARN_STAGES"));
-  assert.equal(createHash("sha256").update(section(current).replaceAll("\r\n","\n")).digest("hex"),"55f80dd7303cef79eaba061065279fba81a3cf6d2e543cb3f33a522336f9847d");
+  assert.equal(createHash("sha256").update(section(current).replaceAll("\r\n","\n")).digest("hex"),"d295cd050b637adc23dff0df358d38c9a93904d87cbfc32b13fa240b12a9d701");
 });
 
 test("every later stage has actionable lessons, empty selection starts and resumable real continuations", () => {
@@ -72,18 +72,25 @@ test("double atari answers put two distinct surviving groups in atari", () => {
 });
 
 test("ladder keeps the pursued group in atari, captures at the edge, and support breaks it", () => {
-  for(const broken of [false,true]) {
-    const steps=lessonById(broken?"s4-ladder-breaker":"s4-ladder").steps.filter(({kind})=>kind==="play").slice(0,broken?3:10);
-    for(const [index,step] of steps.entries()) {
-      let board=boardFromStones(7,step.stones!);
-      assert.equal(groupLiberties(board,p(1,1)).length,!broken&&index===steps.length-1?1:2);
-      const black=move(board,"black",step.targets![0]);board=black.position.board;
-      if(index===steps.length-1&&!broken) { assert.equal(black.captured.length,10);continue; }
-      assert.equal(groupLiberties(board,p(1,1)).length,1);
-      const white=move(board,"white",step.replies![0]!);
-      assert.equal(groupLiberties(white.position.board,p(1,1)).length,broken&&index===2?4:!broken&&index===steps.length-2?1:2);
+  const steps = lessonById("s4-ladder").steps;
+  for (const [index, step] of steps.entries()) {
+    const board = boardFromStones(7, step.stones!);
+    const finalMove = index === steps.length - 1;
+    assert.equal(groupLiberties(board, p(1, 1)).length, finalMove ? 1 : 2);
+    const black = move(board, "black", step.targets![0]);
+    if (finalMove) {
+      assert.equal(black.captured.length, 10);
+    } else {
+      assert.equal(groupLiberties(black.position.board, p(1, 1)).length, 1);
+      const white = move(black.position.board, "white", step.replies![0]!);
+      assert.equal(groupLiberties(white.position.board, p(1, 1)).length, index === steps.length - 2 ? 1 : 2);
     }
   }
+  const breaker = lessonById("s4-ladder-breaker").steps[0];
+  const chase = move(boardFromStones(7, breaker.stones!), "black", breaker.targets![0]);
+  assert.equal(groupLiberties(chase.position.board, p(1, 1)).length, 1);
+  const escape = move(chase.position.board, "white", breaker.replies![0]!);
+  assert.equal(groupLiberties(escape.position.board, p(1, 1)).length, 4);
 });
 
 test("snapback legally sacrifices one stone and immediately captures three, never ko", () => {
@@ -94,6 +101,51 @@ test("snapback legally sacrifices one stone and immediately captures three, neve
   next=playLearnMove(state,steps[1].targets![0]);assert.ok(next.ok);assert.equal(next.captured.length,3);
   assert.equal(next.position.capturedWhiteByBlack,3);
   assert.equal(next.position.capturedBlackByWhite,1);
+});
+
+test("the throw-in destroys eye space and the sacrifice saves a larger group", () => {
+  const [attack, finish] = lessonById("s4-throw-in").steps.filter(({ kind }) => kind === "play");
+  const throwIn = move(boardFromStones(7, attack.stones!), "white", attack.targets![0]);
+  assert.equal(throwIn.captured.length, 0);
+  const response = move(throwIn.position.board, "black", attack.replies![0]!);
+  assert.deepEqual(groupLiberties(response.position.board, p(2, 2)), finish.targets);
+  assert.equal(move(response.position.board, "white", finish.targets![0]).captured.length, 13);
+
+  const [sacrifice] = lessonById("s4-sacrifice").steps;
+  const before = boardFromStones(7, sacrifice.stones!);
+  assert.equal(groupLiberties(before, p(2, 3)).length, 1);
+  const save = move(before, "black", sacrifice.targets![0]);
+  const take = move(save.position.board, "white", sacrifice.replies![0]!);
+  assert.deepEqual(take.captured, [p(0, 4)]);
+  assert.equal(getGroup(take.position.board, p(2, 3)).length, 4);
+  assert.ok(groupLiberties(take.position.board, p(2, 3)).length > 1);
+});
+
+test("the curriculum exercises use distinct positions even under board rotations and reflections", () => {
+  const seen = new Map<string, string>();
+  for (const lesson of LEARN_LESSONS) {
+    for (const step of lesson.steps) {
+      if (!step.size || !step.targets?.length) continue;
+      const size = step.size;
+      const signatures = Array.from({ length: 8 }, (_, symmetry) => {
+        const point = ({ x, y }: Position) => {
+          if (symmetry >= 4) x = size - 1 - x;
+          for (let turn = 0; turn < symmetry % 4; turn++) [x, y] = [size - 1 - y, x];
+          return y * size + x;
+        };
+        return JSON.stringify([
+          size, step.kind, step.toPlay, step.selectFrom, step.expectedError,
+          step.stones?.map((stone) => [point(stone), stone.color]).sort(),
+          step.targets?.map(point).sort(),
+          step.replies?.map((reply) => reply ? point(reply) : null) ?? [],
+        ]);
+      });
+      const signature = signatures.sort()[0];
+      const exercise = lesson.id + "/" + step.id;
+      assert.equal(seen.get(signature), undefined, exercise + " repeats " + seen.get(signature));
+      seen.set(signature, exercise);
+    }
+  }
 });
 
 test("both exits from the net are caught, including the symmetric alternative", () => {
